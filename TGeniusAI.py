@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import QProgressDialog
 from DownloadVideo import DownloadThread
 from AudioTranscript import TranscriptionThread
 from AudioGenerationREST import AudioGenerationThread
+from VideoCutting import VideoCuttingThread
 import cv2
 from ScreenRecorder import ScreenRecorder
 import pygetwindow as gw
@@ -37,6 +38,7 @@ from num2words import num2words
 from langdetect import detect, LangDetectException
 import pycountry
 import uuid
+from CropVideo import CropVideoWidget
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -100,11 +102,13 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
         # Setup del dock del video player
-        videoWidget = QVideoWidget()
-        videoWidget.setAcceptDrops(True)
-        videoWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
+        self.videoCropWidget = CropVideoWidget()
+        self.videoCropWidget.setAcceptDrops(True)
+        self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
-        self.player.setVideoOutput(videoWidget)
+        self.player.setVideoOutput(self.videoCropWidget)
+
+
         self.videoSlider = QSlider(Qt.Orientation.Horizontal)
 
         # Label per mostrare il nome del file video
@@ -117,12 +121,14 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton = QPushButton('Pause')
         self.stopButton = QPushButton('Stop')
         self.cutButton = QPushButton('Taglia')  # Se necessario
+        self.cropButton = QPushButton('Ritaglia')  # Se necessario
 
         # Collegamento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
         self.pauseButton.clicked.connect(self.pauseVideo)
         self.stopButton.clicked.connect(self.stopVideo)
         self.cutButton.clicked.connect(self.cutVideo)  # Assumendo che la funzione cutVideo sia definita
+        self.cropButton.clicked.connect(self.applyCrop)  # Assumendo che la funzione cutVideo sia definita
 
         # Creazione e configurazione del display del timecode
         self.currentTimeLabel = QLabel('00:00')
@@ -175,6 +181,7 @@ class VideoAudioManager(QMainWindow):
         # Layout principale per il dock del video player output
         videoOutputLayout = QVBoxLayout()
         videoOutputLayout.addWidget(self.fileNameLabelOutput)
+
         videoOutputLayout.addWidget(videoOutputWidget)
         videoOutputLayout.addWidget(videoSliderOutput)
         videoOutputLayout.addLayout(playbackControlLayoutOutput)
@@ -199,11 +206,12 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.pauseButton)
         playbackControlLayout.addWidget(self.stopButton)
         playbackControlLayout.addWidget(self.cutButton)
+        playbackControlLayout.addWidget(self.cropButton)
 
         # Layout principale per il dock del video player
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(videoWidget)  # Aggiunta del widget video
+        videoPlayerLayout.addWidget(self.videoCropWidget)  # Aggiunta del widget video
         videoPlayerLayout.addLayout(timecodeLayout)  # Aggiunta del display del timecode
         videoPlayerLayout.addWidget(self.videoSlider)  # Aggiunta della slider
 
@@ -327,6 +335,28 @@ class VideoAudioManager(QMainWindow):
         # Assicurati che self.videoSlider sia stato correttamente inizializzato prima in initUI
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+    def applyCrop(self):
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare il ritaglio.")
+            return
+
+        cropRect = self.videoCropWidget.getCropRect()
+        if cropRect.isEmpty():
+            QMessageBox.warning(self, "Errore", "Seleziona un'area da ritagliare.")
+            return
+
+        try:
+            video = VideoFileClip(self.videoPathLineEdit)
+            cropped_video = video.crop(x1=cropRect.x(), y1=cropRect.y(), x2=cropRect.x() + cropRect.width(),
+                                       y2=cropRect.y() + cropRect.height())
+            output_path = tempfile.mktemp(suffix='.mp4')
+            cropped_video.write_videofile(output_path, codec='libx264')
+            QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
+
+            self.loadVideoOutput(output_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
+
     def applyStyleToAllDocks(self):
         style = self.getDarkStyle()
         self.videoPlayerDock.setStyleSheet(style)
@@ -435,7 +465,7 @@ class VideoAudioManager(QMainWindow):
         dock = Dock("Gestione Audio")
         layout = QVBoxLayout()
 
-        # Creazione del GroupBox per la gestione dell'afudio
+        # Creazione del GroupBox per la gestione dell'audio
         audioManagementGroup = QGroupBox("Opzioni Audio")
         audioLayout = QVBoxLayout()
 
@@ -445,13 +475,26 @@ class VideoAudioManager(QMainWindow):
         self.browseAudioButton = QPushButton('Scegli Audio')
         self.browseAudioButton.clicked.connect(self.browseAudio)
 
-        # Widget per la sostituzione dell'audio nel video
-        self.replaceAudioButton = QPushButton('Sostituisci Audio nel Video')
-        self.replaceAudioButton.clicked.connect(self.replaceAudioInVideo)
-
         # Aggiunta dei widget al layout del GroupBox
         audioLayout.addWidget(self.audioPathLineEdit)
         audioLayout.addWidget(self.browseAudioButton)
+
+        # Campi di input per la durata delle pause
+        self.pauseBeforeLineEdit = QLineEdit()
+        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
+        self.pauseAfterLineEdit = QLineEdit()
+        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
+
+        audioLayout.addWidget(QLabel("Pausa iniziale (s):"))
+        audioLayout.addWidget(self.pauseBeforeLineEdit)
+        audioLayout.addWidget(QLabel("Pausa finale (s):"))
+        audioLayout.addWidget(self.pauseAfterLineEdit)
+
+        # Widget per la sostituzione dell'audio nel video
+        self.replaceAudioButton = QPushButton('Applica Audio con Pause')
+        self.replaceAudioButton.clicked.connect(self.replaceAudioInVideo)
+
+        # Aggiungi il pulsante al layout
         audioLayout.addWidget(self.replaceAudioButton)
         audioManagementGroup.setLayout(audioLayout)
 
@@ -1171,39 +1214,22 @@ class VideoAudioManager(QMainWindow):
     def onAudioGenerationCompleted(self, audio_path):
         QMessageBox.information(self, "Generazione Completata", f"L'audio è stato salvato in: {audio_path}")
 
-    def addPauseAndMerge(self, file_audio_originale, durata_pausa_iniziale, durata_pausa_finale):
-        """
-        Aggiunge pause silenziose all'inizio e alla fine di un file audio e salva il risultato in un nuovo file.
+    def addPauseAndMerge(self, original_audio_path, pause_before, pause_after):
+        # Carica il file audio originale usando pydub
+        original_audio = AudioSegment.from_file(original_audio_path)
 
-        Args:
-            file_audio_originale (str): Percorso del file audio originale.
-            durata_pausa_iniziale (float): Durata della pausa iniziale in secondi.
-            durata_pausa_finale (float): Durata della pausa finale in secondi.
+        # Crea clip audio di silenzio per le pause
+        pause_before_clip = AudioSegment.silent(duration=int(pause_before * 1000))  # durata in millisecondi
+        pause_after_clip = AudioSegment.silent(duration=int(pause_after * 1000))
 
-        Returns:
-            str: Percorso del nuovo file audio con le pause aggiunte.
-        """
-        try:
-            # Carica il file audio originale
-            audio_originale = AudioFileClip(file_audio_originale)
+        # Concatena le pause con l'audio originale
+        final_audio = pause_before_clip + original_audio + pause_after_clip
 
-            # Crea un clip audio di silenzio per l'inizio e la fine
-            pausa_iniziale = AudioClip(lambda t: [0] * len(audio_originale.to_soundarray(t)),
-                                       duration=durata_pausa_iniziale, fps=audio_originale.fps)
-            pausa_finale = AudioClip(lambda t: [0] * len(audio_originale.to_soundarray(t)),
-                                     duration=durata_pausa_finale, fps=audio_originale.fps)
+        # Salva il nuovo file audio
+        new_audio_path = tempfile.mktemp(suffix='.mp3')
+        final_audio.export(new_audio_path, format='mp3')
 
-            # Concatena la pausa iniziale, l'audio originale e la pausa finale
-            audio_finale = concatenate_audioclips([pausa_iniziale, audio_originale, pausa_finale])
-
-            # Definisce il percorso per salvare il nuovo file audio
-            temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            audio_finale.write_audiofile(temp_audio_path, codec='libmp3lame')
-
-            return temp_audio_path
-        except Exception as e:
-            print(f"Errore durante l'aggiunta della pausa: {e}")
-            return None
+        return new_audio_path
 
     def onAudioGenerationCompleted(self, audio_path):
 
@@ -1254,86 +1280,94 @@ class VideoAudioManager(QMainWindow):
         if fileName:
             self.audioPathLineEdit.setText(fileName)  # Aggiorna il campo di testo con il percorso del file
 
+    def extractAudioFromVideo(self, video_path):
+        # Estrai l'audio dal video e salvalo temporaneamente
+        temp_audio_path = tempfile.mktemp(suffix='.mp3')
+        video_clip = VideoFileClip(video_path)
+        video_clip.audio.write_audiofile(temp_audio_path)
+        return temp_audio_path
+
+    def applyNewAudioToVideo(self, video_path, audio_path):
+        # Carica il video e l'audio modificato
+        video_clip = VideoFileClip(video_path)
+        audio_clip = AudioFileClip(audio_path)
+        final_clip = video_clip.set_audio(audio_clip)
+        # Salvataggio del video finale
+        output_video_path = video_path.replace('.mp4', '_new_audio.mp4')
+        final_clip.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
+
+        # Aggiorna l'interfaccia utente per riflettere il cambio
+        self.loadVideoOutput(output_video_path)
+
     def replaceAudioInVideo(self):
         video_path = self.videoPathLineEdit
         audio_path = self.audioPathLineEdit.text()
-        if not video_path or not audio_path:
-            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona sia un video che un file audio.")
-            return
+
+        if not audio_path:
+            audio_path = self.extractAudioFromVideo(video_path)
+
+        pause_before = float(self.pauseBeforeLineEdit.text() or 0)
+        pause_after = float(self.pauseAfterLineEdit.text() or 0)
+
+        # Aggiungi pause all'audio
+        new_audio_path = self.addPauseAndMerge(audio_path, pause_before, pause_after)
 
         try:
+            # Sostituisci l'audio nel video
             video_clip = VideoFileClip(video_path)
-            audio_clip = AudioFileClip(audio_path)
-            final_clip = video_clip.set_audio(audio_clip)
+            new_audio_clip = AudioFileClip(new_audio_path)
+            final_clip = video_clip.set_audio(new_audio_clip)
+            output_video_path = video_path.replace('.mp4', '_new_audio.mp4')
+            final_clip.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
 
-            output_video_path = QFileDialog.getSaveFileName(self, "Salva Video con Audio Sostituito", "", "Video Files (*.mp4)")[0]
-            if output_video_path:
-                final_clip.write_videofile(output_video_path, codec="libx264", audio_codec="aac")
-                QMessageBox.information(self, "Successo", "Video con audio sostituito salvato con successo in: " + output_video_path)
-
-                self.loadVideoOutput(output_video_path)
+            QMessageBox.information(self, "Successo", "Audio con pause applicato con successo al video.")
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore durante la sostituzione dell'audio: {e}")
 
+        # Pulizia: rimuovi i file audio temporanei se necessario
+        os.remove(new_audio_path)
     def cutVideo(self):
         media_path = self.videoPathLineEdit
         if not media_path:
             QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
             return
 
-        # Determina se il file è video o audio basandosi sull'estensione del file
         if media_path.lower().endswith(('.mp4', '.mov', '.avi')):
-            media = VideoFileClip(media_path)
             is_audio = False
         elif media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac')):
-            media = AudioFileClip(media_path)
             is_audio = True
         else:
             QMessageBox.warning(self, "Errore", "Formato file non supportato.")
             return
 
-        progress_dialog = None
-        try:
-            start_time = self.currentPosition / 1000.0  # Converti in secondi
-            end_time = media.duration
+        start_time = self.currentPosition / 1000.0  # Converti in secondi
 
-            # Imposta il ProgressDialog
-            progress_dialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
-            progress_dialog.setWindowTitle("Progresso Taglio")
-            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-            progress_dialog.show()
+        base_name = os.path.splitext(os.path.basename(media_path))[0]
+        directory = os.path.dirname(media_path)
+        ext = 'mp4' if not is_audio else 'mp3'
+        output_path1 = os.path.join(directory, f"{base_name}_part1.{ext}")
+        output_path2 = os.path.join(directory, f"{base_name}_part2.{ext}")
 
-            # Calcola la percentuale di progresso per ciascun segmento
-            percent_complete = 0
+        self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Taglio")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
 
-            # Nome base e percorso cartella
-            base_name = os.path.splitext(os.path.basename(media_path))[0]
-            directory = os.path.dirname(media_path)
-            ext = 'mp4' if not is_audio else 'mp3'
+        self.cutting_thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
+        self.cutting_thread.progress.connect(self.progressDialog.setValue)
+        self.cutting_thread.completed.connect(self.onCutCompleted)
+        self.cutting_thread.error.connect(self.onCutError)
 
-            # Clip 1: dall'inizio fino al punto di taglio
-            clip1 = media.subclip(0, start_time)
-            output_path1 = os.path.join(directory, f"{base_name}_part1.{ext}")
-            clip1.write_videofile(output_path1, codec="libx264",
-                                  audio_codec="aac") if not is_audio else clip1.write_audiofile(output_path1)
-            percent_complete += 50  # Aggiorna il progresso presumendo che ogni parte sia metà del lavoro
-            progress_dialog.setValue(percent_complete)
 
-            # Clip 2: dal punto di taglio fino alla fine
-            clip2 = media.subclip(start_time, end_time)
-            output_path2 = os.path.join(directory, f"{base_name}_part2.{ext}")
-            clip2.write_videofile(output_path2, codec="libx264",
-                                  audio_codec="aac") if not is_audio else clip2.write_audiofile(output_path2)
-            percent_complete = 100
-            progress_dialog.setValue(percent_complete)
-            QMessageBox.information(self, "Successo",
-                                    f"File tagliato e salvato in due parti: {output_path1} e {output_path2}.")
+        self.cutting_thread.start()
 
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", str(e))
-        finally:
-            if progress_dialog:
-                progress_dialog.close()
+    def onCutCompleted(self, part1, part2):
+        QMessageBox.information(self, "Successo", f"File tagliato e salvato in due parti: {part1} e {part2}.")
+        self.progressDialog.close()
+
+    def onCutError(self, error_message):
+        QMessageBox.critical(self, "Errore", error_message)
+        self.progressDialog.close()
 
     def positionChanged(self, position):
         self.videoSlider.setValue(position)

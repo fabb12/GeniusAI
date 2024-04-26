@@ -5,13 +5,14 @@ a = Analysis(
     ['TGeniusAI.py'],
     pathex=[],
     binaries=[],
-    datas=[('res', 'res')],
+    datas=[],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=['PyQt5'],
     noarchive=False,
+    optimize=0,
 )
 pyz = PYZ(a.pure)
 
