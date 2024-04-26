@@ -1,0 +1,57 @@
+{
+    "main_window": {
+        "width": 1920,
+        "height": 1009,
+        "x": 0,
+        "y": -8
+    },
+    "videoPlayerDock": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 636,
+        "height": 166
+    },
+    "transcriptionDock": {
+        "visible": true,
+        "x": 0,
+        "y": 171,
+        "width": 1277,
+        "height": 237
+    },
+    "editingDock": {
+        "visible": true,
+        "x": 1282,
+        "y": 0,
+        "width": 638,
+        "height": 408
+    },
+    "downloadDock": {
+        "visible": true,
+        "x": 0,
+        "y": 261,
+        "width": 1920,
+        "height": 104
+    },
+    "recordingDock": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 256
+    },
+    "audioDock": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 636,
+        "height": 166
+    },
+    "videoPlayerDockOutput": {
+        "visible": true,
+        "x": 0,
+        "y": 783,
+        "width": 1920,
+        "height": 204
+    }
+}
