@@ -312,11 +312,7 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiunta del widget al dock
         self.transcriptionDock.addWidget(widgetTranscription)
-        # Layout per i controlli di pausa
-        self.pauseBeforeLineEdit = QLineEdit()
-        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
-        self.pauseAfterLineEdit = QLineEdit()
-        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
+
 
 
         # Layout principale per il dock delle opzioni di editing
@@ -465,6 +461,12 @@ class VideoAudioManager(QMainWindow):
         dock = Dock("Gestione Audio")
         layout = QVBoxLayout()
 
+        # Layout per i controlli di pausa
+        self.pauseBeforeLineEdit = QLineEdit()
+        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
+        self.pauseAfterLineEdit = QLineEdit()
+        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
+
         # Creazione del GroupBox per la gestione dell'audio
         audioManagementGroup = QGroupBox("Opzioni Audio")
         audioLayout = QVBoxLayout()
@@ -478,12 +480,6 @@ class VideoAudioManager(QMainWindow):
         # Aggiunta dei widget al layout del GroupBox
         audioLayout.addWidget(self.audioPathLineEdit)
         audioLayout.addWidget(self.browseAudioButton)
-
-        # Campi di input per la durata delle pause
-        self.pauseBeforeLineEdit = QLineEdit()
-        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
-        self.pauseAfterLineEdit = QLineEdit()
-        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
 
         audioLayout.addWidget(QLabel("Pausa iniziale (s):"))
         audioLayout.addWidget(self.pauseBeforeLineEdit)
