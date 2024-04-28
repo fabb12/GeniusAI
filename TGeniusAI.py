@@ -1322,6 +1322,8 @@ class VideoAudioManager(QMainWindow):
 
         # Pulizia: rimuovi i file audio temporanei se necessario
         os.remove(new_audio_path)
+
+        self.loadVideoOutput(video_path)
     def cutVideo(self):
         media_path = self.videoPathLineEdit
         if not media_path:

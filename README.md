@@ -53,3 +53,8 @@ Per installare ThemaGeniusAI:
 ### Supporto e Contributi
 
 Gli utenti possono contribuire al progetto inviando pull requests o segnalando problemi e suggerimenti tramite il sistema di issue tracking del repository GitHub. Il supporto è disponibile tramite email o direttamente sul forum della community di sviluppatori.
+
+
+### TODO
+- aggiugere merge video 
+- aggiugre traccia di sotto fondo 
