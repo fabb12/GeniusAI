@@ -457,45 +457,73 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
 
-    def createAudioDock(self):
-        dock = Dock("Gestione Audio")
-        layout = QVBoxLayout()
+    def setupExistingAudioManagementUI(self):
+        # GroupBox per la gestione dell'audio esistente
+        audioManagementGroup = QGroupBox("Opzioni Audio Principale")
+        audioLayout = QVBoxLayout()
 
-        # Layout per i controlli di pausa
+        # Widget per la selezione dell'audio principale
+        self.audioPathLineEdit = QLineEdit()
+        self.audioPathLineEdit.setReadOnly(True)
+        browseAudioButton = QPushButton('Scegli Audio Principale')
+        browseAudioButton.clicked.connect(self.browseAudio)
+
+        # Controlli per gestire le pause
         self.pauseBeforeLineEdit = QLineEdit()
         self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
         self.pauseAfterLineEdit = QLineEdit()
         self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
 
-        # Creazione del GroupBox per la gestione dell'audio
-        audioManagementGroup = QGroupBox("Opzioni Audio")
-        audioLayout = QVBoxLayout()
-
-        # Widget per la selezione dell'audio
-        self.audioPathLineEdit = QLineEdit()
-        self.audioPathLineEdit.setReadOnly(True)
-        self.browseAudioButton = QPushButton('Scegli Audio')
-        self.browseAudioButton.clicked.connect(self.browseAudio)
+        # Pulsante per applicare l'audio al video
+        applyAudioButton = QPushButton('Applica Audio con Pause')
+        applyAudioButton.clicked.connect(self.applyAudioToVideo)
 
         # Aggiunta dei widget al layout del GroupBox
         audioLayout.addWidget(self.audioPathLineEdit)
-        audioLayout.addWidget(self.browseAudioButton)
-
+        audioLayout.addWidget(browseAudioButton)
         audioLayout.addWidget(QLabel("Pausa iniziale (s):"))
         audioLayout.addWidget(self.pauseBeforeLineEdit)
         audioLayout.addWidget(QLabel("Pausa finale (s):"))
         audioLayout.addWidget(self.pauseAfterLineEdit)
+        audioLayout.addWidget(applyAudioButton)
 
-        # Widget per la sostituzione dell'audio nel video
-        self.replaceAudioButton = QPushButton('Applica Audio con Pause')
-        self.replaceAudioButton.clicked.connect(self.replaceAudioInVideo)
-
-        # Aggiungi il pulsante al layout
-        audioLayout.addWidget(self.replaceAudioButton)
         audioManagementGroup.setLayout(audioLayout)
+        return audioManagementGroup
+    def createAudioDock(self):
+        dock = Dock("Gestione Audio")
+        layout = QVBoxLayout()
 
-        # Aggiunta del GroupBox al layout principale del dock
+        # GroupBox per la gestione dell'audio esistente
+        audioManagementGroup = self.setupExistingAudioManagementUI()
+
+        # Nuova GroupBox per la gestione del sottofondo
+        backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
+        backgroundLayout = QVBoxLayout()
+
+        # Widget per la selezione del file audio di sottofondo
+        self.backgroundAudioPathLineEdit = QLineEdit()
+        self.backgroundAudioPathLineEdit.setReadOnly(True)
+        browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
+        browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
+
+        # Slider per il volume del sottofondo
+        volumeLabel = QLabel("Volume Sottofondo:")
+        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSlider.setRange(0, 100)
+        self.volumeSlider.setValue(50)  # Imposta il volume iniziale al 50%
+        self.volumeSlider.valueChanged.connect(self.adjustBackgroundVolume)
+
+        # Aggiunta dei widget al layout del GroupBox
+        backgroundLayout.addWidget(self.backgroundAudioPathLineEdit)
+        backgroundLayout.addWidget(browseBackgroundAudioButton)
+        backgroundLayout.addWidget(volumeLabel)
+        backgroundLayout.addWidget(self.volumeSlider)
+
+        backgroundAudioGroup.setLayout(backgroundLayout)
+
+        # Aggiunta dei GroupBox al layout principale del dock
         layout.addWidget(audioManagementGroup)
+        layout.addWidget(backgroundAudioGroup)
 
         widget = QWidget()
         widget.setLayout(layout)
@@ -503,6 +531,15 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
+    def browseBackgroundAudio(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
+                                                  "Audio Files (*.mp3 *.wav)")
+        if fileName:
+            self.backgroundAudioPathLineEdit.setText(fileName)
+
+    def adjustBackgroundVolume(self, value):
+        # Qui dovrai implementare la logica per regolare il volume del sottofondo
+        print(f"Volume del sottofondo regolato al {value}%")
     def setupDockSettingsManager(self):
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
@@ -607,6 +644,17 @@ class VideoAudioManager(QMainWindow):
                     # Se non riesce ad aprire il dispositivo, non lo aggiunge alla lista
                     print(f"Dispositivo non disponibile: {device['name']}, errore: {e}")
         return available_audio_devices
+
+    def applyAudioToVideo(self):
+        video_path = self.videoPathLineEdit  # Assicurati che questo sia il percorso del video attualmente caricato
+        audio_path = self.audioPathLineEdit.text()
+        pause_before = float(self.pauseBeforeLineEdit.text() or 0)
+        pause_after = float(self.pauseAfterLineEdit.text() or 0)
+
+        if audio_path:
+            self.replaceAudioInVideo(video_path, audio_path, pause_before, pause_after)
+        else:
+            QMessageBox.warning(self, "Attenzione", "Seleziona un file audio prima di procedere.")
 
     def updateTimecodeRec(self):
         if self.recordingTime is not None:
@@ -1295,35 +1343,42 @@ class VideoAudioManager(QMainWindow):
         # Aggiorna l'interfaccia utente per riflettere il cambio
         self.loadVideoOutput(output_video_path)
 
-    def replaceAudioInVideo(self):
-        video_path = self.videoPathLineEdit
-        audio_path = self.audioPathLineEdit.text()
-
+    def replaceAudioInVideo(self, video_path, audio_path, pause_before, pause_after):
         if not audio_path:
             audio_path = self.extractAudioFromVideo(video_path)
-
-        pause_before = float(self.pauseBeforeLineEdit.text() or 0)
-        pause_after = float(self.pauseAfterLineEdit.text() or 0)
 
         # Aggiungi pause all'audio
         new_audio_path = self.addPauseAndMerge(audio_path, pause_before, pause_after)
 
         try:
-            # Sostituisci l'audio nel video
+            # Sostituisci l'audio nel video e adatta la velocità del video all'audio modificato
             video_clip = VideoFileClip(video_path)
             new_audio_clip = AudioFileClip(new_audio_path)
-            final_clip = video_clip.set_audio(new_audio_clip)
-            output_video_path = video_path.replace('.mp4', '_new_audio.mp4')
-            final_clip.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
 
-            QMessageBox.information(self, "Successo", "Audio con pause applicato con successo al video.")
+            # Adatta la velocità del video alla durata dell'audio modificato
+            output_video_path = video_path.replace('.mp4', '_adjusted_audio.mp4')
+            self.adattaVelocitaVideoAAudio(video_path, new_audio_path, output_video_path)
+
+            # Imposta il nuovo audio nel video velocizzato
+            adjusted_video_clip = VideoFileClip(output_video_path)
+            final_clip = adjusted_video_clip.set_audio(new_audio_clip)
+            final_output_video_path = output_video_path.replace('_adjusted_audio.mp4', '_final.mp4')
+            final_clip.write_videofile(final_output_video_path, codec='libx264', audio_codec='aac')
+
+            QMessageBox.information(self, "Successo",
+                                    "Audio con pause applicato e velocità del video adattata con successo.")
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore durante la sostituzione dell'audio: {e}")
+        finally:
+            # Pulizia: rimuovi i file audio temporanei se necessario
+            if os.path.exists(new_audio_path):
+                os.remove(new_audio_path)
+            if os.path.exists(output_video_path) and output_video_path != final_output_video_path:
+                os.remove(output_video_path)
 
-        # Pulizia: rimuovi i file audio temporanei se necessario
-        os.remove(new_audio_path)
+            # Aggiorna il video output per riflettere le modifiche
+            self.loadVideoOutput(final_output_video_path)
 
-        self.loadVideoOutput(video_path)
     def cutVideo(self):
         media_path = self.videoPathLineEdit
         if not media_path:
