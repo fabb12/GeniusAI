@@ -39,6 +39,8 @@ from langdetect import detect, LangDetectException
 import pycountry
 import uuid
 from CropVideo import CropVideoWidget
+from moviepy.audio.AudioClip import CompositeAudioClip
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -478,6 +480,7 @@ class VideoAudioManager(QMainWindow):
         applyAudioButton = QPushButton('Applica Audio con Pause')
         applyAudioButton.clicked.connect(self.applyAudioToVideo)
 
+
         # Aggiunta dei widget al layout del GroupBox
         audioLayout.addWidget(self.audioPathLineEdit)
         audioLayout.addWidget(browseAudioButton)
@@ -486,6 +489,7 @@ class VideoAudioManager(QMainWindow):
         audioLayout.addWidget(QLabel("Pausa finale (s):"))
         audioLayout.addWidget(self.pauseAfterLineEdit)
         audioLayout.addWidget(applyAudioButton)
+
 
         audioManagementGroup.setLayout(audioLayout)
         return audioManagementGroup
@@ -513,12 +517,16 @@ class VideoAudioManager(QMainWindow):
         self.volumeSlider.setValue(50)  # Imposta il volume iniziale al 50%
         self.volumeSlider.valueChanged.connect(self.adjustBackgroundVolume)
 
+
+        applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
+        applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
+
         # Aggiunta dei widget al layout del GroupBox
         backgroundLayout.addWidget(self.backgroundAudioPathLineEdit)
         backgroundLayout.addWidget(browseBackgroundAudioButton)
         backgroundLayout.addWidget(volumeLabel)
         backgroundLayout.addWidget(self.volumeSlider)
-
+        backgroundLayout.addWidget(applyBackgroundButton)
         backgroundAudioGroup.setLayout(backgroundLayout)
 
         # Aggiunta dei GroupBox al layout principale del dock
@@ -645,16 +653,55 @@ class VideoAudioManager(QMainWindow):
                     print(f"Dispositivo non disponibile: {device['name']}, errore: {e}")
         return available_audio_devices
 
+    def applyBackgroundAudioToVideo(self):
+        video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
+        background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
+        background_volume = self.volumeSlider.value() / 100.0  # Volume dell'audio di sottofondo
+
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
+            return
+
+        if not background_audio_path or not os.path.exists(background_audio_path):
+            QMessageBox.warning(self, "Errore", "Carica un audio di sottofondo prima di applicarlo.")
+            return
+
+        try:
+            # Carica video e audio di sottofondo
+            video_clip = VideoFileClip(video_path)
+            background_audio_clip = AudioFileClip(background_audio_path).volumex(background_volume)
+
+            # Combina l'audio di sottofondo con l'audio originale del video, se presente
+            if video_clip.audio:
+                combined_audio = CompositeAudioClip([video_clip.audio, background_audio_clip])
+            else:
+                combined_audio = background_audio_clip
+
+            # Imposta l'audio combinato nel video e salva il nuovo file
+            final_clip = video_clip.set_audio(combined_audio)
+            output_path = tempfile.mktemp(suffix='.mp4')
+            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            QMessageBox.information(self, "Successo",
+                                    f"Il video con audio di sottofondo è stato salvato in {output_path}")
+            self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+
     def applyAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Assicurati che questo sia il percorso del video attualmente caricato
         audio_path = self.audioPathLineEdit.text()
         pause_before = float(self.pauseBeforeLineEdit.text() or 0)
         pause_after = float(self.pauseAfterLineEdit.text() or 0)
 
-        if audio_path:
-            self.replaceAudioInVideo(video_path, audio_path, pause_before, pause_after)
-        else:
-            QMessageBox.warning(self, "Attenzione", "Seleziona un file audio prima di procedere.")
+        if not audio_path:
+            # Estrai l'audio dal video corrente se non è stato fornito un percorso audio
+            video_clip = VideoFileClip(video_path)
+            audio_path = tempfile.mktemp(suffix='.mp3')  # Crea un percorso temporaneo per l'audio
+            video_clip.audio.write_audiofile(audio_path)  # Salva l'audio estratto
+
+        # Aggiungi pause e sostituisci l'audio nel video
+        self.replaceAudioInVideo(video_path, audio_path, pause_before, pause_after)
 
     def updateTimecodeRec(self):
         if self.recordingTime is not None:
@@ -893,11 +940,19 @@ class VideoAudioManager(QMainWindow):
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('&File')
 
-        openAction = QAction('&Open', self)
+        openAction = QAction('&Open Video', self)
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video')
         openAction.triggered.connect(self.browseVideo)
+
+
+        openActionOutput = QAction('&Open as Output Video', self)
+        openAction.setShortcut('Ctrl+I')
+        openActionOutput.setStatusTip('Open Video Output')
+        openActionOutput.triggered.connect(self.browseVideoOutput)
+
         fileMenu.addAction(openAction)
+        fileMenu.addAction(openActionOutput)
 
         # Azione per generare la presentazione PowerPoint
         generatePresentationAction = QAction('Genera &Presentazione', self)
@@ -1350,6 +1405,9 @@ class VideoAudioManager(QMainWindow):
         # Aggiungi pause all'audio
         new_audio_path = self.addPauseAndMerge(audio_path, pause_before, pause_after)
 
+        video_clip = None
+        new_audio_clip = None
+        adjusted_video_clip = None
         try:
             # Sostituisci l'audio nel video e adatta la velocità del video all'audio modificato
             video_clip = VideoFileClip(video_path)
@@ -1370,6 +1428,14 @@ class VideoAudioManager(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore durante la sostituzione dell'audio: {e}")
         finally:
+            # Chiudi i clip per liberare le risorse
+            if video_clip:
+                video_clip.close()
+            if new_audio_clip:
+                new_audio_clip.close()
+            if adjusted_video_clip:
+                adjusted_video_clip.close()
+
             # Pulizia: rimuovi i file audio temporanei se necessario
             if os.path.exists(new_audio_path):
                 os.remove(new_audio_path)
@@ -1492,6 +1558,11 @@ class VideoAudioManager(QMainWindow):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
         if fileName:
            self.loadVideo(fileName)
+
+    def browseVideoOutput(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
+        if fileName:
+           self.loadVideoOutput(fileName)
 
     def updateRecentFiles(self, newFile):
         if newFile not in self.recentFiles:
