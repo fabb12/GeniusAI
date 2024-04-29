@@ -139,12 +139,12 @@ class VideoAudioManager(QMainWindow):
         timecodeLayout.addWidget(self.currentTimeLabel)
         timecodeLayout.addWidget(self.totalTimeLabel)
 
+        # Creazione del dock merge videos
+        self.videoMergeDock = self.createVideoMergeDock()
+        self.videoMergeDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.videoMergeDock, 'bottom')
 
         # Video Player output
-
-        # Creazione del dock aggiuntivo per il video player output
-
-
         # Setup del widget video per l'output
         videoOutputWidget = QVideoWidget()
         videoOutputWidget.setAcceptDrops(True)
@@ -175,6 +175,17 @@ class VideoAudioManager(QMainWindow):
         videoSliderOutput.setRange(0, 1000)  # Inizializza con un range di esempio
         videoSliderOutput.sliderMoved.connect(lambda position: self.playerOutput.setPosition(position))
 
+
+        # Creazione delle QLabel per il timecode
+        self.currentTimeLabelOutput = QLabel('00:00')
+        self.totalTimeLabelOutput = QLabel('/ 00:00')
+        timecodeLayoutOutput = QHBoxLayout()
+        timecodeLayoutOutput.addWidget(self.currentTimeLabelOutput)
+        timecodeLayoutOutput.addWidget(self.totalTimeLabelOutput)
+
+        # Inserisci il layout del timecode nel layout principale del video output
+
+
         # Label per mostrare il nome del file video output
         self.fileNameLabelOutput = QLabel("Nessun video caricato")
         self.fileNameLabelOutput.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -185,8 +196,13 @@ class VideoAudioManager(QMainWindow):
         videoOutputLayout.addWidget(self.fileNameLabelOutput)
 
         videoOutputLayout.addWidget(videoOutputWidget)
+        videoOutputLayout.addLayout(timecodeLayoutOutput)
         videoOutputLayout.addWidget(videoSliderOutput)
         videoOutputLayout.addLayout(playbackControlLayoutOutput)
+
+
+        self.playerOutput.durationChanged.connect(self.updateDurationOutput)
+        self.playerOutput.positionChanged.connect(self.updateTimeCodeOutput)
 
         # Widget per contenere il layout del video player output
         videoPlayerOutputWidget = QWidget()
@@ -196,7 +212,6 @@ class VideoAudioManager(QMainWindow):
         # Collegamento degli eventi del player multimediale ai metodi corrispondenti
         self.playerOutput.durationChanged.connect(lambda duration: videoSliderOutput.setRange(0, duration))
         self.playerOutput.positionChanged.connect(lambda position: videoSliderOutput.setValue(position))
-
 
         # trascrizione video
         self.transcribeButton = QPushButton('Trascrivi Video')
@@ -330,8 +345,20 @@ class VideoAudioManager(QMainWindow):
         self.player.durationChanged.connect(self.durationChanged)  # Assicurati che questo slot sia definito
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
-        # Assicurati che self.videoSlider sia stato correttamente inizializzato prima in initUI
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
+    def updateTimeCodeOutput(self, position):
+        # Aggiorna il timecode corrente del video output
+        hours, remainder = divmod(position // 1000, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self.currentTimeLabelOutput.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+
+    def updateDurationOutput(self, duration):
+        # Aggiorna la durata totale del video output
+        hours, remainder = divmod(duration // 1000, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+
 
     def applyCrop(self):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
@@ -538,6 +565,74 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
+
+    def createVideoMergeDock(self):
+        dock = Dock("Unione Video")
+        layout = QVBoxLayout()
+
+        # Widget per selezionare il video da unire
+        self.mergeVideoPathLineEdit = QLineEdit()
+        self.mergeVideoPathLineEdit.setReadOnly(True)
+        browseMergeVideoButton = QPushButton('Scegli Video da Unire')
+        browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
+
+        # Widget per inserire il timecode
+        self.timecodeLineEdit = QLineEdit()
+        self.timecodeLineEdit.setPlaceholderText("Inserisci il timecode (formato hh:mm:ss)")
+
+        # Pulsante per unire il video
+        mergeButton = QPushButton('Unisci Video')
+        mergeButton.clicked.connect(self.mergeVideo)
+
+        layout.addWidget(self.mergeVideoPathLineEdit)
+        layout.addWidget(browseMergeVideoButton)
+        layout.addWidget(self.timecodeLineEdit)
+        layout.addWidget(mergeButton)
+
+        widget = QWidget()
+        widget.setLayout(layout)
+        dock.addWidget(widget)
+        return dock
+
+    def browseMergeVideo(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
+                                                  "Video Files (*.mp4 *.mov *.avi)")
+        if fileName:
+            self.mergeVideoPathLineEdit.setText(fileName)
+
+    def mergeVideo(self):
+        base_video_path = self.videoPathLineEdit
+        merge_video_path = self.mergeVideoPathLineEdit.text()
+        timecode = self.timecodeLineEdit.text()
+
+        if not base_video_path or not os.path.exists(base_video_path):
+            QMessageBox.warning(self, "Errore", "Carica il video principale prima di unirne un altro.")
+            return
+
+        if not merge_video_path or not os.path.exists(merge_video_path):
+            QMessageBox.warning(self, "Errore", "Seleziona un video da unire.")
+            return
+
+        try:
+            base_clip = VideoFileClip(base_video_path)
+            merge_clip = VideoFileClip(merge_video_path)
+            # Converti il timecode in secondi
+            tc_hours, tc_minutes, tc_seconds = map(int, timecode.split(':'))
+            tc_seconds_total = tc_hours * 3600 + tc_minutes * 60 + tc_seconds
+
+            # Unisci i video inserendo il secondo video al timecode specificato
+            final_clip = concatenate_videoclips(
+                [base_clip.subclip(0, tc_seconds_total), merge_clip, base_clip.subclip(tc_seconds_total)])
+
+            output_path = tempfile.mktemp(suffix='.mp4')
+            final_clip.write_videofile(output_path, codec='libx264')
+            QMessageBox.information(self, "Successo", f"Il video unito è stato salvato in {output_path}")
+
+            # Aggiorna il percorso del video per il player
+            self.loadVideoOutput(output_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'unione", str(e))
+
 
     def browseBackgroundAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
@@ -999,6 +1094,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock = self.createToggleAction(self.downloadDock, 'Mostra/Nascondi Download')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
+        self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -1008,6 +1104,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleDownloadDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
+        viewMenu.addAction(self.actionToggleVideoMergeDock)
 
 
         # Aggiungi azioni per mostrare/nascondere tutti i docks
@@ -1079,6 +1176,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
+        self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
