@@ -277,7 +277,15 @@ class VideoAudioManager(QMainWindow):
         innerLayout.addLayout(languageSelectionLayout)  # Usa addLayout qui
 
         # TextArea per la trascrizione
-        self.transcriptionTextArea = QTextEdit()
+        self.transcriptionTextArea = CustomTextEdit(self)
+        self.transcriptionTextArea.setStyleSheet("""
+               QTextEdit {
+                   color: white;
+                   font-size: 14pt;
+                   font-family: 'Arial';
+                   background-color: #333;
+               }
+           """)
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
         self.resetButton = QPushButton()
@@ -1367,6 +1375,9 @@ class VideoAudioManager(QMainWindow):
 
     def generateAudioWithElevenLabs(self):
         def convert_numbers_to_words(text):
+            # Modifica il testo in modo che ogni numero seguito direttamente da un punto sia seguito da uno spazio
+            text = re.sub(r'(\d+)\.', r'\1 .', text)
+
             new_text = []
             for word in text.split():
                 if word.isdigit():
@@ -1854,7 +1865,18 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione",
                                 "Non sono state generate slides a causa di dati di input non validi o mancanti.")
 
+class CustomTextEdit(QTextEdit):
+    def __init__(self, parent=None):
+        super().__init__(parent)
 
+    def insertFromMimeData(self, source):
+        if source.hasText():
+            # Ottieni il testo puro senza formattazione
+            plain_text = source.text()
+            # Inserisci il testo come testo puro
+            self.insertPlainText(plain_text)
+        else:
+            super().insertFromMimeData(source)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = VideoAudioManager()
