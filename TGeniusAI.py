@@ -90,6 +90,10 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutputDock = Dock("Video Player Output")
         self.videoPlayerOutputDock.setStyleSheet(self.styleSheet())
 
+        # Creazione del dock merge videos
+        self.videoMergeDock = self.createVideoMergeDock()
+        self.videoMergeDock.setStyleSheet(self.styleSheet())
+
         # Aggiunta dei docks all'area
         area.addDock(self.videoPlayerOutputDock, 'right')  # Posizionamento a destra
         area.addDock(self.audioDock, 'bottom')  # Aggiungi il dock audio alla posizione desiderata
@@ -98,6 +102,7 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.editingDock, 'right')
         area.addDock(self.downloadDock, 'top')
         area.addDock(self.recordingDock, 'top')
+        area.addDock(self.videoMergeDock, 'bottom')
 
         if hasattr(self, 'applyDarkMode'):
             self.applyDarkMode()
@@ -119,10 +124,14 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
 
         # Creazione dei pulsanti di controllo playback
-        self.playButton = QPushButton('Play')
-        self.pauseButton = QPushButton('Pause')
-        self.stopButton = QPushButton('Stop')
-        self.cutButton = QPushButton('Taglia')  # Se necessario
+        self.playButton = QPushButton('')
+        self.playButton.setIcon(QIcon("res/play.png"))
+        self.pauseButton = QPushButton('')
+        self.pauseButton.setIcon(QIcon("res/pausa.png"))
+        self.stopButton = QPushButton('')
+        self.stopButton.setIcon(QIcon("res/stop.png"))
+        self.cutButton = QPushButton('')  # Se necessario
+        self.cutButton.setIcon(QIcon("res/taglia.png"))
         self.cropButton = QPushButton('Ritaglia')  # Se necessario
 
         # Collegamento dei pulsanti ai loro slot funzionali
@@ -139,10 +148,6 @@ class VideoAudioManager(QMainWindow):
         timecodeLayout.addWidget(self.currentTimeLabel)
         timecodeLayout.addWidget(self.totalTimeLabel)
 
-        # Creazione del dock merge videos
-        self.videoMergeDock = self.createVideoMergeDock()
-        self.videoMergeDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.videoMergeDock, 'bottom')
 
         # Video Player output
         # Setup del widget video per l'output
@@ -155,9 +160,12 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setVideoOutput(videoOutputWidget)
 
         # Creazione dei pulsanti di controllo playback per il video output
-        playButtonOutput = QPushButton('Play')
-        pauseButtonOutput = QPushButton('Pause')
-        stopButtonOutput = QPushButton('Stop')
+        playButtonOutput = QPushButton('')
+        playButtonOutput.setIcon(QIcon("res/play.png"))
+        pauseButtonOutput = QPushButton('')
+        pauseButtonOutput.setIcon(QIcon("res/pausa.png"))
+        stopButtonOutput = QPushButton('')
+        stopButtonOutput.setIcon(QIcon("res/stop.png"))
 
         # Collegamento dei pulsanti ai loro slot funzionali
         playButtonOutput.clicked.connect(lambda: self.playerOutput.play())
@@ -223,7 +231,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.pauseButton)
         playbackControlLayout.addWidget(self.stopButton)
         playbackControlLayout.addWidget(self.cutButton)
-        playbackControlLayout.addWidget(self.cropButton)
+        #playbackControlLayout.addWidget(self.cropButton)
 
         # Layout principale per il dock del video player
         videoPlayerLayout = QVBoxLayout()
@@ -296,7 +304,7 @@ class VideoAudioManager(QMainWindow):
         self.video_download_language = None
         # Pulsante per incollare nel QTextEdit
         self.pasteButton = QPushButton()
-        self.pasteButton.setIcon(QIcon("res/paste.ico"))  # Assicurati che il percorso dell'icona sia corretto
+        self.pasteButton.setIcon(QIcon("res/paste.png"))  # Assicurati che il percorso dell'icona sia corretto
         self.pasteButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
 
@@ -354,6 +362,26 @@ class VideoAudioManager(QMainWindow):
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Right:
+            # Avanza di 2 secondi
+            current_position = self.player.position()
+            new_position = current_position + 2000  # 2000 ms = 2 secondi
+            self.player.setPosition(new_position)
+        elif event.key() == Qt.Key.Key_Left:
+            # Torna indietro di 2 secondi
+            current_position = self.player.position()
+            new_position = max(0, current_position - 2000)  # Evita di andare sotto lo 0
+            self.player.setPosition(new_position)
+        elif event.key() == Qt.Key.Key_Space:
+            # Pausa o riproduzione a seconda dello stato corrente
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.player.pause()
+            else:
+                self.player.play()
+        else:
+            super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
@@ -659,7 +687,8 @@ class VideoAudioManager(QMainWindow):
             'downloadDock': self.downloadDock,
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
-            'videoPlayerDockOutput': self.videoPlayerOutputDock
+            'videoPlayerDockOutput': self.videoPlayerOutputDock,
+            'videoMergeDock': self.videoMergeDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks)
 
@@ -677,9 +706,10 @@ class VideoAudioManager(QMainWindow):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateTimecodeRec)
         self.timecodeLabel =  QLabel('00:00')
+        self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
-        self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Combobox per la selezione della finestra o del monitor
         self.screenSelectionComboBox = QComboBox()
@@ -920,7 +950,7 @@ class VideoAudioManager(QMainWindow):
 
         url_label = QLabel("Enter YouTube URL:")
         url_edit = QLineEdit()
-        download_btn = QPushButton("Download Video")
+        download_btn = QPushButton("Download Audio")
         download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text()))
 
         layout.addWidget(url_label)
@@ -1043,7 +1073,7 @@ class VideoAudioManager(QMainWindow):
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('&File')
 
-        openAction = QAction('&Open Video', self)
+        openAction = QAction('&Open Video/Audio', self)
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video')
         openAction.triggered.connect(self.browseVideo)
@@ -1078,12 +1108,12 @@ class VideoAudioManager(QMainWindow):
         self.setupViewMenuActions(viewMenu)
         # Creazione del menu About
         aboutMenu = menuBar.addMenu('&About')
-
         # Aggiunta di azioni al menu About
         aboutAction = QAction('&About', self)
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
+        self.updateViewMenu()
 
     def setupViewMenuActions(self, viewMenu):
         # Azione per il Video Player Dock
@@ -1153,6 +1183,7 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setVisible(True)
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
+        self.videoMergeDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
     def hideAllDocks(self):
@@ -1164,6 +1195,7 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
+        self.videoMergeDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
         action = QAction(menuText, self, checkable=True)
@@ -1250,9 +1282,9 @@ class VideoAudioManager(QMainWindow):
                 text = recognizer.recognize_google(audio_data, language=language_video)
             return text, start_time, language_video
         except sr.UnknownValueError:
-            return "[Incomprensibile]", start_time
+            return "[Incomprensibile]", start_time, language_video
         except sr.RequestError as e:
-            return f"[Errore: {e}]", start_time
+            return f"[Errore: {e}]", start_time, language_video
         finally:
             try_remove_chunk_file(chunk_file)
 
