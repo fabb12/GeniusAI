@@ -17,7 +17,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtCore import Qt, QSize
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
-
+import datetime
 import os
 import time
 from PyQt6.QtWidgets import QProgressDialog
@@ -40,6 +40,7 @@ import pycountry
 import uuid
 from CropVideo import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
+from PyQt6.QtCore import pyqtSignal
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -100,8 +101,8 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.videoPlayerDock, 'left')
         area.addDock(self.transcriptionDock, 'bottom')
         area.addDock(self.editingDock, 'right')
-        area.addDock(self.downloadDock, 'top')
-        area.addDock(self.recordingDock, 'top')
+        area.addDock(self.downloadDock, 'left')
+        area.addDock(self.recordingDock, 'right')
         area.addDock(self.videoMergeDock, 'bottom')
 
         if hasattr(self, 'applyDarkMode'):
@@ -289,7 +290,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setStyleSheet("""
                QTextEdit {
                    color: white;
-                   font-size: 14pt;
+                   font-size: 12pt;
                    font-family: 'Arial';
                    background-color: #333;
                }
@@ -603,8 +604,12 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def createVideoMergeDock(self):
+        """Crea e restituisce il dock per la gestione dell'unione di video."""
         dock = Dock("Unione Video")
-        layout = QVBoxLayout()
+
+        # GroupBox per organizzare visivamente le opzioni di unione video
+        mergeGroup = QGroupBox("Opzioni di Unione Video")
+        mergeLayout = QVBoxLayout()
 
         # Widget per selezionare il video da unire
         self.mergeVideoPathLineEdit = QLineEdit()
@@ -620,16 +625,22 @@ class VideoAudioManager(QMainWindow):
         mergeButton = QPushButton('Unisci Video')
         mergeButton.clicked.connect(self.mergeVideo)
 
-        layout.addWidget(self.mergeVideoPathLineEdit)
-        layout.addWidget(browseMergeVideoButton)
-        layout.addWidget(self.timecodeLineEdit)
-        layout.addWidget(mergeButton)
+        # Aggiunta dei controlli al layout della GroupBox
+        mergeLayout.addWidget(self.mergeVideoPathLineEdit)
+        mergeLayout.addWidget(browseMergeVideoButton)
+        mergeLayout.addWidget(self.timecodeLineEdit)
+        mergeLayout.addWidget(mergeButton)
 
+        # Imposta il layout del GroupBox
+        mergeGroup.setLayout(mergeLayout)
+
+        # Widget principale per il dock
         widget = QWidget()
-        widget.setLayout(layout)
+        widget.setLayout(QVBoxLayout())
+        widget.layout().addWidget(mergeGroup)
         dock.addWidget(widget)
-        return dock
 
+        return dock
     def browseMergeVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
                                                   "Video Files (*.mp4 *.mov *.avi)")
@@ -705,17 +716,16 @@ class VideoAudioManager(QMainWindow):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateTimecodeRec)
-        self.timecodeLabel =  QLabel('00:00')
+        self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Combobox per la selezione della finestra o del monitor
-        self.screenSelectionComboBox = QComboBox()
+        self.screenSelectionComboBox = CustomComboBox()
+        self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
 
-
-        # Combobox per la selezione del dispositivo audio
         self.audioDeviceComboBox = QComboBox()
         audio_devices = self.print_audio_devices()
         self.audioDeviceComboBox.addItems(audio_devices)
@@ -731,8 +741,10 @@ class VideoAudioManager(QMainWindow):
         browseButton.clicked.connect(self.browseFileLocation)
 
         # Pulsanti per la registrazione
-        self.startRecordingButton = QPushButton("Inizia Registrazione")
-        self.stopRecordingButton = QPushButton("Ferma Registrazione")
+        self.startRecordingButton = QPushButton("")
+        self.startRecordingButton.setIcon(QIcon("res/rec.png"))
+        self.stopRecordingButton = QPushButton("")
+        self.stopRecordingButton.setIcon(QIcon("res/stop.png"))
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)
@@ -741,28 +753,43 @@ class VideoAudioManager(QMainWindow):
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
-        layout = QVBoxLayout()
-        layout_label = QHBoxLayout()
+        # Layout principale per il gruppo di controllo di registrazione
+        recordingGroup = QGroupBox("Opzioni di Registrazione")
+        recordingLayout = QVBoxLayout(recordingGroup)
+        recordingLayout.addWidget(self.recordingStatusLabel)
+        recordingLayout.addWidget(self.timecodeLabel)
+        recordingLayout.addWidget(QLabel("Seleziona finestra o schermo:"))
+        recordingLayout.addWidget(self.screenSelectionComboBox)
+        recordingLayout.addWidget(QLabel("Seleziona input audio:"))
+        recordingLayout.addWidget(self.audioDeviceComboBox)
+        recordingLayout.addWidget(QLabel("File di destinazione:"))
+        recordingLayout.addWidget(self.filePathLineEdit)
+        recordingLayout.addWidget(browseButton)
+        recordingLayout.addLayout(buttonLayout)
 
-        # Aggiunta dei widget al layout
-        layout_label.addWidget(self.recordingStatusLabel)
-        layout_label.addWidget(self.timecodeLabel)
-        layout.addLayout(layout_label)
-        layout.addWidget(QLabel("Seleziona finestra o schermo:"))
-        layout.addWidget(self.screenSelectionComboBox)
-        layout.addWidget(QLabel("Seleziona input audio:"))
-        layout.addWidget(self.audioDeviceComboBox)
-        layout.addWidget(QLabel("File di destinazione:"))
-        layout.addWidget(self.filePathLineEdit)
-        layout.addWidget(browseButton)
-        layout.addLayout(buttonLayout)  # Utilizza il layout orizzontale per i pulsanti
-
-        # Widget per contenere il layout
+        # Widget per contenere il layout principale
         widget = QWidget()
-        widget.setLayout(layout)
+        widget.setLayout(QVBoxLayout())
+        widget.layout().addWidget(recordingGroup)
         dock.addWidget(widget)
 
+        self.setDefaultAudioDevice()  # Imposta lo Stereo Mix come default subito dopo aver popolato la lista
+
+        self.updateWindowList()
         return dock
+
+    def updateWindowList(self):
+        """Aggiorna la lista delle finestre disponibili."""
+        self.screenSelectionComboBox.clear()
+        windows = {win.title for win in gw.getAllWindows() if win.title.strip()}
+        self.screenSelectionComboBox.addItems(sorted(windows))
+
+
+    def setDefaultAudioDevice(self):
+        """Imposta 'Stereo Mix' come dispositivo predefinito se disponibile."""
+        index = self.audioDeviceComboBox.findText("Stereo Mix")
+        if index != -1:
+            self.audioDeviceComboBox.setCurrentIndex(index)
 
     def browseFileLocation(self):
         """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
@@ -775,15 +802,16 @@ class VideoAudioManager(QMainWindow):
     def print_audio_devices(self):
         devices = sd.query_devices()
         available_audio_devices = []
+        added_devices = set()  # Set per tenere traccia dei dispositivi già aggiunti
+
         for device in devices:
-            if device['max_input_channels'] > 0:  # Verifica se il dispositivo può registrare audio
-                try:
-                    # Prova ad aprire il dispositivo per verificare se è disponibile
-                    with sd.InputStream(device=device['name']):
-                        available_audio_devices.append(f"{device['name']} (Max canali: {device['max_input_channels']})")
-                except Exception as e:
-                    # Se non riesce ad aprire il dispositivo, non lo aggiunge alla lista
-                    print(f"Dispositivo non disponibile: {device['name']}, errore: {e}")
+            # Verifica se il dispositivo è un microfono o lo Stereo Mix e non è già stato aggiunto
+            if ('microphone' in device['name'].lower() or 'stereo mix' in device['name'].lower()) and device[
+                'name'] not in added_devices:
+                device_info = f"{device['name']} (Max canali: {device['max_input_channels']})"
+                available_audio_devices.append(device_info)
+                added_devices.add(device['name'])  # Aggiungi il nome del dispositivo al set
+
         return available_audio_devices
 
     def applyBackgroundAudioToVideo(self):
@@ -860,8 +888,7 @@ class VideoAudioManager(QMainWindow):
 
             if audio_input_index is not None:
                 max_channels = all_devices[audio_input_index]['max_input_channels']
-                audio_channels = min(2,
-                                     max_channels)  # Usa un numero sicuro di canali, ad esempio 2 o il massimo supportato
+                audio_channels = min(2, max_channels)  # Usa un numero sicuro di canali
 
                 monitors = get_monitors()
                 if "Schermo intero" in selected_title:
@@ -873,10 +900,16 @@ class VideoAudioManager(QMainWindow):
                     window.activate()
                     region = (window.left, window.top, window.width, window.height)
 
-                audioFileName = video_file_path.replace('.avi', '.wav')
+                # Genera un timestamp per creare un nome unico per ogni file
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                base_filename = os.path.splitext(video_file_path)[0]
+                extension = os.path.splitext(video_file_path)[1]
+                video_file_path_with_timestamp = f"{base_filename}_{timestamp}{extension}"
+                audioFileName = f"{base_filename}_{timestamp}.wav"
 
                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                self.video_writer = cv2.VideoWriter(video_file_path, fourcc, 25.0, (region[2], region[3]))
+                self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0,
+                                                    (region[2], region[3]))
 
                 self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
                                                       audio_input=audio_input_index, audio_channels=audio_channels)
@@ -886,7 +919,7 @@ class VideoAudioManager(QMainWindow):
                 self.recordingTime = QTime(0, 0, 0)
                 self.timer.start(1000)  # Avvia il timer che aggiorna ogni secondo
 
-                self.current_video_path = video_file_path
+                self.current_video_path = video_file_path_with_timestamp
                 self.current_audio_path = audioFileName
                 self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di {selected_title}')
 
@@ -943,23 +976,35 @@ class VideoAudioManager(QMainWindow):
                 print("File salvato correttamente!")
             except Exception as e:
                 print("Errore durante il salvataggio del file:", e)
+
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""
-        dock = Dock("Download Video", size=(1, 1))
-        layout = QVBoxLayout()
+        dock = Dock("Download Video")
 
-        url_label = QLabel("Enter YouTube URL:")
+        # GroupBox per organizzare visivamente le opzioni di download
+        downloadGroup = QGroupBox("Opzioni di Download Video")
+        downloadLayout = QVBoxLayout()
+
+        # Widget per inserire l'URL del video di YouTube
+        url_label = QLabel("Inserisci l'URL di YouTube:")
         url_edit = QLineEdit()
-        download_btn = QPushButton("Download Audio")
+        download_btn = QPushButton("Download Video")
         download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text()))
 
-        layout.addWidget(url_label)
-        layout.addWidget(url_edit)
-        layout.addWidget(download_btn)
+        # Aggiunta dei controlli al layout della GroupBox
+        downloadLayout.addWidget(url_label)
+        downloadLayout.addWidget(url_edit)
+        downloadLayout.addWidget(download_btn)
 
+        # Imposta il layout del GroupBox
+        downloadGroup.setLayout(downloadLayout)
+
+        # Widget principale per il dock
         widget = QWidget()
-        widget.setLayout(layout)
+        widget.setLayout(QVBoxLayout())
+        widget.layout().addWidget(downloadGroup)
         dock.addWidget(widget)
+
         return dock
 
     def handleDownload(self, url):
@@ -1038,7 +1083,6 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setSource(QUrl.fromLocalFile(video_path))
         self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
 
-        self.playerOutput.play()
         print(f"Loaded video output: {video_path}")
 
     def unloadVideoOutput(self):
@@ -1896,6 +1940,14 @@ class VideoAudioManager(QMainWindow):
         else:
             QMessageBox.warning(self, "Attenzione",
                                 "Non sono state generate slides a causa di dati di input non validi o mancanti.")
+
+class CustomComboBox(QComboBox):
+    popupOpened = pyqtSignal()
+
+    def showPopup(self):
+        self.popupOpened.emit()  # Emetti il segnale quando il popup viene aperto
+        super().showPopup()  # Chiamata al metodo originale per assicurarsi che il popup venga mostrato
+
 
 class CustomTextEdit(QTextEdit):
     def __init__(self, parent=None):
