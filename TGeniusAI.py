@@ -4,8 +4,8 @@ from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
 from PyQt6.QtCore import QUrl
 from moviepy.editor import  concatenate_videoclips, concatenate_audioclips
-from moviepy.editor import VideoFileClip, vfx, AudioFileClip, AudioClip
-
+from moviepy.editor import VideoFileClip, vfx, AudioFileClip, AudioClip, ImageClip, CompositeVideoClip
+from moviepy.editor import  ColorClip
 from pptx import Presentation
 import re
 import tempfile
@@ -554,9 +554,64 @@ class VideoAudioManager(QMainWindow):
         audioLayout.addWidget(self.pauseAfterLineEdit)
         audioLayout.addWidget(applyAudioButton)
 
+        # Nuovi controlli per la pausa personalizzata
+        self.timecodePauseLineEdit = QLineEdit()
+        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
+        self.pauseDurationLineEdit = QLineEdit()
+        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
+        self.applyPauseButton = QPushButton('Applica Pausa Video')
+        self.applyPauseButton.clicked.connect(self.applyFreezeFramePause)
+
+        audioLayout.addWidget(QLabel("Timecode Inizio Pausa:"))
+        audioLayout.addWidget(self.timecodePauseLineEdit)
+        audioLayout.addWidget(QLabel("Durata Pausa (s):"))
+        audioLayout.addWidget(self.pauseDurationLineEdit)
+        audioLayout.addWidget(self.applyPauseButton)
 
         audioManagementGroup.setLayout(audioLayout)
         return audioManagementGroup
+
+    def applyFreezeFramePause(self):
+        video_path = self.videoPathLineEdit
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare una pausa.")
+            return
+
+        try:
+            # Estrazione del timecode e della durata della pausa
+            timecode = self.timecodePauseLineEdit.text()
+            pause_duration = int(self.pauseDurationLineEdit.text())
+            hours, minutes, seconds = map(int, timecode.split(':'))
+            start_time = hours * 3600 + minutes * 60 + seconds
+
+            # Caricamento del video
+            video_clip = VideoFileClip(video_path)
+
+            # Ottenere l'ultimo frame dal timecode specificato
+            freeze_frame = video_clip.get_frame(start_time)
+
+            # Creare un clip di immagine dal frame congelato e impostare la sua durata
+            freeze_clip = ImageClip(freeze_frame).set_duration(pause_duration).set_fps(video_clip.fps)
+
+            # Creazione di due parti di video originali
+            original_video_part1 = video_clip.subclip(0, start_time)
+            original_video_part2 = video_clip.subclip(start_time)
+
+            # Combinazione delle clip video senza l'audio
+            video_only = concatenate_videoclips(
+                [original_video_part1.without_audio(), freeze_clip, original_video_part2.without_audio()],
+                method="compose")
+
+            # Ricreare il video con l'audio originale
+            final_video = CompositeVideoClip([video_only.set_audio(video_clip.audio)])
+
+            # Salvataggio del video finale
+            output_path = tempfile.mktemp(suffix='.mp4')
+            final_video.write_videofile(output_path, codec='libx264')
+            QMessageBox.information(self, "Successo", f"Video con pausa frame congelato salvato in {output_path}")
+            self.loadVideoOutput(output_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
     def createAudioDock(self):
         dock = Dock("Gestione Audio")
         layout = QVBoxLayout()
