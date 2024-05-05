@@ -58,6 +58,7 @@ class VideoAudioManager(QMainWindow):
         self.initUI()
         self.currentPosition = 0
         self.videoPathLineEdit = ''
+        self.videoPathLineOutputEdit = ''
         self.is_recording = False
         self.video_writer = None
         self.setupDockSettingsManager()
@@ -168,6 +169,12 @@ class VideoAudioManager(QMainWindow):
         stopButtonOutput = QPushButton('')
         stopButtonOutput.setIcon(QIcon("res/stop.png"))
 
+        changeButtonOutput = QPushButton('')
+        changeButtonOutput.setIcon(QIcon("res/change.png"))
+        changeButtonOutput.setToolTip('Sposta video su altro player')
+        changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
+                                                                  os.path.basename(self.videoPathLineOutputEdit)))
+
         # Collegamento dei pulsanti ai loro slot funzionali
         playButtonOutput.clicked.connect(lambda: self.playerOutput.play())
         pauseButtonOutput.clicked.connect(lambda: self.playerOutput.pause())
@@ -178,6 +185,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayoutOutput.addWidget(playButtonOutput)
         playbackControlLayoutOutput.addWidget(pauseButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
+        playbackControlLayoutOutput.addWidget(changeButtonOutput)
 
         # Slider per il controllo della posizione del video output
         videoSliderOutput = QSlider(Qt.Orientation.Horizontal)
@@ -346,9 +354,6 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiunta del widget al dock
         self.transcriptionDock.addWidget(widgetTranscription)
-
-
-
         # Layout principale per il dock delle opzioni di editing
 
         voiceSettingsWidget = self.setupVoiceSettingsUI()
@@ -363,6 +368,7 @@ class VideoAudioManager(QMainWindow):
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Right:
@@ -523,53 +529,6 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
 
-    def setupExistingAudioManagementUI(self):
-        # GroupBox per la gestione dell'audio esistente
-        audioManagementGroup = QGroupBox("Opzioni Audio Principale")
-        audioLayout = QVBoxLayout()
-
-        # Widget per la selezione dell'audio principale
-        self.audioPathLineEdit = QLineEdit()
-        self.audioPathLineEdit.setReadOnly(True)
-        browseAudioButton = QPushButton('Scegli Audio Principale')
-        browseAudioButton.clicked.connect(self.browseAudio)
-
-        # Controlli per gestire le pause
-        self.pauseBeforeLineEdit = QLineEdit()
-        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
-        self.pauseAfterLineEdit = QLineEdit()
-        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
-
-        # Pulsante per applicare l'audio al video
-        applyAudioButton = QPushButton('Applica Audio con Pause')
-        applyAudioButton.clicked.connect(self.applyAudioToVideo)
-
-
-        # Aggiunta dei widget al layout del GroupBox
-        audioLayout.addWidget(self.audioPathLineEdit)
-        audioLayout.addWidget(browseAudioButton)
-        audioLayout.addWidget(QLabel("Pausa iniziale (s):"))
-        audioLayout.addWidget(self.pauseBeforeLineEdit)
-        audioLayout.addWidget(QLabel("Pausa finale (s):"))
-        audioLayout.addWidget(self.pauseAfterLineEdit)
-        audioLayout.addWidget(applyAudioButton)
-
-        # Nuovi controlli per la pausa personalizzata
-        self.timecodePauseLineEdit = QLineEdit()
-        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
-        self.pauseDurationLineEdit = QLineEdit()
-        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
-        self.applyPauseButton = QPushButton('Applica Pausa Video')
-        self.applyPauseButton.clicked.connect(self.applyFreezeFramePause)
-
-        audioLayout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        audioLayout.addWidget(self.timecodePauseLineEdit)
-        audioLayout.addWidget(QLabel("Durata Pausa (s):"))
-        audioLayout.addWidget(self.pauseDurationLineEdit)
-        audioLayout.addWidget(self.applyPauseButton)
-
-        audioManagementGroup.setLayout(audioLayout)
-        return audioManagementGroup
 
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
@@ -612,44 +571,25 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
+
     def createAudioDock(self):
         dock = Dock("Gestione Audio")
         layout = QVBoxLayout()
 
-        # GroupBox per la gestione dell'audio esistente
-        audioManagementGroup = self.setupExistingAudioManagementUI()
+        # GroupBox per la sostituzione dell'audio principale
+        audioReplacementGroup = self.createAudioReplacementGroup()
+        layout.addWidget(audioReplacementGroup)
 
-        # Nuova GroupBox per la gestione del sottofondo
-        backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
-        backgroundLayout = QVBoxLayout()
+        # GroupBox per l'applicazione delle pause audio
+        audioPauseGroup = self.createAudioPauseGroup()
+        layout.addWidget(audioPauseGroup)
 
-        # Widget per la selezione del file audio di sottofondo
-        self.backgroundAudioPathLineEdit = QLineEdit()
-        self.backgroundAudioPathLineEdit.setReadOnly(True)
-        browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
-        browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
+        # GroupBox per l'applicazione delle pause video
+        videoPauseGroup = self.createVideoPauseGroup()
+        layout.addWidget(videoPauseGroup)
 
-        # Slider per il volume del sottofondo
-        volumeLabel = QLabel("Volume Sottofondo:")
-        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
-        self.volumeSlider.setRange(0, 100)
-        self.volumeSlider.setValue(50)  # Imposta il volume iniziale al 50%
-        self.volumeSlider.valueChanged.connect(self.adjustBackgroundVolume)
-
-
-        applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
-        applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
-
-        # Aggiunta dei widget al layout del GroupBox
-        backgroundLayout.addWidget(self.backgroundAudioPathLineEdit)
-        backgroundLayout.addWidget(browseBackgroundAudioButton)
-        backgroundLayout.addWidget(volumeLabel)
-        backgroundLayout.addWidget(self.volumeSlider)
-        backgroundLayout.addWidget(applyBackgroundButton)
-        backgroundAudioGroup.setLayout(backgroundLayout)
-
-        # Aggiunta dei GroupBox al layout principale del dock
-        layout.addWidget(audioManagementGroup)
+        # GroupBox per la gestione dell'audio di sottofondo
+        backgroundAudioGroup = self.createBackgroundAudioGroup()
         layout.addWidget(backgroundAudioGroup)
 
         widget = QWidget()
@@ -657,6 +597,89 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
+
+    def createAudioReplacementGroup(self):
+        audioReplacementGroup = QGroupBox("Sostituzione Audio Principale")
+        layout = QVBoxLayout()
+
+        self.audioPathLineEdit = QLineEdit()
+        self.audioPathLineEdit.setReadOnly(True)
+        browseAudioButton = QPushButton('Scegli Audio Principale')
+        browseAudioButton.clicked.connect(self.browseAudio)
+        applyAudioButton = QPushButton('Applica Audio Principale')
+        applyAudioButton.clicked.connect(
+            lambda: self.applyNewAudioToVideo(self.videoPathLineEdit, self.audioPathLineEdit.text()))
+
+        layout.addWidget(self.audioPathLineEdit)
+        layout.addWidget(browseAudioButton)
+        layout.addWidget(applyAudioButton)
+        audioReplacementGroup.setLayout(layout)
+
+        return audioReplacementGroup
+
+    def createAudioPauseGroup(self):
+        audioPauseGroup = QGroupBox("Applica Pause Audio")
+        layout = QVBoxLayout()
+
+        self.pauseBeforeLineEdit = QLineEdit()
+        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
+        self.pauseAfterLineEdit = QLineEdit()
+        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
+        applyPauseButton = QPushButton('Applica Pause Audio')
+        applyPauseButton.clicked.connect(self.applyAudioWithPauses)
+
+        layout.addWidget(QLabel("Pausa iniziale (s):"))
+        layout.addWidget(self.pauseBeforeLineEdit)
+        layout.addWidget(QLabel("Pausa finale (s):"))
+        layout.addWidget(self.pauseAfterLineEdit)
+        layout.addWidget(applyPauseButton)
+        audioPauseGroup.setLayout(layout)
+
+        return audioPauseGroup
+
+    def createVideoPauseGroup(self):
+        videoPauseGroup = QGroupBox("Applica Pausa Video")
+        layout = QVBoxLayout()
+
+        self.timecodePauseLineEdit = QLineEdit()
+        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
+        self.pauseDurationLineEdit = QLineEdit()
+        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
+        applyVideoPauseButton = QPushButton('Applica Pausa Video')
+        applyVideoPauseButton.clicked.connect(self.applyFreezeFramePause)
+
+        layout.addWidget(QLabel("Timecode Inizio Pausa:"))
+        layout.addWidget(self.timecodePauseLineEdit)
+        layout.addWidget(QLabel("Durata Pausa (s):"))
+        layout.addWidget(self.pauseDurationLineEdit)
+        layout.addWidget(applyVideoPauseButton)
+        videoPauseGroup.setLayout(layout)
+
+        return videoPauseGroup
+
+    def createBackgroundAudioGroup(self):
+        backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
+        layout = QVBoxLayout()
+
+        self.backgroundAudioPathLineEdit = QLineEdit()
+        self.backgroundAudioPathLineEdit.setReadOnly(True)
+        browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
+        browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
+        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSlider.setRange(0, 100)
+        self.volumeSlider.setValue(50)
+        self.volumeSlider.valueChanged.connect(self.adjustBackgroundVolume)
+        applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
+        applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
+
+        layout.addWidget(self.backgroundAudioPathLineEdit)
+        layout.addWidget(browseBackgroundAudioButton)
+        layout.addWidget(QLabel("Volume Sottofondo:"))
+        layout.addWidget(self.volumeSlider)
+        layout.addWidget(applyBackgroundButton)
+        backgroundAudioGroup.setLayout(layout)
+
+        return backgroundAudioGroup
 
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
@@ -904,7 +927,7 @@ class VideoAudioManager(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
 
-    def applyAudioToVideo(self):
+    def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Assicurati che questo sia il percorso del video attualmente caricato
         audio_path = self.audioPathLineEdit.text()
         pause_before = float(self.pauseBeforeLineEdit.text() or 0)
@@ -1133,7 +1156,7 @@ class VideoAudioManager(QMainWindow):
     def loadVideoOutput(self, video_path):
         # Scarica il video corrente prima di caricarne uno nuovo
         self.unloadVideoOutput()
-
+        self.videoPathLineOutputEdit = video_path
         # Carica e riproduce il nuovo video
         self.playerOutput.setSource(QUrl.fromLocalFile(video_path))
         self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
