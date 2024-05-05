@@ -171,7 +171,7 @@ class VideoAudioManager(QMainWindow):
 
         changeButtonOutput = QPushButton('')
         changeButtonOutput.setIcon(QIcon("res/change.png"))
-        changeButtonOutput.setToolTip('Sposta video su altro player')
+        changeButtonOutput.setToolTip('Sposta video in Video Player Source')
         changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
                                                                   os.path.basename(self.videoPathLineOutputEdit)))
 
@@ -746,18 +746,24 @@ class VideoAudioManager(QMainWindow):
             tc_seconds_total = tc_hours * 3600 + tc_minutes * 60 + tc_seconds
 
             # Unisci i video inserendo il secondo video al timecode specificato
-            final_clip = concatenate_videoclips(
-                [base_clip.subclip(0, tc_seconds_total), merge_clip, base_clip.subclip(tc_seconds_total)])
+            final_clip = concatenate_videoclips([
+                base_clip.subclip(0, tc_seconds_total),
+                merge_clip,
+                base_clip.subclip(tc_seconds_total)
+            ], method='compose')
 
-            output_path = tempfile.mktemp(suffix='.mp4')
+            # Genera il percorso del file di output
+            base_dir = os.path.dirname(base_video_path)
+            base_name = os.path.splitext(os.path.basename(base_video_path))[0]
+            output_path = os.path.join(base_dir, f"{base_name}_merged.mp4")
+
             final_clip.write_videofile(output_path, codec='libx264')
             QMessageBox.information(self, "Successo", f"Il video unito è stato salvato in {output_path}")
 
             # Aggiorna il percorso del video per il player
             self.loadVideoOutput(output_path)
         except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'unione", str(e))
-
+            QMessageBox.warning(self, "Errore", "Si è verificato un errore durante l'unione dei video: " + str(e))
 
     def browseBackgroundAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
@@ -1123,28 +1129,23 @@ class VideoAudioManager(QMainWindow):
         ext = os.path.splitext(file_path)[1].lower()
         return ext in audio_extensions
 
-    def unloadVideo(self):
-        # Ferma il video se è in riproduzione
-        self.player.stop()
+    def sourceSetter(self, url):
+        self.player.setSource(QUrl.fromLocalFile(url))
+        self.player.play()
 
-        # Rilascia la risorsa video corrente
-        self.player.setSource(QUrl())
-
-        # Aggiorna l'interfaccia utente
-        self.fileNameLabel.setText("Nessun video caricato")
-        self.videoSlider.setValue(0)
-        self.currentTimeLabel.setText('00:00:00')
-        self.totalTimeLabel.setText('/ 00:00:00')
-
-        print("Video unloaded successfully.")
+    def sourceSetterOutput(self, url):
+        self.playerOutput.setSource(QUrl.fromLocalFile(url))
+        self.playerOutput.play()
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
         # Scarica il video corrente prima di caricarne uno nuovo
-        self.unloadVideo()
+        self.player.stop()
+
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
+            QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
 
         self.videoPathLineEdit = video_path
-        self.player.setSource(QUrl.fromLocalFile(video_path))
 
         if self.isAudioOnly(video_path):
             self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")  # Display special message for audio files
@@ -1154,28 +1155,16 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFiles(video_path)  # Update recent files list
 
     def loadVideoOutput(self, video_path):
-        # Scarica il video corrente prima di caricarne uno nuovo
-        self.unloadVideoOutput()
-        self.videoPathLineOutputEdit = video_path
-        # Carica e riproduce il nuovo video
-        self.playerOutput.setSource(QUrl.fromLocalFile(video_path))
-        self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
 
-        print(f"Loaded video output: {video_path}")
-
-    def unloadVideoOutput(self):
-        # Ferma il video se è in riproduzione
         self.playerOutput.stop()
 
-        # Rilascia la risorsa video corrente
-        self.playerOutput.setSource(QUrl())
+        if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
+            QTimer.singleShot(1, lambda: self.sourceSetterOutput(video_path))
 
-        # Aggiorna l'interfaccia utente
-        self.fileNameLabelOutput.setText("Nessun video caricato")
-        print("Video output unloaded successfully.")
+        self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
+        self.videoPathLineOutputEdit = video_path
+        print(f"Loaded video output: {video_path}")
 
-    def onError(self, error_message):
-        QMessageBox.critical(self, "Download Error", error_message)
 
     def updateTimeCode(self, position):
         # Calcola ore, minuti e secondi dalla posizione, che è in millisecondi
@@ -1810,12 +1799,9 @@ class VideoAudioManager(QMainWindow):
     def dropEvent(self, event):
         file_urls = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
         if file_urls:
-            self.player.stop()
-            self.videoPathLineEdit = file_urls[0]  # Aggiorna il percorso del video memorizzato
-            self.player.setSource(QUrl.fromLocalFile(file_urls[0]))  # Imposta la nuova sorgente video
-            self.fileNameLabel.setText(os.path.basename(file_urls[0]))  # Aggiorna il nome del file sulla label
 
-            print(f"Video loaded: {file_urls[0]}")  # Opzionale: stampa il percorso del video caricato
+            self.videoPathLineEdit = file_urls[0]  # Aggiorna il percorso del video memorizzato
+            self.loadVideo(self.videoPathLineEdit, os.path.basename(file_urls[0]))
 
     def browseVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
