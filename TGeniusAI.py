@@ -1135,7 +1135,7 @@ class VideoAudioManager(QMainWindow):
 
     def sourceSetter(self, url):
         self.player.setSource(QUrl.fromLocalFile(url))
-        self.player.play()
+        #self.player.play()
 
     def sourceSetterOutput(self, url):
         self.playerOutput.setSource(QUrl.fromLocalFile(url))
@@ -1342,13 +1342,14 @@ class VideoAudioManager(QMainWindow):
 
     def convertVideoToAudio(self, video_file, audio_format='wav'):
         """Estrae la traccia audio dal video e la converte in formato WAV."""
-        # Usa il blocco 'with' per assicurarti che il clip venga chiuso automaticamente
         with VideoFileClip(video_file) as video_clip:
-            audio_file = f'temp.{audio_format}'
-            # Esegui l'estrazione dell'audio
-            video_clip.audio.write_audiofile(audio_file, codec='pcm_s16le')  # codec per wav
-        # A questo punto, video_clip è stato chiuso e rilasciato
-        return audio_file
+            # Crea un file temporaneo nel sistema in modo sicuro
+            temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{audio_format}')
+            # Esegui l'estrazione dell'audio e salvalo nel file temporaneo
+            video_clip.audio.write_audiofile(temp_audio.name, codec='pcm_s16le')  # codec per wav
+            # Chiudi il file temporaneo per evitare lock sul file
+            temp_audio.close()
+            return temp_audio.name
 
     def splitAudio(self, audio_file, length=60000):
         """Divide l'audio in blocchi di una durata specifica (in millisecondi)."""
