@@ -1343,11 +1343,12 @@ class VideoAudioManager(QMainWindow):
     def convertVideoToAudio(self, video_file, audio_format='wav'):
         """Estrae la traccia audio dal video e la converte in formato WAV."""
         with VideoFileClip(video_file) as video_clip:
-            # Crea un file temporaneo nel sistema in modo sicuro
+            if not video_clip.audio:
+                raise ValueError("Il video non contiene tracce audio")
+            # Crea un file temporaneo in modo sicuro
             temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{audio_format}')
-            # Esegui l'estrazione dell'audio e salvalo nel file temporaneo
-            video_clip.audio.write_audiofile(temp_audio.name, codec='pcm_s16le')  # codec per wav
-            # Chiudi il file temporaneo per evitare lock sul file
+            # Esegui l'estrazione dell'audio
+            video_clip.audio.write_audiofile(temp_audio.name, codec='pcm_s16le')
             temp_audio.close()
             return temp_audio.name
 

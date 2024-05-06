@@ -18,6 +18,8 @@ class TranscriptionThread(QThread):
             else:
                 # Convert video to audio and track the temporary audio file for cleanup
                 audio_file = self.parent().convertVideoToAudio(self.media_path)
+                if not audio_file or not os.path.exists(audio_file):
+                    raise Exception("La conversione del video in audio è fallita o il file non esiste.")
                 self.temp_files.append(audio_file)  # Add to temporary files list
 
             chunks = self.parent().splitAudio(audio_file)
