@@ -863,11 +863,15 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def updateWindowList(self):
-        """Aggiorna la lista delle finestre disponibili."""
+        """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
         self.screenSelectionComboBox.clear()
-        windows = {win.title for win in gw.getAllWindows() if win.title.strip()}
-        self.screenSelectionComboBox.addItems(sorted(windows))
+        windows = [win.title for win in gw.getAllWindows() if win.title.strip()]
 
+        # Ottieni i dettagli dei monitor e formatta il titolo per l'inserimento nella combo box
+        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors())]
+
+        # Aggiungi prima i monitor alla lista della combo box
+        self.screenSelectionComboBox.addItems(monitors + windows)
 
     def setDefaultAudioDevice(self):
         """Imposta 'Stereo Mix' come dispositivo predefinito se disponibile."""
@@ -1804,12 +1808,12 @@ class VideoAudioManager(QMainWindow):
             self.loadVideo(self.videoPathLineEdit, os.path.basename(file_urls[0]))
 
     def browseVideo(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
         if fileName:
            self.loadVideo(fileName)
 
     def browseVideoOutput(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
         if fileName:
            self.loadVideoOutput(fileName)
 
