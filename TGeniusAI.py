@@ -66,6 +66,7 @@ class VideoAudioManager(QMainWindow):
         self.setupDockSettingsManager()
         self.current_video_path = None
         self.current_audio_path = None
+        self.updateViewMenu()
 
     def initUI(self):
 
@@ -390,6 +391,7 @@ class VideoAudioManager(QMainWindow):
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
 
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)
@@ -815,6 +817,8 @@ class VideoAudioManager(QMainWindow):
         self.dockSettingsManager = DockSettingsManager(self, docks)
 
         self.dockSettingsManager.load_settings()
+        self.resetViewMenu()
+
 
 
     def closeEvent(self, event):
@@ -1260,6 +1264,7 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFilesMenu()
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
+        viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
         # Creazione del menu About
         aboutMenu = menuBar.addMenu('&About')
@@ -1268,7 +1273,7 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
-        self.updateViewMenu()
+
 
     def setupViewMenuActions(self, viewMenu):
         # Azione per il Video Player Dock
@@ -1362,7 +1367,19 @@ class VideoAudioManager(QMainWindow):
         dock.setVisible(visible)
         self.updateViewMenu()
 
+    def resetViewMenu(self):
+
+        self.actionToggleVideoPlayerDock.setChecked(True)
+        self.actionToggleVideoPlayerDockOutput.setChecked(True)
+        self.actionToggleAudioDock.setChecked(True)
+        self.actionToggleTranscriptionDock.setChecked(True)
+        self.actionToggleEditingDock.setChecked(True)
+        self.actionToggleDownloadDock.setChecked(True)
+        self.actionToggleRecordingDock.setChecked(True)
+        self.actionToggleVideoMergeDock.setChecked(True)
+
     def updateViewMenu(self):
+
         # Aggiorna lo stato dei menu checkable basato sulla visibilità dei dock
         self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
         self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutputDock.isVisible())
