@@ -1,6 +1,7 @@
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip
-
+from moviepy.config import change_settings
+import os
 class VideoCuttingThread(QThread):
     progress = pyqtSignal(int)
     completed = pyqtSignal(str, str)
@@ -12,6 +13,13 @@ class VideoCuttingThread(QThread):
         self.start_time = start_time
         self.output_path1 = output_path1
         self.output_path2 = output_path2
+
+
+        # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+        ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+        print(ffmpeg_executable_path)
+        change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+
 
     def run(self):
         try:

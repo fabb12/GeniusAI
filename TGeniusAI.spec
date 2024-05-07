@@ -4,11 +4,11 @@ block_cipher = None
 
 a = Analysis(['TGeniusAI.py'],
              pathex=['.'],
-             binaries=[('./ffmpeg/bin/ffmpeg.exe', 'ffmpeg/bin')],
-             datas=[('res', 'res'), ('./ffmpeg/bin/ffmpeg.exe', 'ffmpeg/bin')],  # Include ffmpeg e risorse
+             binaries=[],
+             datas=[('res', 'res')],  # Assicurati di includere tutte le risorse necessarie
              hiddenimports=[
                  'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
-                 'PyQt6.QtGui', 'PyQt6.QtWidgets'  # Aggiungi altre librerie nascoste come necessario
+                 'PyQt6.QtGui', 'PyQt6.QtWidgets'
              ],
              hookspath=[],
              runtime_hooks=[],
@@ -16,28 +16,24 @@ a = Analysis(['TGeniusAI.py'],
              win_no_prefer_redirects=False,
              win_private_assemblies=False,
              cipher=block_cipher,
-             noarchive=False)
+             noarchive=True)  # Modifica qui
 
 pyz = PYZ(a.pure, a.zipped_data,
-          cipher=block_cipher)
+          cipher=block_cipher,
+          noarchive=True)  # E anche qui
 
 exe = EXE(pyz,
           a.scripts,
-          a.binaries,
-          a.zipfiles,
-          a.datas,
+          [],
+          exclude_binaries=True,
           name='TGeniusAI',
           debug=False,
-          bootloader_ignore_signals=False,
           strip=False,
           upx=True,
-          console=False,  # Modifica a seconda se desideri una finestra di console o no
-          onefile=False)  # Crea una directory di distribuzione invece di un file unico
+          console=True)
 
 coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,
                a.datas,
-               strip=False,
-               upx=True,
                name='TGeniusAI')

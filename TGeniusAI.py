@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
 from PyQt6.QtCore import QUrl
 from moviepy.editor import  concatenate_videoclips, concatenate_audioclips
 from moviepy.editor import VideoFileClip, vfx, AudioFileClip, AudioClip, ImageClip, CompositeVideoClip
-from moviepy.editor import  ColorClip
+import numpy as np
 from pptx import Presentation
 import re
 import tempfile
@@ -41,6 +41,8 @@ import uuid
 from CropVideo import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
+import os
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -226,6 +228,7 @@ class VideoAudioManager(QMainWindow):
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
         self.videoPlayerOutputDock.addWidget(videoPlayerOutputWidget)
 
+
         # Collegamento degli eventi del player multimediale ai metodi corrispondenti
         self.playerOutput.durationChanged.connect(lambda duration: videoSliderOutput.setRange(0, duration))
         self.playerOutput.positionChanged.connect(lambda position: videoSliderOutput.setValue(position))
@@ -251,6 +254,25 @@ class VideoAudioManager(QMainWindow):
 
         videoPlayerLayout.addLayout(playbackControlLayout)  # Aggiunta dei controlli di playback
         videoPlayerLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
+
+        # Set up controlli volume
+        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSlider.setRange(0, 100)
+        self.volumeSlider.setValue(int(self.audioOutput.volume() * 100))
+        self.volumeSlider.valueChanged.connect(self.setVolume)
+
+        self.volumeSliderOutput = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSliderOutput.setRange(0, 100)
+        self.volumeSliderOutput.setValue(int(self.audioOutputOutput.volume() * 100))
+        self.volumeSliderOutput.valueChanged.connect(self.setVolumeOutput)
+
+
+        videoPlayerLayout.addWidget(QLabel("Volume"))
+        videoPlayerLayout.addWidget(self.volumeSlider)
+
+        videoOutputLayout.addWidget(QLabel("Volume"))
+        videoOutputLayout.addWidget(self.volumeSliderOutput)
+
 
         # Widget per contenere il layout del video player
         videoPlayerWidget = QWidget()
@@ -369,6 +391,11 @@ class VideoAudioManager(QMainWindow):
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+    def setVolume(self, value):
+        self.audioOutput.setVolume(value / 100.0)
+
+    def setVolumeOutput(self, value):
+        self.audioOutputOutput.setVolume(value / 100.0)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Right:
@@ -1037,14 +1064,27 @@ class VideoAudioManager(QMainWindow):
 
     def mergeAudioVideo(self, video_path, audio_path):
         try:
+            # Verifica l'esistenza dei file
+            if not os.path.exists(video_path) or not os.path.exists(audio_path):
+                raise FileNotFoundError(f"Uno o entrambi i file non trovati: {video_path}, {audio_path}")
+
             video_clip = VideoFileClip(video_path)
             audio_clip = AudioFileClip(audio_path)
+
+            # Verifica che i clip non siano None
+            if video_clip is None or audio_clip is None:
+                raise ValueError("Non è stato possibile caricare i clip video o audio.")
+
             final_clip = video_clip.set_audio(audio_clip)
             output_path = video_path.replace('.avi', '_final.mp4')
             final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
             QMessageBox.information(self, "Successo", f"Video finale salvato in: {output_path}")
             self.loadVideoOutput(output_path)  # Carica il video finale
 
+        except FileNotFoundError as e:
+            QMessageBox.critical(self, "File non trovato", str(e))
+        except ValueError as e:
+            QMessageBox.critical(self, "Errore di caricamento", str(e))
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Errore durante l'unione di audio e video: {e}")
 
@@ -1340,70 +1380,6 @@ class VideoAudioManager(QMainWindow):
                           <br>
                           Autore: FFA <br>""")
 
-    def convertVideoToAudio(self, video_file, audio_format='wav'):
-        """Estrae la traccia audio dal video e la converte in formato WAV."""
-        with VideoFileClip(video_file) as video_clip:
-            if not video_clip.audio:
-                raise ValueError("Il video non contiene tracce audio")
-            # Crea un file temporaneo in modo sicuro
-            temp_audio = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{audio_format}')
-            # Esegui l'estrazione dell'audio
-            video_clip.audio.write_audiofile(temp_audio.name, codec='pcm_s16le')
-            temp_audio.close()
-            return temp_audio.name
-
-    def splitAudio(self, audio_file, length=60000):
-        """Divide l'audio in blocchi di una durata specifica (in millisecondi)."""
-        audio = AudioSegment.from_file(audio_file)
-        chunks = [(audio[i:i + length], i) for i in range(0, len(audio), length)]  # Includere il timestamp di inizio
-        return chunks
-
-    def transcribeAudioChunk(self, audio_chunk, start_time):
-        def get_locale_from_language(language_code):
-            """Converte un codice di lingua ISO 639-1 in un locale più specifico."""
-            try:
-                language = pycountry.languages.get(alpha_2=language_code)
-                # Mappatura semplificata: mappa 'en' a 'en-US', ecc.
-                return {
-                    'en': 'en-US',
-                    'es': 'es-ES',
-                    'fr': 'fr-FR',
-                    'it': 'it-IT',
-                    'de': 'de-DE'
-                }.get(language.part1, f"{language.part1}-{language.part1.upper()}")
-            except Exception:
-                return language_code  # Ritorna il codice originale se la mappatura fallisce
-
-        def try_remove_chunk_file(chunk_file):
-            """Rimuove il file audio temporaneo con tentativi multipli."""
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                try:
-                    os.remove(chunk_file)
-                    break
-                except PermissionError:
-                    if attempt < max_attempts - 1:
-                        time.sleep(0.5)  # Aspetta un po' prima di riprovare
-
-        recognizer = sr.Recognizer()
-        unique_id = uuid.uuid4()
-        chunk_file = f"temp_chunk_{unique_id}.wav"
-        audio_chunk.export(chunk_file, format="wav")
-
-        try:
-            with sr.AudioFile(chunk_file) as source:
-                audio_data = recognizer.record(source)
-                language_video = self.video_download_language if self.video_download_language else self.languageComboBox.currentData()
-                language_video = get_locale_from_language(
-                    language_video)  # Usa la funzione per ottenere il locale corretto
-                text = recognizer.recognize_google(audio_data, language=language_video)
-            return text, start_time, language_video
-        except sr.UnknownValueError:
-            return "[Incomprensibile]", start_time, language_video
-        except sr.RequestError as e:
-            return f"[Errore: {e}]", start_time, language_video
-        finally:
-            try_remove_chunk_file(chunk_file)
 
     def onLanguageChange(self):
         # Ottieni il codice lingua della selezione corrente
