@@ -1,6 +1,8 @@
 import yt_dlp
 from PyQt6.QtCore import QThread, pyqtSignal
-
+import tempfile
+import os
+from moviepy.config import change_settings
 class DownloadThread(QThread):
     finishedAudio = pyqtSignal(str, str, str)  # Emits path of audio and video title
     error = pyqtSignal(str)
@@ -9,6 +11,12 @@ class DownloadThread(QThread):
     def __init__(self, url):
         super().__init__()
         self.url = url
+        # Crea una directory temporanea nella cartella principale
+        self.temp_dir = tempfile.mkdtemp(prefix="audio_downloads_", dir=os.getcwd())
+        # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+        ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+        change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+        print(ffmpeg_executable_path)
 
     def run(self):
         self.download_audio_only()
@@ -22,7 +30,7 @@ class DownloadThread(QThread):
                 'preferredcodec': 'mp3',  # Change to mp3 for more universal playback
                 'preferredquality': '192',
             }],
-            'outtmpl': '%(id)s.%(ext)s',
+            'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
             'quiet': True,
             'ffmpeg_location': r'C:\ffmpeg\bin',
             'progress_hooks': [self.yt_progress_hook],
@@ -32,7 +40,7 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(audio_options) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 if 'id' in info:
-                    audio_file_path = f"{info['id']}.mp3"
+                    audio_file_path = os.path.join(self.temp_dir, f"{info['id']}.mp3")
                     video_title = info.get('title', 'Unknown Title')
                     # Cerca di ottenere la lingua dai metadati del video, se presente
                     video_language = info.get('language', 'Lingua non rilevata')

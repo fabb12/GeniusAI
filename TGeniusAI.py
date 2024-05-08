@@ -47,6 +47,10 @@ import os
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Version information
+        self.version_major = 1
+        self.version_minor = 0
+        self.version_build = 100  # Example build number
 
         #self.setGeometry(100, 500, 800, 800)
         self.player = QMediaPlayer()
@@ -567,7 +571,7 @@ class VideoAudioManager(QMainWindow):
 
         try:
             # Estrazione del timecode e della durata della pausa
-            timecode = self.timecodePauseLineEdit.text()
+            timecode = self.timecodeVideoPauseLineEdit.text()
             pause_duration = int(self.pauseDurationLineEdit.text())
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
@@ -650,17 +654,21 @@ class VideoAudioManager(QMainWindow):
         audioPauseGroup = QGroupBox("Applica Pause Audio")
         layout = QVBoxLayout()
 
-        self.pauseBeforeLineEdit = QLineEdit()
-        self.pauseBeforeLineEdit.setPlaceholderText("Durata pausa iniziale (s)")
-        self.pauseAfterLineEdit = QLineEdit()
-        self.pauseAfterLineEdit.setPlaceholderText("Durata pausa finale (s)")
+        # User enters the timecode for the audio pause start
+        self.timecodePauseLineEdit = QLineEdit()
+        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
+        layout.addWidget(QLabel("Timecode Inizio Pausa:"))
+        layout.addWidget(self.timecodePauseLineEdit)
+
+        # User enters the duration of the pause here in seconds
+        self.pauseDurationLineEdit = QLineEdit()
+        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
+        layout.addWidget(QLabel("Durata Pausa (s):"))
+        layout.addWidget(self.pauseDurationLineEdit)
+
+        # Button to apply the pause
         applyPauseButton = QPushButton('Applica Pause Audio')
         applyPauseButton.clicked.connect(self.applyAudioWithPauses)
-
-        layout.addWidget(QLabel("Pausa iniziale (s):"))
-        layout.addWidget(self.pauseBeforeLineEdit)
-        layout.addWidget(QLabel("Pausa finale (s):"))
-        layout.addWidget(self.pauseAfterLineEdit)
         layout.addWidget(applyPauseButton)
         audioPauseGroup.setLayout(layout)
 
@@ -670,15 +678,15 @@ class VideoAudioManager(QMainWindow):
         videoPauseGroup = QGroupBox("Applica Pausa Video")
         layout = QVBoxLayout()
 
-        self.timecodePauseLineEdit = QLineEdit()
-        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
+        self.timecodeVideoPauseLineEdit = QLineEdit()
+        self.timecodeVideoPauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
         self.pauseDurationLineEdit = QLineEdit()
         self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
         applyVideoPauseButton = QPushButton('Applica Pausa Video')
         applyVideoPauseButton.clicked.connect(self.applyFreezeFramePause)
 
         layout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        layout.addWidget(self.timecodePauseLineEdit)
+        layout.addWidget(self.timecodeVideoPauseLineEdit)
         layout.addWidget(QLabel("Durata Pausa (s):"))
         layout.addWidget(self.pauseDurationLineEdit)
         layout.addWidget(applyVideoPauseButton)
@@ -969,19 +977,58 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
 
     def applyAudioWithPauses(self):
-        video_path = self.videoPathLineEdit  # Assicurati che questo sia il percorso del video attualmente caricato
+        video_path = self.videoPathLineEdit  # Path of the currently loaded video
         audio_path = self.audioPathLineEdit.text()
-        pause_before = float(self.pauseBeforeLineEdit.text() or 0)
-        pause_after = float(self.pauseAfterLineEdit.text() or 0)
+
+        # Retrieve the timecode and pause duration from user input
+        timecode = self.timecodePauseLineEdit.text()
+        pause_duration = float(self.pauseDurationLineEdit.text() or 0)
+
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare la pausa audio.")
+            return
 
         if not audio_path:
-            # Estrai l'audio dal video corrente se non è stato fornito un percorso audio
+            # Extract audio from the current video if no specific audio path is provided
             video_clip = VideoFileClip(video_path)
-            audio_path = tempfile.mktemp(suffix='.mp3')  # Crea un percorso temporaneo per l'audio
-            video_clip.audio.write_audiofile(audio_path)  # Salva l'audio estratto
+            audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
+            video_clip.audio.write_audiofile(audio_path)  # Save the extracted audio
 
-        # Aggiungi pause e sostituisci l'audio nel video
-        self.replaceAudioInVideo(video_path, audio_path, pause_before, pause_after)
+        # Add the audio pause at the specified timecode and duration
+        try:
+            # Convert the timecode into seconds
+            hours, minutes, seconds = map(int, timecode.split(':'))
+            start_time = hours * 3600 + minutes * 60 + seconds
+
+            # Load the audio using pydub
+            original_audio = AudioSegment.from_file(audio_path)
+
+            # Create the silent audio segment for the pause
+            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))  # Duration in milliseconds
+
+            # Split the audio and insert the silent segment
+            first_part = original_audio[:start_time * 1000]  # Before the timecode
+            second_part = original_audio[start_time * 1000:]  # After the timecode
+            new_audio = first_part + silent_audio + second_part
+
+            # Save the modified audio to a temporary path
+            temp_audio_path = tempfile.mktemp(suffix='.mp3')
+            new_audio.export(temp_audio_path, format='mp3')
+
+            # Reattach the modified audio to the video
+            video_clip = VideoFileClip(video_path)
+            new_audio_clip = AudioFileClip(temp_audio_path)
+            final_video = video_clip.set_audio(new_audio_clip)
+            output_path = tempfile.mktemp(suffix='.mp4')
+            final_video.write_videofile(output_path, codec='libx264')
+
+            QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
+            self.loadVideoOutput(output_path)
+
+            # Clean up the temporary audio file
+            os.remove(temp_audio_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'applicazione della pausa audio", str(e))
 
     def updateTimecodeRec(self):
         if self.recordingTime is not None:
@@ -1392,10 +1439,11 @@ class VideoAudioManager(QMainWindow):
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
-                          """<b>Thema Genius</b> version 1.0<br>
-                          AI.<br>
+                          f"""<b>Thema Genius</b> version {self.version_major}.{self.version_minor} (Build {self.version_build})<br>
+                          AI-based video and audio management application.<br>
                           <br>
                           Autore: FFA <br>""")
+
 
 
     def onLanguageChange(self):
@@ -1561,8 +1609,6 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.canceled.connect(self.audio_thread.terminate)
         self.progressDialog.show()
 
-    def onAudioGenerationCompleted(self, audio_path):
-        QMessageBox.information(self, "Generazione Completata", f"L'audio è stato salvato in: {audio_path}")
 
     def addPauseAndMerge(self, original_audio_path, pause_before, pause_after):
         # Carica il file audio originale usando pydub
@@ -1582,28 +1628,47 @@ class VideoAudioManager(QMainWindow):
         return new_audio_path
 
     def onAudioGenerationCompleted(self, audio_path):
+        # Retrieve the timecode and duration for the pause from user inputs
+        timecode = self.timecodePauseLineEdit.text()
+        pause_duration = float(self.pauseDurationLineEdit.text() or 0)
 
-        # Gestione della durata delle pause come prima
-        durata_pausa_iniziale = float(self.pauseBeforeLineEdit.text() or 0)
-        durata_pausa_finale = float(self.pauseAfterLineEdit.text() or 0)
+        if timecode and pause_duration > 0:
+            # Convert the timecode into seconds to determine where the pause starts
+            hours, minutes, seconds = map(int, timecode.split(':'))
+            start_time = hours * 3600 + minutes * 60 + seconds
 
-        if durata_pausa_iniziale > 0 or durata_pausa_finale > 0:
-            audio_path = self.addPauseAndMerge(audio_path, durata_pausa_iniziale, durata_pausa_finale)
+            # Load the original audio
+            original_audio = AudioSegment.from_file(audio_path)
 
-        # Continua con le operazioni di combinazione audio/video come prima
+            # Create the silent audio segment for the specified pause duration
+            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))  # Duration in milliseconds
+
+            # Split the audio at the timecode and insert the silent segment
+            first_part = original_audio[:start_time * 1000]  # Before the timecode
+            second_part = original_audio[start_time * 1000:]  # After the timecode
+            new_audio = first_part + silent_audio + second_part
+
+            # Save the modified audio to a temporary path
+            temp_audio_path = tempfile.mktemp(suffix='.mp3')
+            new_audio.export(temp_audio_path, format='mp3')
+
+            # Update the audio path with the new audio that includes the pause
+            audio_path = temp_audio_path
+
+        # Proceed with video-audio combination as before
         base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
         timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
         output_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_GeniusAI_{timestamp}.mp4")
         self.adattaVelocitaVideoAAudio(self.videoPathLineEdit, audio_path, output_path)
 
         try:
+            # Remove the temporary audio file if it exists
             if os.path.exists(audio_path):
                 os.remove(audio_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Non è stato possibile eliminare il file audio temporaneo: {e}")
 
         QMessageBox.information(self, "Completato", "Processo completato con successo!")
-
         self.loadVideoOutput(output_path)
 
     def onError(self, error_message):

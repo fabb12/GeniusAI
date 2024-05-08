@@ -5,7 +5,8 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import sounddevice as sd
 import wave
 import time
-
+from moviepy.config import change_settings
+import os
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
 
@@ -20,6 +21,13 @@ class ScreenRecorder(QThread):
         self.start_time = None
         self.frame_rate = 25  # Frame per second
         self.audio_rate = 44100  # Audio sample rate
+
+
+        # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+        ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+        change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+        print (ffmpeg_executable_path)
+
 
     def run(self):
         frame_period = 1.0 / self.frame_rate
