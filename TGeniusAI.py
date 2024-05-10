@@ -42,6 +42,7 @@ from CropVideo import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
 import os
+import shutil
 
 
 class VideoAudioManager(QMainWindow):
@@ -1293,12 +1294,12 @@ class VideoAudioManager(QMainWindow):
         fileMenu.addAction(openAction)
         fileMenu.addAction(openActionOutput)
 
-        # Azione per generare la presentazione PowerPoint
-        generatePresentationAction = QAction('Genera &Presentazione', self)
-        generatePresentationAction.setShortcut('Ctrl+P')
-        generatePresentationAction.setStatusTip('Genera una presentazione PowerPoint')
-        generatePresentationAction.triggered.connect(self.generaPresentationConTestoAttuale)
-        fileMenu.addAction(generatePresentationAction)
+        # New Save As action
+        saveAsAction = QAction('&Save Video Output As...', self)
+        saveAsAction.setShortcut('Ctrl+S')
+        saveAsAction.setStatusTip('Save the current video from Video Player Output')
+        saveAsAction.triggered.connect(self.saveVideoAs)
+        fileMenu.addAction(saveAsAction)
 
         exitAction = QAction('&Exit', self)
         exitAction.setShortcut('Ctrl+Q')
@@ -1320,6 +1321,20 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
+
+    def saveVideoAs(self):
+        if not self.videoPathLineOutputEdit:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel Video Player Output.")
+            return
+
+        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", "Video Files (*.mp4 *.mov *.avi)")
+        if fileName:
+            try:
+                # Copy the currently loaded video to the new location
+                shutil.copy(self.videoPathLineOutputEdit, fileName)
+                QMessageBox.information(self, "Successo", f"Video salvato con successo in: {fileName}")
+            except Exception as e:
+                QMessageBox.critical(self, "Errore", f"Errore durante il salvataggio del video: {str(e)}")
 
 
     def setupViewMenuActions(self, viewMenu):
