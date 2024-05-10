@@ -18,7 +18,8 @@ class AudioGenerationThread(QThread):
         super().__init__(parent)
         self.text = text
         self.voice_settings = voice_settings
-        self.client = ElevenLabs(api_key="ef38b436326ec387ecb1a570a8641b84")  # Utilizza la chiave API di default o specifica
+        #self.client = ElevenLabs(api_key="ef38b436326ec387ecb1a570a8641b84")  # Utilizza la chiave API di default o specifica
+        self.client = ElevenLabs(api_key="a1dfc77969cd40068d3b3477af3ea6b5")  # Utilizza la chiave API di default o specifica
 
     def run(self):
         try:
