@@ -43,6 +43,7 @@ from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
 import os
 import shutil
+from PyQt6.QtGui import QTextCursor
 
 
 class VideoAudioManager(QMainWindow):
@@ -311,8 +312,6 @@ class VideoAudioManager(QMainWindow):
         self.languageComboBox.addItem("Francese", "fr")
         self.languageComboBox.addItem("Spagnolo", "es")
         self.languageComboBox.addItem("Tedesco", "de")
-        self.languageComboBox.currentIndexChanged.connect(
-            self.onLanguageChange)  # Opzionale: gestire il cambio di lingua
 
         # Aggiunta della label e della combo box al layout orizzontale
         languageSelectionLayout.addWidget(languageLabel)
@@ -851,8 +850,8 @@ class VideoAudioManager(QMainWindow):
         self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
 
         self.audioDeviceComboBox = QComboBox()
-        audio_devices = self.print_audio_devices()
-        self.audioDeviceComboBox.addItems(audio_devices)
+        #audio_devices = self.print_audio_devices()
+        #self.audioDeviceComboBox.addItems(audio_devices)
 
         titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
                  [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
@@ -1461,12 +1460,6 @@ class VideoAudioManager(QMainWindow):
 
 
 
-    def onLanguageChange(self):
-        # Ottieni il codice lingua della selezione corrente
-        language_code = self.languageComboBox.currentData()
-        print(f"Lingua selezionata cambiata a: {language_code}")
-        # Puoi aggiungere qui ulteriori operazioni basate sul cambio di lingua
-
     def updateLanguageComboBox(self, language_code, language_name):
         # Verifica se la lingua è già presente nella combo box
         index = self.languageComboBox.findData(language_code)
@@ -1474,24 +1467,86 @@ class VideoAudioManager(QMainWindow):
             self.languageComboBox.addItem(language_name, language_code)
             index = self.languageComboBox.count() - 1
         self.languageComboBox.setCurrentIndex(index)
+
+
+    def detectAndUpdateLanguage(self, text):
+        try:
+            detected_language_code = detect(text)
+            language = pycountry.languages.get(alpha_2=detected_language_code)
+            if language:
+                detected_language = language.name
+                self.updateLanguageComboBox(detected_language_code, detected_language)
+                self.updateTranscriptionLanguageDisplay(detected_language)
+            else:
+                self.updateTranscriptionLanguageDisplay("Lingua non supportata")
+        except LangDetectException:
+            self.updateTranscriptionLanguageDisplay("Non rilevabile")
+
     def handleTextChange(self):
         text = self.transcriptionTextArea.toPlainText()
         if text.strip():
-            try:
-                detected_language_code = detect(text)
-                language = pycountry.languages.get(alpha_2=detected_language_code)
-                if language:
-                    detected_language = language.name
-                    self.updateLanguageComboBox(detected_language_code, detected_language)
-                    self.updateTranscriptionLanguageDisplay(detected_language)
-                else:
-                    # If the detected language is not supported by pycountry, display a default message.
-                    self.updateTranscriptionLanguageDisplay("Lingua non supportata")
-            except LangDetectException:
-                self.updateTranscriptionLanguageDisplay("Non rilevabile")
+            # Rileva e aggiorna la lingua del testo
+            self.detectAndUpdateLanguage(text)
+
+            # Disconnetti il segnale per evitare il loop
+            self.transcriptionTextArea.textChanged.disconnect(self.handleTextChange)
+
+            # Salva la posizione attuale del cursore
+            current_cursor_position = self.transcriptionTextArea.textCursor().position()
+
+            # Calcola e aggiorna il tempo di lettura segnando ogni 30 secondi
+            self.calculateAndDisplayTimeCodeEveryThirtySeconds(text)
+
+            # Riconnetti il segnale
+            self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
+
+            # Ripristina la posizione del cursore
+            cursor = self.transcriptionTextArea.textCursor()
+            cursor.setPosition(current_cursor_position)
+            self.transcriptionTextArea.setTextCursor(cursor)
         else:
             self.languageComboBox.setCurrentIndex(-1)  # Resetta la selezione se non c'è testo
             self.updateTranscriptionLanguageDisplay("")
+
+    def calculateAndDisplayTimeCodeEveryThirtySeconds(self, text):
+        WPM = 24  # Media di parole al minuto
+        words_per_second = WPM / 60
+        words = text.split()
+
+        updated_text = []
+        cumulative_time = 0  # Tempo accumulato in secondi
+        next_time_mark = 30  # Soglia successiva per il timecode in secondi
+        last_time_mark_position = 0  # Posizione dell'ultimo timecode aggiunto
+
+        for i, word in enumerate(words):
+            # Verifica se una parola contiene un timecode preesistente
+            if "[" in word and ":" in word and "]" in word:
+                # Estrai e conserva il timecode esistente
+                timecode_position = word.find('[')
+                if timecode_position != -1:
+                    # Aggiungi il segmento di testo prima del timecode
+                    updated_text.append(word[:timecode_position].strip())
+
+                    # Calcola il tempo di lettura accumulato
+                    cumulative_time += (i - last_time_mark_position) / words_per_second
+                    last_time_mark_position = i  # Aggiorna la posizione dell'ultimo timecode
+
+                    # Aggiorna il timecode solo se abbiamo superato i prossimi 30 secondi
+                    if cumulative_time >= next_time_mark:
+                        minutes = int(next_time_mark // 60)
+                        seconds = int(next_time_mark % 60)
+                        updated_text.append(f"[{minutes:02d}:{seconds:02d}]")
+                        next_time_mark += 30
+                    else:
+                        # Altrimenti, mantieni il timecode esistente
+                        updated_text.append(word[timecode_position:])
+                    continue
+            else:
+                # Aggiungi la parola al testo aggiornato
+                updated_text.append(word)
+
+        # Aggiorna la `transcriptionTextArea` con il testo aggiornato
+        self.transcriptionTextArea.setPlainText(' '.join(updated_text))
 
     def updateTranscriptionLanguageDisplay(self, language):
         """
@@ -1614,7 +1669,8 @@ class VideoAudioManager(QMainWindow):
 
         # Crea il thread con i nuovi parametri
         self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings,
-                                                  "ef38b436326ec387ecb1a570a8641b84", self)
+                                                  #"ef38b436326ec387ecb1a570a8641b84", self)
+                                                  "a1dfc77969cd40068d3b3477af3ea6b5", self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)
         self.audio_thread.error.connect(self.onError)
