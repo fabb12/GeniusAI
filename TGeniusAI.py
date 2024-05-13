@@ -43,6 +43,7 @@ from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
 import os
 import shutil
+import pyaudio
 from PyQt6.QtGui import QTextCursor
 
 
@@ -850,8 +851,12 @@ class VideoAudioManager(QMainWindow):
         self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
 
         self.audioDeviceComboBox = QComboBox()
-        #audio_devices = self.print_audio_devices()
-        #self.audioDeviceComboBox.addItems(audio_devices)
+        audio_devices = self.print_audio_devices()  # Call the function to get audio devices
+
+        if audio_devices:  # Check if the list is not empty
+            self.audioDeviceComboBox.addItems(audio_devices)
+        else:
+            print("No input audio devices found.")
 
         titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
                  [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
@@ -904,13 +909,20 @@ class VideoAudioManager(QMainWindow):
     def updateWindowList(self):
         """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
         self.screenSelectionComboBox.clear()
-        windows = [win.title for win in gw.getAllWindows() if win.title.strip()]
+        windows = [win for win in gw.getAllWindows() if win.title.strip() and win.visible and not win.isMinimized]
+
+        # Filter windows to remove non-interactive or non-meaningful ones
+        meaningful_windows = [win for win in windows if 'some criteria to define meaningful window' in win.title]
 
         # Ottieni i dettagli dei monitor e formatta il titolo per l'inserimento nella combo box
-        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors())]
+        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors()) if
+                    m.width > 800 and m.height > 600]
+
+        # Combine meaningful windows and monitors
+        combined_list = monitors + [win.title for win in meaningful_windows]
 
         # Aggiungi prima i monitor alla lista della combo box
-        self.screenSelectionComboBox.addItems(monitors + windows)
+        self.screenSelectionComboBox.addItems(combined_list)
 
     def setDefaultAudioDevice(self):
         """Imposta 'Stereo Mix' come dispositivo predefinito se disponibile."""
@@ -927,18 +939,19 @@ class VideoAudioManager(QMainWindow):
         # Metodi per iniziare e fermare la registrazione
 
     def print_audio_devices(self):
-        devices = sd.query_devices()
+        p = pyaudio.PyAudio()
+        info = p.get_host_api_info_by_index(0)
+        num_devices = info.get('deviceCount')
         available_audio_devices = []
-        added_devices = set()  # Set per tenere traccia dei dispositivi già aggiunti
 
-        for device in devices:
-            # Verifica se il dispositivo è un microfono o lo Stereo Mix e non è già stato aggiunto
-            if ('microphone' in device['name'].lower() or 'stereo mix' in device['name'].lower()) and device[
-                'name'] not in added_devices:
-                device_info = f"{device['name']} (Max canali: {device['max_input_channels']})"
-                available_audio_devices.append(device_info)
-                added_devices.add(device['name'])  # Aggiungi il nome del dispositivo al set
+        for i in range(num_devices):
+            device_info = p.get_device_info_by_host_api_device_index(0, i)
+            if device_info.get('maxInputChannels') > 0:
+                # Format the device info for display and usage
+                formatted_device_info = f"Input Device ID {i} - {device_info.get('name')}, Max Input Channels: {device_info.get('maxInputChannels')}"
+                available_audio_devices.append(formatted_device_info)
 
+        p.terminate()
         return available_audio_devices
 
     def applyBackgroundAudioToVideo(self):
@@ -1040,23 +1053,28 @@ class VideoAudioManager(QMainWindow):
         selected_audio = self.audioDeviceComboBox.currentText()
         video_file_path = self.filePathLineEdit.text()
 
-        if selected_title and selected_audio and video_file_path:
-            # Utilizza regex per estrarre correttamente il nome del dispositivo
-            match = re.match(r"^(.*?) \(Max canali:", selected_audio)
+        def extract_device_name(selected_audio):
+            # Extract the device name and ID from the combo box selection
+            match = re.match(r"Input Device ID (\d+) - (.+?),", selected_audio)
             if match:
-                selected_audio_name = match.group(1)
-                all_devices = sd.query_devices()
-                audio_input_index = None
-                for index, device in enumerate(all_devices):
-                    if device['name'].startswith(selected_audio_name) and device['max_input_channels'] > 0:
-                        audio_input_index = index
-                        break
+                return int(match.group(1)), match.group(2).strip()
+            return None, None
+
+        device_id, selected_audio_name = extract_device_name(selected_audio)
+        audio_input_index = None
+
+        if selected_title and selected_audio_name and video_file_path:
+            # Set audio_input_index to the extracted device ID
+            audio_input_index = device_id
 
             if audio_input_index is not None:
-                max_channels = all_devices[audio_input_index]['max_input_channels']
-                audio_channels = min(2, max_channels)  # Usa un numero sicuro di canali
+                p = pyaudio.PyAudio()
+                device_info = p.get_device_info_by_host_api_device_index(0, audio_input_index)
+                max_channels = device_info.get('maxInputChannels')
+                audio_channels = min(2, max_channels)
 
                 monitors = get_monitors()
+
                 if "Schermo intero" in selected_title:
                     index = int(selected_title.split()[2]) - 1
                     region = (monitors[index].x, monitors[index].y, monitors[index].width, monitors[index].height)
@@ -1066,7 +1084,6 @@ class VideoAudioManager(QMainWindow):
                     window.activate()
                     region = (window.left, window.top, window.width, window.height)
 
-                # Genera un timestamp per creare un nome unico per ogni file
                 timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
                 base_filename = os.path.splitext(video_file_path)[0]
                 extension = os.path.splitext(video_file_path)[1]
@@ -1083,12 +1100,11 @@ class VideoAudioManager(QMainWindow):
 
                 self.recordingStatusLabel.setText("Stato: Registrazione in corso")
                 self.recordingTime = QTime(0, 0, 0)
-                self.timer.start(1000)  # Avvia il timer che aggiorna ogni secondo
+                self.timer.start(1000)
 
                 self.current_video_path = video_file_path_with_timestamp
                 self.current_audio_path = audioFileName
                 self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di {selected_title}')
-
             else:
                 QMessageBox.warning(self, "Errore", "Dispositivo audio non trovato.")
         else:
@@ -1487,23 +1503,6 @@ class VideoAudioManager(QMainWindow):
         if text.strip():
             # Rileva e aggiorna la lingua del testo
             self.detectAndUpdateLanguage(text)
-
-            # Disconnetti il segnale per evitare il loop
-            self.transcriptionTextArea.textChanged.disconnect(self.handleTextChange)
-
-            # Salva la posizione attuale del cursore
-            current_cursor_position = self.transcriptionTextArea.textCursor().position()
-
-            # Calcola e aggiorna il tempo di lettura segnando ogni 30 secondi
-            self.calculateAndDisplayTimeCodeEveryThirtySeconds(text)
-
-            # Riconnetti il segnale
-            self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
-
-            # Ripristina la posizione del cursore
-            cursor = self.transcriptionTextArea.textCursor()
-            cursor.setPosition(current_cursor_position)
-            self.transcriptionTextArea.setTextCursor(cursor)
         else:
             self.languageComboBox.setCurrentIndex(-1)  # Resetta la selezione se non c'è testo
             self.updateTranscriptionLanguageDisplay("")
