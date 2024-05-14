@@ -1063,7 +1063,7 @@ class VideoAudioManager(QMainWindow):
         device_id, selected_audio_name = extract_device_name(selected_audio)
         audio_input_index = None
 
-        if selected_title and selected_audio_name and video_file_path:
+        if selected_title and selected_audio_name:
             # Set audio_input_index to the extracted device ID
             audio_input_index = device_id
 
@@ -1078,17 +1078,28 @@ class VideoAudioManager(QMainWindow):
                 if "Schermo intero" in selected_title:
                     index = int(selected_title.split()[2]) - 1
                     region = (monitors[index].x, monitors[index].y, monitors[index].width, monitors[index].height)
+                    print(region)
                 else:
                     window = gw.getWindowsWithTitle(selected_title)[0]
                     window.moveTo(0, 0)
                     window.activate()
                     region = (window.left, window.top, window.width, window.height)
 
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                base_filename = os.path.splitext(video_file_path)[0]
-                extension = os.path.splitext(video_file_path)[1]
-                video_file_path_with_timestamp = f"{base_filename}_{timestamp}{extension}"
-                audioFileName = f"{base_filename}_{timestamp}.wav"
+                # Verifica e crea una cartella di default se necessario
+                if not video_file_path:
+                    # Creare una cartella predefinita nella directory principale del software
+                    default_folder = os.path.join(os.getcwd(), 'screenrecorder')
+                    os.makedirs(default_folder, exist_ok=True)
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                    base_filename = f"recording_{timestamp}"
+                    video_file_path_with_timestamp = os.path.join(default_folder, f"{base_filename}.avi")
+                    audioFileName = os.path.join(default_folder, f"{base_filename}.wav")
+                else:
+                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+                    base_filename = os.path.splitext(video_file_path)[0]
+                    extension = os.path.splitext(video_file_path)[1]
+                    video_file_path_with_timestamp = f"{base_filename}_{timestamp}{extension}"
+                    audioFileName = f"{base_filename}_{timestamp}.wav"
 
                 fourcc = cv2.VideoWriter_fourcc(*'XVID')
                 self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0,
@@ -1110,24 +1121,39 @@ class VideoAudioManager(QMainWindow):
         else:
             QMessageBox.warning(self, "Errore",
                                 "Assicurati di selezionare una finestra/schermo, un dispositivo audio e un percorso di salvataggio valido.")
-
     def stopScreenRecording(self):
         # Stop the recording process
         if self.recorder_thread is not None:
             self.recorder_thread.stop()
+            self.recorder_thread = None  # Resetta il thread per future registrazioni
 
         # Close the video writer and release resources
         if self.video_writer is not None:
             self.video_writer.release()
             self.video_writer = None
 
-        # Example of handling the paths set earlier
+        # Verifica se i percorsi dei file sono stati impostati e procedi alla loro gestione
         if self.current_video_path and self.current_audio_path:
-            # Process to merge audio and video or finalize the recording
-            self.mergeAudioVideo(self.current_video_path, self.current_audio_path)
+            try:
+                # Processo per unire l'audio e il video o finalizzare la registrazione
+                self.mergeAudioVideo(self.current_video_path, self.current_audio_path)
 
-        self.timer.stop()
-        self.recordingStatusLabel.setText("Stato: Registrazione Terminata.")
+                # Resetta i percorsi per evitare riferimenti obsoleti
+                self.current_video_path = None
+                self.current_audio_path = None
+
+                # Informa l'utente che la registrazione e il salvataggio sono stati completati
+                self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
+            except Exception as e:
+                # Gestisce eventuali errori nel processo di unione o finalizzazione
+                self.recordingStatusLabel.setText(f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+        else:
+            # Nessuna registrazione è stata avviata o non ci sono file da processare
+            self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
+
+        # Stop the timer if it's running
+        if self.timer.isActive():
+            self.timer.stop()
 
     def mergeAudioVideo(self, video_path, audio_path):
         try:
