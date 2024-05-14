@@ -78,7 +78,7 @@ class VideoAudioManager(QMainWindow):
     def initUI(self):
 
         self.setWindowTitle('ThemaGeniusAI - Alpha')
-        self.setWindowIcon(QIcon('res/eye.png'))
+        self.setWindowIcon(QIcon('../res/eye.png'))
 
         # Creazione e configurazione dell'area del dock
         area = DockArea()
@@ -137,13 +137,13 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione dei pulsanti di controllo playback
         self.playButton = QPushButton('')
-        self.playButton.setIcon(QIcon("res/play.png"))
+        self.playButton.setIcon(QIcon("../res/play.png"))
         self.pauseButton = QPushButton('')
-        self.pauseButton.setIcon(QIcon("res/pausa.png"))
+        self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
-        self.stopButton.setIcon(QIcon("res/stop.png"))
+        self.stopButton.setIcon(QIcon("../res/stop.png"))
         self.cutButton = QPushButton('')  # Se necessario
-        self.cutButton.setIcon(QIcon("res/taglia.png"))
+        self.cutButton.setIcon(QIcon("../res/taglia.png"))
         self.cropButton = QPushButton('Ritaglia')  # Se necessario
 
         # Collegamento dei pulsanti ai loro slot funzionali
@@ -173,14 +173,14 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione dei pulsanti di controllo playback per il video output
         playButtonOutput = QPushButton('')
-        playButtonOutput.setIcon(QIcon("res/play.png"))
+        playButtonOutput.setIcon(QIcon("../res/play.png"))
         pauseButtonOutput = QPushButton('')
-        pauseButtonOutput.setIcon(QIcon("res/pausa.png"))
+        pauseButtonOutput.setIcon(QIcon("../res/pausa.png"))
         stopButtonOutput = QPushButton('')
-        stopButtonOutput.setIcon(QIcon("res/stop.png"))
+        stopButtonOutput.setIcon(QIcon("../res/stop.png"))
 
         changeButtonOutput = QPushButton('')
-        changeButtonOutput.setIcon(QIcon("res/change.png"))
+        changeButtonOutput.setIcon(QIcon("../res/change.png"))
         changeButtonOutput.setToolTip('Sposta video in Video Player Source')
         changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
                                                                   os.path.basename(self.videoPathLineOutputEdit)))
@@ -334,20 +334,20 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
         self.resetButton = QPushButton()
-        self.resetButton.setIcon(QIcon("res/reset.png"))  # Assicurati che il percorso dell'icona sia corretto
+        self.resetButton.setIcon(QIcon("../res/reset.png"))  # Assicurati che il percorso dell'icona sia corretto
         self.resetButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
         self.detected_language_code = 'it-IT'  # Imposta una lingua di default
         self.video_download_language = None
         # Pulsante per incollare nel QTextEdit
         self.pasteButton = QPushButton()
-        self.pasteButton.setIcon(QIcon("res/paste.png"))  # Assicurati che il percorso dell'icona sia corretto
+        self.pasteButton.setIcon(QIcon("../res/paste.png"))  # Assicurati che il percorso dell'icona sia corretto
         self.pasteButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
 
         # Pulsante per salvare il testo
         self.saveButton = QPushButton()
-        self.saveButton.setIcon(QIcon("res/save.png"))  # Assicurati che il percorso dell'icona sia corretto
+        self.saveButton.setIcon(QIcon("../res/save.png"))  # Assicurati che il percorso dell'icona sia corretto
         self.saveButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.saveButton.clicked.connect(self.saveText)
 
@@ -870,9 +870,9 @@ class VideoAudioManager(QMainWindow):
 
         # Pulsanti per la registrazione
         self.startRecordingButton = QPushButton("")
-        self.startRecordingButton.setIcon(QIcon("res/rec.png"))
+        self.startRecordingButton.setIcon(QIcon("../res/rec.png"))
         self.stopRecordingButton = QPushButton("")
-        self.stopRecordingButton.setIcon(QIcon("res/stop.png"))
+        self.stopRecordingButton.setIcon(QIcon("../res/stop.png"))
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)

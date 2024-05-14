@@ -7,7 +7,7 @@ class DockSettingsManager:
     def __init__(self, main_window, docks):
         self.main_window = main_window
         self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
-        self.settings_file = 'dock_settings.json'  # File per il salvataggio delle impostazioni
+        self.settings_file = '../dock_settings.json'  # File per il salvataggio delle impostazioni
 
 
     def save_settings(self):
