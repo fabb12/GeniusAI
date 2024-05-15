@@ -44,7 +44,7 @@ from PyQt6.QtCore import pyqtSignal
 import os
 import shutil
 import pyaudio
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
 
 
 class VideoAudioManager(QMainWindow):
@@ -54,6 +54,7 @@ class VideoAudioManager(QMainWindow):
         self.version_major = 1
         self.version_minor = 0
         self.version_build = 100  # Example build number
+
 
         #self.setGeometry(100, 500, 800, 800)
         self.player = QMediaPlayer()
@@ -127,6 +128,11 @@ class VideoAudioManager(QMainWindow):
                                         QSizePolicy.Policy.Expanding)
         self.player.setVideoOutput(self.videoCropWidget)
 
+        self.zoom_level = 1.0  # Inizia con zoom al 100%
+        self.videoCropWidget.installEventFilter(self)  # Installa un filtro eventi per intercettare wheelEvent
+
+        self.is_panning = False
+        self.last_mouse_position = QPoint()
 
         self.videoSlider = QSlider(Qt.Orientation.Horizontal)
 
@@ -261,7 +267,6 @@ class VideoAudioManager(QMainWindow):
         videoPlayerLayout.addWidget(self.videoSlider)  # Aggiunta della slider
 
         videoPlayerLayout.addLayout(playbackControlLayout)  # Aggiunta dei controlli di playback
-        videoPlayerLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
 
         # Set up controlli volume
         self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
@@ -314,6 +319,32 @@ class VideoAudioManager(QMainWindow):
         self.languageComboBox.addItem("Spagnolo", "es")
         self.languageComboBox.addItem("Tedesco", "de")
 
+
+        #---speed
+        self.speedSlider = QSlider(Qt.Orientation.Horizontal)
+        self.speedSlider.setMinimum(25)  # Minimum speed at 25% of normal speed
+        self.speedSlider.setMaximum(400)  # Maximum speed at 400% of normal speed
+        self.speedSlider.setValue(100)  # Default value set to 100% speed
+        self.speedSlider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self.speedSlider.setTickInterval(25)
+        self.speedSlider.setToolTip("Adjust Playback Speed")
+
+        # Add a label to show the speed percentage
+        self.speedLabel = QLabel("100%")
+        self.speedLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Connect the slider's value changed signal to the updateSpeed function
+        self.speedSlider.valueChanged.connect(self.updateSpeed)
+
+        # Layout for speed control
+        speedControlLayout = QHBoxLayout()
+        speedControlLayout.addWidget(QLabel("Speed:"))
+        speedControlLayout.addWidget(self.speedSlider)
+        speedControlLayout.addWidget(self.speedLabel)
+
+        # Add this layout to the video player layout where other controls are added
+        videoPlayerLayout.addLayout(speedControlLayout)
+
         # Aggiunta della label e della combo box al layout orizzontale
         languageSelectionLayout.addWidget(languageLabel)
         languageSelectionLayout.addWidget(self.languageComboBox)
@@ -355,6 +386,8 @@ class VideoAudioManager(QMainWindow):
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
         buttonsLayout.addWidget(self.saveButton)
+        buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
+
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Pulsanti per le diverse funzionalità
@@ -397,7 +430,70 @@ class VideoAudioManager(QMainWindow):
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+    def eventFilter(self, source, event):
+        if source == self.videoCropWidget:
+            if event.type() == QEvent.Type.Wheel:
+                self.handleWheelEvent(event)
+                return True
+            elif event.type() == QEvent.Type.MouseButtonPress and event.buttons() & Qt.MouseButton.LeftButton:
+                self.is_panning = True
+                self.last_mouse_position = event.position().toPoint()
+                return True
+            elif event.type() == QEvent.Type.MouseMove and self.is_panning:
+                self.handlePanEvent(event)
+                return True
+            elif event.type() == QEvent.Type.MouseButtonRelease:
+                self.is_panning = False
+                return True
+        return super().eventFilter(source, event)
 
+    def updateSpeed(self, value):
+        # Convert the slider value to a playback rate
+        playbackRate = value / 100.0
+        self.player.setPlaybackRate(playbackRate)
+        # Update the speed label to reflect the current speed
+        self.speedLabel.setText(f"{value}%")
+
+    def handleWheelEvent(self, event):
+        mouse_pos = event.position().toPoint()
+        widget_pos = self.videoCropWidget.pos()
+        mouse_x_in_widget = mouse_pos.x() - widget_pos.x()
+        mouse_y_in_widget = mouse_pos.y() - widget_pos.y()
+
+        # Calcola la variazione di zoom basata sul delta dello scroll della rotellina del mouse
+        delta = event.angleDelta().y()
+        old_zoom_level = self.zoom_level
+        if delta > 0:
+            self.zoom_level *= 1.1
+        elif delta < 0:
+            self.zoom_level *= 0.9
+
+        self.applyVideoZoom(mouse_x_in_widget, mouse_y_in_widget, old_zoom_level)
+
+    def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
+        # Calcola le nuove dimensioni basate sul livello di zoom attuale
+        original_size = self.videoCropWidget.sizeHint()
+        new_width = int(original_size.width() * self.zoom_level)
+        new_height = int(original_size.height() * self.zoom_level)
+        self.videoCropWidget.resize(new_width, new_height)
+
+        # Calcola la nuova posizione per centrare lo zoom attorno al mouse
+        scale_change = self.zoom_level / old_zoom_level
+        new_x = mouse_x * scale_change - mouse_x
+        new_y = mouse_y * scale_change - mouse_y
+        current_pos = self.videoCropWidget.pos()
+        new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
+        self.videoCropWidget.move(new_pos)
+
+    def handlePanEvent(self, event):
+        # Calcola la differenza di movimento
+        current_position = event.position().toPoint()
+        delta = current_position - self.last_mouse_position
+        self.last_mouse_position = current_position
+
+        # Sposta il contenuto del widget di video
+        new_pos = self.videoCropWidget.pos() + delta
+        self.videoCropWidget.move(new_pos)
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)
 
