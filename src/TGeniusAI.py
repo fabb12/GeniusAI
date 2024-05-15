@@ -218,7 +218,7 @@ class VideoAudioManager(QMainWindow):
 
         # Inserisci il layout del timecode nel layout principale del video output
 
-
+        self.timecodeEnabled = False
         # Label per mostrare il nome del file video output
         self.fileNameLabelOutput = QLabel("Nessun video caricato")
         self.fileNameLabelOutput.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -382,12 +382,19 @@ class VideoAudioManager(QMainWindow):
         self.saveButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.saveButton.clicked.connect(self.saveText)
 
+        # Checkbox to toggle timecode insertion
+        self.timecodeCheckbox = QCheckBox("Insert Timecodes at End of Sentences")
+        self.timecodeCheckbox.setChecked(False)  # Initially unchecked
+        self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)  # Connect to a method to handle changes
+
+
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
         buttonsLayout.addWidget(self.saveButton)
         buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
 
+        buttonsLayout.addWidget(self.timecodeCheckbox)
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Pulsanti per le diverse funzionalità
@@ -429,6 +436,13 @@ class VideoAudioManager(QMainWindow):
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
+    def handleTimecodeToggle(self, checked):
+        # Update the timecode insertion enabled state based on checkbox
+        self.timecodeEnabled = checked
+
+        # Trigger text change processing to update timecodes
+        self.handleTextChange()
 
     def eventFilter(self, source, event):
         if source == self.videoCropWidget:
@@ -1621,53 +1635,54 @@ class VideoAudioManager(QMainWindow):
             self.updateTranscriptionLanguageDisplay("Non rilevabile")
 
     def handleTextChange(self):
-        text = self.transcriptionTextArea.toPlainText()
-        if text.strip():
-            # Rileva e aggiorna la lingua del testo
-            self.detectAndUpdateLanguage(text)
-        else:
-            self.languageComboBox.setCurrentIndex(-1)  # Resetta la selezione se non c'è testo
-            self.updateTranscriptionLanguageDisplay("")
+        current_text = self.transcriptionTextArea.toPlainText()
+        if current_text.strip():
+            self.detectAndUpdateLanguage(current_text)
 
-    def calculateAndDisplayTimeCodeEveryThirtySeconds(self, text):
-        WPM = 24  # Media di parole al minuto
+            # Temporarily block signals to prevent recursive calls
+            self.transcriptionTextArea.blockSignals(True)
+
+            if self.timecodeEnabled:
+                updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
+            else:
+                # If timecode is not enabled, revert to original text without timecodes
+                updated_text = self.removeTimecodes(current_text)
+
+            if updated_text != current_text:
+                self.transcriptionTextArea.setPlainText(updated_text)
+
+            # Unblock signals after updating the text
+            self.transcriptionTextArea.blockSignals(False)
+
+    def removeTimecodes(self, text):
+        # Regex to remove timecodes
+        import re
+        return re.sub(r'\s*\[\d{2}:\d{2}\]', '', text)
+
+    def calculateAndDisplayTimeCodeAtEndOfSentences(self, text):
+        WPM = 150  # Average words-per-minute rate for spoken language
         words_per_second = WPM / 60
-        words = text.split()
+
+        # Split the text into sentences
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', text)
 
         updated_text = []
-        cumulative_time = 0  # Tempo accumulato in secondi
-        next_time_mark = 30  # Soglia successiva per il timecode in secondi
-        last_time_mark_position = 0  # Posizione dell'ultimo timecode aggiunto
+        cumulative_time = 0  # Total time in seconds
 
-        for i, word in enumerate(words):
-            # Verifica se una parola contiene un timecode preesistente
-            if "[" in word and ":" in word and "]" in word:
-                # Estrai e conserva il timecode esistente
-                timecode_position = word.find('[')
-                if timecode_position != -1:
-                    # Aggiungi il segmento di testo prima del timecode
-                    updated_text.append(word[:timecode_position].strip())
+        for sentence in sentences:
+            words = sentence.split()
+            cumulative_time += len(words) / words_per_second
 
-                    # Calcola il tempo di lettura accumulato
-                    cumulative_time += (i - last_time_mark_position) / words_per_second
-                    last_time_mark_position = i  # Aggiorna la posizione dell'ultimo timecode
+            # After processing the sentence, add it and then the timecode
+            updated_text.append(sentence)
 
-                    # Aggiorna il timecode solo se abbiamo superato i prossimi 30 secondi
-                    if cumulative_time >= next_time_mark:
-                        minutes = int(next_time_mark // 60)
-                        seconds = int(next_time_mark % 60)
-                        updated_text.append(f"[{minutes:02d}:{seconds:02d}]")
-                        next_time_mark += 30
-                    else:
-                        # Altrimenti, mantieni il timecode esistente
-                        updated_text.append(word[timecode_position:])
-                    continue
-            else:
-                # Aggiungi la parola al testo aggiornato
-                updated_text.append(word)
+            # Format the timecode
+            minutes = int(cumulative_time // 60)
+            seconds = int(cumulative_time % 60)
+            updated_text.append(f" [{minutes:02d}:{seconds:02d}]")
 
-        # Aggiorna la `transcriptionTextArea` con il testo aggiornato
-        self.transcriptionTextArea.setPlainText(' '.join(updated_text))
+        return ' '.join(updated_text)
 
     def updateTranscriptionLanguageDisplay(self, language):
         """
