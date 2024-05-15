@@ -383,7 +383,8 @@ class VideoAudioManager(QMainWindow):
         self.saveButton.clicked.connect(self.saveText)
 
         # Checkbox to toggle timecode insertion
-        self.timecodeCheckbox = QCheckBox("Insert Timecodes at End of Sentences")
+        self.timecodeCheckbox = QCheckBox("Inserisci timecode alla fine di ogni frase.")
+
         self.timecodeCheckbox.setChecked(False)  # Initially unchecked
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)  # Connect to a method to handle changes
 
@@ -1805,8 +1806,8 @@ class VideoAudioManager(QMainWindow):
 
         # Crea il thread con i nuovi parametri
         self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings,
-                                                  #"ef38b436326ec387ecb1a570a8641b84", self)
-                                                  "a1dfc77969cd40068d3b3477af3ea6b5", self)
+                                                  "ef38b436326ec387ecb1a570a8641b84", self)
+                                                  #"a1dfc77969cd40068d3b3477af3ea6b5", self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)
         self.audio_thread.error.connect(self.onError)
