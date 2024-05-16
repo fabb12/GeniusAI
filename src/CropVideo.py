@@ -1,46 +1,90 @@
-from PyQt6.QtGui import QPainter, QPen, QColor
+from PyQt6.QtGui import QPainter, QPen, QColor, QWheelEvent
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, QRect, QPoint
-from PyQt6.QtWidgets import QWidget
+from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
+from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
+import sys
+
 
 class CropVideoWidget(QVideoWidget):
+    cropRectChanged = pyqtSignal(QRect)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setMouseTracking(True)  # Permette il tracking del mouse sul widget
-        self.isSelecting = False  # Flag per controllare se la selezione è attiva
-        self.origin = QPoint()  # Punto di origine del rettangolo di selezione
-        self.end = QPoint()  # Punto finale del rettangolo di selezione
-        self.cropRect = QRect()  # QRect che mantiene le coordinate del rettangolo di selezione
+        self.setMouseTracking(True)
+        self.isSelecting = False
+        self.isPanning = False
+        self.origin = QPoint()
+        self.end = QPoint()
+        self.cropRect = QRect()
+        self.scale_factor = 1.0
+        self.translation = QPoint(0, 0)
+        self.last_mouse_pos = QPoint()
 
     def mousePressEvent(self, event):
-        # Attiva la selezione solo con il tasto sinistro del mouse e il tasto Control premuto
-        if event.buttons() == Qt.MouseButton.LeftButton and event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+        if event.button() == Qt.MouseButton.RightButton:
             self.origin = event.position().toPoint()
             self.end = self.origin
             self.isSelecting = True
+            self.isPanning = False
             self.update()
+        elif event.button() == Qt.MouseButton.LeftButton and not self.isSelecting:
+            self.last_mouse_pos = event.position().toPoint()
+            self.isPanning = True
 
     def mouseMoveEvent(self, event):
-        # Aggiorna il punto finale durante il movimento del mouse se la selezione è attiva
         if self.isSelecting:
             self.end = event.position().toPoint()
+            self.update()
+        elif self.isPanning:
+            delta = event.position().toPoint() - self.last_mouse_pos
+            self.translation += delta
+            self.last_mouse_pos = event.position().toPoint()
             self.update()
 
     def mouseReleaseEvent(self, event):
-        # Completa la selezione quando il tasto del mouse viene rilasciato
-        if self.isSelecting:
+        if self.isSelecting and event.button() == Qt.MouseButton.RightButton:
             self.isSelecting = False
             self.end = event.position().toPoint()
             self.cropRect = QRect(self.origin, self.end).normalized()
+            self.cropRectChanged.emit(self.cropRect)
+
+            print(self.cropRect)
             self.update()
+        self.isPanning = False
+
+    def wheelEvent(self, event):
+        angle_delta = event.angleDelta().y() / 8
+        steps = angle_delta / 15
+        self.scale_factor += steps * 0.1
+        self.scale_factor = max(0.1, min(self.scale_factor, 10.0))
+        self.update()
 
     def paintEvent(self, event):
-        super().paintEvent(event)  # Renderizza il video prima di sovrapporre il rettangolo
-        if not self.cropRect.isNull():
-            painter = QPainter(self)
-            painter.setPen(QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine))  # Imposta il colore e lo stile della penna
-            painter.setBrush(QColor(0, 0, 0, 0))  # Nessun colore di riempimento
-            painter.drawRect(self.cropRect)  # Disegna il rettangolo di selezione
+        super().paintEvent(event)
+        painter = QPainter(self)
+        painter.scale(self.scale_factor, self.scale_factor)
+        painter.translate(self.translation / self.scale_factor)
+
+        if self.isSelecting or not self.cropRect.isNull():
+            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)  # Rettangolo rosso spesso
+            painter.setPen(pen)
+            painter.setBrush(QColor(255, 0, 0, 50))  # Colore rosso semi-trasparente
+            painter.drawRect(QRect(self.origin, self.end).normalized())
 
     def getCropRect(self):
-        return self.cropRect.normalized()  # Restituisce il rettangolo di selezione normalizzato
+
+        return self.cropRect.normalized()
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = QWidget()
+    layout = QVBoxLayout(window)
+    video_widget = CropVideoWidget()
+    layout.addWidget(video_widget)
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
