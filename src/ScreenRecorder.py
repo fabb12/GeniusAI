@@ -6,6 +6,7 @@ import wave
 import time
 from mss import mss
 
+
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
@@ -50,6 +51,11 @@ class ScreenRecorder(QThread):
                             img = sct.grab(sct.monitors[0])
                         frame = np.array(img)
                         frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+
+                        # Aggiungi cerchio rosso attorno al puntatore del mouse
+                        mouse_x, mouse_y = self.get_mouse_position()
+                        cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 20
+
                         self.video_writer.write(frame)
                         frame_times.append(current_time - start_time)  # Registra il delta tempo
                         next_frame_time += self.frame_period
@@ -64,6 +70,21 @@ class ScreenRecorder(QThread):
                 self.save_audio(audio_buffer, frame_times)
                 self.recording_stopped_signal.emit()
                 self.p.terminate()
+
+    def get_mouse_position(self):
+        # Ottieni la posizione del puntatore del mouse
+        mouse_x, mouse_y = 0, 0
+        try:
+            import ctypes
+            cursor_info = ctypes.windll.user32.GetCursorPos
+            cursor_info.restype = ctypes.wintypes.BOOL
+            cursor_info.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
+            pt = ctypes.wintypes.POINT()
+            if cursor_info(ctypes.byref(pt)):
+                mouse_x, mouse_y = pt.x, pt.y
+        except Exception as e:
+            self.error_signal.emit(f"Failed to get mouse position: {str(e)}")
+        return mouse_x, mouse_y
 
     def save_audio(self, audio_buffer, frame_times):
         try:
@@ -80,4 +101,3 @@ class ScreenRecorder(QThread):
     def stop(self):
         self.is_running = False
         self.wait()
-
