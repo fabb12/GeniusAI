@@ -2,7 +2,7 @@
 
 block_cipher = None
 
-a = Analysis(['TGeniusAI.py'],
+a = Analysis(['src/TGeniusAI.py'],
              pathex=['.'],
              binaries=[],
              datas=[('res', 'res')],  # Assicurati di includere tutte le risorse necessarie
