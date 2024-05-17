@@ -1012,7 +1012,7 @@ class VideoAudioManager(QMainWindow):
         widget.layout().addWidget(recordingGroup)
         dock.addWidget(widget)
 
-        self.setDefaultAudioDevice()  # Imposta lo Stereo Mix come default subito dopo aver popolato la lista
+        #self.setDefaultAudioDevice()  # Imposta lo Stereo Mix come default subito dopo aver popolato la lista
 
         self.updateWindowList()
         return dock
