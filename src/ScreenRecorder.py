@@ -6,11 +6,11 @@ import wave
 import time
 from mss import mss
 
-
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
+    audio_ready_signal = pyqtSignal(bool)  # Segnale per indicare se l'audio è pronto
 
     def __init__(self, video_writer, audio_path, region=None, audio_input=0, audio_channels=2):
         super().__init__()
@@ -30,12 +30,19 @@ class ScreenRecorder(QThread):
         audio_buffer = []
         frame_times = []
 
-        stream = self.p.open(format=pyaudio.paInt16,
-                             channels=self.audio_channels,
-                             rate=self.audio_rate,
-                             input=True,
-                             input_device_index=self.audio_input,
-                             frames_per_buffer=1024)
+        try:
+            stream = self.p.open(format=pyaudio.paInt16,
+                                 channels=self.audio_channels,
+                                 rate=self.audio_rate,
+                                 input=True,
+                                 input_device_index=self.audio_input,
+                                 frames_per_buffer=1024)
+            self.audio_ready_signal.emit(True)  # Audio pronto
+        except Exception as e:
+            self.audio_ready_signal.emit(False)  # Audio non pronto
+            self.error_signal.emit(f"Audio input error: {str(e)}")
+            return
+
         stream.start_stream()
 
         with mss() as sct:

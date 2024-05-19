@@ -946,7 +946,6 @@ class VideoAudioManager(QMainWindow):
         event.accept()
 
     def createRecordingDock(self):
-        """Crea e restituisce il dock per la gestione della registrazione dello schermo."""
         dock = Dock("Registrazione")
 
         self.timer = QTimer(self)
@@ -954,17 +953,22 @@ class VideoAudioManager(QMainWindow):
         self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
+        # Aumenta le dimensioni del font della timecodeLabel
+        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")  # Cambia a seconda delle dimensioni desiderate
+
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # Combobox per la selezione della finestra o del monitor
+        self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
+        self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+
         self.screenSelectionComboBox = CustomComboBox()
         self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
 
         self.audioDeviceComboBox = QComboBox()
-        audio_devices = self.print_audio_devices()  # Call the function to get audio devices
+        audio_devices = self.print_audio_devices()
 
-        if audio_devices:  # Check if the list is not empty
+        if audio_devices:
             self.audioDeviceComboBox.addItems(audio_devices)
         else:
             print("No input audio devices found.")
@@ -973,13 +977,11 @@ class VideoAudioManager(QMainWindow):
                  [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
         self.screenSelectionComboBox.addItems(titles)
 
-        # Campo di input per la scelta del nome del file e posizione
         self.filePathLineEdit = QLineEdit()
         self.filePathLineEdit.setPlaceholderText("Inserisci il percorso del file di destinazione")
         browseButton = QPushButton("Sfoglia")
         browseButton.clicked.connect(self.browseFileLocation)
 
-        # Pulsanti per la registrazione
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("../res/rec.png"))
         self.stopRecordingButton = QPushButton("")
@@ -988,14 +990,13 @@ class VideoAudioManager(QMainWindow):
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)
 
-        # Collegamento dei pulsanti ai metodi
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
-        # Layout principale per il gruppo di controllo di registrazione
         recordingGroup = QGroupBox("Opzioni di Registrazione")
         recordingLayout = QVBoxLayout(recordingGroup)
         recordingLayout.addWidget(self.recordingStatusLabel)
+        recordingLayout.addWidget(self.audioStatusLabel)  # Aggiungi QLabel di stato audio
         recordingLayout.addWidget(self.timecodeLabel)
         recordingLayout.addWidget(QLabel("Seleziona finestra o schermo:"))
         recordingLayout.addWidget(self.screenSelectionComboBox)
@@ -1006,13 +1007,10 @@ class VideoAudioManager(QMainWindow):
         recordingLayout.addWidget(browseButton)
         recordingLayout.addLayout(buttonLayout)
 
-        # Widget per contenere il layout principale
         widget = QWidget()
         widget.setLayout(QVBoxLayout())
         widget.layout().addWidget(recordingGroup)
         dock.addWidget(widget)
-
-        #self.setDefaultAudioDevice()  # Imposta lo Stereo Mix come default subito dopo aver popolato la lista
 
         self.updateWindowList()
         return dock
@@ -1163,6 +1161,8 @@ class VideoAudioManager(QMainWindow):
         selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
         video_file_path = self.filePathLineEdit.text()
+        self.timecodeLabel.setStyleSheet(
+            "QLabel { font-size: 24pt; color: red; }")
 
         def extract_device_name(selected_audio):
             # Extract the device name and ID from the combo box selection
@@ -1218,6 +1218,8 @@ class VideoAudioManager(QMainWindow):
 
                 self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
                                                       audio_input=audio_input_index, audio_channels=audio_channels)
+                self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)
+                self.recorder_thread.error_signal.connect(self.showError)
                 self.recorder_thread.start()
 
                 self.recordingStatusLabel.setText("Stato: Registrazione in corso")
@@ -1232,9 +1234,22 @@ class VideoAudioManager(QMainWindow):
         else:
             QMessageBox.warning(self, "Errore",
                                 "Assicurati di selezionare una finestra/schermo, un dispositivo audio e un percorso di salvataggio valido.")
+
+    def updateAudioStatus(self, is_audio_ready):
+        if is_audio_ready:
+            self.audioStatusLabel.setText("Audio pronto")
+        else:
+            self.audioStatusLabel.setText("Audio non pronto")
+
+    def showError(self, message):
+        QMessageBox.critical(self, "Errore", message)
+
     def stopScreenRecording(self):
         # Stop the recording process
         if self.recorder_thread is not None:
+            self.timecodeLabel.setStyleSheet(
+                "QLabel { font-size: 24pt; }")  # Cambia a seconda delle dimensioni desiderate
+
             self.recorder_thread.stop()
             self.recorder_thread = None  # Resetta il thread per future registrazioni
 
