@@ -47,9 +47,8 @@ class CropVideoWidget(QVideoWidget):
             self.end = event.position().toPoint()
             self.cropRect = QRect(self.origin, self.end).normalized()
             self.cropRectChanged.emit(self.cropRect)
-
-            print(self.cropRect)
             self.update()
+        print(self.cropRect)
         self.isPanning = False
 
     def wheelEvent(self, event):
@@ -72,7 +71,6 @@ class CropVideoWidget(QVideoWidget):
             painter.drawRect(QRect(self.origin, self.end).normalized())
 
     def getCropRect(self):
-
         return self.cropRect.normalized()
 
 

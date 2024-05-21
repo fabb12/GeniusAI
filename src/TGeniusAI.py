@@ -46,6 +46,10 @@ import shutil
 import pyaudio
 from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
 
+from PyQt6.QtWidgets import QSlider
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainter
+from CustomSlider import CustomSlider
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -66,6 +70,8 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput.setVolume(1.0)  # Imposta il volume al massimo (1.0 = 100%)
         self.recentFiles = []
         self.initUI()
+        self.bookmarkStart = None
+        self.bookmarkEnd = None
         self.currentPosition = 0
         self.videoPathLineEdit = ''
         self.videoPathLineOutputEdit = ''
@@ -134,7 +140,7 @@ class VideoAudioManager(QMainWindow):
         self.is_panning = False
         self.last_mouse_position = QPoint()
 
-        self.videoSlider = QSlider(Qt.Orientation.Horizontal)
+        self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
 
         # Label per mostrare il nome del file video
         self.fileNameLabel = QLabel("Nessun video caricato")
@@ -148,16 +154,19 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("../res/stop.png"))
-        self.cutButton = QPushButton('')  # Se necessario
+        self.setStartBookmarkButton = QPushButton('Set Start')
+        self.setEndBookmarkButton = QPushButton('Set End')
+        self.cutButton = QPushButton('Cut')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
-        self.cropButton = QPushButton('Ritaglia')  # Se necessario
 
         # Collegamento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
         self.pauseButton.clicked.connect(self.pauseVideo)
         self.stopButton.clicked.connect(self.stopVideo)
-        self.cutButton.clicked.connect(self.cutVideo)  # Assumendo che la funzione cutVideo sia definita
-        self.cropButton.clicked.connect(self.applyCrop)  # Assumendo che la funzione cutVideo sia definita
+       # self.cropButton.clicked.connect(self.applyCrop)  # Assumendo che la funzione cutVideo sia definita
+        self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
+        self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
+        self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
 
         # Creazione e configurazione del display del timecode
         self.currentTimeLabel = QLabel('00:00')
@@ -204,7 +213,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
 
         # Slider per il controllo della posizione del video output
-        videoSliderOutput = QSlider(Qt.Orientation.Horizontal)
+        videoSliderOutput = CustomSlider(Qt.Orientation.Horizontal)
         videoSliderOutput.setRange(0, 1000)  # Inizializza con un range di esempio
         videoSliderOutput.sliderMoved.connect(lambda position: self.playerOutput.setPosition(position))
 
@@ -256,7 +265,10 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.playButton)
         playbackControlLayout.addWidget(self.pauseButton)
         playbackControlLayout.addWidget(self.stopButton)
+        playbackControlLayout.addWidget(self.setStartBookmarkButton)
+        playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
+
         #playbackControlLayout.addWidget(self.cropButton)
 
         # Layout principale per il dock del video player
@@ -438,6 +450,50 @@ class VideoAudioManager(QMainWindow):
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+    def setStartBookmark(self):
+        self.videoSlider.setBookmarkStart(self.player.position())
+
+    def setEndBookmark(self):
+        self.videoSlider.setBookmarkEnd(self.player.position())
+
+    def cutVideoBetweenBookmarks(self):
+        if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
+            QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di tagliare.")
+            return
+
+        media_path = self.videoPathLineEdit
+        if not media_path:
+            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
+            return
+
+        if media_path.lower().endswith(('.mp4', '.mov', '.avi')):
+            is_audio = False
+        elif media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac')):
+            is_audio = True
+        else:
+            QMessageBox.warning(self, "Errore", "Formato file non supportato.")
+            return
+
+        start_time = self.videoSlider.bookmarkStart / 1000.0  # Converti in secondi
+        end_time = self.videoSlider.bookmarkEnd / 1000.0  # Converti in secondi
+
+        base_name = os.path.splitext(os.path.basename(media_path))[0]
+        directory = os.path.dirname(media_path)
+        ext = 'mp4' if not is_audio else 'mp3'
+        output_path = os.path.join(directory, f"{base_name}_cut.{ext}")
+
+        self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Taglio")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        self.cutting_thread = VideoCuttingThread(media_path, start_time, end_time, output_path)
+        self.cutting_thread.progress.connect(self.progressDialog.setValue)
+        self.cutting_thread.completed.connect(self.onCutCompleted)
+        self.cutting_thread.error.connect(self.onCutError)
+
+        self.cutting_thread.start()
+
     def handleTimecodeToggle(self, checked):
         # Update the timecode insertion enabled state based on checkbox
         self.timecodeEnabled = checked
@@ -554,6 +610,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         cropRect = self.videoCropWidget.getCropRect()
+        print(cropRect)
         if cropRect.isEmpty():
             QMessageBox.warning(self, "Errore", "Seleziona un'area da ritagliare.")
             return
@@ -1335,12 +1392,18 @@ class VideoAudioManager(QMainWindow):
         # Widget per inserire l'URL del video di YouTube
         url_label = QLabel("Inserisci l'URL di YouTube:")
         url_edit = QLineEdit()
+
+        # CheckBox per selezionare se scaricare anche il video
+        video_checkbox = QCheckBox("Scarica anche il video")
+
+        # Bottone per iniziare il download
         download_btn = QPushButton("Download Video")
-        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text()))
+        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked()))
 
         # Aggiunta dei controlli al layout della GroupBox
         downloadLayout.addWidget(url_label)
         downloadLayout.addWidget(url_edit)
+        downloadLayout.addWidget(video_checkbox)
         downloadLayout.addWidget(download_btn)
 
         # Imposta il layout del GroupBox
@@ -1354,10 +1417,10 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
-    def handleDownload(self, url):
+    def handleDownload(self, url, download_video):
         if url:
-            self.downloadThread = DownloadThread(url)
-            self.downloadThread.finishedAudio.connect(self.onDownloadFinished)
+            self.downloadThread = DownloadThread(url, download_video)
+            self.downloadThread.finished.connect(self.onDownloadFinished)
             self.downloadThread.error.connect(self.onError)
             self.downloadThread.progress.connect(self.updateDownloadProgress)  # Connect to the new progress signal
             self.downloadThread.start()
@@ -1374,13 +1437,12 @@ class VideoAudioManager(QMainWindow):
         if not self.progressDialog.wasCanceled():
             self.progressDialog.setValue(progress)
 
-    def onDownloadFinished(self, audio_path, video_title, video_language):
+    def onDownloadFinished(self, file_path, video_title, video_language):
         self.progressDialog.close()
-        QMessageBox.information(self, "Download Complete", f"audio saved to {audio_path}.")
+        QMessageBox.information(self, "Download Complete", f"File saved to {file_path}.")
         self.video_download_language = video_language
-        print (video_language)
-        if self.isAudioOnly(audio_path):
-            self.loadVideo(audio_path, video_title)
+        print(video_language)
+        self.loadVideo(file_path, video_title)
 
     def onError(self, error_message):
         self.progressDialog.close()
@@ -2019,9 +2081,10 @@ class VideoAudioManager(QMainWindow):
 
         self.cutting_thread.start()
 
-    def onCutCompleted(self, part1, part2):
-        QMessageBox.information(self, "Successo", f"File tagliato e salvato in due parti: {part1} e {part2}.")
+    def onCutCompleted(self, output_path):
+        QMessageBox.information(self, "Successo", f"File tagliato salvato in: {output_path}.")
         self.progressDialog.close()
+        self.loadVideoOutput(output_path)
 
     def onCutError(self, error_message):
         QMessageBox.critical(self, "Errore", error_message)

@@ -2,24 +2,23 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip
 from moviepy.config import change_settings
 import os
+
 class VideoCuttingThread(QThread):
     progress = pyqtSignal(int)
-    completed = pyqtSignal(str, str)
+    completed = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, media_path, start_time, output_path1, output_path2):
+    def __init__(self, media_path, start_time, end_time, output_path):
         super().__init__()
         self.media_path = media_path
         self.start_time = start_time
-        self.output_path1 = output_path1
-        self.output_path2 = output_path2
-
+        self.end_time = end_time
+        self.output_path = output_path
 
         # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
         ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
         print(ffmpeg_executable_path)
         change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
-
 
     def run(self):
         try:
@@ -33,22 +32,17 @@ class VideoCuttingThread(QThread):
             else:
                 raise ValueError("Formato file non supportato")
 
-            # Taglia il media
-            clip1 = media.subclip(0, self.start_time)
-            clip2 = media.subclip(self.start_time, media.duration)
+            # Taglia il media tra start_time e end_time
+            clip = media.subclip(self.start_time, self.end_time)
 
             if is_video:
-                # Salva i file video tagliati
-                clip1.write_videofile(self.output_path1, codec="libx264", audio_codec="aac")
-                self.progress.emit(50)  # Aggiorna il progresso al 50% dopo il completamento della prima parte
-                clip2.write_videofile(self.output_path2, codec="libx264", audio_codec="aac")
+                # Salva il file video tagliato
+                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac")
             else:
-                # Salva i file audio tagliati
-                clip1.write_audiofile(self.output_path1)
-                self.progress.emit(50)  # Aggiorna il progresso al 50% dopo il completamento della prima parte
-                clip2.write_audiofile(self.output_path2)
+                # Salva il file audio tagliato
+                clip.write_audiofile(self.output_path)
 
             self.progress.emit(100)  # Completa il progresso al 100%
-            self.completed.emit(self.output_path1, self.output_path2)
+            self.completed.emit(self.output_path)
         except Exception as e:
             self.error.emit(str(e))
