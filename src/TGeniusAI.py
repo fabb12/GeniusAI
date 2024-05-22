@@ -33,7 +33,7 @@ from pptx.util import Pt, Inches
 from num2words import num2words
 from langdetect import detect, LangDetectException
 import pycountry
-from CropVideo import CropVideoWidget
+from CustVideoWidget import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
 import os
