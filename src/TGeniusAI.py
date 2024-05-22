@@ -3,18 +3,16 @@ from pydub import AudioSegment
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
 from PyQt6.QtCore import QUrl
-from moviepy.editor import  concatenate_videoclips, concatenate_audioclips
-from moviepy.editor import VideoFileClip, vfx, AudioFileClip, AudioClip, ImageClip, CompositeVideoClip
-import numpy as np
+from moviepy.editor import  concatenate_videoclips
+from moviepy.editor import VideoFileClip, vfx, AudioFileClip, ImageClip, CompositeVideoClip
 from pptx import Presentation
 import re
 import tempfile
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QCheckBox,
-                             QLineEdit, QSlider, QHBoxLayout, QGroupBox, QTextEdit, QRadioButton, QComboBox, QButtonGroup)
-from PyQt6.QtGui import QIcon, QFont
+                             QLineEdit,  QHBoxLayout, QGroupBox, QTextEdit, QComboBox)
+from PyQt6.QtGui import QIcon
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from PyQt6.QtCore import Qt, QSize
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 import datetime
@@ -30,14 +28,11 @@ from ScreenRecorder import ScreenRecorder
 import pygetwindow as gw
 from screeninfo import get_monitors
 from SettingsManager import DockSettingsManager
-import sounddevice as sd
 from PyQt6.QtCore import QTimer, QTime
 from pptx.util import Pt, Inches
-import speech_recognition as sr
 from num2words import num2words
 from langdetect import detect, LangDetectException
 import pycountry
-import uuid
 from CropVideo import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
@@ -48,8 +43,9 @@ from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
 from moviepy.config import change_settings
 from PyQt6.QtWidgets import QSlider
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPainter
 from CustomSlider import CustomSlider
+from PyQt6.QtWidgets import QToolBar
+
 
 # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
@@ -109,9 +105,6 @@ class VideoAudioManager(QMainWindow):
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
-
-
-
 
     def initUI(self):
 
@@ -189,6 +182,10 @@ class VideoAudioManager(QMainWindow):
         self.setEndBookmarkButton = QPushButton('Set End')
         self.cutButton = QPushButton('Cut')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
+        self.rewindButton = QPushButton('')
+        self.rewindButton.setIcon(QIcon("../res/rewind.png"))
+        self.forwardButton = QPushButton('')
+        self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
         # Collegamento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
@@ -198,6 +195,8 @@ class VideoAudioManager(QMainWindow):
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
+        self.rewindButton.clicked.connect(self.rewind5Seconds)
+        self.forwardButton.clicked.connect(self.forward5Seconds)
 
         # Creazione e configurazione del display del timecode
         self.currentTimeLabel = QLabel('00:00')
@@ -293,9 +292,11 @@ class VideoAudioManager(QMainWindow):
 
         # Layout per i controlli di playback
         playbackControlLayout = QHBoxLayout()
+        playbackControlLayout.addWidget(self.rewindButton)  # Pulsante indietro di 5 secondi
         playbackControlLayout.addWidget(self.playButton)
         playbackControlLayout.addWidget(self.pauseButton)
         playbackControlLayout.addWidget(self.stopButton)
+        playbackControlLayout.addWidget(self.forwardButton)  # Pulsante avanti di 5 secondi
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
@@ -479,12 +480,57 @@ class VideoAudioManager(QMainWindow):
         # Setup della barra dei menu e della dark mode, se necessario
         self.setupMenuBar()
 
-
         # Collegamento degli eventi del player multimediale ai metodi corrispondenti
         self.player.durationChanged.connect(self.durationChanged)  # Assicurati che questo slot sia definito
         self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
+
+
+
+        # Creazione della toolbar
+        toolbar = QToolBar("Main Toolbar")
+        self.addToolBar(toolbar)
+
+        # Aggiunta dei pulsanti alla toolbar
+        releaseSourceAction = QAction(QIcon("../res/release.png"), "Clean Video Source", self)
+        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
+        toolbar.addAction(releaseSourceAction)
+
+        releaseOutputAction = QAction(QIcon("../res/release.png"), "Clean Video Output", self)
+        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
+        toolbar.addAction(releaseOutputAction)
+
+        # Continuazione della configurazione UI esistente...
+
+    def rewind5Seconds(self):
+        current_position = self.player.position()
+        new_position = max(0, current_position - 5000)  # Indietro di 5000 ms = 5 secondi
+        self.player.setPosition(new_position)
+
+    def forward5Seconds(self):
+        current_position = self.player.position()
+        new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
+        self.player.setPosition(new_position)
+
+
+    def releaseSourceVideo(self):
+        self.player.stop()
+        time.sleep(.01)
+        self.currentTimeLabel.setText('00:00')
+        self.totalTimeLabel.setText('00:00')
+        self.player.setSource(QUrl())
+        self.videoPathLineEdit = ''
+        self.fileNameLabel.setText("Nessun video caricato")
+
+    def releaseOutputVideo(self):
+        self.playerOutput.stop()
+        time.sleep(.01)
+        self.currentTimeLabelOutput.setText('00:00')
+        self.totalTimeLabelOutput.setText('00:00')
+        self.playerOutput.setSource(QUrl())
+        self.videoPathLineOutputEdit = ''
+        self.fileNameLabelOutput.setText("Nessun video caricato")
 
     def get_nearest_timecode(self):
         cursor_position = self.transcriptionTextArea.textCursor().position()
