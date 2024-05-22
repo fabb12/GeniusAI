@@ -51,12 +51,35 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter
 from CustomSlider import CustomSlider
 
+
+class CustomTextEdit(QTextEdit):
+    cursorPositionChanged = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        self.cursorPositionChanged.emit()
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.cursorPositionChanged.emit()
+
+    def insertFromMimeData(self, source):
+        if source.hasText():
+            plain_text = source.text()
+            self.insertPlainText(plain_text)
+        else:
+            super().insertFromMimeData(source)
+        self.cursorPositionChanged.emit()
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
         # Version information
         self.version_major = 1
-        self.version_minor = 0
+        self.version_minor = 2
         self.version_build = 100  # Example build number
 
 
@@ -366,6 +389,7 @@ class VideoAudioManager(QMainWindow):
 
         # TextArea per la trascrizione
         self.transcriptionTextArea = CustomTextEdit(self)
+
         self.transcriptionTextArea.setStyleSheet("""
                QTextEdit {
                    color: white;
@@ -400,6 +424,9 @@ class VideoAudioManager(QMainWindow):
         self.timecodeCheckbox.setChecked(False)  # Initially unchecked
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)  # Connect to a method to handle changes
 
+        # Aggiungi il pulsante di sincronizzazione
+        self.syncButton = QPushButton('Sincronizza Video')
+        self.syncButton.clicked.connect(self.sync_video_to_transcription)
 
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
@@ -408,6 +435,7 @@ class VideoAudioManager(QMainWindow):
         buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
 
         buttonsLayout.addWidget(self.timecodeCheckbox)
+        buttonsLayout.addWidget(self.syncButton)
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Pulsanti per le diverse funzionalità
@@ -450,6 +478,42 @@ class VideoAudioManager(QMainWindow):
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+    def get_nearest_timecode(self):
+        cursor_position = self.transcriptionTextArea.textCursor().position()
+        text = self.transcriptionTextArea.toPlainText()
+
+        # Trova tutti i timecode nel testo
+        timecode_pattern = re.compile(r'\[(\d{2}):(\d{2})\]')
+        matches = list(timecode_pattern.finditer(text))
+
+        if not matches:
+            return None
+
+        nearest_timecode = None
+        min_distance = float('inf')
+
+        for match in matches:
+            start, end = match.span()
+            distance = abs(cursor_position - start)
+
+            if distance < min_distance:
+                min_distance = distance
+                nearest_timecode = match
+
+        if nearest_timecode:
+            minutes, seconds = map(int, nearest_timecode.groups())
+            timecode_seconds = minutes * 60 + seconds
+            return timecode_seconds
+
+        return None
+
+    def sync_video_to_transcription(self):
+        timecode_seconds = self.get_nearest_timecode()
+
+        if timecode_seconds is not None:
+            self.player.setPosition(timecode_seconds * 1000)  # Converti in millisecondi
+        else:
+            QMessageBox.warning(self, "Attenzione", "Nessun timecode trovato nella trascrizione.")
     def setStartBookmark(self):
         self.videoSlider.setBookmarkStart(self.player.position())
 
@@ -1717,19 +1781,16 @@ class VideoAudioManager(QMainWindow):
         if current_text.strip():
             self.detectAndUpdateLanguage(current_text)
 
-            # Temporarily block signals to prevent recursive calls
             self.transcriptionTextArea.blockSignals(True)
 
             if self.timecodeEnabled:
                 updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
             else:
-                # If timecode is not enabled, revert to original text without timecodes
                 updated_text = self.removeTimecodes(current_text)
 
             if updated_text != current_text:
                 self.transcriptionTextArea.setPlainText(updated_text)
 
-            # Unblock signals after updating the text
             self.transcriptionTextArea.blockSignals(False)
 
     def removeTimecodes(self, text):
