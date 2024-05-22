@@ -5,6 +5,12 @@ import pyaudio
 import wave
 import time
 from mss import mss
+from moviepy.config import change_settings
+import os
+# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+print(ffmpeg_executable_path)
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)

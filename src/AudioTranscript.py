@@ -9,6 +9,12 @@ from pydub import AudioSegment
 import io
 from moviepy.config import change_settings
 
+# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+print(ffmpeg_executable_path)
+
+
 class TranscriptionThread(QThread):
     update_progress = pyqtSignal(int, str)  # Signal for updating progress with an index and message
     transcription_complete = pyqtSignal(str, list)  # Signal when transcription is complete, including temporary files to clean
@@ -18,11 +24,6 @@ class TranscriptionThread(QThread):
         super().__init__(parent)
         self.media_path = media_path
 
-
-        # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
-        ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-        change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
-        print (ffmpeg_executable_path)
 
 
     def run(self):

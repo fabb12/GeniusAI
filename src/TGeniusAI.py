@@ -45,11 +45,16 @@ import os
 import shutil
 import pyaudio
 from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
-
+from moviepy.config import change_settings
 from PyQt6.QtWidgets import QSlider
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPainter
 from CustomSlider import CustomSlider
+
+# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+print(ffmpeg_executable_path)
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 
 class CustomTextEdit(QTextEdit):
@@ -104,6 +109,9 @@ class VideoAudioManager(QMainWindow):
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
+
+
+
 
     def initUI(self):
 
@@ -1789,7 +1797,7 @@ class VideoAudioManager(QMainWindow):
                 updated_text = self.removeTimecodes(current_text)
 
             if updated_text != current_text:
-                self.transcriptionTextArea.setPlainText(updated_text)
+                self.transcriptionTextArea.setHtml(updated_text)  # Imposta il testo come HTML
 
             self.transcriptionTextArea.blockSignals(False)
 
@@ -1816,10 +1824,10 @@ class VideoAudioManager(QMainWindow):
             # After processing the sentence, add it and then the timecode
             updated_text.append(sentence)
 
-            # Format the timecode
+            # Format the timecode with HTML for red color
             minutes = int(cumulative_time // 60)
             seconds = int(cumulative_time % 60)
-            updated_text.append(f" [{minutes:02d}:{seconds:02d}]")
+            updated_text.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
 
         return ' '.join(updated_text)
 

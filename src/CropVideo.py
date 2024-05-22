@@ -3,8 +3,13 @@ from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
 import sys
+import os
+from moviepy.config import change_settings
 
-
+# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
+ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+print(ffmpeg_executable_path)
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 class CropVideoWidget(QVideoWidget):
     cropRectChanged = pyqtSignal(QRect)
 
