@@ -45,7 +45,11 @@ from PyQt6.QtWidgets import QSlider
 from PyQt6.QtCore import Qt
 from CustomSlider import CustomSlider
 from PyQt6.QtWidgets import QToolBar
+from SettingsDialog import ApiKeyDialog
 
+# fea27867f451afb3ee369dcc7fcfb074
+# ef38b436326ec387ecb1a570a8641b84
+# a1dfc77969cd40068d3b3477af3ea6b5
 
 # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
@@ -82,7 +86,7 @@ class VideoAudioManager(QMainWindow):
         self.version_major = 1
         self.version_minor = 2
         self.version_build = 100  # Example build number
-
+        self.api_key = "ef38b436326ec387ecb1a570a8641b84"
 
         #self.setGeometry(100, 500, 800, 800)
         self.player = QMediaPlayer()
@@ -182,9 +186,9 @@ class VideoAudioManager(QMainWindow):
         self.setEndBookmarkButton = QPushButton('Set End')
         self.cutButton = QPushButton('Cut')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
-        self.rewindButton = QPushButton('')
+        self.rewindButton = QPushButton('<< 5s')
         self.rewindButton.setIcon(QIcon("../res/rewind.png"))
-        self.forwardButton = QPushButton('')
+        self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
         # Collegamento dei pulsanti ai loro slot funzionali
@@ -501,15 +505,24 @@ class VideoAudioManager(QMainWindow):
         self.addToolBar(toolbar)
 
         # Aggiunta dei pulsanti alla toolbar
-        releaseSourceAction = QAction(QIcon("../res/release.png"), "Clean Video Source", self)
+        releaseSourceAction = QAction(QIcon("../res/reset.png"), "Clean VS", self)
         releaseSourceAction.triggered.connect(self.releaseSourceVideo)
         toolbar.addAction(releaseSourceAction)
 
-        releaseOutputAction = QAction(QIcon("../res/release.png"), "Clean Video Output", self)
+        releaseOutputAction = QAction(QIcon("../res/reset.png"), "Clean VO", self)
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         toolbar.addAction(releaseOutputAction)
-
+        # Aggiunta del pulsante per impostare la API Key
+        apiKeyAction = QAction(QIcon("../res/key.png"), "Imposta API Key", self)
+        apiKeyAction.triggered.connect(self.showApiKeyDialog)
+        toolbar.addAction(apiKeyAction)
         # Continuazione della configurazione UI esistente...
+
+    def showApiKeyDialog(self):
+        dialog = ApiKeyDialog(self)
+        if dialog.exec() == dialog.DialogCode.Accepted:
+            self.api_key = dialog.get_api_key()
+            print(f"API Key impostata: {self.api_key}")
 
     def insertPause(self):
         cursor = self.transcriptionTextArea.textCursor()
@@ -1987,9 +2000,11 @@ class VideoAudioManager(QMainWindow):
         font = run.font
         font.size = Pt(size_pt)  # Imposta la grandezza del font
 
-
-
     def generateAudioWithElevenLabs(self):
+        if not self.api_key:
+            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key prima di generare l'audio.")
+            return
+
         def convert_numbers_to_words(text):
             # Modifica il testo in modo che ogni numero seguito direttamente da un punto sia seguito da uno spazio
             text = re.sub(r'(\d+)\.', r'\1 .', text)
@@ -2024,9 +2039,8 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
 
         # Crea il thread con i nuovi parametri
-        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings,
-                                                  "ef38b436326ec387ecb1a570a8641b84", self)
-                                                  #"a1dfc77969cd40068d3b3477af3ea6b5", self)
+        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, self.api_key,
+                                                  self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)
         self.audio_thread.error.connect(self.onError)
@@ -2035,7 +2049,6 @@ class VideoAudioManager(QMainWindow):
         # Prepara il dialogo di progresso
         self.progressDialog.canceled.connect(self.audio_thread.terminate)
         self.progressDialog.show()
-
 
     def addPauseAndMerge(self, original_audio_path, pause_before, pause_after):
         # Carica il file audio originale usando pydub
