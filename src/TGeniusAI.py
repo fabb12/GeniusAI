@@ -437,12 +437,20 @@ class VideoAudioManager(QMainWindow):
         self.syncButton = QPushButton('Sincronizza Video')
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
 
+        # Nuovi controlli per inserire la pausa
+        self.pauseTimeEdit = QLineEdit()
+        self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
+        self.insertPauseButton = QPushButton('Inserisci Pausa')
+        self.insertPauseButton.clicked.connect(self.insertPause)
+
+
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
         buttonsLayout.addWidget(self.saveButton)
         buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
-
+        buttonsLayout.addWidget(self.pauseTimeEdit)
+        buttonsLayout.addWidget(self.insertPauseButton)
         buttonsLayout.addWidget(self.timecodeCheckbox)
         buttonsLayout.addWidget(self.syncButton)
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -502,6 +510,18 @@ class VideoAudioManager(QMainWindow):
         toolbar.addAction(releaseOutputAction)
 
         # Continuazione della configurazione UI esistente...
+
+    def insertPause(self):
+        cursor = self.transcriptionTextArea.textCursor()
+        pause_time = self.pauseTimeEdit.text().strip()
+
+        if not re.match(r'^\d+(\.\d+)?s$', pause_time):
+            QMessageBox.warning(self, "Errore", "Inserisci un formato valido per la pausa (es. 1.0s)")
+            return
+
+        pause_tag = f'<break time="{pause_time}" />'
+        cursor.insertText(f' {pause_tag} ')
+        self.transcriptionTextArea.setTextCursor(cursor)
 
     def rewind5Seconds(self):
         current_position = self.player.position()
