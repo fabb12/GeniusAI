@@ -632,12 +632,18 @@ class VideoAudioManager(QMainWindow):
 
         self.cutting_thread.start()
 
+
     def handleTimecodeToggle(self, checked):
         # Update the timecode insertion enabled state based on checkbox
         self.timecodeEnabled = checked
 
         # Trigger text change processing to update timecodes
-        self.handleTextChange()
+        if checked:
+            self.original_text = self.transcriptionTextArea.toPlainText()
+            self.handleTextChange()
+        else:
+            self.transcriptionTextArea.setPlainText(self.original_text)
+
 
     def eventFilter(self, source, event):
         if source == self.videoCropWidget:
@@ -1853,22 +1859,16 @@ class VideoAudioManager(QMainWindow):
     def handleTextChange(self):
         current_text = self.transcriptionTextArea.toPlainText()
         if current_text.strip():
-            self.detectAndUpdateLanguage(current_text)
-
-            self.transcriptionTextArea.blockSignals(True)
-
             if self.timecodeEnabled:
+                self.transcriptionTextArea.blockSignals(True)
                 updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
+                self.transcriptionTextArea.setHtml(updated_text)
+                self.transcriptionTextArea.blockSignals(False)
             else:
-                updated_text = self.removeTimecodes(current_text)
-
-            if updated_text != current_text:
-                self.transcriptionTextArea.setHtml(updated_text)  # Imposta il testo come HTML
-
-            self.transcriptionTextArea.blockSignals(False)
+                self.original_text = current_text
 
     def removeTimecodes(self, text):
-        # Regex to remove timecodes
+        # Regex to remove timecodes in the format [00:01]
         import re
         return re.sub(r'\s*\[\d{2}:\d{2}\]', '', text)
 
@@ -1876,7 +1876,7 @@ class VideoAudioManager(QMainWindow):
         WPM = 150  # Average words-per-minute rate for spoken language
         words_per_second = WPM / 60
 
-        # Split the text into sentences
+        # Split the text into sentences while keeping the delimiters (e.g., .!?)
         import re
         sentences = re.split(r'(?<=[.!?])\s+', text)
 
@@ -1884,19 +1884,26 @@ class VideoAudioManager(QMainWindow):
         cumulative_time = 0  # Total time in seconds
 
         for sentence in sentences:
-            words = sentence.split()
+            # Conta le parole nella frase (escludendo i tag di pausa)
+            words = re.findall(r'\b\w+\b', sentence)
             cumulative_time += len(words) / words_per_second
 
-            # After processing the sentence, add it and then the timecode
+            # Aggiungi le pause nel calcolo
+            pause_pattern = re.compile(r'<break time="(\d+(\.\d+)?)s" />')
+            pauses = pause_pattern.findall(sentence)
+            for pause in pauses:
+                pause_time = float(pause[0])
+                cumulative_time += pause_time
+
+            # Mantieni il testo originale e aggiungi il timecode
             updated_text.append(sentence)
 
-            # Format the timecode with HTML for red color
+            # Format the timecode with HTML for lightblue color
             minutes = int(cumulative_time // 60)
             seconds = int(cumulative_time % 60)
             updated_text.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
 
         return ' '.join(updated_text)
-
     def updateTranscriptionLanguageDisplay(self, language):
         """
         Aggiorna il dock della trascrizione con la lingua attuale.
