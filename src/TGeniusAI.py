@@ -88,7 +88,7 @@ class VideoAudioManager(QMainWindow):
         self.version_build = 100  # Example build number
         self.api_key = "ef38b436326ec387ecb1a570a8641b84"
 
-        #self.setGeometry(100, 500, 800, 800)
+        self.setGeometry(100, 500, 800, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
         self.playerOutput = QMediaPlayer()
@@ -182,17 +182,19 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("../res/stop.png"))
-        self.setStartBookmarkButton = QPushButton('Set Start')
-        self.setEndBookmarkButton = QPushButton('Set End')
-        self.cutButton = QPushButton('Cut')
+        self.setStartBookmarkButton = QPushButton('')
+        self.setStartBookmarkButton.setIcon(QIcon("../res/bookmark_1.png"))
+        self.setEndBookmarkButton = QPushButton('')
+        self.setEndBookmarkButton.setIcon(QIcon("../res/bookmark_2.png"))
+        self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
         self.rewindButton = QPushButton('<< 5s')
         self.rewindButton.setIcon(QIcon("../res/rewind.png"))
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
-        self.deleteButton = QPushButton('Delete')
-        self.deleteButton.setIcon(QIcon("../res/delete.png"))
+        self.deleteButton = QPushButton('')
+        self.deleteButton.setIcon(QIcon("../res/trash-bin.png"))
         # Collegamento dei pulsanti ai loro slot funzionali
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
 
@@ -508,14 +510,16 @@ class VideoAudioManager(QMainWindow):
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
 
-        # Aggiunta dei pulsanti alla toolbar
-        releaseSourceAction = QAction(QIcon("../res/reset.png"), "Clean VS", self)
-        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
-        toolbar.addAction(releaseSourceAction)
+        # Nuovi pulsanti per caricare le impostazioni dei dock
+        loadDockSettings1Action = QAction(QIcon("../res/load1.png"), "", self)
+        loadDockSettings1Action.triggered.connect(lambda: self.loadDockSettings('../res/user1_settings.json'))
+        toolbar.addAction(loadDockSettings1Action)
 
-        releaseOutputAction = QAction(QIcon("../res/reset.png"), "Clean VO", self)
-        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
-        toolbar.addAction(releaseOutputAction)
+        loadDockSettings2Action = QAction(QIcon("../res/load2.png"), "", self)
+        loadDockSettings2Action.triggered.connect(lambda: self.loadDockSettings('../res/user2_settings.json'))
+        toolbar.addAction(loadDockSettings2Action)
+
+
         # Aggiunta del pulsante per impostare la API Key
         apiKeyAction = QAction(QIcon("../res/key.png"), "Imposta API Key", self)
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
@@ -1757,6 +1761,16 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFilesMenu()
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
+        videoMenu = menuBar.addMenu('&Video')
+
+        releaseSourceAction = QAction(QIcon("../res/reset.png"), "Unload Video Source", self)
+        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
+        videoMenu.addAction(releaseSourceAction)
+
+        releaseOutputAction = QAction(QIcon("../res/reset.png"), "Unload Video Output", self)
+        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
+        videoMenu.addAction(releaseOutputAction)
+
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
         # Creazione del menu About
@@ -1766,6 +1780,14 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
+
+    def loadDockSettings(self, filename):
+        try:
+            self.dockSettingsManager.load_settings(filename)
+            self.resetViewMenu()
+            QMessageBox.information(self, "Successo", f"Impostazioni dei dock caricate da {filename}.")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Errore nel caricamento delle impostazioni: {str(e)}")
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:

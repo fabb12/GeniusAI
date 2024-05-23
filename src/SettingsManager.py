@@ -9,20 +9,33 @@ class DockSettingsManager:
         self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
         self.settings_file = '../dock_settings.json'  # File per il salvataggio delle impostazioni
 
-
     def save_settings(self):
-        self.settings.beginGroup("DockLayout")
-        for dock_name, dock in self.docks.items():
-            self.settings.setValue(f"{dock_name}/geometry", dock.saveGeometry())
-            self.settings.setValue(f"{dock_name}/visible", dock.isVisible())
-        self.settings.endGroup()
+        settings = {'main_window': {
+            'width': self.main_window.size().width(),
+            'height': self.main_window.size().height(),
+            'x': self.main_window.pos().x(),
+            'y': self.main_window.pos().y()
+        }}
+        for name, dock in self.docks.items():
+            settings[name] = {
+                'visible': dock.isVisible(),
+                'x': dock.pos().x(),
+                'y': dock.pos().y(),
+                'width': dock.size().width(),
+                'height': dock.size().height()
+            }
+        with open(self.settings_file, 'w') as file:
+            json.dump(settings, file, indent=4)
 
-    def load_settings(self):
+    def load_settings(self, settings_file=None):
+        if not settings_file:
+            settings_file = self.settings_file
+
         try:
             for dock in self.docks.values():
                 dock.setVisible(False)
 
-            with open(self.settings_file, 'r') as file:
+            with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
             # Carica le impostazioni della finestra principale
@@ -42,26 +55,6 @@ class DockSettingsManager:
 
         except FileNotFoundError:
             print("Settings file not found. Using default settings.")
-
-    def save_settings(self):
-        settings = {'main_window': {
-            'width': self.main_window.size().width(),
-            'height': self.main_window.size().height(),
-            'x': self.main_window.pos().x(),
-            'y': self.main_window.pos().y()
-        }}
-        for name, dock in self.docks.items():
-            settings[name] = {
-                'visible': dock.isVisible(),
-                'x': dock.pos().x(),
-                'y': dock.pos().y(),
-                'width': dock.size().width(),
-                'height': dock.size().height()
-                # Aggiungi qui il salvataggio dell'area se gestibile
-                # 'area': self.main_window.getDockArea(dock)
-            }
-        with open(self.settings_file, 'w') as file:
-            json.dump(settings, file, indent=4)
 
     def apply_visibility(self, name, visible):
         if name in self.docks:
