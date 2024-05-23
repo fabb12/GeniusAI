@@ -28,7 +28,7 @@ from ScreenRecorder import ScreenRecorder
 import pygetwindow as gw
 from screeninfo import get_monitors
 from SettingsManager import DockSettingsManager
-from PyQt6.QtCore import QTimer, QTime
+from PyQt6.QtCore import  QTime
 from pptx.util import Pt, Inches
 from num2words import num2words
 from langdetect import detect, LangDetectException
@@ -46,7 +46,7 @@ from PyQt6.QtCore import Qt
 from CustomSlider import CustomSlider
 from PyQt6.QtWidgets import QToolBar
 from SettingsDialog import ApiKeyDialog
-
+from moviepy.editor import concatenate_audioclips, concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -191,6 +191,11 @@ class VideoAudioManager(QMainWindow):
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
+        self.deleteButton = QPushButton('Delete')
+        self.deleteButton.setIcon(QIcon("../res/delete.png"))
+        # Collegamento dei pulsanti ai loro slot funzionali
+        self.deleteButton.clicked.connect(self.deleteVideoSegment)
+
         # Collegamento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
         self.pauseButton.clicked.connect(self.pauseVideo)
@@ -304,8 +309,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
-
-        #playbackControlLayout.addWidget(self.cropButton)
+        playbackControlLayout.addWidget(self.deleteButton)  #
 
         # Layout principale per il dock del video player
         videoPlayerLayout = QVBoxLayout()
@@ -432,7 +436,7 @@ class VideoAudioManager(QMainWindow):
         self.saveButton.clicked.connect(self.saveText)
 
         # Checkbox to toggle timecode insertion
-        self.timecodeCheckbox = QCheckBox("Inserisci timecode alla fine di ogni frase.")
+        self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
 
         self.timecodeCheckbox.setChecked(False)  # Initially unchecked
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)  # Connect to a method to handle changes
@@ -517,6 +521,66 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
         # Continuazione della configurazione UI esistente...
+
+    def deleteVideoSegment(self):
+        if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
+            QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di eliminare.")
+            return
+
+        video_path = self.videoPathLineEdit
+        if not video_path:
+            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di eliminarne una parte.")
+            return
+
+        try:
+            video = VideoFileClip(video_path)
+            audio = video.audio
+
+            # Calcola i tempi di inizio e fine per la parte da eliminare
+            start_time = self.videoSlider.bookmarkStart / 1000.0
+            end_time = self.videoSlider.bookmarkEnd / 1000.0
+
+            # Assicurati che il tempo di fine non sia oltre la durata del video
+            end_time = min(end_time, video.duration)
+
+            # Crea due parti: prima e dopo la parte da eliminare
+            clips = []
+            if start_time > 0:
+                part1 = video.subclip(0, start_time)
+                clips.append(part1)
+            if end_time < video.duration:
+                part2 = video.subclip(end_time)
+                clips.append(part2)
+
+            if not clips:
+                QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
+                return
+
+            # Concatenale per creare il video finale
+            final_video = concatenate_videoclips(clips)
+
+            # Combina il video modificato con l'audio originale, se presente
+            if audio:
+                final_audio = concatenate_audioclips([part.audio for part in clips if part.audio])
+                final_video_with_audio = final_video.set_audio(final_audio)
+            else:
+                final_video_with_audio = final_video
+
+            # Salva il nuovo video
+            output_path = os.path.join(os.path.dirname(video_path), "video_modified.mp4")
+            final_video_with_audio.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            # Estrai l'audio dal video modificato
+            audio_path = self.extractAudioFromVideo(output_path)
+
+            # Utilizza la funzione per adattare la velocità del video all'audio
+            self.adattaVelocitaVideoAAudio(output_path, audio_path, output_path)
+
+            QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
+
+            self.loadVideoOutput(output_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'eliminazione", str(e))
 
     def showApiKeyDialog(self):
         dialog = ApiKeyDialog(self)
