@@ -536,6 +536,10 @@ class VideoAudioManager(QMainWindow):
             video = VideoFileClip(video_path)
             audio = video.audio
 
+            # Estrai l'audio originale
+            temp_audio_path = tempfile.mktemp(suffix='.mp3')
+            audio.write_audiofile(temp_audio_path)
+
             # Calcola i tempi di inizio e fine per la parte da eliminare
             start_time = self.videoSlider.bookmarkStart / 1000.0
             end_time = self.videoSlider.bookmarkEnd / 1000.0
@@ -556,25 +560,16 @@ class VideoAudioManager(QMainWindow):
                 QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
                 return
 
-            # Concatenale per creare il video finale
+            # Concatenale per creare il video finale senza la parte da eliminare
             final_video = concatenate_videoclips(clips)
 
-            # Combina il video modificato con l'audio originale, se presente
-            if audio:
-                final_audio = concatenate_audioclips([part.audio for part in clips if part.audio])
-                final_video_with_audio = final_video.set_audio(final_audio)
-            else:
-                final_video_with_audio = final_video
+            # Salva il video senza audio
+            temp_video_path = tempfile.mktemp(suffix='.mp4')
+            final_video.write_videofile(temp_video_path, codec='libx264', audio=False)
 
-            # Salva il nuovo video
+            # Sincronizza il video con l'audio
             output_path = os.path.join(os.path.dirname(video_path), "video_modified.mp4")
-            final_video_with_audio.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            # Estrai l'audio dal video modificato
-            audio_path = self.extractAudioFromVideo(output_path)
-
-            # Utilizza la funzione per adattare la velocità del video all'audio
-            self.adattaVelocitaVideoAAudio(output_path, audio_path, output_path)
+            self.adattaVelocitaVideoAAudio(temp_video_path, temp_audio_path, output_path)
 
             QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
 
