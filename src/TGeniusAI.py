@@ -184,9 +184,9 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("../res/stop.png"))
-        self.setStartBookmarkButton = QPushButton('Inizio')
+        self.setStartBookmarkButton = QPushButton('Start')
         self.setStartBookmarkButton.setIcon(QIcon("../res/bookmark_1.png"))
-        self.setEndBookmarkButton = QPushButton('Fine')
+        self.setEndBookmarkButton = QPushButton('End')
         self.setEndBookmarkButton.setIcon(QIcon("../res/bookmark_2.png"))
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
@@ -1137,11 +1137,6 @@ class VideoAudioManager(QMainWindow):
         current_position = self.player.position()
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
 
-    def formatTimecode(self, position_ms):
-        hours, remainder = divmod(position_ms // 1000, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
         dock = Dock("Unione Video")
@@ -1157,8 +1152,17 @@ class VideoAudioManager(QMainWindow):
         browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
 
         # Widget per inserire il timecode
-        self.timecodeLineEdit = QLineEdit()
-        self.timecodeLineEdit.setPlaceholderText("Inserisci il timecode (formato hh:mm:ss)")
+        self.timecodeVideoMergeLineEdit = QLineEdit()
+        self.timecodeVideoMergeLineEdit.setPlaceholderText("Inserisci il timecode (formato hh:mm:ss)")
+
+        # Pulsante per prelevare il timecode dalla posizione corrente del video
+        getTimecodeButton = QPushButton("Preleva Timecode")
+        getTimecodeButton.clicked.connect(self.setTimecodeMergeFromSlider)
+
+        # Layout orizzontale per il timecode e il pulsante
+        timecodeLayout = QHBoxLayout()
+        timecodeLayout.addWidget(self.timecodeVideoMergeLineEdit)
+        timecodeLayout.addWidget(getTimecodeButton)
 
         # Pulsante per unire il video
         mergeButton = QPushButton('Unisci Video')
@@ -1167,7 +1171,8 @@ class VideoAudioManager(QMainWindow):
         # Aggiunta dei controlli al layout della GroupBox
         mergeLayout.addWidget(self.mergeVideoPathLineEdit)
         mergeLayout.addWidget(browseMergeVideoButton)
-        mergeLayout.addWidget(self.timecodeLineEdit)
+        mergeLayout.addWidget(QLabel("Timecode Inizio Unione:"))
+        mergeLayout.addLayout(timecodeLayout)
         mergeLayout.addWidget(mergeButton)
 
         # Imposta il layout del GroupBox
@@ -1180,16 +1185,20 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
-    def browseMergeVideo(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
-                                                  "Video Files (*.mp4 *.mov *.avi)")
-        if fileName:
-            self.mergeVideoPathLineEdit.setText(fileName)
+
+    def setTimecodeMergeFromSlider(self):
+        current_position = self.player.position()
+        self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
+
+    def formatTimecode(self, position_ms):
+        hours, remainder = divmod(position_ms // 1000, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     def mergeVideo(self):
         base_video_path = self.videoPathLineEdit
         merge_video_path = self.mergeVideoPathLineEdit.text()
-        timecode = self.timecodeLineEdit.text()
+        timecode = self.timecodeVideoMergeLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
             QMessageBox.warning(self, "Errore", "Carica il video principale prima di unirne un altro.")
@@ -1225,6 +1234,12 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.warning(self, "Errore", "Si è verificato un errore durante l'unione dei video: " + str(e))
+
+    def browseMergeVideo(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
+                                                  "Video Files (*.mp4 *.mov *.avi)")
+        if fileName:
+            self.mergeVideoPathLineEdit.setText(fileName)
 
     def browseBackgroundAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
