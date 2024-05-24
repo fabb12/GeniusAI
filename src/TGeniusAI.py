@@ -57,28 +57,6 @@ print(ffmpeg_executable_path)
 change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 
-class CustomTextEdit(QTextEdit):
-    cursorPositionChanged = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def keyPressEvent(self, event):
-        super().keyPressEvent(event)
-        self.cursorPositionChanged.emit()
-
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        self.cursorPositionChanged.emit()
-
-    def insertFromMimeData(self, source):
-        if source.hasText():
-            plain_text = source.text()
-            self.insertPlainText(plain_text)
-        else:
-            super().insertFromMimeData(source)
-        self.cursorPositionChanged.emit()
-
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2630,22 +2608,33 @@ class CustomComboBox(QComboBox):
     popupOpened = pyqtSignal()
 
     def showPopup(self):
-        self.popupOpened.emit()  # Emetti il segnale quando il popup viene aperto
-        super().showPopup()  # Chiamata al metodo originale per assicurarsi che il popup venga mostrato
+        self.popupOpened.emit()
+        super().showPopup()
+
 
 
 class CustomTextEdit(QTextEdit):
+    cursorPositionChanged = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
+    def keyPressEvent(self, event):
+        super().keyPressEvent(event)
+        self.cursorPositionChanged.emit()
+
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.cursorPositionChanged.emit()
+
     def insertFromMimeData(self, source):
         if source.hasText():
-            # Ottieni il testo puro senza formattazione
             plain_text = source.text()
-            # Inserisci il testo come testo puro
             self.insertPlainText(plain_text)
         else:
             super().insertFromMimeData(source)
+        self.cursorPositionChanged.emit()
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = VideoAudioManager()
