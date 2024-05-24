@@ -2137,9 +2137,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         def convert_numbers_to_words(text):
-            # Modifica il testo in modo che ogni numero seguito direttamente da un punto sia seguito da uno spazio
             text = re.sub(r'(\d+)\.', r'\1 .', text)
-
             new_text = []
             for word in text.split():
                 if word.isdigit():
@@ -2154,9 +2152,9 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Inserisci una trascrizione prima di generare l'audio.")
             return
         transcriptionText = convert_numbers_to_words(transcriptionText)
-        # Dati per identificare la voce e il modello
+
         voice_id = self.voiceSelectionComboBox.currentData()
-        model_id = "eleven_multilingual_v1"  # Assumi il modello, personalizza come necessario
+        model_id = "eleven_multilingual_v1"
 
         voice_settings = {
             'stability': self.stabilitySlider.value() / 100.0,
@@ -2169,15 +2167,18 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowTitle("Progresso Generazione Audio")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
 
+        # Percorso per salvare il file audio
+        base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
+        audio_save_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_generated.mp3")
+
         # Crea il thread con i nuovi parametri
         self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, self.api_key,
-                                                  self)
+                                                  audio_save_path, self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)
         self.audio_thread.error.connect(self.onError)
         self.audio_thread.start()
 
-        # Prepara il dialogo di progresso
         self.progressDialog.canceled.connect(self.audio_thread.terminate)
         self.progressDialog.show()
 
@@ -2199,47 +2200,31 @@ class VideoAudioManager(QMainWindow):
         return new_audio_path
 
     def onAudioGenerationCompleted(self, audio_path):
-        # Retrieve the timecode and duration for the pause from user inputs
         timecode = self.timecodePauseLineEdit.text()
         pause_duration = float(self.pauseDurationLineEdit.text() or 0)
 
         if timecode and pause_duration > 0:
-            # Convert the timecode into seconds to determine where the pause starts
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
 
-            # Load the original audio
             original_audio = AudioSegment.from_file(audio_path)
+            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))
 
-            # Create the silent audio segment for the specified pause duration
-            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))  # Duration in milliseconds
-
-            # Split the audio at the timecode and insert the silent segment
-            first_part = original_audio[:start_time * 1000]  # Before the timecode
-            second_part = original_audio[start_time * 1000:]  # After the timecode
+            first_part = original_audio[:start_time * 1000]
+            second_part = original_audio[start_time * 1000:]
             new_audio = first_part + silent_audio + second_part
 
-            # Save the modified audio to a temporary path
             temp_audio_path = tempfile.mktemp(suffix='.mp3')
             new_audio.export(temp_audio_path, format='mp3')
-
-            # Update the audio path with the new audio that includes the pause
             audio_path = temp_audio_path
 
-        # Proceed with video-audio combination as before
         base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
         timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
         output_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_GeniusAI_{timestamp}.mp4")
         self.adattaVelocitaVideoAAudio(self.videoPathLineEdit, audio_path, output_path)
 
-        try:
-            # Remove the temporary audio file if it exists
-            if os.path.exists(audio_path):
-                os.remove(audio_path)
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Non è stato possibile eliminare il file audio temporaneo: {e}")
-
-        QMessageBox.information(self, "Completato", "Processo completato con successo!")
+        QMessageBox.information(self, "Completato",
+                                f"Processo completato con successo! L'audio è stato salvato in: {audio_path}")
         self.loadVideoOutput(output_path)
 
     def onError(self, error_message):

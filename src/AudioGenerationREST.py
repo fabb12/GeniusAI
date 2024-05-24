@@ -14,13 +14,14 @@ class AudioGenerationThread(QThread):
     error = pyqtSignal(str)      # Signal to notify errors
     progress = pyqtSignal(int)   # Signal to update progress, if necessary
 
-    def __init__(self, text, voice_id, model_id, voice_settings, api_key, parent=None):
+    def __init__(self, text, voice_id, model_id, voice_settings, api_key, output_path, parent=None):
         super().__init__(parent)
         self.text = text
         self.voice_id = voice_id
         self.model_id = model_id
         self.voice_settings = voice_settings
         self.api_key = api_key
+        self.output_path = output_path
 
     def run(self):
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{self.voice_id}"
@@ -39,13 +40,12 @@ class AudioGenerationThread(QThread):
         try:
             response = requests.post(url, json=data, headers=headers)
             if response.status_code == 200:
-                temp_audio_path = tempfile.mktemp(suffix='.mp3')
-                with open(temp_audio_path, 'wb') as f:
+                with open(self.output_path, 'wb') as f:
                     for chunk in response.iter_content(chunk_size=1024):
                         if chunk:  # filter out keep-alive new chunks
                             f.write(chunk)
                             self.progress.emit(100)  # You may want to refine progress updates for large files
-                self.completed.emit(temp_audio_path)
+                self.completed.emit(self.output_path)
             else:
                 raise Exception(f"Failed to generate audio: {response.status_code} - {response.text}")
         except Exception as e:
