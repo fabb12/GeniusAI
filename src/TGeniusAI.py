@@ -155,6 +155,8 @@ class VideoAudioManager(QMainWindow):
             self.applyDarkMode()
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
+
+
         # Setup del dock del video player
         self.videoCropWidget = CropVideoWidget()
         self.videoCropWidget.setAcceptDrops(True)
@@ -182,9 +184,9 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("../res/stop.png"))
-        self.setStartBookmarkButton = QPushButton('')
+        self.setStartBookmarkButton = QPushButton('Inizio')
         self.setStartBookmarkButton.setIcon(QIcon("../res/bookmark_1.png"))
-        self.setEndBookmarkButton = QPushButton('')
+        self.setEndBookmarkButton = QPushButton('Fine')
         self.setEndBookmarkButton.setIcon(QIcon("../res/bookmark_2.png"))
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
@@ -193,7 +195,7 @@ class VideoAudioManager(QMainWindow):
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
-        self.deleteButton = QPushButton('')
+        self.deleteButton = QPushButton('Delete')
         self.deleteButton.setIcon(QIcon("../res/trash-bin.png"))
         # Collegamento dei pulsanti ai loro slot funzionali
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
@@ -511,11 +513,11 @@ class VideoAudioManager(QMainWindow):
         self.addToolBar(toolbar)
 
         # Nuovi pulsanti per caricare le impostazioni dei dock
-        loadDockSettings1Action = QAction(QIcon("../res/load1.png"), "", self)
+        loadDockSettings1Action = QAction(QIcon("../res/load1.png"), "User1", self)
         loadDockSettings1Action.triggered.connect(lambda: self.loadDockSettings('../res/user1_settings.json'))
         toolbar.addAction(loadDockSettings1Action)
 
-        loadDockSettings2Action = QAction(QIcon("../res/load2.png"), "", self)
+        loadDockSettings2Action = QAction(QIcon("../res/load2.png"), "User2", self)
         loadDockSettings2Action.triggered.connect(lambda: self.loadDockSettings('../res/user2_settings.json'))
         toolbar.addAction(loadDockSettings2Action)
 
@@ -540,10 +542,6 @@ class VideoAudioManager(QMainWindow):
             video = VideoFileClip(video_path)
             audio = video.audio
 
-            # Estrai l'audio originale
-            temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            audio.write_audiofile(temp_audio_path)
-
             # Calcola i tempi di inizio e fine per la parte da eliminare
             start_time = self.videoSlider.bookmarkStart / 1000.0
             end_time = self.videoSlider.bookmarkEnd / 1000.0
@@ -552,28 +550,30 @@ class VideoAudioManager(QMainWindow):
             end_time = min(end_time, video.duration)
 
             # Crea due parti: prima e dopo la parte da eliminare
-            clips = []
-            if start_time > 0:
-                part1 = video.subclip(0, start_time)
-                clips.append(part1)
-            if end_time < video.duration:
-                part2 = video.subclip(end_time)
-                clips.append(part2)
+            video_clips = []
+            audio_clips = []
 
-            if not clips:
+            if start_time > 0:
+                video_clips.append(video.subclip(0, start_time))
+                audio_clips.append(audio.subclip(0, start_time))
+            if end_time < video.duration:
+                video_clips.append(video.subclip(end_time))
+                audio_clips.append(audio.subclip(end_time))
+
+            if not video_clips:
                 QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
                 return
 
             # Concatenale per creare il video finale senza la parte da eliminare
-            final_video = concatenate_videoclips(clips)
-
-            # Salva il video senza audio
-            temp_video_path = tempfile.mktemp(suffix='.mp4')
-            final_video.write_videofile(temp_video_path, codec='libx264', audio=False)
+            final_video = concatenate_videoclips(video_clips)
+            final_audio = concatenate_audioclips(audio_clips)
 
             # Sincronizza il video con l'audio
+            final_video = final_video.set_audio(final_audio)
+
+            # Salva il video finale
             output_path = os.path.join(os.path.dirname(video_path), "video_modified.mp4")
-            self.adattaVelocitaVideoAAudio(temp_video_path, temp_audio_path, output_path)
+            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
             QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
 
@@ -892,8 +892,8 @@ class VideoAudioManager(QMainWindow):
 
         # QComboBox per la selezione della voce
         self.voiceSelectionComboBox = QComboBox()
-        self.voiceSelectionComboBox.addItem("Marco", "GcAgjAjkhWsmUd4GlPiv")
         self.voiceSelectionComboBox.addItem("Alessio", "BTpQARcEj1XqVxdZjTI7")
+        self.voiceSelectionComboBox.addItem("Marco", "GcAgjAjkhWsmUd4GlPiv")
         self.voiceSelectionComboBox.addItem("Matilda", "atq1BFi5ZHt88WgSOJRB")
         self.voiceSelectionComboBox.addItem("Mika", "B2j2knC2POvVW0XJE6Hi")
         layout.addWidget(self.voiceSelectionComboBox)
@@ -1039,6 +1039,8 @@ class VideoAudioManager(QMainWindow):
 
         return audioReplacementGroup
 
+
+
     def createAudioPauseGroup(self):
         audioPauseGroup = QGroupBox("Applica Pause Audio")
         layout = QVBoxLayout()
@@ -1046,8 +1048,18 @@ class VideoAudioManager(QMainWindow):
         # User enters the timecode for the audio pause start
         self.timecodePauseLineEdit = QLineEdit()
         self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
+
+        # Pulsante per prelevare il timecode dalla slider
+        getTimecodeButton = QPushButton("Preleva Timecode")
+        getTimecodeButton.clicked.connect(self.setTimecodePauseFromSlider)
+
+        # Layout orizzontale per il timecode e il pulsante
+        timecodeLayout = QHBoxLayout()
+        timecodeLayout.addWidget(self.timecodePauseLineEdit)
+        timecodeLayout.addWidget(getTimecodeButton)
+
         layout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        layout.addWidget(self.timecodePauseLineEdit)
+        layout.addLayout(timecodeLayout)
 
         # User enters the duration of the pause here in seconds
         self.pauseDurationLineEdit = QLineEdit()
@@ -1069,15 +1081,25 @@ class VideoAudioManager(QMainWindow):
 
         self.timecodeVideoPauseLineEdit = QLineEdit()
         self.timecodeVideoPauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
-        self.pauseDurationLineEdit = QLineEdit()
-        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
-        applyVideoPauseButton = QPushButton('Applica Pausa Video')
-        applyVideoPauseButton.clicked.connect(self.applyFreezeFramePause)
+
+        # Pulsante per prelevare il timecode dalla slider
+        getTimecodeButton = QPushButton("Preleva Timecode")
+        getTimecodeButton.clicked.connect(self.setTimecodeVideoFromSlider)
+
+        # Layout orizzontale per il timecode e il pulsante
+        timecodeLayout = QHBoxLayout()
+        timecodeLayout.addWidget(self.timecodeVideoPauseLineEdit)
+        timecodeLayout.addWidget(getTimecodeButton)
 
         layout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        layout.addWidget(self.timecodeVideoPauseLineEdit)
+        layout.addLayout(timecodeLayout)
+
+        self.pauseDurationLineEdit = QLineEdit()
+        self.pauseDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
         layout.addWidget(QLabel("Durata Pausa (s):"))
         layout.addWidget(self.pauseDurationLineEdit)
+        applyVideoPauseButton = QPushButton('Applica Pausa Video')
+        applyVideoPauseButton.clicked.connect(self.applyFreezeFramePause)
         layout.addWidget(applyVideoPauseButton)
         videoPauseGroup.setLayout(layout)
 
@@ -1106,6 +1128,19 @@ class VideoAudioManager(QMainWindow):
         backgroundAudioGroup.setLayout(layout)
 
         return backgroundAudioGroup
+
+    def setTimecodePauseFromSlider(self):
+        current_position = self.player.position()
+        self.timecodePauseLineEdit.setText(self.formatTimecode(current_position))
+
+    def setTimecodeVideoFromSlider(self):
+        current_position = self.player.position()
+        self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
+
+    def formatTimecode(self, position_ms):
+        hours, remainder = divmod(position_ms // 1000, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
