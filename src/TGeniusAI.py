@@ -485,7 +485,6 @@ class VideoAudioManager(QMainWindow):
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
 
-
         # Creazione della toolbar
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
@@ -1258,8 +1257,8 @@ class VideoAudioManager(QMainWindow):
         self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # Aumenta le dimensioni del font della timecodeLabel
-        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")  # Cambia a seconda delle dimensioni desiderate
+        # Riduce la dimensione del font della timecodeLabel
+        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
 
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -1294,18 +1293,22 @@ class VideoAudioManager(QMainWindow):
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)
+        buttonLayout.setSpacing(5)
+        buttonLayout.setContentsMargins(0, 0, 0, 0)
 
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
         recordingGroup = QGroupBox("Opzioni di Registrazione")
         recordingLayout = QVBoxLayout(recordingGroup)
+        recordingLayout.setSpacing(5)
+        recordingLayout.setContentsMargins(5, 5, 5, 5)
         recordingLayout.addWidget(self.recordingStatusLabel)
         recordingLayout.addWidget(self.audioStatusLabel)  # Aggiungi QLabel di stato audio
         recordingLayout.addWidget(self.timecodeLabel)
-        recordingLayout.addWidget(QLabel("Seleziona finestra o schermo:"))
+        recordingLayout.addWidget(QLabel("Finestra/Schermo:"))
         recordingLayout.addWidget(self.screenSelectionComboBox)
-        recordingLayout.addWidget(QLabel("Seleziona input audio:"))
+        recordingLayout.addWidget(QLabel("Input audio:"))
         recordingLayout.addWidget(self.audioDeviceComboBox)
         recordingLayout.addWidget(QLabel("File di destinazione:"))
         recordingLayout.addWidget(self.filePathLineEdit)
@@ -1314,6 +1317,8 @@ class VideoAudioManager(QMainWindow):
 
         widget = QWidget()
         widget.setLayout(QVBoxLayout())
+        widget.layout().setSpacing(5)
+        widget.layout().setContentsMargins(5, 5, 5, 5)
         widget.layout().addWidget(recordingGroup)
         dock.addWidget(widget)
 
