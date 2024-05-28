@@ -1,2 +1,6 @@
 /dist/
 /build/
+/src/ffmpeg.exe
+/build/
+/dist/
+/ffmpeg.exe

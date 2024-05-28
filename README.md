@@ -1,41 +1,86 @@
-### Readme: ThemaGeniusAI - Alpha
+# ThemaGeniusAI - Alpha
 
-#### Introduzione
-ThemaGeniusAI - Alpha è un'applicazione desktop avanzata progettata per gestire e manipolare file audio e video. Offre un'ampia gamma di funzionalità per l'editing video, la gestione audio, la trascrizione, la sintesi vocale, e la registrazione dello schermo. Questo programma è ideale per professionisti del multimedia e per chi necessita di uno strumento completo per la gestione di contenuti audiovisivi.
+ThemaGeniusAI è un'applicazione avanzata basata su AI per la gestione di video e audio, progettata per semplificare il processo di editing video, trascrizione audio e creazione di contenuti. Questo README fornisce una panoramica delle varie funzionalità disponibili in ThemaGeniusAI, inclusa la generazione di documentazione e la creazione di tutorial video.
 
-#### Funzionalità Principali
+## Funzionalità
 
-1. **Player Multimediale Integrato**: Riproduci, metti in pausa e ferma video e audio direttamente dall'applicazione. Supporta slider temporale e visualizzazione di timecode.
+### 1. Gestione Video e Audio
 
-2. **Editing Video**: Ritaglia, unisci e taglia video con opzioni facili da usare. Applica effetti come il freeze frame e adatta la velocità del video all'audio.
+- **Riproduzione ed Editing Video**: Carica, riproduci, metti in pausa, ferma e taglia file video. Supporta vari formati video.
+- **Gestione Audio**: Sostituisci l'audio principale, applica pause audio e aggiungi audio di sottofondo ai video.
+- **Ritaglio Video**: Ritaglia video con un widget di ritaglio personalizzabile.
+- **Regolazione della Velocità**: Regola la velocità di riproduzione con una barra di scorrimento.
+- **Segnalibri**: Imposta segnalibri di inizio e fine per segmenti video.
 
-3. **Gestione Audio**: Sostituisci l'audio principale, aggiungi pause audio, gestisci audio di sottofondo con controllo del volume e unisci tracce audio.
+### 2. Trascrizione e Sintesi
 
-4. **Trascrizione e Sintesi Vocale**: Trascrivi automaticamente il parlato dai video e genera audio sintetizzato utilizzando tecnologie di intelligenza artificiale.
+- **Trascrizione Video**: Trascrivi video in testo con rilevamento automatico della lingua.
+- **Generazione Audio**: Genera audio dalle trascrizioni utilizzando l'intelligenza artificiale, supportando più lingue e impostazioni vocali.
+- **Inserimento Timecode**: Inserisci automaticamente timecode nelle trascrizioni.
+- **Editing Testo**: Editor di testo avanzato per modificare e formattare le trascrizioni.
 
-5. **Registrazione dello Schermo**: Registra parti dello schermo o finestre specifiche con opzioni per l'inclusione di audio. Ideale per la creazione di tutorial o presentazioni.
+### 3. Download e Registrazione
 
-6. **Generazione di Presentazioni PowerPoint**: Crea presentazioni basate su testo trascritto o inserito manualmente, con la capacità di salvare direttamente in formato .pptx.
+- **Download Video**: Scarica video da URL, con opzione per scaricare solo l'audio.
+- **Registrazione Schermo**: Registra lo schermo o finestre specifiche con opzioni audio avanzate.
+- **Gestione Registrazione**: Avvia, ferma e salva registrazioni video e audio.
 
-7. **Supporto per il Drag & Drop**: Carica facilmente video trascinandoli direttamente nell'interfaccia.
+### 4. Generazione di Documentazione
 
-8. **Estesa Personalizzazione dell'Interfaccia**: Configura l'interfaccia secondo le tue preferenze con supporto per il salvataggio delle impostazioni dei dock e applicazione di temi scuri.
+- **Generazione Presentazioni**: Crea presentazioni PowerPoint dai testi delle trascrizioni o da file di testo esterni.
+- **Generazione Video Tutorial**: Utilizza le trascrizioni e gli strumenti di editing per creare tutorial video completi.
 
-9. **Download di Video**: Scarica video da URL con supporto per la gestione del progresso del download e la manipolazione dell'audio scaricato.
+### 5. Funzionalità Avanzate
 
-#### Installazione e Requisiti
-- **Python**: Versione 3.6 o superiore.
-- **Librerie Python**: PyQt6, moviepy, pydub, opencv-python, speech_recognition, pycountry, pyaudio.
-- **Sistema Operativo**: Compatibile con Windows, macOS e Linux.
+- **Unione Video**: Unisci più video in un unico file.
+- **Applicazione Pause Video**: Aggiungi pause con frame congelato ai video.
+- **Personalizzazione Dock**: Personalizza e salva layout dei dock per un'esperienza utente ottimizzata.
 
-#### Utilizzo
-1. **Avvio dell'applicazione**: Esegui il file `main.py` per avviare l'interfaccia.
-2. **Caricamento di File**: Utilizza il menu File per aprire file audio o video o trascinali direttamente nell'interfaccia.
-3. **Uso dei Dock**: Interagisci con i vari docks per accedere alle diverse funzionalità come trascrizione, download, editing, e altro.
-4. **Personalizzazione dell'Interfaccia**: Adatta l'interfaccia alle tue esigenze modificando le impostazioni dei dock e applicando il tema scuro se preferito.
+## Installazione
 
-#### Supporto e Contributi
-Se incontri problemi durante l'uso dell'applicazione o desideri contribuire allo sviluppo, non esitare a contattare lo sviluppatore o a visitare il repository del progetto su GitHub.
+1. Assicurati di avere Python installato sul tuo sistema.
+2. Installa le dipendenze richieste eseguendo:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Esegui l'applicazione:
+   ```bash
+   python main.py
+   ```
 
-#### Note Finali
-ThemaGeniusAI - Alpha è in costante sviluppo e miglioramento. Feedback e suggerimenti sono sempre benvenuti per rendere l'applicazione più efficace e facile da usare.
+## Utilizzo
+
+### Interfaccia Principale
+
+- La finestra principale di ThemaGeniusAI è suddivisa in diversi dock, ognuno dedicato a una specifica funzionalità, come riproduzione video, trascrizione, editing, download e registrazione.
+
+### Caricamento e Riproduzione Video
+
+1. Carica un video cliccando su `File > Open Video/Audio`.
+2. Usa i controlli di riproduzione (play, pausa, stop) per gestire il video.
+
+### Trascrizione e Sintesi Audio
+
+1. Carica un video e clicca su `Trascrivi Video`.
+2. Dopo la trascrizione, genera l'audio cliccando su `Genera Audio con AI`.
+
+### Download e Registrazione
+
+1. Per scaricare un video, inserisci l'URL e clicca su `Download Video`.
+2. Per registrare lo schermo, seleziona le opzioni desiderate e clicca su `Start Recording`.
+
+### Generazione di Presentazioni
+
+1. Crea una presentazione PowerPoint dalle trascrizioni cliccando su `Genera Presentazione`.
+
+## Contribuzione
+
+Contribuisci al progetto inviando segnalazioni di bug o richiedendo nuove funzionalità tramite il repository GitHub del progetto.
+
+## Licenza
+
+ThemaGeniusAI è distribuito sotto la licenza MIT. Consulta il file LICENSE per maggiori dettagli.
+
+---
+
+Per ulteriori informazioni, consulta la documentazione completa o contatta l'autore del progetto.

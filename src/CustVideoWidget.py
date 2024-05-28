@@ -8,7 +8,6 @@ from moviepy.config import change_settings
 
 # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-print(ffmpeg_executable_path)
 change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 class CropVideoWidget(QVideoWidget):
     cropRectChanged = pyqtSignal(QRect)

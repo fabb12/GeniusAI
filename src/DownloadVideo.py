@@ -17,7 +17,6 @@ class DownloadThread(QThread):
         # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
         ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
         change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
-        print(ffmpeg_executable_path)
 
     def run(self):
         if self.download_video:

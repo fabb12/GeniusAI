@@ -1,64 +1,64 @@
 {
     "main_window": {
-        "width": 1278,
-        "height": 1360,
-        "x": 1281,
-        "y": 0
+        "width": 1177,
+        "height": 1244,
+        "x": 546,
+        "y": 10
     },
     "videoPlayerDock": {
-        "visible": true,
+        "visible": false,
         "x": 0,
         "y": 0,
-        "width": 656,
-        "height": 864
+        "width": 0,
+        "height": 843
     },
     "transcriptionDock": {
         "visible": true,
-        "x": 0,
-        "y": 869,
-        "width": 1278,
-        "height": 432
+        "x": 548,
+        "y": 0,
+        "width": 629,
+        "height": 1185
     },
     "editingDock": {
         "visible": false,
-        "x": 1278,
+        "x": 543,
         "y": 0,
         "width": 0,
-        "height": 1301
+        "height": 1185
     },
     "downloadDock": {
         "visible": false,
         "x": 0,
         "y": 0,
-        "width": 656,
-        "height": 0
+        "width": 0,
+        "height": 1185
     },
     "recordingDock": {
-        "visible": false,
-        "x": 1278,
-        "y": 0,
-        "width": 0,
-        "height": 1301
-    },
-    "audioDock": {
         "visible": true,
         "x": 0,
-        "y": 5,
-        "width": 617,
-        "height": 859
+        "y": 848,
+        "width": 543,
+        "height": 337
     },
-    "videoPlayerDockOutput": {
+    "audioDock": {
         "visible": false,
         "x": 0,
-        "y": 0,
-        "width": 0,
+        "y": 843,
+        "width": 543,
         "height": 0
+    },
+    "videoPlayerDockOutput": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 543,
+        "height": 843
     },
     "videoMergeDock": {
         "visible": false,
         "x": 0,
-        "y": 1301,
-        "width": 1278,
+        "y": 1185,
+        "width": 543,
         "height": 0
     }
 }
