@@ -2,9 +2,7 @@ import sys
 from pydub import AudioSegment
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
-from PyQt6.QtCore import QUrl
-from moviepy.editor import  concatenate_videoclips
-from moviepy.editor import VideoFileClip, vfx, AudioFileClip, ImageClip, CompositeVideoClip
+from moviepy.editor import ImageClip, CompositeVideoClip
 from pptx import Presentation
 import re
 import tempfile
@@ -16,7 +14,6 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
 import datetime
-import os
 import time
 from PyQt6.QtWidgets import QProgressDialog
 from DownloadVideo import DownloadThread
@@ -47,6 +44,8 @@ from CustomSlider import CustomSlider
 from PyQt6.QtWidgets import QToolBar
 from SettingsDialog import ApiKeyDialog
 from moviepy.editor import concatenate_audioclips, concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
+from PyQt6.QtGui import QDesktopServices
+from PyQt6.QtCore import QUrl
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -162,9 +161,9 @@ class VideoAudioManager(QMainWindow):
         self.pauseButton.setIcon(QIcon("../res/pausa.png"))
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("../res/stop.png"))
-        self.setStartBookmarkButton = QPushButton('Start')
+        self.setStartBookmarkButton = QPushButton('')
         self.setStartBookmarkButton.setIcon(QIcon("../res/bookmark_1.png"))
-        self.setEndBookmarkButton = QPushButton('End')
+        self.setEndBookmarkButton = QPushButton('')
         self.setEndBookmarkButton.setIcon(QIcon("../res/bookmark_2.png"))
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("../res/taglia.png"))
@@ -173,7 +172,7 @@ class VideoAudioManager(QMainWindow):
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("../res/forward.png"))
 
-        self.deleteButton = QPushButton('Delete')
+        self.deleteButton = QPushButton('')
         self.deleteButton.setIcon(QIcon("../res/trash-bin.png"))
         # Collegamento dei pulsanti ai loro slot funzionali
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
@@ -504,6 +503,11 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
         # Continuazione della configurazione UI esistente...
+
+    def openRootFolder(self):
+        root_folder_path = os.path.dirname(os.path.abspath(__file__))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
+
 
     def deleteVideoSegment(self):
         if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
@@ -1782,6 +1786,14 @@ class VideoAudioManager(QMainWindow):
         saveAsAction.setStatusTip('Save the current video from Video Player Output')
         saveAsAction.triggered.connect(self.saveVideoAs)
         fileMenu.addAction(saveAsAction)
+
+
+        # Action to open root folder
+        openRootFolderAction = QAction('&Open Root Folder', self)
+        openRootFolderAction.setShortcut('Ctrl+R')
+        openRootFolderAction.setStatusTip('Open the root folder of the software')
+        openRootFolderAction.triggered.connect(self.openRootFolder)
+        fileMenu.addAction(openRootFolderAction)
 
         exitAction = QAction('&Exit', self)
         exitAction.setShortcut('Ctrl+Q')
