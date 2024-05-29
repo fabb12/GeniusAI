@@ -502,7 +502,7 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction = QAction(QIcon("../res/key.png"), "Imposta API Key", self)
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
-        # Continuazione della configurazione UI esistente...
+
 
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
@@ -1256,40 +1256,66 @@ class VideoAudioManager(QMainWindow):
     def createRecordingDock(self):
         dock = Dock("Registrazione")
 
+        # Timer per aggiornare il timecode della registrazione
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.updateTimecodeRec)
+
+        # Label per il timecode della registrazione
         self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        # Riduce la dimensione del font della timecodeLabel
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
 
+        # Label per lo stato della registrazione
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
+        # Label per lo stato dell'audio
         self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
         self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
+        # ComboBox per la selezione della finestra/schermo
         self.screenSelectionComboBox = CustomComboBox()
         self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
 
+        # ComboBox per la selezione del dispositivo audio
         self.audioDeviceComboBox = QComboBox()
         audio_devices = self.print_audio_devices()
-
         if audio_devices:
             self.audioDeviceComboBox.addItems(audio_devices)
         else:
             print("No input audio devices found.")
 
+        # Popola la ComboBox con le finestre disponibili e gli schermi
         titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
                  [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
         self.screenSelectionComboBox.addItems(titles)
 
+        # LineEdit per il percorso del file di destinazione
         self.filePathLineEdit = QLineEdit()
         self.filePathLineEdit.setPlaceholderText("Inserisci il percorso del file di destinazione")
         browseButton = QPushButton("Sfoglia")
         browseButton.clicked.connect(self.browseFileLocation)
 
+        # GroupBox per le impostazioni di registrazione
+        recordingGroup = QGroupBox("Impostazioni di Registrazione")
+        recordingLayout = QVBoxLayout(recordingGroup)
+        recordingLayout.addWidget(self.recordingStatusLabel)
+        recordingLayout.addWidget(self.audioStatusLabel)
+        recordingLayout.addWidget(self.timecodeLabel)
+        recordingLayout.addWidget(QLabel("Finestra/Schermo:"))
+        recordingLayout.addWidget(self.screenSelectionComboBox)
+        recordingLayout.addWidget(QLabel("Input audio:"))
+        recordingLayout.addWidget(self.audioDeviceComboBox)
+
+        # GroupBox per le opzioni di salvataggio
+        saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
+        saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
+        self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")  # Correzione: Creazione del controllo
+        saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
+        saveOptionsLayout.addWidget(self.filePathLineEdit)
+        saveOptionsLayout.addWidget(browseButton)
+
+        # Bottoni di controllo per avviare e fermare la registrazione
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("../res/rec.png"))
         self.stopRecordingButton = QPushButton("")
@@ -1297,35 +1323,22 @@ class VideoAudioManager(QMainWindow):
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)
-        buttonLayout.setSpacing(5)
-        buttonLayout.setContentsMargins(0, 0, 0, 0)
 
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
-        recordingGroup = QGroupBox("Opzioni di Registrazione")
-        recordingLayout = QVBoxLayout(recordingGroup)
-        recordingLayout.setSpacing(5)
-        recordingLayout.setContentsMargins(5, 5, 5, 5)
-        recordingLayout.addWidget(self.recordingStatusLabel)
-        recordingLayout.addWidget(self.audioStatusLabel)  # Aggiungi QLabel di stato audio
-        recordingLayout.addWidget(self.timecodeLabel)
-        recordingLayout.addWidget(QLabel("Finestra/Schermo:"))
-        recordingLayout.addWidget(self.screenSelectionComboBox)
-        recordingLayout.addWidget(QLabel("Input audio:"))
-        recordingLayout.addWidget(self.audioDeviceComboBox)
-        recordingLayout.addWidget(QLabel("File di destinazione:"))
-        recordingLayout.addWidget(self.filePathLineEdit)
-        recordingLayout.addWidget(browseButton)
-        recordingLayout.addLayout(buttonLayout)
+        # Layout principale del widget
+        mainLayout = QVBoxLayout()
+        mainLayout.addWidget(recordingGroup)
+        mainLayout.addWidget(saveOptionsGroup)
+        mainLayout.addLayout(buttonLayout)
 
+        # Imposta il layout principale nel widget del dock
         widget = QWidget()
-        widget.setLayout(QVBoxLayout())
-        widget.layout().setSpacing(5)
-        widget.layout().setContentsMargins(5, 5, 5, 5)
-        widget.layout().addWidget(recordingGroup)
+        widget.setLayout(mainLayout)
         dock.addWidget(widget)
 
+        # Aggiorna la lista delle finestre disponibili
         self.updateWindowList()
         return dock
 
@@ -1475,8 +1488,8 @@ class VideoAudioManager(QMainWindow):
         selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
         video_file_path = self.filePathLineEdit.text()
-        self.timecodeLabel.setStyleSheet(
-            "QLabel { font-size: 24pt; color: red; }")
+        save_video_only = self.saveVideoOnlyCheckBox.isChecked()  # Check if the user wants to save only the video
+        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
 
         def extract_device_name(selected_audio):
             # Extract the device name and ID from the combo box selection
@@ -1485,69 +1498,72 @@ class VideoAudioManager(QMainWindow):
                 return int(match.group(1)), match.group(2).strip()
             return None, None
 
-        device_id, selected_audio_name = extract_device_name(selected_audio)
-        audio_input_index = None
+        if not save_video_only:
+            device_id, selected_audio_name = extract_device_name(selected_audio)
+            audio_input_index = None
 
-        if selected_title and selected_audio_name:
-            # Set audio_input_index to the extracted device ID
-            audio_input_index = device_id
+            if selected_title and selected_audio_name:
+                audio_input_index = device_id
 
-            if audio_input_index is not None:
-                p = pyaudio.PyAudio()
-                device_info = p.get_device_info_by_host_api_device_index(0, audio_input_index)
-                max_channels = device_info.get('maxInputChannels')
-                audio_channels = min(2, max_channels)
-
-                monitors = get_monitors()
-
-                if "Schermo intero" in selected_title:
-                    index = int(selected_title.split()[2]) - 1
-                    region = (monitors[index].x, monitors[index].y, monitors[index].width, monitors[index].height)
-                    print(region)
-                else:
-                    window = gw.getWindowsWithTitle(selected_title)[0]
-                    window.moveTo(0, 0)
-                    window.activate()
-                    region = (window.left, window.top, window.width, window.height)
-
-                # Verifica e crea una cartella di default se necessario
-                if not video_file_path:
-                    # Creare una cartella predefinita nella directory principale del software
-                    default_folder = os.path.join(os.getcwd(), 'screenrecorder')
-                    os.makedirs(default_folder, exist_ok=True)
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                    base_filename = f"recording_{timestamp}"
-                    video_file_path_with_timestamp = os.path.join(default_folder, f"{base_filename}.avi")
-                    audioFileName = os.path.join(default_folder, f"{base_filename}.wav")
-                else:
-                    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-                    base_filename = os.path.splitext(video_file_path)[0]
-                    extension = os.path.splitext(video_file_path)[1]
-                    video_file_path_with_timestamp = f"{base_filename}_{timestamp}{extension}"
-                    audioFileName = f"{base_filename}_{timestamp}.wav"
-
-                fourcc = cv2.VideoWriter_fourcc(*'XVID')
-                self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0,
-                                                    (region[2], region[3]))
-
-                self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
-                                                      audio_input=audio_input_index, audio_channels=audio_channels)
-                self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)
-                self.recorder_thread.error_signal.connect(self.showError)
-                self.recorder_thread.start()
-
-                self.recordingStatusLabel.setText("Stato: Registrazione in corso")
-                self.recordingTime = QTime(0, 0, 0)
-                self.timer.start(1000)
-
-                self.current_video_path = video_file_path_with_timestamp
-                self.current_audio_path = audioFileName
-                self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di {selected_title}')
-            else:
-                QMessageBox.warning(self, "Errore", "Dispositivo audio non trovato.")
+                if audio_input_index is not None:
+                    p = pyaudio.PyAudio()
+                    device_info = p.get_device_info_by_host_api_device_index(0, audio_input_index)
+                    max_channels = device_info.get('maxInputChannels')
+                    audio_channels = min(2, max_channels)
         else:
-            QMessageBox.warning(self, "Errore",
-                                "Assicurati di selezionare una finestra/schermo, un dispositivo audio e un percorso di salvataggio valido.")
+            audio_input_index = None
+            audio_channels = 0
+
+        monitors = get_monitors()
+
+        if "Schermo intero" in selected_title:
+            index = int(selected_title.split()[2]) - 1
+            region = (monitors[index].x, monitors[index].y, monitors[index].width, monitors[index].height)
+        else:
+            window = gw.getWindowsWithTitle(selected_title)[0]
+            window.moveTo(0, 0)
+            window.activate()
+            region = (window.left, window.top, window.width, window.height)
+
+        # Verifica e crea una cartella di default se necessario
+        if not video_file_path:
+            default_folder = os.path.join(os.getcwd(), 'screenrecorder')
+            os.makedirs(default_folder, exist_ok=True)
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            base_filename = f"recording_{timestamp}"
+            video_file_path_with_timestamp = os.path.join(default_folder, f"{base_filename}.avi")
+            if not save_video_only:
+                audioFileName = os.path.join(default_folder, f"{base_filename}.wav")
+        else:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            base_filename = os.path.splitext(video_file_path)[0]
+            extension = os.path.splitext(video_file_path)[1]
+            video_file_path_with_timestamp = f"{base_filename}_{timestamp}{extension}"
+            if not save_video_only:
+                audioFileName = f"{base_filename}_{timestamp}.wav"
+
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0, (region[2], region[3]))
+
+        if not save_video_only:
+            self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
+                                                  audio_input=audio_input_index, audio_channels=audio_channels)
+        else:
+            self.recorder_thread = ScreenRecorder(self.video_writer, None, region=region,
+                                                  audio_input=None, audio_channels=0)
+
+        self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)
+        self.recorder_thread.error_signal.connect(self.showError)
+        self.recorder_thread.start()
+
+        self.recordingStatusLabel.setText("Stato: Registrazione in corso")
+        self.recordingTime = QTime(0, 0, 0)
+        self.timer.start(1000)
+
+        self.current_video_path = video_file_path_with_timestamp
+        if not save_video_only:
+            self.current_audio_path = audioFileName
+        self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di {selected_title}')
 
     def updateAudioStatus(self, is_audio_ready):
         if is_audio_ready:
@@ -1560,33 +1576,58 @@ class VideoAudioManager(QMainWindow):
 
     def stopScreenRecording(self):
         # Stop the recording process
-        if self.recorder_thread is not None:
+        if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet(
                 "QLabel { font-size: 24pt; }")  # Cambia a seconda delle dimensioni desiderate
-
             self.recorder_thread.stop()
             self.recorder_thread = None  # Resetta il thread per future registrazioni
 
         # Close the video writer and release resources
-        if self.video_writer is not None:
+        if hasattr(self, 'video_writer') and self.video_writer is not None:
             self.video_writer.release()
             self.video_writer = None
 
         # Verifica se i percorsi dei file sono stati impostati e procedi alla loro gestione
-        if self.current_video_path and self.current_audio_path:
-            try:
-                # Processo per unire l'audio e il video o finalizzare la registrazione
-                self.mergeAudioVideo(self.current_video_path, self.current_audio_path)
+        if hasattr(self, 'current_video_path') and hasattr(self, 'current_audio_path'):
+            video_path = self.current_video_path
+            audio_path = self.current_audio_path
 
-                # Resetta i percorsi per evitare riferimenti obsoleti
-                self.current_video_path = None
-                self.current_audio_path = None
+            if self.saveVideoOnlyCheckBox.isChecked():
+                # Se l'opzione "Salva solo il video" è selezionata
+                if video_path and os.path.exists(video_path):
+                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
+                    QMessageBox.information(self, "File Salvato",
+                                            f"Il video è stato salvato correttamente:\nVideo: {video_path}")
+                else:
+                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file video trovato.")
+                    QMessageBox.warning(self, "File non trovato", "Il file video non è stato trovato.")
 
-                # Informa l'utente che la registrazione e il salvataggio sono stati completati
-                self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
-            except Exception as e:
-                # Gestisce eventuali errori nel processo di unione o finalizzazione
-                self.recordingStatusLabel.setText(f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                self.loadVideoOutput(video_path)
+
+            else:
+                # Se entrambe le tracce video e audio devono essere salvate
+                if video_path and os.path.exists(video_path) and audio_path and os.path.exists(audio_path):
+                    try:
+                        # Processo per unire l'audio e il video o finalizzare la registrazione
+                        self.mergeAudioVideo(video_path, audio_path)
+
+                        # Informa l'utente che la registrazione e il salvataggio sono stati completati
+                        self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
+
+                    except Exception as e:
+                        # Gestisce eventuali errori nel processo di unione o finalizzazione
+                        self.recordingStatusLabel.setText(
+                            f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                        QMessageBox.critical(self, "Errore",
+                                             f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                else:
+                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
+                    QMessageBox.warning(self, "File non trovato",
+                                        f"Uno o entrambi i file non trovati:\nVideo: {video_path}\nAudio: {audio_path}")
+
+            # Resetta i percorsi per evitare riferimenti obsoleti
+            self.current_video_path = None
+            self.current_audio_path = None
         else:
             # Nessuna registrazione è stata avviata o non ci sono file da processare
             self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
@@ -1594,6 +1635,10 @@ class VideoAudioManager(QMainWindow):
         # Stop the timer if it's running
         if self.timer.isActive():
             self.timer.stop()
+
+        # Resetta il timecode
+        self.timecodeLabel.setText('00:00')
+
 
     def mergeAudioVideo(self, video_path, audio_path):
         try:
@@ -1971,16 +2016,18 @@ class VideoAudioManager(QMainWindow):
                           <br>
                           Autore: FFA <br>""")
 
-
-
-    def updateLanguageComboBox(self, language_code, language_name):
-        # Verifica se la lingua è già presente nella combo box
-        index = self.languageComboBox.findData(language_code)
-        if index == -1:  # Lingua non presente, aggiungila
-            self.languageComboBox.addItem(language_name, language_code)
-            index = self.languageComboBox.count() - 1
-        self.languageComboBox.setCurrentIndex(index)
-
+    def handleTextChange(self):
+        current_text = self.transcriptionTextArea.toPlainText()
+        if current_text.strip():
+            if self.timecodeEnabled:
+                self.transcriptionTextArea.blockSignals(True)
+                updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
+                self.transcriptionTextArea.setHtml(updated_text)
+                self.detectAndUpdateLanguage(updated_text)
+                self.transcriptionTextArea.blockSignals(False)
+            else:
+                self.detectAndUpdateLanguage(current_text)
+                self.original_text = current_text
 
     def detectAndUpdateLanguage(self, text):
         try:
@@ -1995,16 +2042,15 @@ class VideoAudioManager(QMainWindow):
         except LangDetectException:
             self.updateTranscriptionLanguageDisplay("Non rilevabile")
 
-    def handleTextChange(self):
-        current_text = self.transcriptionTextArea.toPlainText()
-        if current_text.strip():
-            if self.timecodeEnabled:
-                self.transcriptionTextArea.blockSignals(True)
-                updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
-                self.transcriptionTextArea.setHtml(updated_text)
-                self.transcriptionTextArea.blockSignals(False)
-            else:
-                self.original_text = current_text
+    def updateLanguageComboBox(self, language_code, language_name):
+        index = self.languageComboBox.findData(language_code)
+        if index == -1:
+            self.languageComboBox.addItem(language_name, language_code)
+            index = self.languageComboBox.count() - 1
+        self.languageComboBox.setCurrentIndex(index)
+
+    def updateTranscriptionLanguageDisplay(self, language):
+        self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
 
     def removeTimecodes(self, text):
         # Regex to remove timecodes in the format [00:01]
@@ -2043,11 +2089,7 @@ class VideoAudioManager(QMainWindow):
             updated_text.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
 
         return ' '.join(updated_text)
-    def updateTranscriptionLanguageDisplay(self, language):
-        """
-        Aggiorna il dock della trascrizione con la lingua attuale.
-        """
-        self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
+
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video selezionato.")
