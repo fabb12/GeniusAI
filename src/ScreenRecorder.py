@@ -1,13 +1,17 @@
 import numpy as np
 import cv2
-from PyQt6.QtCore import QThread, pyqtSignal
-import pyaudio
-import wave
+from PyQt6.QtCore import QThread, pyqtSignal, QTime, QTimer
+import sounddevice as sd
+import soundfile as sf
 import time
 from mss import mss
 from moviepy.config import change_settings
+from moviepy.editor import VideoFileClip, AudioFileClip
 import os
 import ctypes.wintypes
+from queue import Queue
+from threading import Lock
+from PyQt6.QtWidgets import QMessageBox, QFileDialog
 
 # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
@@ -29,31 +33,30 @@ class ScreenRecorder(QThread):
         self.is_running = True
         self.frame_rate = 30  # Frames per second
         self.audio_rate = 44100  # Audio sample rate
-        self.p = pyaudio.PyAudio() if audio_input is not None else None
         self.frame_period = 1.0 / self.frame_rate
+        self.audio_queue = Queue()
+        self.lock = Lock()
+        self.sync_event = Lock()
 
     def run(self):
         self.recording_started_signal.emit()
-        audio_buffer = []
         start_time = time.time()
 
         if self.audio_input is not None:
             try:
-                stream = self.p.open(format=pyaudio.paInt16,
-                                     channels=self.audio_channels,
-                                     rate=self.audio_rate,
-                                     input=True,
-                                     input_device_index=self.audio_input,
-                                     frames_per_buffer=1024)
+                self.audio_file = sf.SoundFile(self.audio_path, mode='w', samplerate=self.audio_rate, channels=self.audio_channels, format='WAV')
+                self.stream = sd.InputStream(samplerate=self.audio_rate, channels=self.audio_channels, device=self.audio_input, callback=self.audio_callback)
+                self.stream.start()
                 self.audio_ready_signal.emit(True)  # Audio pronto
             except Exception as e:
                 self.audio_ready_signal.emit(False)  # Audio non pronto
                 self.error_signal.emit(f"Audio input error: {str(e)}")
                 return
-            stream.start_stream()
         else:
-            stream = None
+            self.stream = None
             self.audio_ready_signal.emit(False)
+
+        self.sync_event.acquire()  # Wait for audio to be ready
 
         with mss() as sct:
             next_frame_time = start_time + self.frame_period
@@ -75,10 +78,6 @@ class ScreenRecorder(QThread):
                         self.video_writer.write(frame)
                         next_frame_time += self.frame_period
 
-                    if stream is not None:
-                        audio_data = stream.read(1024, exception_on_overflow=False)
-                        audio_buffer.append(audio_data)
-
                     # Sincronizzazione precisa
                     sleep_time = next_frame_time - time.time()
                     if sleep_time > 0:
@@ -86,13 +85,19 @@ class ScreenRecorder(QThread):
             except Exception as e:
                 self.error_signal.emit(f"Recording error: {str(e)}")
             finally:
-                if stream is not None:
-                    stream.stop_stream()
-                    stream.close()
-                    self.save_audio(audio_buffer)
+                if self.stream is not None:
+                    self.stream.stop()
+                    self.stream.close()
+                    self.audio_file.close()
                 self.recording_stopped_signal.emit()
-                if self.p is not None:
-                    self.p.terminate()
+
+    def audio_callback(self, indata, frames, time, status):
+        if status:
+            self.error_signal.emit(f"Audio stream status: {status}")
+        self.audio_file.write(indata)
+        self.audio_queue.put(indata)
+        if not self.sync_event.locked():
+            self.sync_event.release()  # Release sync event when the first audio data is received
 
     def get_mouse_position(self):
         # Ottieni la posizione del puntatore del mouse
@@ -108,21 +113,6 @@ class ScreenRecorder(QThread):
         except Exception as e:
             self.error_signal.emit(f"Failed to get mouse position: {str(e)}")
         return mouse_x, mouse_y
-
-    def save_audio(self, audio_buffer):
-        if self.audio_path is None:
-            return  # Non salvare l'audio se l'opzione "Salva solo il video" è selezionata
-
-        try:
-            with wave.open(self.audio_path, 'wb') as wf:
-                wf.setnchannels(self.audio_channels)
-                wf.setsampwidth(self.p.get_sample_size(pyaudio.paInt16))
-                wf.setframerate(self.audio_rate)
-                # Scrivi un file audio completo
-                audio_data_full = b''.join(audio_buffer)
-                wf.writeframes(audio_data_full)
-        except Exception as e:
-            self.error_signal.emit(f"Failed to save audio: {str(e)}")
 
     def stop(self):
         self.is_running = False
