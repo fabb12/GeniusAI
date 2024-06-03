@@ -61,10 +61,14 @@ class VideoAudioManager(QMainWindow):
         super().__init__()
         # Version information
         self.version_major = 1
-        self.version_minor = 2
-        self.version_build = 100  # Example build number
-        self.api_key = "ef38b436326ec387ecb1a570a8641b84"
+        self.version_minor = 1
+        self.version_patch = 12
+        build_date = datetime.datetime.now().strftime("%Y%m%d")
 
+        # Comporre la stringa di versione
+        self.version = f"{self.version_major}.{self.version_minor}.{self.version_patch} - {build_date}"
+
+        self.api_key = "ef38b436326ec387ecb1a570a8641b84"
         self.setGeometry(100, 500, 800, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
@@ -89,7 +93,7 @@ class VideoAudioManager(QMainWindow):
 
     def initUI(self):
 
-        self.setWindowTitle('ThemaGeniusAI - Alpha')
+        self.setWindowTitle('ThemaGeniusAI - Alpha | {}'.format(self.version))
         self.setWindowIcon(QIcon('../res/eye.png'))
 
         # Creazione e configurazione dell'area del dock
@@ -269,6 +273,8 @@ class VideoAudioManager(QMainWindow):
         # Widget per contenere il layout del video player output
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
+        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         self.videoPlayerOutputDock.addWidget(videoPlayerOutputWidget)
 
 
@@ -322,6 +328,8 @@ class VideoAudioManager(QMainWindow):
 
         # Widget per contenere il layout del video player
         videoPlayerWidget = QWidget()
+        videoPlayerWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         videoPlayerWidget.setLayout(videoPlayerLayout)
         self.videoPlayerDock.addWidget(videoPlayerWidget)
 
@@ -1257,8 +1265,8 @@ class VideoAudioManager(QMainWindow):
         dock = Dock("Registrazione")
 
         # Timer per aggiornare il timecode della registrazione
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.updateTimecodeRec)
+        self.rec_timer = QTimer(self)
+        self.rec_timer.timeout.connect(self.updateTimecodeRec)
 
         # Label per il timecode della registrazione
         self.timecodeLabel = QLabel('00:00')
@@ -1284,6 +1292,7 @@ class VideoAudioManager(QMainWindow):
             self.audioDeviceComboBox.addItems(audio_devices)
         else:
             print("No input audio devices found.")
+
 
         # Popola la ComboBox con le finestre disponibili e gli schermi
         titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
@@ -1340,6 +1349,8 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna la lista delle finestre disponibili
         self.updateWindowList()
+
+        self.setDefaultAudioDevice()
         return dock
 
     def updateWindowList(self):
@@ -1361,10 +1372,8 @@ class VideoAudioManager(QMainWindow):
         self.screenSelectionComboBox.addItems(combined_list)
 
     def setDefaultAudioDevice(self):
-        """Imposta 'Stereo Mix' come dispositivo predefinito se disponibile."""
-        index = self.audioDeviceComboBox.findText("Stereo Mix")
-        if index != -1:
-            self.audioDeviceComboBox.setCurrentIndex(index)
+        """Imposta 'Headset' come dispositivo predefinito se disponibile."""
+        self.audioDeviceComboBox.setCurrentIndex(2)
 
     def browseFileLocation(self):
         """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
@@ -1558,7 +1567,7 @@ class VideoAudioManager(QMainWindow):
 
         self.recordingStatusLabel.setText("Stato: Registrazione in corso")
         self.recordingTime = QTime(0, 0, 0)
-        self.timer.start(1000)
+        self.rec_timer.start(1000)
 
         self.current_video_path = video_file_path_with_timestamp
         if not save_video_only:
@@ -1575,6 +1584,7 @@ class VideoAudioManager(QMainWindow):
         QMessageBox.critical(self, "Errore", message)
 
     def stopScreenRecording(self):
+        self.rec_timer.stop()
         # Stop the recording process
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet(
@@ -1633,8 +1643,8 @@ class VideoAudioManager(QMainWindow):
             self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
 
         # Stop the timer if it's running
-        if self.timer.isActive():
-            self.timer.stop()
+        if self.rec_timer.isActive():
+            self.rec_timer.stop()
 
         # Resetta il timecode
         self.timecodeLabel.setText('00:00')
@@ -2011,7 +2021,7 @@ class VideoAudioManager(QMainWindow):
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
-                          f"""<b>Thema Genius</b> version {self.version_major}.{self.version_minor} (Build {self.version_build})<br>
+                          f"""<b>Thema Genius</b> version: {self.version}<br>
                           AI-based video and audio management application.<br>
                           <br>
                           Autore: FFA <br>""")

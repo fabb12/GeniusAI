@@ -7,19 +7,19 @@ import time
 from mss import mss
 from moviepy.config import change_settings
 import os
-import ctypes
 import ctypes.wintypes
 
 # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
 change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
     audio_ready_signal = pyqtSignal(bool)  # Segnale per indicare se l'audio è pronto
 
-    def __init__(self, video_writer, audio_path=None, region=None, audio_input=None, audio_channels=0):
+    def __init__(self, video_writer, audio_path=None, region=None, audio_input=None, audio_channels=2):
         super().__init__()
         self.video_writer = video_writer
         self.audio_path = audio_path
@@ -27,7 +27,7 @@ class ScreenRecorder(QThread):
         self.audio_input = audio_input
         self.audio_channels = audio_channels
         self.is_running = True
-        self.frame_rate = 25  # Frames per second
+        self.frame_rate = 30  # Frames per second
         self.audio_rate = 44100  # Audio sample rate
         self.p = pyaudio.PyAudio() if audio_input is not None else None
         self.frame_period = 1.0 / self.frame_rate
@@ -35,7 +35,7 @@ class ScreenRecorder(QThread):
     def run(self):
         self.recording_started_signal.emit()
         audio_buffer = []
-        frame_times = []
+        start_time = time.time()
 
         if self.audio_input is not None:
             try:
@@ -56,8 +56,7 @@ class ScreenRecorder(QThread):
             self.audio_ready_signal.emit(False)
 
         with mss() as sct:
-            next_frame_time = time.time()
-            start_time = next_frame_time  # Registra il tempo di inizio della registrazione
+            next_frame_time = start_time + self.frame_period
             try:
                 while self.is_running:
                     current_time = time.time()
@@ -71,22 +70,26 @@ class ScreenRecorder(QThread):
 
                         # Aggiungi cerchio rosso attorno al puntatore del mouse
                         mouse_x, mouse_y = self.get_mouse_position()
-                        cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 20
+                        cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 10
 
                         self.video_writer.write(frame)
-                        frame_times.append(current_time - start_time)  # Registra il delta tempo
                         next_frame_time += self.frame_period
 
                     if stream is not None:
                         audio_data = stream.read(1024, exception_on_overflow=False)
-                        audio_buffer.append((current_time - start_time, audio_data))  # Registra il delta tempo
+                        audio_buffer.append(audio_data)
+
+                    # Sincronizzazione precisa
+                    sleep_time = next_frame_time - time.time()
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
             except Exception as e:
                 self.error_signal.emit(f"Recording error: {str(e)}")
             finally:
                 if stream is not None:
                     stream.stop_stream()
                     stream.close()
-                    self.save_audio(audio_buffer, frame_times)
+                    self.save_audio(audio_buffer)
                 self.recording_stopped_signal.emit()
                 if self.p is not None:
                     self.p.terminate()
@@ -106,7 +109,7 @@ class ScreenRecorder(QThread):
             self.error_signal.emit(f"Failed to get mouse position: {str(e)}")
         return mouse_x, mouse_y
 
-    def save_audio(self, audio_buffer, frame_times):
+    def save_audio(self, audio_buffer):
         if self.audio_path is None:
             return  # Non salvare l'audio se l'opzione "Salva solo il video" è selezionata
 
@@ -116,7 +119,7 @@ class ScreenRecorder(QThread):
                 wf.setsampwidth(self.p.get_sample_size(pyaudio.paInt16))
                 wf.setframerate(self.audio_rate)
                 # Scrivi un file audio completo
-                audio_data_full = b''.join([data[1] for data in audio_buffer])
+                audio_data_full = b''.join(audio_buffer)
                 wf.writeframes(audio_data_full)
         except Exception as e:
             self.error_signal.emit(f"Failed to save audio: {str(e)}")
