@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QSlider
+from PyQt6.QtWidgets import QSlider, QStyleOptionSlider
 from PyQt6.QtGui import QPainter, QColor, QBrush, QFont
 from PyQt6.QtCore import Qt
 
@@ -51,6 +51,16 @@ class CustomSlider(QSlider):
     def setBookmarkEnd(self, position):
         self.bookmarkEnd = position
         self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+            value = self.style().sliderValueFromPosition(self.minimum(), self.maximum(), int(event.position().x()), self.width())
+            self.setValue(value)
+            self.sliderMoved.emit(value)
+            self.sliderPressed.emit()  # Emit the signal to trigger the slot
+        super().mousePressEvent(event)
 
     def paintEvent(self, event):
         super().paintEvent(event)
