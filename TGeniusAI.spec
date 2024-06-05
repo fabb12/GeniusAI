@@ -1,11 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import shutil
+import os
+
 block_cipher = None
 
 a = Analysis(['src/TGeniusAI.py'],
              pathex=['.'],
              binaries=[],
-             datas=[('res', 'res')],  # Assicurati di includere tutte le risorse necessarie
+             datas=[
+                 ('res', 'res'),  # Assicurati di includere tutte le risorse necessarie
+                 ('Readme.txt', '.'),  # Aggiungi Readme.txt nella cartella TGeniusAI
+                 ('install.bat', '.'),  # Aggiungi install.bat nella cartella TGeniusAI
+                 ('ffmpeg.exe', '.')  # Aggiungi ffmpeg.exe nella cartella TGeniusAI
+             ],
              hiddenimports=[
                  'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
                  'PyQt6.QtGui', 'PyQt6.QtWidgets'
@@ -36,4 +44,19 @@ coll = COLLECT(exe,
                a.binaries,
                a.zipfiles,
                a.datas,
-               name='TGeniusAI')
+               name='TGeniusAI',
+               strip=False,
+               upx=True,
+               console=True)
+
+# Script personalizzato per spostare i file un livello sopra
+def move_files_up():
+    dist_dir = os.path.join(os.getcwd(), 'dist', 'TGeniusAI')
+    files_to_move = ['Readme.txt', 'install.bat']
+    for file_name in files_to_move:
+        src_path = os.path.join(dist_dir, file_name)
+        dest_path = os.path.join(dist_dir, '..', file_name)
+        if os.path.exists(src_path):
+            shutil.move(src_path, dest_path)
+
+move_files_up()

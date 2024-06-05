@@ -697,7 +697,6 @@ class VideoAudioManager(QMainWindow):
 
         self.cutting_thread.start()
 
-
     def handleTimecodeToggle(self, checked):
         # Update the timecode insertion enabled state based on checkbox
         self.timecodeEnabled = checked
