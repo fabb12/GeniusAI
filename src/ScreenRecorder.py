@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QMessageBox, QFileDialog
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
 change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
+
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
@@ -44,8 +45,10 @@ class ScreenRecorder(QThread):
 
         if self.audio_input is not None:
             try:
-                self.audio_file = sf.SoundFile(self.audio_path, mode='w', samplerate=self.audio_rate, channels=self.audio_channels, format='WAV')
-                self.stream = sd.InputStream(samplerate=self.audio_rate, channels=self.audio_channels, device=self.audio_input, callback=self.audio_callback)
+                self.audio_file = sf.SoundFile(self.audio_path, mode='w', samplerate=self.audio_rate,
+                                               channels=self.audio_channels, format='WAV')
+                self.stream = sd.InputStream(samplerate=self.audio_rate, channels=self.audio_channels,
+                                             device=self.audio_input, callback=self.audio_callback)
                 self.stream.start()
                 self.audio_ready_signal.emit(True)  # Audio pronto
             except Exception as e:
@@ -94,10 +97,23 @@ class ScreenRecorder(QThread):
     def audio_callback(self, indata, frames, time, status):
         if status:
             self.error_signal.emit(f"Audio stream status: {status}")
-        self.audio_file.write(indata)
-        self.audio_queue.put(indata)
+
+        # Normalizza il volume
+        amplified_audio = self.normalize_audio(indata)
+
+        self.audio_file.write(amplified_audio)
+        self.audio_queue.put(amplified_audio)
         if not self.sync_event.locked():
             self.sync_event.release()  # Release sync event when the first audio data is received
+
+    def normalize_audio(self, indata, factor=2.0):
+        """
+        Normalizza il volume del segnale audio.
+        :param indata: Input audio data
+        :param factor: Amplification factor
+        :return: Amplified audio data
+        """
+        return indata * factor
 
     def get_mouse_position(self):
         # Ottieni la posizione del puntatore del mouse

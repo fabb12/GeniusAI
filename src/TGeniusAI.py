@@ -62,7 +62,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 1
-        self.version_patch = 12
+        self.version_patch = 14
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -1496,12 +1496,11 @@ class VideoAudioManager(QMainWindow):
     def startScreenRecording(self):
         selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
-        video_file_path = self.filePathLineEdit.text()
-        save_video_only = self.saveVideoOnlyCheckBox.isChecked()  # Check if the user wants to save only the video
+        video_file_path = self.filePathLineEdit.text().strip()  # Strip leading/trailing whitespace
+        save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
 
         def extract_device_name(selected_audio):
-            # Extract the device name and ID from the combo box selection
             match = re.match(r"Input Device ID (\d+) - (.+?),", selected_audio)
             if match:
                 return int(match.group(1)), match.group(2).strip()
@@ -1510,7 +1509,6 @@ class VideoAudioManager(QMainWindow):
         if not save_video_only:
             device_id, selected_audio_name = extract_device_name(selected_audio)
             audio_input_index = None
-
             if selected_title and selected_audio_name:
                 audio_input_index = device_id
         else:
@@ -1527,8 +1525,10 @@ class VideoAudioManager(QMainWindow):
             window.activate()
             region = (window.left, window.top, window.width, window.height)
 
-        # Verifica e crea una cartella di default se necessario
-        default_folder = os.path.join(os.getcwd(), 'screenrecorder')
+        if not video_file_path:
+            default_folder = os.path.join(os.getcwd(), 'screenrecorder')
+        else:
+            default_folder = os.path.dirname(video_file_path)
         os.makedirs(default_folder, exist_ok=True)
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
@@ -1564,25 +1564,19 @@ class VideoAudioManager(QMainWindow):
 
     def stopScreenRecording(self):
         self.rec_timer.stop()
-        # Stop the recording process
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
-            self.timecodeLabel.setStyleSheet(
-                "QLabel { font-size: 24pt; }")  # Cambia a seconda delle dimensioni desiderate
+            self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
             self.recorder_thread.stop()
-            self.recorder_thread = None  # Resetta il thread per future registrazioni
+            self.recorder_thread = None
 
-        # Close the video writer and release resources
         if hasattr(self, 'video_writer') and self.video_writer is not None:
             self.video_writer.release()
             self.video_writer = None
 
-        # Verifica se i percorsi dei file sono stati impostati e procedi alla loro gestione
-        if hasattr(self, 'current_video_path') and hasattr(self, 'current_audio_path'):
+        if hasattr(self, 'current_video_path'):
             video_path = self.current_video_path
-            audio_path = self.current_audio_path
 
             if self.saveVideoOnlyCheckBox.isChecked():
-                # Se l'opzione "Salva solo il video" è selezionata
                 if video_path and os.path.exists(video_path):
                     self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
                     QMessageBox.information(self, "File Salvato",
@@ -1590,49 +1584,44 @@ class VideoAudioManager(QMainWindow):
                 else:
                     self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file video trovato.")
                     QMessageBox.warning(self, "File non trovato", "Il file video non è stato trovato.")
-
                 self.loadVideoOutput(video_path)
-
             else:
-                # Se entrambe le tracce video e audio devono essere salvate
-                if video_path and os.path.exists(video_path) and audio_path and os.path.exists(audio_path):
-                    try:
-                        # Applica la funzione per adattare la velocità del video all'audio
-                        default_folder = os.path.join(os.getcwd(), 'screenrecorder')
-                        output_path = os.path.join(default_folder,
-                                                   f"{os.path.splitext(os.path.basename(video_path))[0]}_final.mp4")
-                        self.adattaVelocitaVideoAAudio(video_path, audio_path, output_path)
-
-                        # Informa l'utente che la registrazione e il salvataggio sono stati completati
-                        self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
-                        QMessageBox.information(self, "File Salvato",
-                                                f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
-
-                        self.loadVideoOutput(output_path)
-
-                    except Exception as e:
-                        # Gestisce eventuali errori nel processo di unione o finalizzazione
-                        self.recordingStatusLabel.setText(
-                            f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
-                        QMessageBox.critical(self, "Errore",
-                                             f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                if video_path and os.path.exists(video_path) and hasattr(self,
+                                                                         'current_audio_path') and self.current_audio_path:
+                    audio_path = self.current_audio_path
+                    if os.path.exists(audio_path):
+                        try:
+                            default_folder = os.path.join(os.getcwd(),
+                                                          'screenrecorder') if not self.filePathLineEdit.text().strip() else os.path.dirname(
+                                self.filePathLineEdit.text().strip())
+                            output_path = os.path.join(default_folder,
+                                                       f"{os.path.splitext(os.path.basename(video_path))[0]}_final.mp4")
+                            self.adattaVelocitaVideoAAudio(video_path, audio_path, output_path)
+                            self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
+                            QMessageBox.information(self, "File Salvato",
+                                                    f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
+                            self.loadVideoOutput(output_path)
+                        except Exception as e:
+                            self.recordingStatusLabel.setText(
+                                f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                            QMessageBox.critical(self, "Errore",
+                                                 f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
+                    else:
+                        self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
+                        QMessageBox.warning(self, "File non trovato",
+                                            f"Uno o entrambi i file non trovati:\nVideo: {video_path}\nAudio: {audio_path}")
                 else:
                     self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
                     QMessageBox.warning(self, "File non trovato",
-                                        f"Uno o entrambi i file non trovati:\nVideo: {video_path}\nAudio: {audio_path}")
+                                        f"Uno o entrambi i file non trovati:\nVideo: {video_path}")
 
-            # Resetta i percorsi per evitare riferimenti obsoleti
             self.current_video_path = None
             self.current_audio_path = None
         else:
-            # Nessuna registrazione è stata avviata o non ci sono file da processare
             self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
 
-        # Stop the timer if it's running
         if self.rec_timer.isActive():
             self.rec_timer.stop()
-
-        # Resetta il timecode
         self.timecodeLabel.setText('00:00')
 
     def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
