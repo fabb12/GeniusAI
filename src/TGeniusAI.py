@@ -1435,7 +1435,6 @@ class VideoAudioManager(QMainWindow):
 
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
-        audio_path = self.audioPathLineEdit.text()
 
         # Retrieve the timecode and pause duration from user input
         timecode = self.timecodePauseLineEdit.text()
@@ -1445,20 +1444,18 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Errore", "Carica un video prima di applicare la pausa audio.")
             return
 
-        if not audio_path:
-            # Extract audio from the current video if no specific audio path is provided
-            video_clip = VideoFileClip(video_path)
-            audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
-            video_clip.audio.write_audiofile(audio_path)  # Save the extracted audio
-
-        # Add the audio pause at the specified timecode and duration
         try:
+            # Estrai l'audio dal video
+            video_clip = VideoFileClip(video_path)
+            original_audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
+            video_clip.audio.write_audiofile(original_audio_path)  # Save the extracted audio
+
             # Convert the timecode into seconds
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
 
             # Load the audio using pydub
-            original_audio = AudioSegment.from_file(audio_path)
+            original_audio = AudioSegment.from_file(original_audio_path)
 
             # Create the silent audio segment for the pause
             silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))  # Duration in milliseconds
@@ -1472,18 +1469,16 @@ class VideoAudioManager(QMainWindow):
             temp_audio_path = tempfile.mktemp(suffix='.mp3')
             new_audio.export(temp_audio_path, format='mp3')
 
-            # Reattach the modified audio to the video
-            video_clip = VideoFileClip(video_path)
-            new_audio_clip = AudioFileClip(temp_audio_path)
-            final_video = video_clip.set_audio(new_audio_clip)
+            # Adapt the speed of the video to match the new audio duration
             output_path = tempfile.mktemp(suffix='.mp4')
-            final_video.write_videofile(output_path, codec='libx264')
+            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
 
             QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
             self.loadVideoOutput(output_path)
 
             # Clean up the temporary audio file
             os.remove(temp_audio_path)
+            os.remove(original_audio_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione della pausa audio", str(e))
 
@@ -2325,53 +2320,6 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna l'interfaccia utente per riflettere il cambio
         self.loadVideoOutput(output_video_path)
-
-    def replaceAudioInVideo(self, video_path, audio_path, pause_before, pause_after):
-        if not audio_path:
-            audio_path = self.extractAudioFromVideo(video_path)
-
-        # Aggiungi pause all'audio
-        new_audio_path = self.addPauseAndMerge(audio_path, pause_before, pause_after)
-
-        video_clip = None
-        new_audio_clip = None
-        adjusted_video_clip = None
-        try:
-            # Sostituisci l'audio nel video e adatta la velocità del video all'audio modificato
-            video_clip = VideoFileClip(video_path)
-            new_audio_clip = AudioFileClip(new_audio_path)
-
-            # Adatta la velocità del video alla durata dell'audio modificato
-            output_video_path = video_path.replace('.mp4', '_adjusted_audio.mp4')
-            self.adattaVelocitaVideoAAudio(video_path, new_audio_path, output_video_path)
-
-            # Imposta il nuovo audio nel video velocizzato
-            adjusted_video_clip = VideoFileClip(output_video_path)
-            final_clip = adjusted_video_clip.set_audio(new_audio_clip)
-            final_output_video_path = output_video_path.replace('_adjusted_audio.mp4', '_final.mp4')
-            final_clip.write_videofile(final_output_video_path, codec='libx264', audio_codec='aac')
-
-            QMessageBox.information(self, "Successo",
-                                    "Audio con pause applicato e velocità del video adattata con successo.")
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore durante la sostituzione dell'audio: {e}")
-        finally:
-            # Chiudi i clip per liberare le risorse
-            if video_clip:
-                video_clip.close()
-            if new_audio_clip:
-                new_audio_clip.close()
-            if adjusted_video_clip:
-                adjusted_video_clip.close()
-
-            # Pulizia: rimuovi i file audio temporanei se necessario
-            if os.path.exists(new_audio_path):
-                os.remove(new_audio_path)
-            if os.path.exists(output_video_path) and output_video_path != final_output_video_path:
-                os.remove(output_video_path)
-
-            # Aggiorna il video output per riflettere le modifiche
-            self.loadVideoOutput(final_output_video_path)
 
     def cutVideo(self):
         media_path = self.videoPathLineEdit
