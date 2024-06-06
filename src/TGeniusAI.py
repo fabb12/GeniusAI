@@ -1315,6 +1315,7 @@ class VideoAudioManager(QMainWindow):
         recordingLayout.addWidget(QLabel("Input audio:"))
         recordingLayout.addWidget(self.audioDeviceComboBox)
 
+
         # GroupBox per le opzioni di salvataggio
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
         saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
@@ -1322,6 +1323,13 @@ class VideoAudioManager(QMainWindow):
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
         saveOptionsLayout.addWidget(self.filePathLineEdit)
         saveOptionsLayout.addWidget(browseButton)
+        # Aggiungi questi attributi alla classe VideoAudioManager
+        self.recordingNameLineEdit = QLineEdit()
+        self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
+
+        # All'interno del layout di registrazione, aggiungi il QLineEdit
+        saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
+        saveOptionsLayout.addWidget(self.recordingNameLineEdit)
 
         # Bottoni di controllo per avviare e fermare la registrazione
         self.startRecordingButton = QPushButton("")
@@ -1519,26 +1527,26 @@ class VideoAudioManager(QMainWindow):
             window.activate()
             region = (window.left, window.top, window.width, window.height)
 
+        # Recupera il nome della registrazione dall'utente
+        recording_name = self.recordingNameLineEdit.text().strip()
+        if not recording_name:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            recording_name = f"recording_{timestamp}"
+
         if not video_file_path:
             default_folder = os.path.join(os.getcwd(), 'screenrecorder')
         else:
             default_folder = os.path.dirname(video_file_path)
         os.makedirs(default_folder, exist_ok=True)
-        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
-        if not video_file_path:
-            base_filename = f"recording_{timestamp}"
-            video_file_path_with_timestamp = os.path.join(default_folder, f"{base_filename}.avi")
-        else:
-            base_filename = os.path.splitext(os.path.basename(video_file_path))[0]
-            extension = os.path.splitext(video_file_path)[1]
-            video_file_path_with_timestamp = os.path.join(default_folder, f"{base_filename}_{timestamp}{extension}")
+        # Usa recording_name per i nomi dei file
+        video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.avi")
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
         self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0, (region[2], region[3]))
 
         if not save_video_only:
-            audioFileName = os.path.join(default_folder, f"{base_filename}_{timestamp}.wav")
+            audioFileName = os.path.join(default_folder, f"{recording_name}.wav")
             self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
                                                   audio_input=audio_input_index, audio_channels=2)
         else:
