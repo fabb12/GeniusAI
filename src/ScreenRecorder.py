@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import QMessageBox, QFileDialog
 ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
 change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
-
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
@@ -67,19 +66,24 @@ class ScreenRecorder(QThread):
                 while self.is_running:
                     current_time = time.time()
                     if current_time >= next_frame_time:
-                        if self.region:
-                            img = sct.grab(self.region)
-                        else:
-                            img = sct.grab(sct.monitors[0])
-                        frame = np.array(img)
-                        frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+                        try:
+                            if self.region:
+                                img = sct.grab(self.region)
+                            else:
+                                img = sct.grab(sct.monitors[0])
+                            frame = np.array(img)
+                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
-                        # Aggiungi cerchio rosso attorno al puntatore del mouse
-                        mouse_x, mouse_y = self.get_mouse_position()
-                        cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 10
+                            # Aggiungi cerchio rosso attorno al puntatore del mouse
+                            mouse_x, mouse_y = self.get_mouse_position()
+                            cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 10
 
-                        self.video_writer.write(frame)
-                        next_frame_time += self.frame_period
+                            self.video_writer.write(frame)
+                            next_frame_time += self.frame_period
+                        except Exception as e:
+                            self.error_signal.emit(f"Screen capture error: {str(e)}")
+                            self.stop()
+                            break
 
                     # Sincronizzazione precisa
                     sleep_time = next_frame_time - time.time()
