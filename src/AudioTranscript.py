@@ -1,6 +1,6 @@
 import os
 from PyQt6.QtCore import QThread, pyqtSignal
-from scipy.io.wavfile import write, read
+from scipy.io.wavfile import read
 import time
 import pycountry
 import uuid
@@ -22,8 +22,8 @@ class TranscriptionThread(QThread):
     def __init__(self, media_path, parent=None):
         super().__init__(parent)
         self.media_path = media_path
-
-
+        self._is_running = True  # Flag to control the running state of the thread
+        self.partial_text = ""  # Initialize partial_text to store partial transcriptions
 
     def run(self):
         try:
@@ -38,10 +38,15 @@ class TranscriptionThread(QThread):
                 audio_buffer.close()
 
             chunks = self.splitAudio(audio_file)
+            total_chunks = len(chunks)  # Total number of chunks for percentage calculation
             transcription = ""
             last_timestamp = None
 
             for index, (chunk, start_time) in enumerate(chunks):
+                if not self._is_running:  # Check if the thread should stop
+                    self.transcription_complete.emit(transcription, [])  # Emit current transcription
+                    return
+
                 text, start_time, _ = self.transcribeAudioChunk(chunk, start_time)
                 start_mins, start_secs = divmod(start_time // 1000, 60)
                 current_time_in_seconds = (start_mins * 60) + start_secs
@@ -52,13 +57,21 @@ class TranscriptionThread(QThread):
                 else:
                     transcription += f"{text}\n\n"
 
-                self.update_progress.emit(index + 1, f"Trascrizione {index + 1}/{len(chunks)}")
+                self.partial_text = transcription  # Update partial transcription
+
+                # Calculate the progress percentage
+                progress_percentage = int(((index + 1) / total_chunks) * 100)
+                self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
             self.transcription_complete.emit(transcription, [])  # Emit completion with no temp files to clean
         except Exception as e:
             self.error_occurred.emit(str(e))
 
+    def stop(self):
+        self._is_running = False
 
+    def get_partial_transcription(self):
+        return self.partial_text  # Return the partial transcription text
 
     def convertVideoToAudio(self, video_file, audio_format='wav'):
         """Estrae la traccia audio dal video e la converte in formato WAV mantenendo tutto in memoria."""
@@ -82,7 +95,6 @@ class TranscriptionThread(QThread):
             audio = AudioSegment.from_file(audio_input)
         chunks = [(audio[i:i + length], i) for i in range(0, len(audio), length)]
         return chunks
-
 
     def get_locale_from_language(self, language_code):
         """Converte un codice di lingua ISO 639-1 in un locale più specifico."""

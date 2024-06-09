@@ -1,6 +1,5 @@
 import requests
 from PyQt6.QtCore import QThread, pyqtSignal
-import tempfile
 from moviepy.config import change_settings
 import os
 

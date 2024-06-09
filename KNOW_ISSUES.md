@@ -2,10 +2,10 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 
-## [Unreleased]
+## [1.1.15] - 2024-06-10
 
-- [ ] aggiungere titolo del file da registrare nel dock di registrazione
-- [ ] aggiungere interruzione trascrizione
+- [x] aggiungere titolo del file da registrare nel dock di registrazione
+- [x] aggiungere interruzione trascrizione
 
 ### Bugs
 - [ ] Correggere il bug che impedisce il corretto funzionamento della funzione di ritaglio video in modalità schermo intero.

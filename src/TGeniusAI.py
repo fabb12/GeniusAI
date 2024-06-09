@@ -63,7 +63,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 1
-        self.version_patch = 14
+        self.version_patch = 15
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -511,8 +511,6 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction = QAction(QIcon("../res/key.png"), "Imposta API Key", self)
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
-
-
     def set_default_dock_layout(self):
         area = self.centralWidget()
 
@@ -534,8 +532,6 @@ class VideoAudioManager(QMainWindow):
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
-
-
     def deleteVideoSegment(self):
         if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
             QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di eliminare.")
@@ -588,13 +584,11 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'eliminazione", str(e))
-
     def showApiKeyDialog(self):
         dialog = ApiKeyDialog(self)
         if dialog.exec() == dialog.DialogCode.Accepted:
             self.api_key = dialog.get_api_key()
             print(f"API Key impostata: {self.api_key}")
-
     def insertPause(self):
         cursor = self.transcriptionTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
@@ -606,18 +600,14 @@ class VideoAudioManager(QMainWindow):
         pause_tag = f'<break time="{pause_time}" />'
         cursor.insertText(f' {pause_tag} ')
         self.transcriptionTextArea.setTextCursor(cursor)
-
     def rewind5Seconds(self):
         current_position = self.player.position()
         new_position = max(0, current_position - 5000)  # Indietro di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
-
     def forward5Seconds(self):
         current_position = self.player.position()
         new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
-
-
     def releaseSourceVideo(self):
         self.player.stop()
         time.sleep(.01)
@@ -626,7 +616,6 @@ class VideoAudioManager(QMainWindow):
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
-
     def releaseOutputVideo(self):
         self.playerOutput.stop()
         time.sleep(.01)
@@ -635,7 +624,6 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setSource(QUrl())
         self.videoPathLineOutputEdit = ''
         self.fileNameLabelOutput.setText("Nessun video caricato")
-
     def get_nearest_timecode(self):
         cursor_position = self.transcriptionTextArea.textCursor().position()
         text = self.transcriptionTextArea.toPlainText()
@@ -664,7 +652,6 @@ class VideoAudioManager(QMainWindow):
             return timecode_seconds
 
         return None
-
     def sync_video_to_transcription(self):
         timecode_seconds = self.get_nearest_timecode()
 
@@ -674,10 +661,8 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Nessun timecode trovato nella trascrizione.")
     def setStartBookmark(self):
         self.videoSlider.setBookmarkStart(self.player.position())
-
     def setEndBookmark(self):
         self.videoSlider.setBookmarkEnd(self.player.position())
-
     def cutVideoBetweenBookmarks(self):
         if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
             QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di tagliare.")
@@ -715,7 +700,6 @@ class VideoAudioManager(QMainWindow):
         self.cutting_thread.error.connect(self.onCutError)
 
         self.cutting_thread.start()
-
     def handleTimecodeToggle(self, checked):
         # Update the timecode insertion enabled state based on checkbox
         self.timecodeEnabled = checked
@@ -726,7 +710,6 @@ class VideoAudioManager(QMainWindow):
             self.handleTextChange()
         else:
             self.transcriptionTextArea.setPlainText(self.original_text)
-
 
     def eventFilter(self, source, event):
         if source == self.videoCropWidget:
@@ -744,14 +727,12 @@ class VideoAudioManager(QMainWindow):
                 self.is_panning = False
                 return True
         return super().eventFilter(source, event)
-
     def updateSpeed(self, value):
         # Convert the slider value to a playback rate
         playbackRate = value / 100.0
         self.player.setPlaybackRate(playbackRate)
         # Update the speed label to reflect the current speed
         self.speedLabel.setText(f"{value}%")
-
     def handleWheelEvent(self, event):
         mouse_pos = event.position().toPoint()
         widget_pos = self.videoCropWidget.pos()
@@ -767,7 +748,6 @@ class VideoAudioManager(QMainWindow):
             self.zoom_level *= 0.9
 
         self.applyVideoZoom(mouse_x_in_widget, mouse_y_in_widget, old_zoom_level)
-
     def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
         # Calcola le nuove dimensioni basate sul livello di zoom attuale
         original_size = self.videoCropWidget.sizeHint()
@@ -782,7 +762,6 @@ class VideoAudioManager(QMainWindow):
         current_pos = self.videoCropWidget.pos()
         new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
         self.videoCropWidget.move(new_pos)
-
     def handlePanEvent(self, event):
         # Calcola la differenza di movimento
         current_position = event.position().toPoint()
@@ -794,7 +773,6 @@ class VideoAudioManager(QMainWindow):
         self.videoCropWidget.move(new_pos)
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)
-
     def setVolumeOutput(self, value):
         self.audioOutputOutput.setVolume(value / 100.0)
 
@@ -817,7 +795,6 @@ class VideoAudioManager(QMainWindow):
                 self.player.play()
         else:
             super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
-
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
         hours, remainder = divmod(position // 1000, 3600)
@@ -829,7 +806,6 @@ class VideoAudioManager(QMainWindow):
         hours, remainder = divmod(duration // 1000, 3600)
         minutes, seconds = divmod(remainder, 60)
         self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
-
 
     def applyCrop(self):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
@@ -853,7 +829,6 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
-
     def applyStyleToAllDocks(self):
         style = self.getDarkStyle()
         self.videoPlayerDock.setStyleSheet(style)
@@ -957,8 +932,6 @@ class VideoAudioManager(QMainWindow):
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
-
-
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
@@ -1000,7 +973,6 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
-
     def createAudioDock(self):
         dock = Dock("Gestione Audio")
         layout = QVBoxLayout()
@@ -1026,7 +998,6 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
-
     def createAudioReplacementGroup(self):
         audioReplacementGroup = QGroupBox("Sostituzione Audio Principale")
         layout = QVBoxLayout()
@@ -1045,9 +1016,6 @@ class VideoAudioManager(QMainWindow):
         audioReplacementGroup.setLayout(layout)
 
         return audioReplacementGroup
-
-
-
     def createAudioPauseGroup(self):
         audioPauseGroup = QGroupBox("Applica Pause Audio")
         layout = QVBoxLayout()
@@ -1081,7 +1049,6 @@ class VideoAudioManager(QMainWindow):
         audioPauseGroup.setLayout(layout)
 
         return audioPauseGroup
-
     def createVideoPauseGroup(self):
         videoPauseGroup = QGroupBox("Applica Pausa Video")
         layout = QVBoxLayout()
@@ -1111,7 +1078,6 @@ class VideoAudioManager(QMainWindow):
         videoPauseGroup.setLayout(layout)
 
         return videoPauseGroup
-
     def createBackgroundAudioGroup(self):
         backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
         layout = QVBoxLayout()
@@ -1135,15 +1101,12 @@ class VideoAudioManager(QMainWindow):
         backgroundAudioGroup.setLayout(layout)
 
         return backgroundAudioGroup
-
     def setTimecodePauseFromSlider(self):
         current_position = self.player.position()
         self.timecodePauseLineEdit.setText(self.formatTimecode(current_position))
-
     def setTimecodeVideoFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
-
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
         dock = Dock("Unione Video")
@@ -1192,16 +1155,13 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
-
     def setTimecodeMergeFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
-
     def formatTimecode(self, position_ms):
         hours, remainder = divmod(position_ms // 1000, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
-
     def mergeVideo(self):
         base_video_path = self.videoPathLineEdit
         merge_video_path = self.mergeVideoPathLineEdit.text()
@@ -1241,19 +1201,16 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.warning(self, "Errore", "Si è verificato un errore durante l'unione dei video: " + str(e))
-
     def browseMergeVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
                                                   "Video Files (*.mp4 *.mov *.avi)")
         if fileName:
             self.mergeVideoPathLineEdit.setText(fileName)
-
     def browseBackgroundAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
                                                   "Audio Files (*.mp3 *.wav)")
         if fileName:
             self.backgroundAudioPathLineEdit.setText(fileName)
-
     def adjustBackgroundVolume(self, value):
         # Qui dovrai implementare la logica per regolare il volume del sottofondo
         print(f"Volume del sottofondo regolato al {value}%")
@@ -1277,12 +1234,9 @@ class VideoAudioManager(QMainWindow):
             self.set_default_dock_layout()
         self.resetViewMenu()
 
-
-
     def closeEvent(self, event):
         self.dockSettingsManager.save_settings()
         event.accept()
-
     def createRecordingDock(self):
         dock = Dock("Registrazione")
 
@@ -1396,11 +1350,9 @@ class VideoAudioManager(QMainWindow):
         folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
         if folder:
             self.folderPathLineEdit.setText(folder)
-
     def openFolder(self):
         folder_path = self.folderPathLineEdit.text() or "screenrecorder"
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
-
 
     def openFolderInFileSystem(self):
         if hasattr(self, 'selected_directory') and os.path.isdir(self.selected_directory):
@@ -1413,7 +1365,6 @@ class VideoAudioManager(QMainWindow):
                 print("Sistema operativo non supportato.")
         else:
             print("Nessuna cartella selezionata o cartella non esistente.")
-
     def updateWindowList(self):
         """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
         self.screenSelectionComboBox.clear()
@@ -1431,7 +1382,6 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiungi prima i monitor alla lista della combo box
         self.screenSelectionComboBox.addItems(combined_list)
-
     def setDefaultAudioDevice(self):
         """Imposta 'Headset' come dispositivo predefinito se disponibile."""
         self.audioDeviceComboBox.setCurrentIndex(1)
@@ -1443,7 +1393,6 @@ class VideoAudioManager(QMainWindow):
             self.filePathLineEdit.setText(fileName)
 
         # Metodi per iniziare e fermare la registrazione
-
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
         info = p.get_host_api_info_by_index(0)
@@ -1459,7 +1408,6 @@ class VideoAudioManager(QMainWindow):
 
         p.terminate()
         return available_audio_devices
-
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
         background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
@@ -1494,7 +1442,6 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
-
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
 
@@ -2174,6 +2121,8 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog = QProgressDialog("Trascrizione in corso...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Trascrizione")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.canceled.connect(
+            self.stopTranscription)  # Connect the cancel button to stop the transcription
         self.progressDialog.show()
 
         self.thread = TranscriptionThread(self.videoPathLineEdit, self)
@@ -2181,6 +2130,16 @@ class VideoAudioManager(QMainWindow):
         self.thread.transcription_complete.connect(self.completeTranscription(self.progressDialog))
         self.thread.error_occurred.connect(self.handleErrors(self.progressDialog))
         self.thread.start()
+
+    def stopTranscription(self):
+        if self.thread is not None:
+            self.thread.stop()  # Ferma il thread di trascrizione
+            self.thread.wait()  # Aspetta che il thread finisca
+            partial_text = self.thread.get_partial_transcription()  # Ottieni il testo parziale trascritto
+            self.transcriptionTextArea.setPlainText(
+                partial_text)  # Mostra il testo parziale nell'oggetto transcriptionTextArea
+            self.thread = None
+            self.progressDialog.close()  # Chiudi il dialogo di progresso
 
     def updateProgressDialog(self, progress_dialog):
         def update(value, label):
