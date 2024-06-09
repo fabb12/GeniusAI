@@ -5,9 +5,9 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 ## [Unreleased]
 
 - [ ] aggiungere titolo del file da registrare nel dock di registrazione
+- [ ] aggiungere interruzione trascrizione
 
 ### Bugs
-- [ ] Risolvere il problema che causa il crash dell'applicazione quando si tenta di caricare un file video danneggiato.
 - [ ] Correggere il bug che impedisce il corretto funzionamento della funzione di ritaglio video in modalità schermo intero.
 - [ ] Sistemare l'errore che causa la perdita della connessione audio durante la registrazione dello schermo.
 

@@ -46,6 +46,7 @@ from SettingsDialog import ApiKeyDialog
 from moviepy.editor import concatenate_audioclips, concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QUrl
+import subprocess
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -512,6 +513,24 @@ class VideoAudioManager(QMainWindow):
         toolbar.addAction(apiKeyAction)
 
 
+    def set_default_dock_layout(self):
+        area = self.centralWidget()
+
+        # Add only the specified docks
+        area.addDock(self.videoPlayerDock, 'left')
+        area.addDock(self.recordingDock, 'right')
+
+        # Set default visibility
+        self.videoPlayerDock.setVisible(True)
+        self.recordingDock.setVisible(True)
+
+        # Set other docks as invisible
+        self.videoPlayerOutputDock.setVisible(False)
+        self.audioDock.setVisible(False)
+        self.transcriptionDock.setVisible(False)
+        self.editingDock.setVisible(False)
+        self.downloadDock.setVisible(False)
+        self.videoMergeDock.setVisible(False)
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
@@ -1251,7 +1270,11 @@ class VideoAudioManager(QMainWindow):
         }
         self.dockSettingsManager = DockSettingsManager(self, docks)
 
-        self.dockSettingsManager.load_settings()
+        settings_file = '../res/user_default_settings.json'
+        if os.path.exists(settings_file):
+            self.dockSettingsManager.load_settings(settings_file)
+        else:
+            self.set_default_dock_layout()
         self.resetViewMenu()
 
 
@@ -1267,22 +1290,30 @@ class VideoAudioManager(QMainWindow):
         self.rec_timer = QTimer(self)
         self.rec_timer.timeout.connect(self.updateTimecodeRec)
 
+        # GroupBox per la gestione della registrazione
+        recordingGroup = QGroupBox("Gestione Registrazione")
+        recordingLayout = QVBoxLayout(recordingGroup)
+
         # Label per il timecode della registrazione
         self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
+        recordingLayout.addWidget(self.timecodeLabel)
 
         # Label per lo stato della registrazione
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        recordingLayout.addWidget(self.recordingStatusLabel)
 
         # Label per lo stato dell'audio
         self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
         self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        recordingLayout.addWidget(self.audioStatusLabel)
 
         # ComboBox per la selezione della finestra/schermo
         self.screenSelectionComboBox = CustomComboBox()
         self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
+        recordingLayout.addWidget(self.screenSelectionComboBox)
 
         # ComboBox per la selezione del dispositivo audio
         self.audioDeviceComboBox = QComboBox()
@@ -1291,45 +1322,47 @@ class VideoAudioManager(QMainWindow):
             self.audioDeviceComboBox.addItems(audio_devices)
         else:
             print("No input audio devices found.")
-
+        recordingLayout.addWidget(self.audioDeviceComboBox)
 
         # Popola la ComboBox con le finestre disponibili e gli schermi
         titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
                  [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
         self.screenSelectionComboBox.addItems(titles)
 
-        # LineEdit per il percorso del file di destinazione
-        self.filePathLineEdit = QLineEdit()
-        self.filePathLineEdit.setPlaceholderText("Inserisci il percorso del file di destinazione")
-        browseButton = QPushButton("Sfoglia")
-        browseButton.clicked.connect(self.browseFileLocation)
-
-        # GroupBox per le impostazioni di registrazione
-        recordingGroup = QGroupBox("Impostazioni di Registrazione")
-        recordingLayout = QVBoxLayout(recordingGroup)
-        recordingLayout.addWidget(self.recordingStatusLabel)
-        recordingLayout.addWidget(self.audioStatusLabel)
-        recordingLayout.addWidget(self.timecodeLabel)
-        recordingLayout.addWidget(QLabel("Finestra/Schermo:"))
-        recordingLayout.addWidget(self.screenSelectionComboBox)
-        recordingLayout.addWidget(QLabel("Input audio:"))
-        recordingLayout.addWidget(self.audioDeviceComboBox)
-
-
         # GroupBox per le opzioni di salvataggio
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
         saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
-        self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")  # Correzione: Creazione del controllo
+
+        # LineEdit per il percorso della cartella di destinazione
+        self.folderPathLineEdit = QLineEdit()
+        self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
+        saveOptionsLayout.addWidget(self.folderPathLineEdit)
+
+        # Checkbox per salvare solo il video
+        self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
-        saveOptionsLayout.addWidget(self.filePathLineEdit)
-        saveOptionsLayout.addWidget(browseButton)
-        # Aggiungi questi attributi alla classe VideoAudioManager
+
+        # LineEdit per il nome della registrazione
         self.recordingNameLineEdit = QLineEdit()
         self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
-
-        # All'interno del layout di registrazione, aggiungi il QLineEdit
         saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
         saveOptionsLayout.addWidget(self.recordingNameLineEdit)
+
+        # Layout orizzontale per i pulsanti Sfoglia e Apri Cartella
+        buttonsLayout = QHBoxLayout()
+
+        # Pulsante Sfoglia
+        browseButton = QPushButton('Sfoglia')
+        browseButton.clicked.connect(self.browseFolderLocation)
+        buttonsLayout.addWidget(browseButton)
+
+        # Pulsante Apri Cartella
+        open_folder_button = QPushButton('Apri Cartella')
+        open_folder_button.clicked.connect(self.openFolder)
+        buttonsLayout.addWidget(open_folder_button)
+
+        # Aggiungere il layout dei pulsanti al layout delle opzioni di salvataggio
+        saveOptionsLayout.addLayout(buttonsLayout)
 
         # Bottoni di controllo per avviare e fermare la registrazione
         self.startRecordingButton = QPushButton("")
@@ -1359,6 +1392,27 @@ class VideoAudioManager(QMainWindow):
 
         self.setDefaultAudioDevice()
         return dock
+    def browseFolderLocation(self):
+        folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
+        if folder:
+            self.folderPathLineEdit.setText(folder)
+
+    def openFolder(self):
+        folder_path = self.folderPathLineEdit.text() or "screenrecorder"
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+
+
+    def openFolderInFileSystem(self):
+        if hasattr(self, 'selected_directory') and os.path.isdir(self.selected_directory):
+            # Aprire la cartella nel file system
+            if os.name == 'nt':  # Windows
+                os.startfile(self.selected_directory)
+            elif os.name == 'posix':  # MacOS, Linux
+                subprocess.Popen(['open', self.selected_directory])
+            else:
+                print("Sistema operativo non supportato.")
+        else:
+            print("Nessuna cartella selezionata o cartella non esistente.")
 
     def updateWindowList(self):
         """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
@@ -2645,8 +2699,6 @@ class CustomComboBox(QComboBox):
         self.popupOpened.emit()
         super().showPopup()
 
-
-
 class CustomTextEdit(QTextEdit):
     cursorPositionChanged = pyqtSignal()
 
@@ -2668,6 +2720,7 @@ class CustomTextEdit(QTextEdit):
         else:
             super().insertFromMimeData(source)
         self.cursorPositionChanged.emit()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
