@@ -4,7 +4,8 @@ from PyQt6.QtCore import QPoint, QSize
 
 
 class DockSettingsManager:
-    def __init__(self, main_window, docks):
+    def __init__(self, main_window, docks, parent):
+        self.parent = parent
         self.main_window = main_window
         self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
         self.settings_file = '../dock_settings.json'  # File per il salvataggio delle impostazioni
@@ -59,3 +60,39 @@ class DockSettingsManager:
     def apply_visibility(self, name, visible):
         if name in self.docks:
             self.docks[name].setVisible(visible)
+
+    def loadDockSettingsUser1(self):
+
+        self.docks['videoPlayerOutput'].setVisible(True)
+        self.docks['recordingDock'].setVisible(True)
+
+        self.docks['videoPlayerDock'].setVisible(False)
+        self.docks['audioDock'].setVisible(False)
+        self.docks['transcriptionDock'].setVisible(False)
+        self.docks['editingDock'].setVisible(False)
+        self.docks['downloadDock'].setVisible(False)
+        self.docks['videoMergeDock'].setVisible(False)
+
+    def resetAll(self):
+        self.docks['recordingDock'].setVisible(False)
+        self.docks['videoPlayerOutput'].setVisible(False)
+
+        self.docks['videoPlayerDock'].setVisible(False)
+        self.docks['audioDock'].setVisible(False)
+        self.docks['transcriptionDock'].setVisible(False)
+        self.docks['editingDock'].setVisible(False)
+        self.docks['downloadDock'].setVisible(False)
+        self.docks['videoMergeDock'].setVisible(False)
+
+    def loadDockSettingsUser2(self):
+        self.resetAll()
+
+        self.docks['videoPlayerDock'].setVisible(True)
+        self.docks['transcriptionDock'].setVisible(True)
+
+        self.docks['videoPlayerOutput'].setVisible(False)
+        self.docks['audioDock'].setVisible(False)
+        self.docks['editingDock'].setVisible(False)
+        self.docks['downloadDock'].setVisible(False)
+        self.docks['recordingDock'].setVisible(False)
+        self.docks['videoMergeDock'].setVisible(False)

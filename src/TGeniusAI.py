@@ -80,6 +80,7 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput.setVolume(1.0)  # Imposta il volume al massimo (1.0 = 100%)
         self.recentFiles = []
         self.initUI()
+        self.setupDockSettingsManager()
         self.bookmarkStart = None
         self.bookmarkEnd = None
         self.currentPosition = 0
@@ -87,7 +88,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineOutputEdit = ''
         self.is_recording = False
         self.video_writer = None
-        self.setupDockSettingsManager()
+
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
@@ -104,33 +105,35 @@ class VideoAudioManager(QMainWindow):
         # Creazione dei docks esistenti...
         self.videoPlayerDock = Dock("Video Player Source")
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.videoPlayerDock, 'left')
 
         self.transcriptionDock = Dock("Trascrizione e Sintesi Audio")
         self.transcriptionDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.transcriptionDock, 'right')
 
         self.editingDock = Dock("Opzioni di Editing")
         self.editingDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.editingDock, 'right')
+
         self.downloadDock = self.createDownloadDock()
         self.downloadDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.downloadDock, 'left')
+
         self.recordingDock = self.createRecordingDock()
         self.recordingDock.setStyleSheet(self.styleSheet())
-        self.audioDock = self.createAudioDock()  # Creazione del dock per la gestione audio
+        area.addDock(self.recordingDock, 'bottom')
+
+        self.audioDock = self.createAudioDock()
         self.audioDock.setStyleSheet(self.styleSheet())
-        self.videoPlayerOutputDock = Dock("Video Player Output")
-        self.videoPlayerOutputDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.audioDock, 'bottom')
+
+        self.videoPlayerOutput = Dock("Video Player Output")
+        self.videoPlayerOutput.setStyleSheet(self.styleSheet())
+        area.addDock(self.videoPlayerOutput, 'left')
 
         # Creazione del dock merge videos
         self.videoMergeDock = self.createVideoMergeDock()
         self.videoMergeDock.setStyleSheet(self.styleSheet())
-
-        # Aggiunta dei docks all'area
-        area.addDock(self.videoPlayerOutputDock, 'right')  # Posizionamento a destra
-        area.addDock(self.audioDock, 'bottom')  # Aggiungi il dock audio alla posizione desiderata
-        area.addDock(self.videoPlayerDock, 'left')
-        area.addDock(self.transcriptionDock, 'bottom')
-        area.addDock(self.editingDock, 'right')
-        area.addDock(self.downloadDock, 'left')
-        area.addDock(self.recordingDock, 'right')
         area.addDock(self.videoMergeDock, 'bottom')
 
         if hasattr(self, 'applyDarkMode'):
@@ -182,7 +185,7 @@ class VideoAudioManager(QMainWindow):
         # Collegamento dei pulsanti ai loro slot funzionali
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
 
-        # Collegamento dei pulsanti ai loro slot funzionali
+        # Collegam  ento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
         self.pauseButton.clicked.connect(self.pauseVideo)
         self.stopButton.clicked.connect(self.stopVideo)
@@ -276,7 +279,7 @@ class VideoAudioManager(QMainWindow):
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
         videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
-        self.videoPlayerOutputDock.addWidget(videoPlayerOutputWidget)
+        self.videoPlayerOutput.addWidget(videoPlayerOutputWidget)
 
 
         # Collegamento degli eventi del player multimediale ai metodi corrispondenti
@@ -492,43 +495,57 @@ class VideoAudioManager(QMainWindow):
 
         self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
 
+        # Definizione dei docks
+        docks = {
+            'videoPlayerDock': self.videoPlayerDock,
+            'transcriptionDock': self.transcriptionDock,
+            'editingDock': self.editingDock,
+            'downloadDock': self.downloadDock,
+            'recordingDock': self.recordingDock,
+            'audioDock': self.audioDock,
+            'videoPlayerOutput': self.videoPlayerOutput,
+            'videoMergeDock': self.videoMergeDock
+        }
+        self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
         # Creazione della toolbar
         toolbar = QToolBar("Main Toolbar")
         self.addToolBar(toolbar)
 
-        # Nuovi pulsanti per caricare le impostazioni dei dock
         loadDockSettings1Action = QAction(QIcon("../res/load1.png"), "User1", self)
-        loadDockSettings1Action.triggered.connect(lambda: self.loadDockSettings('../res/user1_settings.json'))
+        loadDockSettings1Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser1)
         toolbar.addAction(loadDockSettings1Action)
 
         loadDockSettings2Action = QAction(QIcon("../res/load2.png"), "User2", self)
-        loadDockSettings2Action.triggered.connect(lambda: self.loadDockSettings('../res/user2_settings.json'))
+        loadDockSettings2Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser2)
         toolbar.addAction(loadDockSettings2Action)
-
 
         # Aggiunta del pulsante per impostare la API Key
         apiKeyAction = QAction(QIcon("../res/key.png"), "Imposta API Key", self)
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
+
     def set_default_dock_layout(self):
         area = self.centralWidget()
 
         # Add only the specified docks
         area.addDock(self.videoPlayerDock, 'left')
-        area.addDock(self.recordingDock, 'right')
+        area.addDock(self.recordingDock, 'bottom')
 
         # Set default visibility
         self.videoPlayerDock.setVisible(True)
         self.recordingDock.setVisible(True)
 
         # Set other docks as invisible
-        self.videoPlayerOutputDock.setVisible(False)
+        self.videoPlayerOutput.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
+
+
+
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
@@ -837,7 +854,7 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setStyleSheet(style)
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
-        self.videoPlayerOutputDock.setStyleSheet(style)
+        self.videoPlayerOutput.setStyleSheet(style)
     def getDarkStyle(self):
         return """
         QWidget {
@@ -1215,19 +1232,8 @@ class VideoAudioManager(QMainWindow):
         # Qui dovrai implementare la logica per regolare il volume del sottofondo
         print(f"Volume del sottofondo regolato al {value}%")
     def setupDockSettingsManager(self):
-        docks = {
-            'videoPlayerDock': self.videoPlayerDock,
-            'transcriptionDock': self.transcriptionDock,
-            'editingDock': self.editingDock,
-            'downloadDock': self.downloadDock,
-            'recordingDock': self.recordingDock,
-            'audioDock': self.audioDock,
-            'videoPlayerDockOutput': self.videoPlayerOutputDock,
-            'videoMergeDock': self.videoMergeDock
-        }
-        self.dockSettingsManager = DockSettingsManager(self, docks)
 
-        settings_file = '../res/user_default_settings.json'
+        settings_file = '../dock_settings.json'
         if os.path.exists(settings_file):
             self.dockSettingsManager.load_settings(settings_file)
         else:
@@ -1237,8 +1243,12 @@ class VideoAudioManager(QMainWindow):
     def closeEvent(self, event):
         self.dockSettingsManager.save_settings()
         event.accept()
+
     def createRecordingDock(self):
         dock = Dock("Registrazione")
+
+        # Imposta la policy di dimensionamento del dock per occupare il minimo spazio possibile
+        dock.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
 
         # Timer per aggiornare il timecode della registrazione
         self.rec_timer = QTimer(self)
@@ -1339,6 +1349,8 @@ class VideoAudioManager(QMainWindow):
         # Imposta il layout principale nel widget del dock
         widget = QWidget()
         widget.setLayout(mainLayout)
+
+
         dock.addWidget(widget)
 
         # Aggiorna la lista delle finestre disponibili
@@ -1346,6 +1358,7 @@ class VideoAudioManager(QMainWindow):
 
         self.setDefaultAudioDevice()
         return dock
+
     def browseFolderLocation(self):
         folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
         if folder:
@@ -1894,14 +1907,6 @@ class VideoAudioManager(QMainWindow):
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
 
-    def loadDockSettings(self, filename):
-        try:
-            self.dockSettingsManager.load_settings(filename)
-            self.resetViewMenu()
-            QMessageBox.information(self, "Successo", f"Impostazioni dei dock caricate da {filename}.")
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore nel caricamento delle impostazioni: {str(e)}")
-
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel Video Player Output.")
@@ -1926,7 +1931,7 @@ class VideoAudioManager(QMainWindow):
                                                            self.actionToggleVideoPlayerDock.isChecked()))
 
         # Azioni simili per gli altri docks...
-        self.actionToggleVideoPlayerDockOutput = self.createToggleAction(self.videoPlayerOutputDock,
+        self.actionToggleVideoPlayerDockOutput = self.createToggleAction(self.videoPlayerOutput,
                                                                          'Mostra/Nascondi Video Player Output')
         self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
                                                                      'Mostra/Nascondi Trascrizione')
@@ -1979,7 +1984,7 @@ class VideoAudioManager(QMainWindow):
     def showAllDocks(self):
         # Imposta tutti i docks visibili
         self.videoPlayerDock.setVisible(True)
-        self.videoPlayerOutputDock.setVisible(True)
+        self.videoPlayerOutput.setVisible(True)
         self.audioDock.setVisible(True)
         self.transcriptionDock.setVisible(True)
         self.editingDock.setVisible(True)
@@ -1991,7 +1996,7 @@ class VideoAudioManager(QMainWindow):
     def hideAllDocks(self):
         # Nasconde tutti i docks
         self.videoPlayerDock.setVisible(False)
-        self.videoPlayerOutputDock.setVisible(False)
+        self.videoPlayerOutput.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
@@ -2024,7 +2029,7 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna lo stato dei menu checkable basato sulla visibilità dei dock
         self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
-        self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutputDock.isVisible())
+        self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutput.isVisible())
         self.actionToggleAudioDock.setChecked(self.audioDock.isVisible())
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
