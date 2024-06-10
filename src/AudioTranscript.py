@@ -7,12 +7,15 @@ import uuid
 import speech_recognition as sr
 from pydub import AudioSegment
 import io
+import sys
 from moviepy.config import change_settings
 
-# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
-ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+if getattr(sys, 'frozen', False):
+    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
+else:
+    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
 
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 class TranscriptionThread(QThread):
     update_progress = pyqtSignal(int, str)  # Signal for updating progress with an index and message
@@ -27,9 +30,12 @@ class TranscriptionThread(QThread):
 
     def run(self):
         try:
+            print("Checkpoint: Start transcription")  # Checkpoint
             if os.path.splitext(self.media_path)[1].lower() in ['.wav', '.mp3', '.flac', '.aac']:
+                print(f"Checkpoint: Detected audio file format {os.path.splitext(self.media_path)[1].lower()}")  # Checkpoint
                 audio_file = self.media_path
             else:
+                print("Checkpoint: Converting video to audio")  # Checkpoint
                 audio_buffer = self.convertVideoToAudio(self.media_path)
                 if audio_buffer is None or audio_buffer.getbuffer().nbytes == 0:
                     raise Exception("La conversione del video in audio è fallita.")
@@ -37,6 +43,7 @@ class TranscriptionThread(QThread):
                 audio_file = {'fps': fps, 'array': audio_array}
                 audio_buffer.close()
 
+            print("Checkpoint: Splitting audio")  # Checkpoint
             chunks = self.splitAudio(audio_file)
             total_chunks = len(chunks)  # Total number of chunks for percentage calculation
             transcription = ""
@@ -44,9 +51,11 @@ class TranscriptionThread(QThread):
 
             for index, (chunk, start_time) in enumerate(chunks):
                 if not self._is_running:  # Check if the thread should stop
+                    print("Checkpoint: Stopping transcription")  # Checkpoint
                     self.transcription_complete.emit(transcription, [])  # Emit current transcription
                     return
 
+                print(f"Checkpoint: Transcribing chunk {index + 1}/{total_chunks}")  # Checkpoint
                 text, start_time, _ = self.transcribeAudioChunk(chunk, start_time)
                 start_mins, start_secs = divmod(start_time // 1000, 60)
                 current_time_in_seconds = (start_mins * 60) + start_secs
@@ -63,8 +72,10 @@ class TranscriptionThread(QThread):
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
                 self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
+            print("Checkpoint: Transcription complete")  # Checkpoint
             self.transcription_complete.emit(transcription, [])  # Emit completion with no temp files to clean
         except Exception as e:
+            print(f"Checkpoint: Error occurred - {str(e)}")  # Checkpoint
             self.error_occurred.emit(str(e))
 
     def stop(self):
@@ -75,6 +86,7 @@ class TranscriptionThread(QThread):
 
     def convertVideoToAudio(self, video_file, audio_format='wav'):
         """Estrae la traccia audio dal video e la converte in formato WAV mantenendo tutto in memoria."""
+        print("Checkpoint: Inside convertVideoToAudio")  # Checkpoint
         # Carica il clip video usando Pydub (potrebbe richiedere ffmpeg installato)
         video = AudioSegment.from_file(video_file)
 
@@ -86,6 +98,7 @@ class TranscriptionThread(QThread):
         return buffer
 
     def splitAudio(self, audio_input, length=60000):
+        print("Checkpoint: Inside splitAudio")  # Checkpoint
         if isinstance(audio_input, dict):
             audio_array = audio_input['array']
             fps = audio_input['fps']
@@ -98,6 +111,7 @@ class TranscriptionThread(QThread):
 
     def get_locale_from_language(self, language_code):
         """Converte un codice di lingua ISO 639-1 in un locale più specifico."""
+        print(f"Checkpoint: Converting language code {language_code} to locale")  # Checkpoint
         try:
             language = pycountry.languages.get(alpha_2=language_code)
             return {
@@ -111,33 +125,24 @@ class TranscriptionThread(QThread):
             return language_code  # Ritorna il codice originale se la mappatura fallisce
 
     def transcribeAudioChunk(self, audio_chunk, start_time):
-
-        def try_remove_chunk_file(chunk_file):
-            """Rimuove il file audio temporaneo con tentativi multipli."""
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                try:
-                    os.remove(chunk_file)
-                    break
-                except PermissionError:
-                    if attempt < max_attempts - 1:
-                        time.sleep(0.5)  # Aspetta un po' prima di riprovare
-
+        print("Checkpoint: Inside transcribeAudioChunk")  # Checkpoint
         recognizer = sr.Recognizer()
-        unique_id = uuid.uuid4()
-        chunk_file = f"temp_chunk_{unique_id}.wav"
-        audio_chunk.export(chunk_file, format="wav")
+        audio_buffer = io.BytesIO()
+        audio_chunk.export(audio_buffer, format="wav")
+        audio_buffer.seek(0)
 
         try:
-            with sr.AudioFile(chunk_file) as source:
+            with sr.AudioFile(audio_buffer) as source:
+                print("Checkpoint: Audio file loaded into recognizer")  # Checkpoint
                 audio_data = recognizer.record(source)
                 language_video = self.parent().languageComboBox.currentData()  # Ottiene il codice lingua dalla comboBox
                 locale = self.get_locale_from_language(language_video)
                 text = recognizer.recognize_google(audio_data, language=locale)
+                print(f"Checkpoint: Successfully recognized text: {text}")  # Checkpoint
             return text, start_time, language_video
         except sr.UnknownValueError:
+            print("Checkpoint: Speech recognition could not understand audio")  # Checkpoint
             return "[Incomprensibile]", start_time, language_video
         except sr.RequestError as e:
+            print(f"Checkpoint: API request error - {e}")  # Checkpoint
             return f"[Errore: {e}]", start_time, language_video
-        finally:
-            try_remove_chunk_file(chunk_file)

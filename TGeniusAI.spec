@@ -7,15 +7,17 @@ import zipfile
 
 block_cipher = None
 
+current_dir = os.getcwd()
+
 a = Analysis(
     ['src/TGeniusAI.py'],
     pathex=['.'],
     binaries=[],
     datas=[
-        ('res', 'res'),  # Includi la cartella delle risorse
-        ('Readme.md', '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
-        ('install.bat', '.'),  # Aggiungi install.bat nella cartella TGeniusAI
-        ('ffmpeg.exe', '.')  # Aggiungi ffmpeg.exe nella cartella TGeniusAI
+        (os.path.join(current_dir, 'res'), 'res'),  # Includi la cartella delle risorse
+        (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
+        (os.path.join(current_dir, 'install.bat'), '.'),  # Aggiungi install.bat nella cartella TGeniusAI
+        (os.path.join(current_dir, 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe nella cartella TGeniusAI
     ],
     hiddenimports=[
         'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
@@ -46,7 +48,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,
+    console=True,
     icon='res/eye.ico'  # Specifica il percorso dell'icona
 )
 
@@ -63,8 +65,8 @@ coll = COLLECT(
 
 # Script personalizzato per spostare i file nella cartella corretta e creare un file ZIP
 def move_files_up_and_create_zip():
-    dist_dir = os.path.join(os.getcwd(), 'dist', 'TGeniusAI')
-    release_dir = os.path.join(os.getcwd(), 'Release')
+    dist_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
+    release_dir = os.path.join(current_dir, 'Release')
 
     # Crea la cartella Release se non esiste
     os.makedirs(release_dir, exist_ok=True)

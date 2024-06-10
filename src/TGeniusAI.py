@@ -51,11 +51,15 @@ import subprocess
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
 
-# Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
-ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-print(ffmpeg_executable_path)
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+from moviepy.config import change_settings
 
+if getattr(sys, 'frozen', False):
+    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
+else:
+    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+print (ffmpeg_executable_path)
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -63,7 +67,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 1
-        self.version_patch = 15
+        self.version_patch = 16
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione

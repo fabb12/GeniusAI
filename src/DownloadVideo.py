@@ -3,6 +3,16 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import tempfile
 import os
 from moviepy.config import change_settings
+import sys
+
+if getattr(sys, 'frozen', False):
+    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
+else:
+    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
+
+change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+
+
 class DownloadThread(QThread):
     finished = pyqtSignal(str, str, str)  # Emits path of file and video title
     error = pyqtSignal(str)
@@ -14,9 +24,6 @@ class DownloadThread(QThread):
         self.download_video = download_video
         # Crea una directory temporanea nella cartella principale
         self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
-        # Imposta il percorso di ffmpeg relativamente al percorso di esecuzione dello script
-        ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-        change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
     def run(self):
         if self.download_video:
