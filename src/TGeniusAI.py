@@ -121,7 +121,7 @@ class VideoAudioManager(QMainWindow):
 
         self.recordingDock = self.createRecordingDock()
         self.recordingDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.recordingDock, 'bottom')
+        area.addDock(self.recordingDock, 'left')
 
         self.audioDock = self.createAudioDock()
         self.audioDock.setStyleSheet(self.styleSheet())
@@ -530,7 +530,7 @@ class VideoAudioManager(QMainWindow):
 
         # Add only the specified docks
         area.addDock(self.videoPlayerDock, 'left')
-        area.addDock(self.recordingDock, 'bottom')
+        area.addDock(self.recordingDock, 'left')
 
         # Set default visibility
         self.videoPlayerDock.setVisible(True)
@@ -1512,7 +1512,7 @@ class VideoAudioManager(QMainWindow):
     def startScreenRecording(self):
         selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
-        video_file_path = self.filePathLineEdit.text().strip()  # Strip leading/trailing whitespace
+        folder_path = self.folderPathLineEdit.text().strip()  # Strip leading/trailing whitespace
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
 
@@ -1547,10 +1547,10 @@ class VideoAudioManager(QMainWindow):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             recording_name = f"recording_{timestamp}"
 
-        if not video_file_path:
+        if not folder_path:
             default_folder = os.path.join(os.getcwd(), 'screenrecorder')
         else:
-            default_folder = os.path.dirname(video_file_path)
+            default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
         # Usa recording_name per i nomi dei file
@@ -1607,10 +1607,9 @@ class VideoAudioManager(QMainWindow):
                     audio_path = self.current_audio_path
                     if os.path.exists(audio_path):
                         try:
-                            default_folder = os.path.join(os.getcwd(),
-                                                          'screenrecorder') if not self.filePathLineEdit.text().strip() else os.path.dirname(
-                                self.filePathLineEdit.text().strip())
-                            output_path = os.path.join(default_folder,
+                            folder_path = self.folderPathLineEdit.text().strip() or os.path.join(os.getcwd(),
+                                                                                                 'screenrecorder')
+                            output_path = os.path.join(folder_path,
                                                        f"{os.path.splitext(os.path.basename(video_path))[0]}_final.mp4")
                             self.adattaVelocitaVideoAAudio(video_path, audio_path, output_path)
                             self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
