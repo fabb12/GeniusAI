@@ -5,22 +5,10 @@ import sounddevice as sd
 import soundfile as sf
 import time
 from mss import mss
-from moviepy.config import change_settings
-from moviepy.editor import VideoFileClip, AudioFileClip
-import os
 import ctypes.wintypes
 from queue import Queue
 from threading import Lock
-from PyQt6.QtWidgets import QMessageBox, QFileDialog
-import sys
-from moviepy.config import change_settings
 
-if getattr(sys, 'frozen', False):
-    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
-else:
-    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)

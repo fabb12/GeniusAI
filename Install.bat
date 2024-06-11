@@ -1,36 +1,21 @@
 @echo off
-setlocal
 
-:: Ottieni la directory corrente
-set "currentDir=%~dp0"
-set "currentDir=%currentDir:~0,-1%"
+REM Ottieni il percorso completo dello script .bat
+set SCRIPT_DIR=%~dp0
 
-:: Percorso della cartella superiore
-set "parentDir=%currentDir%\.."
-set "parentDir=%parentDir:~0,-1%"
+REM Imposta il percorso di ffmpeg.exe
+set FFMPEG_DIR=%SCRIPT_DIR%res\ffmpeg\bin
 
-:: Percorso della cartella TGeniusAI
-set "tgFolder=%currentDir%\TGeniusAI"
+REM Aggiungi il percorso di ffmpeg.exe alla variabile PATH per l'utente corrente usando PowerShell
+powershell -Command "[Environment]::SetEnvironmentVariable('PATH', [Environment]::GetEnvironmentVariable('PATH', 'User') + ';%FFMPEG_DIR%', 'User')"
 
-:: Imposta il percorso dell'eseguibile
-set "exePath=%tgFolder%\TGeniusAI.exe"
+REM Verifica che il percorso sia stato aggiunto
+echo Verifica che il percorso di ffmpeg.exe sia stato aggiunto al PATH:
+powershell -Command "[Environment]::GetEnvironmentVariable('PATH', 'User')" | find "%FFMPEG_DIR%"
+if %errorlevel%==0 (
+    echo Il percorso e' stato aggiunto con successo.
+) else (
+    echo Errore: il percorso non e' stato aggiunto.
+)
 
-:: Nome del collegamento
-set "shortcutName=TGeniusAI.lnk"
-
-:: Percorso completo del collegamento nella cartella TGeniusAI
-set "tgShortcutPath=%tgFolder%\%shortcutName%"
-
-:: Percorso completo del collegamento nella cartella superiore
-set "parentShortcutPath=%parentDir%\%shortcutName%"
-
-:: Crea il collegamento nella cartella TGeniusAI utilizzando PowerShell
-powershell -command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%tgShortcutPath%'); $s.TargetPath = '%exePath%'; $s.WorkingDirectory = '%tgFolder%'; $s.Save()"
-
-:: Sposta il collegamento nella cartella superiore
-move "%tgShortcutPath%" "%parentShortcutPath%"
-
-echo Collegamento creato e spostato con successo: %parentShortcutPath%
-
-endlocal
 pause

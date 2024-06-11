@@ -1,5 +1,3 @@
-# -*- mode: python ; coding: utf-8 -*-
-
 import shutil
 import os
 import re
@@ -17,11 +15,10 @@ a = Analysis(
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Includi la cartella delle risorse
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
         (os.path.join(current_dir, 'install.bat'), '.'),  # Aggiungi install.bat nella cartella TGeniusAI
-        (os.path.join(current_dir, 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe nella cartella _internal
     ],
     hiddenimports=[
         'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
-        'PyQt6.QtGui', 'PyQt6.QtWidgets'
+        'PyQt6.QtGui', 'PyQt6.QtWidgets', 'pycountry', 'speech_recognition'
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -29,14 +26,14 @@ a = Analysis(
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
-    noarchive=True
+    noarchive=False
 )
 
 pyz = PYZ(
     a.pure,
     a.zipped_data,
     cipher=block_cipher,
-    noarchive=True
+    noarchive=False
 )
 
 exe = EXE(
@@ -46,9 +43,9 @@ exe = EXE(
     exclude_binaries=True,
     name='TGeniusAI',
     debug=False,
-    strip=False,
+    strip=True,
     upx=True,
-    console=True,
+    console=False,  # Imposta console a False per rimuovere la console
     icon=os.path.join('src', 'res', 'eye.ico')  # Specifica il percorso dell'icona nella cartella res sotto src
 )
 
@@ -58,9 +55,9 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     name='TGeniusAI',
-    strip=False,
+    strip=True,
     upx=True,
-    console=True
+    console=False
 )
 
 # Script personalizzato per spostare i file nella cartella corretta e creare un file ZIP

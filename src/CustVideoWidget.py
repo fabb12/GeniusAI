@@ -4,14 +4,13 @@ from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
 import sys
 import os
-from moviepy.config import change_settings
+import logging
+# Configura il logging
+logging.basicConfig(filename='transcription_log.txt', level=logging.DEBUG, format='[%(asctime)s - %(levelname)s] - %(message)s')
+# Reindirizza stdout e stderr a os.devnull per ignorare l'output
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
 
-if getattr(sys, 'frozen', False):
-    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
-else:
-    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
 
 class CropVideoWidget(QVideoWidget):
     cropRectChanged = pyqtSignal(QRect)
@@ -56,7 +55,7 @@ class CropVideoWidget(QVideoWidget):
             self.cropRect = QRect(self.origin, self.end).normalized()
             self.cropRectChanged.emit(self.cropRect)
             self.update()
-        print(self.cropRect)
+        logging.debug(self.cropRect)
         self.isPanning = False
 
     def wheelEvent(self, event):

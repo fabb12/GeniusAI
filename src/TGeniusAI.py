@@ -1,5 +1,4 @@
 import sys
-from pydub import AudioSegment
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
 from moviepy.editor import ImageClip, CompositeVideoClip
@@ -33,11 +32,9 @@ import pycountry
 from CustVideoWidget import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
 from PyQt6.QtCore import pyqtSignal
-import os
 import shutil
 import pyaudio
 from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
-from moviepy.config import change_settings
 from PyQt6.QtWidgets import QSlider
 from PyQt6.QtCore import Qt
 from CustomSlider import CustomSlider
@@ -47,19 +44,16 @@ from moviepy.editor import concatenate_audioclips, concatenate_videoclips, Video
 from PyQt6.QtGui import QDesktopServices
 from PyQt6.QtCore import QUrl
 import subprocess
+import os
+import logging
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
-
-from moviepy.config import change_settings
-
-if getattr(sys, 'frozen', False):
-    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
-else:
-    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
-print (ffmpeg_executable_path)
+# Configura il logging
+logging.basicConfig(filename='transcription_log.txt', level=logging.DEBUG, format='[%(asctime)s - %(levelname)s] - %(message)s')
+# Reindirizza stdout e stderr a os.devnull per ignorare l'output
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -609,7 +603,7 @@ class VideoAudioManager(QMainWindow):
         dialog = ApiKeyDialog(self)
         if dialog.exec() == dialog.DialogCode.Accepted:
             self.api_key = dialog.get_api_key()
-            print(f"API Key impostata: {self.api_key}")
+            logging.debug(f"API Key impostata: {self.api_key}")
     def insertPause(self):
         cursor = self.transcriptionTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
@@ -834,7 +828,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         cropRect = self.videoCropWidget.getCropRect()
-        print(cropRect)
+        logging.debug(cropRect)
         if cropRect.isEmpty():
             QMessageBox.warning(self, "Errore", "Seleziona un'area da ritagliare.")
             return
@@ -1234,7 +1228,7 @@ class VideoAudioManager(QMainWindow):
             self.backgroundAudioPathLineEdit.setText(fileName)
     def adjustBackgroundVolume(self, value):
         # Qui dovrai implementare la logica per regolare il volume del sottofondo
-        print(f"Volume del sottofondo regolato al {value}%")
+        logging.debug(f"Volume del sottofondo regolato al {value}%")
     def setupDockSettingsManager(self):
 
         settings_file = '../dock_settings.json'
@@ -1289,7 +1283,7 @@ class VideoAudioManager(QMainWindow):
         if audio_devices:
             self.audioDeviceComboBox.addItems(audio_devices)
         else:
-            print("No input audio devices found.")
+            logging.debug("No input audio devices found.")
         recordingLayout.addWidget(self.audioDeviceComboBox)
 
         # Popola la ComboBox con le finestre disponibili e gli schermi
@@ -1379,9 +1373,9 @@ class VideoAudioManager(QMainWindow):
             elif os.name == 'posix':  # MacOS, Linux
                 subprocess.Popen(['open', self.selected_directory])
             else:
-                print("Sistema operativo non supportato.")
+                logging.debug("Sistema operativo non supportato.")
         else:
-            print("Nessuna cartella selezionata o cartella non esistente.")
+            logging.debug("Nessuna cartella selezionata o cartella non esistente.")
     def updateWindowList(self):
         """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
         self.screenSelectionComboBox.clear()
@@ -1459,6 +1453,7 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
 
@@ -1473,27 +1468,29 @@ class VideoAudioManager(QMainWindow):
         try:
             # Estrai l'audio dal video
             video_clip = VideoFileClip(video_path)
+            audio_clip = video_clip.audio
             original_audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
-            video_clip.audio.write_audiofile(original_audio_path)  # Save the extracted audio
+            audio_clip.write_audiofile(original_audio_path)  # Save the extracted audio
 
             # Convert the timecode into seconds
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
 
-            # Load the audio using pydub
-            original_audio = AudioSegment.from_file(original_audio_path)
+            # Load the audio using moviepy
+            original_audio = AudioFileClip(original_audio_path)
+            total_duration = original_audio.duration
 
             # Create the silent audio segment for the pause
-            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))  # Duration in milliseconds
+            silent_audio = AudioFileClip("silent.mp3").set_duration(pause_duration)
 
             # Split the audio and insert the silent segment
-            first_part = original_audio[:start_time * 1000]  # Before the timecode
-            second_part = original_audio[start_time * 1000:]  # After the timecode
-            new_audio = first_part + silent_audio + second_part
+            first_part = original_audio.subclip(0, start_time)
+            second_part = original_audio.subclip(start_time, total_duration)
+            new_audio = concatenate_audioclips([first_part, silent_audio, second_part])
 
             # Save the modified audio to a temporary path
             temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            new_audio.export(temp_audio_path, format='mp3')
+            new_audio.write_audiofile(temp_audio_path)
 
             # Adapt the speed of the video to match the new audio duration
             output_path = tempfile.mktemp(suffix='.mp4')
@@ -1667,9 +1664,9 @@ class VideoAudioManager(QMainWindow):
 
             # Specifica del codec libx264 per il video e aac per l'audio
             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=original_frame_rate)
-            print(f'Video elaborato con successo.')
+            logging.debug(f'Video elaborato con successo.')
         except Exception as e:
-            print(f"Errore durante l'adattamento della velocità del video: {e}")
+            logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
 
     def mergeAudioVideo(self, video_path, audio_path):
         try:
@@ -1718,9 +1715,9 @@ class VideoAudioManager(QMainWindow):
             try:
                 with open(path, 'w') as file:
                     file.write(text_to_save)
-                print("File salvato correttamente!")
+                logging.debug("File salvato correttamente!")
             except Exception as e:
-                print("Errore durante il salvataggio del file:", e)
+                logging.debug("Errore durante il salvataggio del file:", e)
 
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""
@@ -1782,7 +1779,7 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.close()
         QMessageBox.information(self, "Download Complete", f"File saved to {file_path}.")
         self.video_download_language = video_language
-        print(video_language)
+        logging.debug(video_language)
         self.loadVideo(file_path, video_title)
 
     def onError(self, error_message):
@@ -1829,7 +1826,7 @@ class VideoAudioManager(QMainWindow):
 
         self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
         self.videoPathLineOutputEdit = video_path
-        print(f"Loaded video output: {video_path}")
+        logging.debug(f"Loaded video output: {video_path}")
 
 
     def updateTimeCode(self, position):
@@ -2179,16 +2176,16 @@ class VideoAudioManager(QMainWindow):
         for _ in range(attempts):
             try:
                 os.remove(file_path)
-                print(f"File {file_path} successfully removed.")
+                logging.debug(f"File {file_path} successfully removed.")
                 break
             except PermissionError:
-                print(f"Warning: File {file_path} is currently in use. Retrying...")
+                logging.debug(f"Warning: File {file_path} is currently in use. Retrying...")
                 time.sleep(delay)
             except FileNotFoundError:
-                print(f"The file {file_path} does not exist or has already been removed.")
+                logging.debug(f"The file {file_path} does not exist or has already been removed.")
                 break
             except Exception as e:
-                print(f"Unexpected error while removing {file_path}: {e}")
+                logging.debug(f"Unexpected error while removing {file_path}: {e}")
     def handleErrors(self, progress_dialog):
         def error(message):
             QMessageBox.critical(self, "Errore nella Trascrizione",
@@ -2262,40 +2259,30 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.canceled.connect(self.audio_thread.terminate)
         self.progressDialog.show()
 
-    def addPauseAndMerge(self, original_audio_path, pause_before, pause_after):
-        # Carica il file audio originale usando pydub
-        original_audio = AudioSegment.from_file(original_audio_path)
-
-        # Crea clip audio di silenzio per le pause
-        pause_before_clip = AudioSegment.silent(duration=int(pause_before * 1000))  # durata in millisecondi
-        pause_after_clip = AudioSegment.silent(duration=int(pause_after * 1000))
-
-        # Concatena le pause con l'audio originale
-        final_audio = pause_before_clip + original_audio + pause_after_clip
-
-        # Salva il nuovo file audio
-        new_audio_path = tempfile.mktemp(suffix='.mp3')
-        final_audio.export(new_audio_path, format='mp3')
-
-        return new_audio_path
-
     def onAudioGenerationCompleted(self, audio_path):
         timecode = self.timecodePauseLineEdit.text()
         pause_duration = float(self.pauseDurationLineEdit.text() or 0)
 
         if timecode and pause_duration > 0:
+            # Convert the timecode into seconds
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
 
-            original_audio = AudioSegment.from_file(audio_path)
-            silent_audio = AudioSegment.silent(duration=int(pause_duration * 1000))
+            # Load the audio using moviepy
+            original_audio = AudioFileClip(audio_path)
+            total_duration = original_audio.duration
 
-            first_part = original_audio[:start_time * 1000]
-            second_part = original_audio[start_time * 1000:]
-            new_audio = first_part + silent_audio + second_part
+            # Create the silent audio segment for the pause
+            silent_audio = AudioFileClip("silent.mp3").set_duration(pause_duration)
 
+            # Split the audio and insert the silent segment
+            first_part = original_audio.subclip(0, start_time)
+            second_part = original_audio.subclip(start_time, total_duration)
+            new_audio = concatenate_audioclips([first_part, silent_audio, second_part])
+
+            # Save the modified audio to a temporary path
             temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            new_audio.export(temp_audio_path, format='mp3')
+            new_audio.write_audiofile(temp_audio_path)
             audio_path = temp_audio_path
 
         base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
@@ -2310,21 +2297,6 @@ class VideoAudioManager(QMainWindow):
     def onError(self, error_message):
         QMessageBox.critical(self, "Errore", "Errore durante la generazione dell'audio: " + error_message)
 
-    def mergeAudioTracks(self, lista_percorsi_audio, output_path):
-        # Assicurati che la lista non sia vuota
-        if not lista_percorsi_audio:
-            raise ValueError("La lista dei percorsi audio è vuota")
-
-        # Carica la prima traccia audio
-        traccia_unita = AudioSegment.from_file(lista_percorsi_audio[0])
-
-        # Unisci le tracce rimanenti
-        for percorso in lista_percorsi_audio[1:]:
-            traccia_attuale = AudioSegment.from_file(percorso)
-            traccia_unita += traccia_attuale
-
-        # Esporta la traccia audio unita
-        traccia_unita.export(output_path, format="mp3")
 
     def browseAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
@@ -2515,9 +2487,9 @@ class VideoAudioManager(QMainWindow):
 
             # Specifica del codec libx264 per il video e aac per l'audio
             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=original_frame_rate)
-            print(f'Video elaborato con successo.')
+            logging.debug(f'Video elaborato con successo.')
         except Exception as e:
-            print(f"Errore durante l'adattamento della velocità del video: {e}")
+            logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
 

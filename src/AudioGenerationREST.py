@@ -1,16 +1,13 @@
 import requests
 from PyQt6.QtCore import QThread, pyqtSignal
-from moviepy.config import change_settings
-import os
+import logging
 import sys
-
-
-if getattr(sys, 'frozen', False):
-    ffmpeg_executable_path = os.path.join(sys._MEIPASS, 'ffmpeg.exe')
-else:
-    ffmpeg_executable_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ffmpeg.exe')
-
-change_settings({"FFMPEG_BINARY": ffmpeg_executable_path})
+import os
+# Configura il logging
+logging.basicConfig(filename='transcription_log.txt', level=logging.DEBUG, format='[%(asctime)s - %(levelname)s] - %(message)s')
+# Reindirizza stdout e stderr a os.devnull per ignorare l'output
+sys.stdout = open(os.devnull, 'w')
+sys.stderr = open(os.devnull, 'w')
 
 class AudioGenerationThread(QThread):
     completed = pyqtSignal(str)  # Signal to notify the path of the completed file

@@ -55,7 +55,7 @@ class DockSettingsManager:
             self.main_window.updateViewMenu()
 
         except FileNotFoundError:
-            print("Settings file not found. Using default settings.")
+            logging.debug("Settings file not found. Using default settings.")
 
     def apply_visibility(self, name, visible):
         if name in self.docks:
