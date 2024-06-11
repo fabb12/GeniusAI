@@ -138,7 +138,7 @@ class TranscriptionThread(QThread):
                 language_video = self.parent().languageComboBox.currentData()  # Ottiene il codice lingua dalla comboBox
                 locale = self.get_locale_from_language(language_video)
                 text = recognizer.recognize_google(audio_data, language=locale)
-                print(f"Checkpoint: Successfully recognized text: {text}")  # Checkpoint
+                print(f"Checkpoint: Successfully recognized text")  # Checkpoint
             return text, start_time, language_video
         except sr.UnknownValueError:
             print("Checkpoint: Speech recognition could not understand audio")  # Checkpoint

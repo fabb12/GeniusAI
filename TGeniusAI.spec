@@ -14,10 +14,10 @@ a = Analysis(
     pathex=['.'],
     binaries=[],
     datas=[
-        (os.path.join(current_dir, 'res'), 'res'),  # Includi la cartella delle risorse
+        (os.path.join(current_dir, 'src', 'res'), 'res'),  # Includi la cartella delle risorse
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
         (os.path.join(current_dir, 'install.bat'), '.'),  # Aggiungi install.bat nella cartella TGeniusAI
-        (os.path.join(current_dir, 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe nella cartella TGeniusAI
+        (os.path.join(current_dir, 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe nella cartella _internal
     ],
     hiddenimports=[
         'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
@@ -49,7 +49,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=True,
-    icon='res/eye.ico'  # Specifica il percorso dell'icona
+    icon=os.path.join('src', 'res', 'eye.ico')  # Specifica il percorso dell'icona nella cartella res sotto src
 )
 
 coll = COLLECT(
@@ -65,24 +65,25 @@ coll = COLLECT(
 
 # Script personalizzato per spostare i file nella cartella corretta e creare un file ZIP
 def move_files_up_and_create_zip():
-    dist_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
-    release_dir = os.path.join(current_dir, 'Release')
+    internal_dir = os.path.join(current_dir, 'dist', 'TGeniusAI', '_internal')
+    release_dir = os.path.join(current_dir, 'dist', 'Release')
+    tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
 
     # Crea la cartella Release se non esiste
     os.makedirs(release_dir, exist_ok=True)
 
-    files_to_move = ['Readme.md', 'install.bat', 'ffmpeg.exe']
+    files_to_move = ['Readme.md', 'install.bat']
     folders_to_move = ['res']
 
     for file_name in files_to_move:
-        src_path = os.path.join(dist_dir, file_name)
-        dest_path = os.path.join(release_dir, file_name)
+        src_path = os.path.join(internal_dir, file_name)
+        dest_path = os.path.join(tgeniusai_dir, file_name)
         if os.path.exists(src_path):
             shutil.move(src_path, dest_path)
 
     for folder_name in folders_to_move:
-        src_path = os.path.join(dist_dir, folder_name)
-        dest_path = os.path.join(release_dir, folder_name)
+        src_path = os.path.join(internal_dir, folder_name)
+        dest_path = os.path.join(tgeniusai_dir, folder_name)
         if os.path.exists(src_path):
             if os.path.exists(dest_path):
                 shutil.rmtree(dest_path)
@@ -98,14 +99,13 @@ def move_files_up_and_create_zip():
     else:
         version = "v0.0.0"
 
-    # Crea un file ZIP contenente tutti i file nella cartella Release
+    # Crea un file ZIP contenente tutti i file nella cartella TGeniusAI
     zip_file_path = os.path.join(release_dir, f"TGeniusAI_{version}.zip")
     with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-        for root, dirs, files in os.walk(release_dir):
+        for root, dirs, files in os.walk(tgeniusai_dir):
             for file in files:
-                if file != os.path.basename(zip_file_path):  # Evita di aggiungere il file ZIP a se stesso
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, release_dir)
-                    zipf.write(file_path, arcname)
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, tgeniusai_dir)
+                zipf.write(file_path, arcname)
 
 move_files_up_and_create_zip()
