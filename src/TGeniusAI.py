@@ -5,7 +5,7 @@ from moviepy.editor import ImageClip, CompositeVideoClip
 from pptx import Presentation
 import re
 import tempfile
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QLabel, QCheckBox,
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox,
                              QLineEdit,  QHBoxLayout, QGroupBox, QTextEdit, QComboBox)
 from PyQt6.QtGui import QIcon
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -63,7 +63,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 1
-        self.version_patch = 16
+        self.version_patch = 18
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -103,15 +103,15 @@ class VideoAudioManager(QMainWindow):
         self.setCentralWidget(area)
 
         # Creazione dei docks esistenti...
-        self.videoPlayerDock = Dock("Video Player Source")
+        self.videoPlayerDock = Dock("Video Player Source", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
         area.addDock(self.videoPlayerDock, 'left')
 
-        self.transcriptionDock = Dock("Trascrizione e Sintesi Audio")
+        self.transcriptionDock = Dock("Trascrizione e Sintesi Audio", closable=True)
         self.transcriptionDock.setStyleSheet(self.styleSheet())
         area.addDock(self.transcriptionDock, 'right')
 
-        self.editingDock = Dock("Opzioni di Editing")
+        self.editingDock = Dock("Opzioni di Editing", closable=True)
         self.editingDock.setStyleSheet(self.styleSheet())
         area.addDock(self.editingDock, 'right')
 
@@ -127,7 +127,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(self.styleSheet())
         area.addDock(self.audioDock, 'bottom')
 
-        self.videoPlayerOutput = Dock("Video Player Output")
+        self.videoPlayerOutput = Dock("Video Player Output", closable=True)
         self.videoPlayerOutput.setStyleSheet(self.styleSheet())
         area.addDock(self.videoPlayerOutput, 'left')
 
@@ -980,31 +980,33 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
+
     def createAudioDock(self):
-        dock = Dock("Gestione Audio")
-        layout = QVBoxLayout()
+        dock = Dock("Gestione Audio", closable=True)
+        layout = QGridLayout()
 
         # GroupBox per la sostituzione dell'audio principale
         audioReplacementGroup = self.createAudioReplacementGroup()
-        layout.addWidget(audioReplacementGroup)
+        layout.addWidget(audioReplacementGroup, 1, 1, 1, 1)
 
         # GroupBox per l'applicazione delle pause audio
         audioPauseGroup = self.createAudioPauseGroup()
-        layout.addWidget(audioPauseGroup)
+        layout.addWidget(audioPauseGroup, 1, 0)
 
         # GroupBox per l'applicazione delle pause video
         videoPauseGroup = self.createVideoPauseGroup()
-        layout.addWidget(videoPauseGroup)
+        layout.addWidget(videoPauseGroup, 2, 0)
 
         # GroupBox per la gestione dell'audio di sottofondo
         backgroundAudioGroup = self.createBackgroundAudioGroup()
-        layout.addWidget(backgroundAudioGroup)
+        layout.addWidget(backgroundAudioGroup, 2, 1, 1, 1)  # Estendi questo widget su 3 righe
 
         widget = QWidget()
         widget.setLayout(layout)
         dock.addWidget(widget)
 
         return dock
+
     def createAudioReplacementGroup(self):
         audioReplacementGroup = QGroupBox("Sostituzione Audio Principale")
         layout = QVBoxLayout()
@@ -1116,7 +1118,7 @@ class VideoAudioManager(QMainWindow):
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
-        dock = Dock("Unione Video")
+        dock = Dock("Unione Video", closable=True)
 
         # GroupBox per organizzare visivamente le opzioni di unione video
         mergeGroup = QGroupBox("Opzioni di Unione Video")
@@ -1235,10 +1237,10 @@ class VideoAudioManager(QMainWindow):
         event.accept()
 
     def createRecordingDock(self):
-        dock = Dock("Registrazione")
+        dock = Dock("Registrazione", closable=True)
 
         # Imposta la policy di dimensionamento del dock per occupare il minimo spazio possibile
-        dock.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
+        #dock.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
 
         # Timer per aggiornare il timecode della registrazione
         self.rec_timer = QTimer(self)
@@ -1713,7 +1715,7 @@ class VideoAudioManager(QMainWindow):
 
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""
-        dock = Dock("Download Video")
+        dock = Dock("Download Video", closable=True)
 
         # GroupBox per organizzare visivamente le opzioni di download
         downloadGroup = QGroupBox("Opzioni di Download Video")

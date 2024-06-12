@@ -8,3 +8,5 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungere interruzione trascrizione
 - [ ] aggiunta di pausa video e audio da controllare 
 - [ ] aggiungere la funzione ritaglio
+- [x] aggiugere chiusura dock
+- [ ] modificare il processo di registrazione usando ffmpeg
