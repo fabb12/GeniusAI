@@ -46,6 +46,8 @@ from PyQt6.QtCore import QUrl
 import subprocess
 import os
 import logging
+from bs4 import BeautifulSoup
+
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -715,16 +717,6 @@ class VideoAudioManager(QMainWindow):
         self.cutting_thread.error.connect(self.onCutError)
 
         self.cutting_thread.start()
-    def handleTimecodeToggle(self, checked):
-        # Update the timecode insertion enabled state based on checkbox
-        self.timecodeEnabled = checked
-
-        # Trigger text change processing to update timecodes
-        if checked:
-            self.original_text = self.transcriptionTextArea.toPlainText()
-            self.handleTextChange()
-        else:
-            self.transcriptionTextArea.setPlainText(self.original_text)
 
     def eventFilter(self, source, event):
         if source == self.videoCropWidget:
@@ -2044,18 +2036,66 @@ class VideoAudioManager(QMainWindow):
                           <br>
                           Autore: FFA <br>""")
 
+    def handleTimecodeToggle(self, checked):
+        # Update the timecode insertion enabled state based on checkbox
+        self.timecodeEnabled = checked
+
+        # Trigger text change processing to update timecodes
+        current_html = self.transcriptionTextArea.toHtml()
+        if checked:
+            self.original_text_html = current_html
+            self.handleTextChange()
+        else:
+            self.transcriptionTextArea.setHtml(self.original_text_html)
+
     def handleTextChange(self):
-        current_text = self.transcriptionTextArea.toPlainText()
-        if current_text.strip():
+        current_html = self.transcriptionTextArea.toHtml()
+        if current_html.strip():
             if self.timecodeEnabled:
                 self.transcriptionTextArea.blockSignals(True)
-                updated_text = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_text)
-                self.transcriptionTextArea.setHtml(updated_text)
-                self.detectAndUpdateLanguage(updated_text)
+                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_html)
+                self.transcriptionTextArea.setHtml(updated_html)
+                self.detectAndUpdateLanguage(BeautifulSoup(updated_html, 'html.parser').get_text())
                 self.transcriptionTextArea.blockSignals(False)
             else:
-                self.detectAndUpdateLanguage(current_text)
-                self.original_text = current_text
+                self.detectAndUpdateLanguage(BeautifulSoup(current_html, 'html.parser').get_text())
+                self.original_text_html = current_html
+
+    def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
+        WPM = 150  # Average words-per-minute rate for spoken language
+        words_per_second = WPM / 60
+
+        soup = BeautifulSoup(html_text, 'html.parser')
+        paragraphs = soup.find_all('p')
+
+        cumulative_time = 0  # Total time in seconds
+
+        for paragraph in paragraphs:
+            text = paragraph.get_text()
+
+            sentences = re.split(r'(?<=[.!?])\s+', text)
+            updated_html = []
+
+            for sentence in sentences:
+                words = re.findall(r'\b\w+\b', sentence)
+                cumulative_time += len(words) / words_per_second
+
+                pause_pattern = re.compile(r'<break time="(\d+(\.\d+)?)s" />')
+                pauses = pause_pattern.findall(sentence)
+                for pause in pauses:
+                    pause_time = float(pause[0])
+                    cumulative_time += pause_time
+
+                updated_html.append(sentence)
+
+                minutes = int(cumulative_time // 60)
+                seconds = int(cumulative_time % 60)
+                updated_html.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
+
+            paragraph.clear()
+            paragraph.append(BeautifulSoup(' '.join(updated_html), 'html.parser'))
+
+        return str(soup)
 
     def detectAndUpdateLanguage(self, text):
         try:
@@ -2084,39 +2124,6 @@ class VideoAudioManager(QMainWindow):
         # Regex to remove timecodes in the format [00:01]
         import re
         return re.sub(r'\s*\[\d{2}:\d{2}\]', '', text)
-
-    def calculateAndDisplayTimeCodeAtEndOfSentences(self, text):
-        WPM = 150  # Average words-per-minute rate for spoken language
-        words_per_second = WPM / 60
-
-        # Split the text into sentences while keeping the delimiters (e.g., .!?)
-        import re
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-
-        updated_text = []
-        cumulative_time = 0  # Total time in seconds
-
-        for sentence in sentences:
-            # Conta le parole nella frase (escludendo i tag di pausa)
-            words = re.findall(r'\b\w+\b', sentence)
-            cumulative_time += len(words) / words_per_second
-
-            # Aggiungi le pause nel calcolo
-            pause_pattern = re.compile(r'<break time="(\d+(\.\d+)?)s" />')
-            pauses = pause_pattern.findall(sentence)
-            for pause in pauses:
-                pause_time = float(pause[0])
-                cumulative_time += pause_time
-
-            # Mantieni il testo originale e aggiungi il timecode
-            updated_text.append(sentence)
-
-            # Format the timecode with HTML for lightblue color
-            minutes = int(cumulative_time // 60)
-            seconds = int(cumulative_time % 60)
-            updated_text.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
-
-        return ' '.join(updated_text)
 
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
