@@ -14,7 +14,7 @@ a = Analysis(
     datas=[
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Includi la cartella delle risorse
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
-        (os.path.join(current_dir, 'install.bat'), '.'),  # Aggiungi install.bat nella cartella TGeniusAI
+        #(os.path.join(current_dir, 'install.bat'), '.'),  # Aggiungi install.bat nella cartella TGeniusAI
     ],
     hiddenimports=[
         'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
@@ -43,7 +43,7 @@ exe = EXE(
     exclude_binaries=True,
     name='TGeniusAI',
     debug=False,
-    strip=True,
+    strip=False,
     upx=True,
     console=False,  # Imposta console a False per rimuovere la console
     icon=os.path.join('src', 'res', 'eye.ico')  # Specifica il percorso dell'icona nella cartella res sotto src
@@ -55,7 +55,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     name='TGeniusAI',
-    strip=True,
+    strip=False,
     upx=True,
     console=False
 )
@@ -69,7 +69,7 @@ def move_files_up_and_create_zip():
     # Crea la cartella Release se non esiste
     os.makedirs(release_dir, exist_ok=True)
 
-    files_to_move = ['Readme.md', 'install.bat']
+    files_to_move = ['Readme.md']
     folders_to_move = ['res']
 
     for file_name in files_to_move:
