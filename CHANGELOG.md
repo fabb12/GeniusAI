@@ -9,10 +9,9 @@ Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 ### Added
 - Aggiunto tasto chiusura dock
 
-### Changed
--
-
 ### Fixed
+- Sistemato problema con schermo 2
+- Sistemato problema della cambio di formattazione quando selezionato 'inserisci timecode'
 ## [1.1.16] - 2024-06-08
 
 ### Added

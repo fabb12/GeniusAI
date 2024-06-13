@@ -47,6 +47,8 @@ import subprocess
 import os
 import logging
 from bs4 import BeautifulSoup
+from ScreenButton import ScreenButton
+
 
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
@@ -1240,39 +1242,38 @@ class VideoAudioManager(QMainWindow):
     def createRecordingDock(self):
         dock = Dock("Registrazione", closable=True)
 
-        # Imposta la policy di dimensionamento del dock per occupare il minimo spazio possibile
-        #dock.setSizePolicy(QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum))
-
-        # Timer per aggiornare il timecode della registrazione
         self.rec_timer = QTimer(self)
         self.rec_timer.timeout.connect(self.updateTimecodeRec)
 
-        # GroupBox per la gestione della registrazione
         recordingGroup = QGroupBox("Gestione Registrazione")
         recordingLayout = QVBoxLayout(recordingGroup)
 
-        # Label per il timecode della registrazione
         self.timecodeLabel = QLabel('00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
         recordingLayout.addWidget(self.timecodeLabel)
 
-        # Label per lo stato della registrazione
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         recordingLayout.addWidget(self.recordingStatusLabel)
 
-        # Label per lo stato dell'audio
         self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
         self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         recordingLayout.addWidget(self.audioStatusLabel)
 
-        # ComboBox per la selezione della finestra/schermo
-        self.screenSelectionComboBox = CustomComboBox()
-        self.screenSelectionComboBox.popupOpened.connect(self.updateWindowList)
-        recordingLayout.addWidget(self.screenSelectionComboBox)
+        # Griglia per i quadrati degli schermi
+        screensGroupBox = QGroupBox("Seleziona Schermo")
+        screensLayout = QGridLayout(screensGroupBox)
 
-        # ComboBox per la selezione del dispositivo audio
+        self.screen_buttons = []
+        for i, monitor in enumerate(get_monitors()):
+            screen_button = ScreenButton(f"", i + 1)
+            screen_button.clicked.connect(lambda checked, idx=i: self.selectScreen(idx))
+            screensLayout.addWidget(screen_button, i // 3, i % 3)
+            self.screen_buttons.append(screen_button)
+
+        recordingLayout.addWidget(screensGroupBox)
+
         self.audioDeviceComboBox = QComboBox()
         audio_devices = self.print_audio_devices()
         if audio_devices:
@@ -1281,47 +1282,33 @@ class VideoAudioManager(QMainWindow):
             logging.debug("No input audio devices found.")
         recordingLayout.addWidget(self.audioDeviceComboBox)
 
-        # Popola la ComboBox con le finestre disponibili e gli schermi
-        titles = [win.title for win in gw.getAllWindows() if win.title.strip()] + \
-                 [f"Schermo intero {i + 1} - {w.width}x{w.height}" for i, w in enumerate(get_monitors())]
-        self.screenSelectionComboBox.addItems(titles)
-
-        # GroupBox per le opzioni di salvataggio
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
         saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
 
-        # LineEdit per il percorso della cartella di destinazione
         self.folderPathLineEdit = QLineEdit()
         self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
 
-        # Checkbox per salvare solo il video
         self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
 
-        # LineEdit per il nome della registrazione
         self.recordingNameLineEdit = QLineEdit()
         self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
         saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
         saveOptionsLayout.addWidget(self.recordingNameLineEdit)
 
-        # Layout orizzontale per i pulsanti Sfoglia e Apri Cartella
         buttonsLayout = QHBoxLayout()
 
-        # Pulsante Sfoglia
         browseButton = QPushButton('Sfoglia')
         browseButton.clicked.connect(self.browseFolderLocation)
         buttonsLayout.addWidget(browseButton)
 
-        # Pulsante Apri Cartella
         open_folder_button = QPushButton('Apri Cartella')
         open_folder_button.clicked.connect(self.openFolder)
         buttonsLayout.addWidget(open_folder_button)
 
-        # Aggiungere il layout dei pulsanti al layout delle opzioni di salvataggio
         saveOptionsLayout.addLayout(buttonsLayout)
 
-        # Bottoni di controllo per avviare e fermare la registrazione
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
         self.stopRecordingButton = QPushButton("")
@@ -1333,24 +1320,27 @@ class VideoAudioManager(QMainWindow):
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
-        # Layout principale del widget
         mainLayout = QVBoxLayout()
         mainLayout.addWidget(recordingGroup)
         mainLayout.addWidget(saveOptionsGroup)
         mainLayout.addLayout(buttonLayout)
 
-        # Imposta il layout principale nel widget del dock
         widget = QWidget()
         widget.setLayout(mainLayout)
 
-
         dock.addWidget(widget)
-
-        # Aggiorna la lista delle finestre disponibili
-        self.updateWindowList()
 
         self.setDefaultAudioDevice()
         return dock
+
+    def selectScreen(self, screen_index):
+        self.selected_screen_index = screen_index
+        for button in self.screen_buttons:
+            if button.screen_number == screen_index + 1:
+                button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
+            else:
+                button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
+
 
     def browseFolderLocation(self):
         folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
@@ -1489,28 +1479,11 @@ class VideoAudioManager(QMainWindow):
             self.recordingTime = self.recordingTime.addSecs(1)
             self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
 
-    def updateWindowList(self):
-        """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
-        self.screenSelectionComboBox.clear()
-        windows = [win for win in gw.getAllWindows() if win.title.strip() and win.visible and not win.isMinimized]
 
-        # Filter windows to remove non-interactive or non-meaningful ones
-        meaningful_windows = [win for win in windows if 'some criteria to define meaningful window' in win.title]
-
-        # Ottieni i dettagli dei monitor e formatta il titolo per l'inserimento nella combo box
-        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors()) if
-                    m.width > 800 and m.height > 600]
-
-        # Combine meaningful windows and monitors
-        combined_list = monitors + [win.title for win in meaningful_windows]
-
-        # Aggiungi prima i monitor alla lista della combo box
-        self.screenSelectionComboBox.addItems(combined_list)
 
     def startScreenRecording(self):
-        selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
-        folder_path = self.folderPathLineEdit.text().strip()  # Strip leading/trailing whitespace
+        folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
 
@@ -1523,18 +1496,14 @@ class VideoAudioManager(QMainWindow):
         if not save_video_only:
             device_id, selected_audio_name = extract_device_name(selected_audio)
             audio_input_index = None
-            if selected_title and selected_audio_name:
+            if self.selected_screen_index is not None and selected_audio_name:
                 audio_input_index = device_id
         else:
             audio_input_index = None
 
         monitors = get_monitors()
-        monitor_index = 0
+        monitor_index = self.selected_screen_index if self.selected_screen_index is not None else 0
 
-        if "Schermo intero" in selected_title:
-            monitor_index = int(selected_title.split()[2]) - 1
-
-        # Recupera il nome della registrazione dall'utente
         recording_name = self.recordingNameLineEdit.text().strip()
         if not recording_name:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -1546,7 +1515,6 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        # Usa recording_name per i nomi dei file
         video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.avi")
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
@@ -1559,8 +1527,7 @@ class VideoAudioManager(QMainWindow):
                                                   audio_input=audio_input_index, audio_channels=2)
         else:
             self.recorder_thread = ScreenRecorder(self.video_writer, None, monitor_index=monitor_index,
-                                                  audio_input=None,
-                                                  audio_channels=0)
+                                                  audio_input=None, audio_channels=0)
 
         self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)
         self.recorder_thread.error_signal.connect(self.showError)
@@ -1571,7 +1538,7 @@ class VideoAudioManager(QMainWindow):
         self.current_video_path = video_file_path_with_timestamp
         if not save_video_only:
             self.current_audio_path = audioFileName
-        self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di {selected_title}')
+        self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di Schermo {monitor_index + 1}')
 
     def stopScreenRecording(self):
         self.rec_timer.stop()
