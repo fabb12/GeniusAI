@@ -72,7 +72,7 @@ class VideoAudioManager(QMainWindow):
         self.version = f"{self.version_major}.{self.version_minor}.{self.version_patch} - {build_date}"
 
         self.api_key = "ef38b436326ec387ecb1a570a8641b84"
-        self.setGeometry(100, 500, 800, 800)
+        #self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
         self.playerOutput = QMediaPlayer()
@@ -107,34 +107,50 @@ class VideoAudioManager(QMainWindow):
         # Creazione dei docks esistenti...
         self.videoPlayerDock = Dock("Video Player Source", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
+        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         area.addDock(self.videoPlayerDock, 'left')
 
         self.transcriptionDock = Dock("Trascrizione e Sintesi Audio", closable=True)
+        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.transcriptionDock.setStyleSheet(self.styleSheet())
         area.addDock(self.transcriptionDock, 'right')
 
         self.editingDock = Dock("Opzioni di Editing", closable=True)
+        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.editingDock.setStyleSheet(self.styleSheet())
         area.addDock(self.editingDock, 'right')
 
         self.downloadDock = self.createDownloadDock()
+        self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.downloadDock.setStyleSheet(self.styleSheet())
         area.addDock(self.downloadDock, 'left')
 
         self.recordingDock = self.createRecordingDock()
+        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.recordingDock.setStyleSheet(self.styleSheet())
         area.addDock(self.recordingDock, 'left')
 
         self.audioDock = self.createAudioDock()
+        self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.audioDock.setStyleSheet(self.styleSheet())
         area.addDock(self.audioDock, 'bottom')
 
         self.videoPlayerOutput = Dock("Video Player Output", closable=True)
         self.videoPlayerOutput.setStyleSheet(self.styleSheet())
+        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         area.addDock(self.videoPlayerOutput, 'left')
 
         # Creazione del dock merge videos
         self.videoMergeDock = self.createVideoMergeDock()
+        self.videoMergeDock.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                           QSizePolicy.Policy.Expanding)
         self.videoMergeDock.setStyleSheet(self.styleSheet())
         area.addDock(self.videoMergeDock, 'bottom')
 
@@ -208,13 +224,13 @@ class VideoAudioManager(QMainWindow):
 
         # Video Player output
         # Setup del widget video per l'output
-        videoOutputWidget = CropVideoWidget()
-        videoOutputWidget.setAcceptDrops(True)
-        videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
+        self.videoOutputWidget = CropVideoWidget()
+        self.videoOutputWidget.setAcceptDrops(True)
+        self.videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
 
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
-        self.playerOutput.setVideoOutput(videoOutputWidget)
+        self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
         # Creazione dei pulsanti di controllo playback per il video output
         playButtonOutput = QPushButton('')
@@ -267,7 +283,7 @@ class VideoAudioManager(QMainWindow):
         videoOutputLayout = QVBoxLayout()
         videoOutputLayout.addWidget(self.fileNameLabelOutput)
 
-        videoOutputLayout.addWidget(videoOutputWidget)
+        videoOutputLayout.addWidget(self.videoOutputWidget)
         videoOutputLayout.addLayout(timecodeLayoutOutput)
         videoOutputLayout.addWidget(videoSliderOutput)
         videoOutputLayout.addLayout(playbackControlLayoutOutput)
@@ -533,11 +549,11 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.recordingDock, 'right')
 
         # Set default visibility
-        self.videoPlayerDock.setVisible(True)
+        self.videoPlayerOutput.setVisible(True)
         self.recordingDock.setVisible(True)
 
         # Set other docks as invisible
-        self.videoPlayerOutput.setVisible(False)
+        self.videoPlayerDock.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
@@ -1248,7 +1264,7 @@ class VideoAudioManager(QMainWindow):
         recordingGroup = QGroupBox("Gestione Registrazione")
         recordingLayout = QVBoxLayout(recordingGroup)
 
-        self.timecodeLabel = QLabel('00:00')
+        self.timecodeLabel = QLabel('00:00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
         recordingLayout.addWidget(self.timecodeLabel)

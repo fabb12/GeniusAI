@@ -26,6 +26,7 @@ class CropVideoWidget(QVideoWidget):
         self.scale_factor = 1.0
         self.translation = QPoint(0, 0)
         self.last_mouse_pos = QPoint()
+        self.setMinimumWidth(400)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
