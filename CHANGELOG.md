@@ -4,11 +4,18 @@ Tutti i cambiamenti notevoli a questo progetto saranno documentati in questo fil
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e questo progetto aderisce a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.19] - 2024-06-13
 
 ### Added
-- Nuova funzionalità per la trascrizione video con supporto multilingua.
-- Possibilità di unire video con timecode specificato dall'utente.
+- Aggiunto tasto chiusura dock
+
+### Changed
+-
+
+### Fixed
+## [1.1.16] - 2024-06-08
+
+### Added
 - Opzione per aggiungere pause audio in punti specifici del video.
 - Implementazione della funzionalità di zoom e pan nel widget di ritaglio video.
 

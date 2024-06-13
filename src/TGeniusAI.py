@@ -206,7 +206,7 @@ class VideoAudioManager(QMainWindow):
 
         # Video Player output
         # Setup del widget video per l'output
-        videoOutputWidget = QVideoWidget()
+        videoOutputWidget = CropVideoWidget()
         videoOutputWidget.setAcceptDrops(True)
         videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
@@ -277,8 +277,6 @@ class VideoAudioManager(QMainWindow):
         # Widget per contenere il layout del video player output
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
-        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
         self.videoPlayerOutput.addWidget(videoPlayerOutputWidget)
 
 
@@ -726,6 +724,8 @@ class VideoAudioManager(QMainWindow):
             elif event.type() == QEvent.Type.MouseButtonPress and event.buttons() & Qt.MouseButton.LeftButton:
                 self.is_panning = True
                 self.last_mouse_position = event.position().toPoint()
+                if self.recorder_thread:
+                    self.recorder_thread.enlarge_circle()
                 return True
             elif event.type() == QEvent.Type.MouseMove and self.is_panning:
                 self.handlePanEvent(event)
@@ -734,6 +734,7 @@ class VideoAudioManager(QMainWindow):
                 self.is_panning = False
                 return True
         return super().eventFilter(source, event)
+
     def updateSpeed(self, value):
         # Convert the slider value to a playback rate
         playbackRate = value / 100.0
@@ -1578,7 +1579,6 @@ class VideoAudioManager(QMainWindow):
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
             self.recorder_thread.stop()
-            self.recorder_thread = None
 
         if hasattr(self, 'video_writer') and self.video_writer is not None:
             self.video_writer.release()
@@ -1606,11 +1606,18 @@ class VideoAudioManager(QMainWindow):
                                                                                                  'screenrecorder')
                             output_path = os.path.join(folder_path,
                                                        f"{os.path.splitext(os.path.basename(video_path))[0]}_final.mp4")
-                            self.adattaVelocitaVideoAAudio(video_path, audio_path, output_path)
+                            self.recorder_thread.unisciVideoAAudio(video_path, audio_path, output_path)
+                            self.recorder_thread = None
+
+                            # Aggiungi il passaggio per adattare la velocità del video all'audio
+                            adjusted_output_path = os.path.join(folder_path,
+                                                                f"{os.path.splitext(os.path.basename(output_path))[0]}_adjusted.mp4")
+                            self.adattaVelocitaVideoAAudio(output_path, audio_path, adjusted_output_path)
+
                             self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
                             QMessageBox.information(self, "File Salvato",
-                                                    f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
-                            self.loadVideoOutput(output_path)
+                                                    f"Il video finale è stato salvato correttamente:\nVideo: {adjusted_output_path}")
+                            self.loadVideoOutput(adjusted_output_path)
                         except Exception as e:
                             self.recordingStatusLabel.setText(
                                 f"Errore durante l'unione o il salvataggio dei file: {str(e)}")

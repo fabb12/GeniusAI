@@ -8,7 +8,7 @@ from mss import mss
 import ctypes.wintypes
 from queue import Queue
 from threading import Lock
-
+import subprocess
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
@@ -30,6 +30,11 @@ class ScreenRecorder(QThread):
         self.audio_queue = Queue()
         self.lock = Lock()
         self.sync_event = Lock()
+        self.drawing = False  # True quando il mouse è premuto
+        self.start_point = (0, 0)
+        self.end_point = (0, 0)
+        self.enlarge_circle = False
+        self.enlarge_timestamp = 0
 
     def run(self):
         self.recording_started_signal.emit()
@@ -69,7 +74,12 @@ class ScreenRecorder(QThread):
 
                             # Aggiungi cerchio rosso attorno al puntatore del mouse
                             mouse_x, mouse_y = self.get_mouse_position()
-                            cv2.circle(frame, (mouse_x, mouse_y), 10, (0, 0, 255), -1)  # Cerchio rosso con raggio 10
+                            if self.enlarge_circle and current_time - self.enlarge_timestamp < 0.5:
+                                radius = 14
+                            else:
+                                radius = 8
+                                self.enlarge_circle = False
+                            cv2.circle(frame, (mouse_x, mouse_y), radius, (0, 0, 255), -1)  # Cerchio rosso
 
                             self.video_writer.write(frame)
                             next_frame_time += self.frame_period
@@ -130,3 +140,24 @@ class ScreenRecorder(QThread):
     def stop(self):
         self.is_running = False
         self.wait()
+
+    def unisciVideoAAudio(self, video_path, new_audio_path, output_path):
+        try:
+            # Usa ffmpeg per unire il video e l'audio
+            command = [
+                'ffmpeg', '-y', '-i', video_path, '-i', new_audio_path,
+                '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', output_path
+            ]
+            subprocess.run(command, check=True)
+            print(f"Unione di {video_path} e {new_audio_path} completata con successo.")
+        except subprocess.CalledProcessError as e:
+            print(f"Errore durante l'unione di audio e video: {e}")
+
+    def handle_mouse_events(self):
+        cv2.namedWindow('Screen Capture')
+        cv2.setMouseCallback('Screen Capture', self.mouse_callback)
+
+    def mouse_callback(self, event, x, y, flags, param):
+        if event == cv2.EVENT_LBUTTONDOWN:
+            self.enlarge_circle = True
+            self.enlarge_timestamp = time.time()
