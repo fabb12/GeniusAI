@@ -1371,23 +1371,7 @@ class VideoAudioManager(QMainWindow):
                 logging.debug("Sistema operativo non supportato.")
         else:
             logging.debug("Nessuna cartella selezionata o cartella non esistente.")
-    def updateWindowList(self):
-        """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
-        self.screenSelectionComboBox.clear()
-        windows = [win for win in gw.getAllWindows() if win.title.strip() and win.visible and not win.isMinimized]
 
-        # Filter windows to remove non-interactive or non-meaningful ones
-        meaningful_windows = [win for win in windows if 'some criteria to define meaningful window' in win.title]
-
-        # Ottieni i dettagli dei monitor e formatta il titolo per l'inserimento nella combo box
-        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors()) if
-                    m.width > 800 and m.height > 600]
-
-        # Combine meaningful windows and monitors
-        combined_list = monitors + [win.title for win in meaningful_windows]
-
-        # Aggiungi prima i monitor alla lista della combo box
-        self.screenSelectionComboBox.addItems(combined_list)
     def setDefaultAudioDevice(self):
         """Imposta 'Headset' come dispositivo predefinito se disponibile."""
         self.audioDeviceComboBox.setCurrentIndex(1)
@@ -1505,6 +1489,24 @@ class VideoAudioManager(QMainWindow):
             self.recordingTime = self.recordingTime.addSecs(1)
             self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
 
+    def updateWindowList(self):
+        """Aggiorna la lista delle finestre e degli schermi disponibili, dando priorità agli schermi interi."""
+        self.screenSelectionComboBox.clear()
+        windows = [win for win in gw.getAllWindows() if win.title.strip() and win.visible and not win.isMinimized]
+
+        # Filter windows to remove non-interactive or non-meaningful ones
+        meaningful_windows = [win for win in windows if 'some criteria to define meaningful window' in win.title]
+
+        # Ottieni i dettagli dei monitor e formatta il titolo per l'inserimento nella combo box
+        monitors = [f"Schermo intero {i + 1} - {m.width}x{m.height}" for i, m in enumerate(get_monitors()) if
+                    m.width > 800 and m.height > 600]
+
+        # Combine meaningful windows and monitors
+        combined_list = monitors + [win.title for win in meaningful_windows]
+
+        # Aggiungi prima i monitor alla lista della combo box
+        self.screenSelectionComboBox.addItems(combined_list)
+
     def startScreenRecording(self):
         selected_title = self.screenSelectionComboBox.currentText()
         selected_audio = self.audioDeviceComboBox.currentText()
@@ -1527,15 +1529,10 @@ class VideoAudioManager(QMainWindow):
             audio_input_index = None
 
         monitors = get_monitors()
+        monitor_index = 0
 
         if "Schermo intero" in selected_title:
-            index = int(selected_title.split()[2]) - 1
-            region = (monitors[index].x, monitors[index].y, monitors[index].width, monitors[index].height)
-        else:
-            window = gw.getWindowsWithTitle(selected_title)[0]
-            window.moveTo(0, 0)
-            window.activate()
-            region = (window.left, window.top, window.width, window.height)
+            monitor_index = int(selected_title.split()[2]) - 1
 
         # Recupera il nome della registrazione dall'utente
         recording_name = self.recordingNameLineEdit.text().strip()
@@ -1553,14 +1550,16 @@ class VideoAudioManager(QMainWindow):
         video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.avi")
 
         fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0, (region[2], region[3]))
+        width, height = monitors[monitor_index].width, monitors[monitor_index].height
+        self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0, (width, height))
 
         if not save_video_only:
             audioFileName = os.path.join(default_folder, f"{recording_name}.wav")
-            self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, region=region,
+            self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, monitor_index=monitor_index,
                                                   audio_input=audio_input_index, audio_channels=2)
         else:
-            self.recorder_thread = ScreenRecorder(self.video_writer, None, region=region, audio_input=None,
+            self.recorder_thread = ScreenRecorder(self.video_writer, None, monitor_index=monitor_index,
+                                                  audio_input=None,
                                                   audio_channels=0)
 
         self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)

@@ -9,6 +9,7 @@ import ctypes.wintypes
 from queue import Queue
 from threading import Lock
 import subprocess
+from screeninfo import get_monitors
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
@@ -16,15 +17,15 @@ class ScreenRecorder(QThread):
     recording_stopped_signal = pyqtSignal()
     audio_ready_signal = pyqtSignal(bool)  # Segnale per indicare se l'audio è pronto
 
-    def __init__(self, video_writer, audio_path=None, region=None, audio_input=None, audio_channels=2):
+    def __init__(self, video_writer, audio_path=None, monitor_index=0, audio_input=None, audio_channels=2):
         super().__init__()
         self.video_writer = video_writer
         self.audio_path = audio_path
-        self.region = region
+        self.monitor_index = monitor_index
         self.audio_input = audio_input
         self.audio_channels = audio_channels
         self.is_running = True
-        self.frame_rate = 30  # Frames per second
+        self.frame_rate = 25  # Frames per second
         self.audio_rate = 44100  # Audio sample rate
         self.frame_period = 1.0 / self.frame_rate
         self.audio_queue = Queue()
@@ -65,10 +66,7 @@ class ScreenRecorder(QThread):
                     current_time = time.time()
                     if current_time >= next_frame_time:
                         try:
-                            if self.region:
-                                img = sct.grab(self.region)
-                            else:
-                                img = sct.grab(sct.monitors[0])
+                            img = sct.grab(sct.monitors[self.monitor_index + 1 ])
                             frame = np.array(img)
                             frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
 
