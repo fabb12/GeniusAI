@@ -63,7 +63,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 1
-        self.version_patch = 18
+        self.version_patch = 19
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -527,8 +527,8 @@ class VideoAudioManager(QMainWindow):
         area = self.centralWidget()
 
         # Add only the specified docks
-        area.addDock(self.videoPlayerDock, 'left')
-        area.addDock(self.recordingDock, 'left')
+        area.addDock(self.videoPlayerOutput, 'left')
+        area.addDock(self.recordingDock, 'right')
 
         # Set default visibility
         self.videoPlayerDock.setVisible(True)
