@@ -103,6 +103,8 @@ class VideoAudioManager(QMainWindow):
         # Creazione e configurazione dell'area del dock
         area = DockArea()
         self.setCentralWidget(area)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
 
         # Creazione dei docks esistenti...
         self.videoPlayerDock = Dock("Video Player Source", closable=True)

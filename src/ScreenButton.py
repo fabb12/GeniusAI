@@ -1,7 +1,48 @@
-from PyQt6.QtWidgets import QPushButton
 from PyQt6.QtGui import QPainter, QPen, QFont
-from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel
+from PyQt6.QtCore import Qt, QSize
 
+class ToggleButton(QPushButton):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setChecked(False)
+        self.setMinimumSize(QSize(80, 40))
+        self.setStyleSheet(self.get_style())
+        self.clicked.connect(self.update_button_style)
+
+    def update_button_style(self):
+        self.setStyleSheet(self.get_style())
+
+    def get_style(self):
+        if self.isChecked():
+            return """
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border-radius: 20px;
+                text-align: left;
+                padding-left: 10px;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+            }
+            """
+        else:
+            return """
+            QPushButton {
+                background-color: #CCC;
+                color: black;
+                border-radius: 20px;
+                text-align: left;
+                padding-left: 10px;
+            }
+            QPushButton:checked {
+                background-color: #4CAF50;
+                color: white;
+            }
+            """
 
 class ScreenButton(QPushButton):
     def __init__(self, text, screen_number, parent=None):
