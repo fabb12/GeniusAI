@@ -14,7 +14,7 @@ a = Analysis(
     datas=[
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Includi la cartella delle risorse
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
-        (os.path.join(current_dir, 'ffmpeg', 'bin', 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe
+        #(os.path.join(current_dir, 'ffmpeg', 'bin', 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe
     ],
     hiddenimports=[
         'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',

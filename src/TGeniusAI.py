@@ -5,7 +5,7 @@ from moviepy.editor import ImageClip, CompositeVideoClip
 from pptx import Presentation
 import re
 import tempfile
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox,
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
                              QLineEdit,  QHBoxLayout, QGroupBox, QTextEdit, QComboBox)
 from PyQt6.QtGui import QIcon
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -1257,29 +1257,38 @@ class VideoAudioManager(QMainWindow):
         self.dockSettingsManager.save_settings()
         event.accept()
 
+    def selectDefaultScreen(self):
+        """Seleziona il primo schermo di default."""
+        if self.screen_buttons:
+            self.selectScreen(0)
+
     def createRecordingDock(self):
         dock = Dock("Registrazione", closable=True)
 
         self.rec_timer = QTimer(self)
         self.rec_timer.timeout.connect(self.updateTimecodeRec)
 
-        recordingGroup = QGroupBox("Gestione Registrazione")
-        recordingLayout = QVBoxLayout(recordingGroup)
+        # Group Box for Info
+        infoGroup = QGroupBox("Info")
+        infoLayout = QVBoxLayout(infoGroup)
 
         self.timecodeLabel = QLabel('00:00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
-        recordingLayout.addWidget(self.timecodeLabel)
+        infoLayout.addWidget(self.timecodeLabel)
 
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        recordingLayout.addWidget(self.recordingStatusLabel)
+        infoLayout.addWidget(self.recordingStatusLabel)
 
         self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
         self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        recordingLayout.addWidget(self.audioStatusLabel)
+        infoLayout.addWidget(self.audioStatusLabel)
 
-        # Griglia per i quadrati degli schermi
+        # Main Layout for Recording Management
+        recordingLayout = QVBoxLayout()
+
+        # Screen selection grid
         screensGroupBox = QGroupBox("Seleziona Schermo")
         screensLayout = QGridLayout(screensGroupBox)
 
@@ -1292,13 +1301,20 @@ class VideoAudioManager(QMainWindow):
 
         recordingLayout.addWidget(screensGroupBox)
 
-        self.audioDeviceComboBox = QComboBox()
+        # Audio selection group box
+        audioGroupBox = QGroupBox("Audio")
+        audioLayout = QVBoxLayout(audioGroupBox)
+
+        self.audio_buttons = []
         audio_devices = self.print_audio_devices()
         if audio_devices:
-            self.audioDeviceComboBox.addItems(audio_devices)
+            for device in audio_devices:
+                radio_button = QRadioButton(device)
+                audioLayout.addWidget(radio_button)
+                self.audio_buttons.append(radio_button)
         else:
             logging.debug("No input audio devices found.")
-        recordingLayout.addWidget(self.audioDeviceComboBox)
+        recordingLayout.addWidget(audioGroupBox)
 
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
         saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
@@ -1327,6 +1343,8 @@ class VideoAudioManager(QMainWindow):
 
         saveOptionsLayout.addLayout(buttonsLayout)
 
+        recordingLayout.addWidget(saveOptionsGroup)
+
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
         self.stopRecordingButton = QPushButton("")
@@ -1338,10 +1356,11 @@ class VideoAudioManager(QMainWindow):
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
 
+        recordingLayout.addLayout(buttonLayout)
+
         mainLayout = QVBoxLayout()
-        mainLayout.addWidget(recordingGroup)
-        mainLayout.addWidget(saveOptionsGroup)
-        mainLayout.addLayout(buttonLayout)
+        mainLayout.addWidget(infoGroup)
+        mainLayout.addLayout(recordingLayout)
 
         widget = QWidget()
         widget.setLayout(mainLayout)
@@ -1349,6 +1368,7 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         self.setDefaultAudioDevice()
+        self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
         return dock
 
     def selectScreen(self, screen_index):
@@ -1381,8 +1401,9 @@ class VideoAudioManager(QMainWindow):
             logging.debug("Nessuna cartella selezionata o cartella non esistente.")
 
     def setDefaultAudioDevice(self):
-        """Imposta 'Headset' come dispositivo predefinito se disponibile."""
-        self.audioDeviceComboBox.setCurrentIndex(1)
+        """Imposta il primo dispositivo audio come predefinito se disponibile."""
+        if self.audio_buttons:
+            self.audio_buttons[0].setChecked(True)
 
     def browseFileLocation(self):
         """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
@@ -1497,10 +1518,14 @@ class VideoAudioManager(QMainWindow):
             self.recordingTime = self.recordingTime.addSecs(1)
             self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
 
-
-
     def startScreenRecording(self):
-        selected_audio = self.audioDeviceComboBox.currentText()
+        # Trova il dispositivo audio selezionato
+        selected_audio = None
+        for button in self.audio_buttons:
+            if button.isChecked():
+                selected_audio = button.text()
+                break
+
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
@@ -1623,7 +1648,7 @@ class VideoAudioManager(QMainWindow):
 
         if self.rec_timer.isActive():
             self.rec_timer.stop()
-        self.timecodeLabel.setText('00:00')
+        self.timecodeLabel.setText('00:00:00')
 
     def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
         try:
