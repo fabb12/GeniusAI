@@ -1302,7 +1302,7 @@ class VideoAudioManager(QMainWindow):
         recordingLayout.addWidget(screensGroupBox)
 
         # Audio selection group box
-        audioGroupBox = QGroupBox("Audio")
+        audioGroupBox = QGroupBox("Seleziona Audio")
         audioLayout = QVBoxLayout(audioGroupBox)
 
         self.audio_buttons = []
