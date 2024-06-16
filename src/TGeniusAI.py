@@ -48,6 +48,7 @@ import os
 import logging
 from bs4 import BeautifulSoup
 from ScreenButton import ScreenButton
+from MonitorTeams import TeamsCallRecorder
 
 
 # fea27867f451afb3ee369dcc7fcfb074
@@ -94,6 +95,31 @@ class VideoAudioManager(QMainWindow):
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
+        # Aggiungi l'istanza di TeamsCallRecorder
+        self.teams_call_recorder = TeamsCallRecorder(self)
+
+        # Avvia la registrazione automatica delle chiamate
+        self.teams_call_recorder.start()
+
+    def closeEvent(self, event):
+        # Ferma il TeamsCallRecorder quando l'applicazione si chiude
+        self.teams_call_recorder.stop()
+        super().closeEvent(event)
+
+    def select_screen_for_window(self, window):
+        monitor_index = None
+        for i, monitor in enumerate(get_monitors()):
+            if window.left >= monitor.x and window.top >= monitor.y:
+                monitor_index = i
+                break
+
+        if monitor_index is not None:
+            self.selected_screen_index = monitor_index
+            for button in self.screen_buttons:
+                if button.screen_number == monitor_index + 1:
+                    button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
+                else:
+                    button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
 
     def initUI(self):
 
@@ -297,6 +323,8 @@ class VideoAudioManager(QMainWindow):
         # Widget per contenere il layout del video player output
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
+        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                        QSizePolicy.Policy.Expanding)
         self.videoPlayerOutput.addWidget(videoPlayerOutputWidget)
 
 
@@ -1344,6 +1372,10 @@ class VideoAudioManager(QMainWindow):
         saveOptionsLayout.addLayout(buttonsLayout)
 
         recordingLayout.addWidget(saveOptionsGroup)
+
+        # Aggiungi la checkbox per abilitare la registrazione automatica delle chiamate di Teams
+        self.autoRecordTeamsCheckBox = QCheckBox("Abilita registrazione automatica per Teams")
+        recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
 
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
