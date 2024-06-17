@@ -50,7 +50,7 @@ from bs4 import BeautifulSoup
 from ScreenButton import ScreenButton
 from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
-
+from Settings import SettingsDialog
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -607,7 +607,14 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
 
+        # Aggiungi pulsante per aprire le impostazioni
+        settingsAction = QAction(QIcon("./res/settings.png"), "Impostazioni", self)
+        settingsAction.triggered.connect(self.showSettingsDialog)
+        toolbar.addAction(settingsAction)
 
+    def showSettingsDialog(self):
+        dialog = SettingsDialog(self)
+        dialog.exec()
     def summarizeText(self):
         input_text = self.transcriptionTextArea.toPlainText()
         if input_text:

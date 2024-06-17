@@ -4,6 +4,10 @@ Tutti i cambiamenti notevoli a questo progetto saranno documentati in questo fil
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e questo progetto aderisce a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2024-06-17
+### Added
+- Aggiunto funzione Riassumi
+
 ## [1.1.19] - 2024-06-13
 
 ### Added
