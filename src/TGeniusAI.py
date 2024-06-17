@@ -49,7 +49,7 @@ import logging
 from bs4 import BeautifulSoup
 from ScreenButton import ScreenButton
 from MonitorTeams import TeamsCallRecorder
-
+from transformers import pipeline
 
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
@@ -65,14 +65,17 @@ class VideoAudioManager(QMainWindow):
         super().__init__()
         # Version information
         self.version_major = 1
-        self.version_minor = 1
-        self.version_patch = 19
+        self.version_minor = 2
+        self.version_patch = 0
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
         self.version = f"{self.version_major}.{self.version_minor}.{self.version_patch} - {build_date}"
 
         self.api_key = "ef38b436326ec387ecb1a570a8641b84"
+        # Inizializza il modello di riassunto
+        self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
+
         #self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
@@ -428,12 +431,11 @@ class VideoAudioManager(QMainWindow):
 
         # Inizializzazione della QComboBox per la lingua
         self.languageComboBox = QComboBox()
-
-        self.languageComboBox.addItem("Italiano", "it")
-        self.languageComboBox.addItem("Inglese", "en")
-        self.languageComboBox.addItem("Francese", "fr")
-        self.languageComboBox.addItem("Spagnolo", "es")
-        self.languageComboBox.addItem("Tedesco", "de")
+        self.languageComboBox.addItem( "it")
+        self.languageComboBox.addItem( "en")
+        self.languageComboBox.addItem("fr")
+        self.languageComboBox.addItem("es")
+        self.languageComboBox.addItem( "de")
 
 
         #---speed
@@ -470,6 +472,7 @@ class VideoAudioManager(QMainWindow):
 
         # TextArea per la trascrizione
         self.transcriptionTextArea = CustomTextEdit(self)
+        self.transcriptionTextArea.setUndoRedoEnabled(True)
 
         self.transcriptionTextArea.setStyleSheet("""
                QTextEdit {
@@ -515,6 +518,11 @@ class VideoAudioManager(QMainWindow):
         self.insertPauseButton = QPushButton('Inserisci Pausa')
         self.insertPauseButton.clicked.connect(self.insertPause)
 
+        # Nuovo pulsante Riassumi
+        self.summarizeButton = QPushButton('Riassumi')
+        self.summarizeButton.clicked.connect(self.summarizeText)  # Collega la funzione di riassunto
+
+        # Aggiungi il pulsante Riassumi al layout
 
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
@@ -525,6 +533,7 @@ class VideoAudioManager(QMainWindow):
         buttonsLayout.addWidget(self.insertPauseButton)
         buttonsLayout.addWidget(self.timecodeCheckbox)
         buttonsLayout.addWidget(self.syncButton)
+
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Pulsanti per le diverse funzionalità
@@ -533,6 +542,7 @@ class VideoAudioManager(QMainWindow):
 
         self.generatePresentationButton = QPushButton('Genera Presentazione')
         self.generatePresentationButton.clicked.connect(self.generaPresentationConTestoAttuale)
+
         # Aggiunta dei layout e widget al layout interno
         innerLayout.addLayout(buttonsLayout)  # Aggiungi il layout dei pulsanti in orizzontale
         innerLayout.addWidget(self.transcriptionTextArea)
@@ -540,6 +550,7 @@ class VideoAudioManager(QMainWindow):
         bottonLayout = QHBoxLayout()
         bottonLayout.addWidget(self.generateAudioButton)
         bottonLayout.addWidget(self.generatePresentationButton)
+        bottonLayout.addWidget(self.summarizeButton)
         innerLayout.addLayout(bottonLayout)
 
         # Impostazione del layout interno al GroupBox
@@ -595,6 +606,19 @@ class VideoAudioManager(QMainWindow):
         apiKeyAction = QAction(QIcon("./res/key.png"), "Imposta API Key", self)
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
+
+
+    def summarizeText(self):
+        input_text = self.transcriptionTextArea.toPlainText()
+        if input_text:
+            # Genera il riassunto
+            summary = self.summarizer(input_text, max_length=500, min_length=100, do_sample=False)
+            summarized_text = summary[0]["summary_text"]
+            # Sostituisci il testo esistente con il riassunto
+            self.transcriptionTextArea.setPlainText(summarized_text)
+        else:
+            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da riassumere.")
+
 
     def set_default_dock_layout(self):
         area = self.centralWidget()
