@@ -612,7 +612,7 @@ class VideoAudioManager(QMainWindow):
         input_text = self.transcriptionTextArea.toPlainText()
         if input_text:
             # Genera il riassunto
-            summary = self.summarizer(input_text, max_length=500, min_length=100, do_sample=False)
+            summary = self.summarizer(input_text, max_length=1000, min_length=50, do_sample=False)
             summarized_text = summary[0]["summary_text"]
             # Sostituisci il testo esistente con il riassunto
             self.transcriptionTextArea.setPlainText(summarized_text)
