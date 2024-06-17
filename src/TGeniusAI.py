@@ -100,6 +100,31 @@ class VideoAudioManager(QMainWindow):
 
         # Avvia la registrazione automatica delle chiamate
         self.teams_call_recorder.start()
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_Right:
+            # Avanza di 10 secondi
+            current_position = self.player.position()
+            new_position = current_position + 10000  # 10000 ms = 10 secondi
+            self.player.setPosition(new_position)
+        elif event.key() == Qt.Key.Key_Left:
+            # Torna indietro di 10 secondi
+            current_position = self.player.position()
+            new_position = max(0, current_position - 10000)  # Evita di andare sotto lo 0
+            self.player.setPosition(new_position)
+        elif event.key() == Qt.Key.Key_Up:
+            # Alza il volume del 10%
+            current_volume = self.audioOutput.volume()
+            new_volume = min(1.0, current_volume + 0.1)
+            self.volumeSlider.setValue(int(new_volume * 100))
+        elif event.key() == Qt.Key.Key_Down:
+            # Abbassa il volume del 10%
+            current_volume = self.audioOutput.volume()
+            new_volume = max(0.0, current_volume - 0.1)
+            self.volumeSlider.setValue(int(new_volume * 100))
+        else:
+            super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
     def closeEvent(self, event):
         # Ferma il TeamsCallRecorder quando l'applicazione si chiude
