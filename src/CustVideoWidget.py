@@ -5,12 +5,6 @@ from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
 import sys
 import os
 import logging
-# Configura il logging
-logging.basicConfig(filename='transcription_log.txt', level=logging.DEBUG, format='[%(asctime)s - %(levelname)s] - %(message)s')
-# Reindirizza stdout e stderr a os.devnull per ignorare l'output
-sys.stdout = open(os.devnull, 'w')
-sys.stderr = open(os.devnull, 'w')
-
 
 class CropVideoWidget(QVideoWidget):
     cropRectChanged = pyqtSignal(QRect)

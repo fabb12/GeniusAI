@@ -51,13 +51,14 @@ from ScreenButton import ScreenButton
 from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
 from Settings import SettingsDialog
+from Summarizer import SummarizerThread
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
 
 # Configura il logging
 logging.basicConfig(
-    filename='transcription_log.txt',
+    filename='console_log.txt',
     level=logging.DEBUG,
     format='[%(asctime)s - %(levelname)s] - %(message)s'
 )
@@ -117,7 +118,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineOutputEdit = ''
         self.is_recording = False
         self.video_writer = None
-
+        self.summarizer_thread = None
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
@@ -453,11 +454,12 @@ class VideoAudioManager(QMainWindow):
 
         # Inizializzazione della QComboBox per la lingua
         self.languageComboBox = QComboBox()
-        self.languageComboBox.addItem( "it")
-        self.languageComboBox.addItem( "en")
-        self.languageComboBox.addItem("fr")
-        self.languageComboBox.addItem("es")
-        self.languageComboBox.addItem( "de")
+
+        self.languageComboBox.addItem("Italiano", "it")
+        self.languageComboBox.addItem("Inglese", "en")
+        self.languageComboBox.addItem("Francese", "fr")
+        self.languageComboBox.addItem("Spagnolo", "es")
+        self.languageComboBox.addItem("Tedesco", "de")
 
 
         #---speed
@@ -637,19 +639,61 @@ class VideoAudioManager(QMainWindow):
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
         dialog.exec()
+
     def summarizeText(self):
-        self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
         input_text = self.transcriptionTextArea.toPlainText()
-        if input_text:
-            # Genera il riassunto
-            summary = self.summarizer(input_text, max_length=1000, min_length=50, do_sample=False)
-            summarized_text = summary[0]["summary_text"]
-            # Sostituisci il testo esistente con il riassunto
-            self.transcriptionTextArea.setPlainText(summarized_text)
-        else:
+        if not input_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci del testo da riassumere.")
+            return
 
+        self.progressDialog = QProgressDialog("Riassunto in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Riassunto")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.canceled.connect(self.stopSummarization)
+        self.progressDialog.show()
 
+        input_length = len(input_text.split())
+        summary_length = max(50, input_length // 3)
+        self.summarizer_thread = SummarizerThread(input_text, summary_length, self)
+        self.summarizer_thread.update_progress.connect(self.updateProgressDialog(self.progressDialog))
+        self.summarizer_thread.summarization_complete.connect(self.completeSummarization(self.progressDialog))
+        self.summarizer_thread.error_occurred.connect(self.handleSummarizationErrors(self.progressDialog))
+        self.summarizer_thread.start()
+
+    def stopSummarization(self):
+        if self.summarizer_thread:
+            self.summarizer_thread.terminate()
+            self.progressDialog.close()
+
+    def updateProgressDialog(self, progress_dialog):
+        def update(value, label):
+            if not progress_dialog.wasCanceled():
+                progress_dialog.setValue(value)
+                progress_dialog.setLabelText(label)
+
+        return update
+
+    def completeSummarization(self, progress_dialog):
+        def complete(summary_text):
+            if not progress_dialog.wasCanceled():
+                bullet_points = self.createBulletPoints(summary_text)
+                self.transcriptionTextArea.setPlainText(bullet_points)
+                progress_dialog.setValue(100)
+                progress_dialog.close()
+
+        return complete
+
+    def handleSummarizationErrors(self, progress_dialog):
+        def error(message):
+            QMessageBox.critical(self, "Errore durante il Riassunto", f"Errore: {message}")
+            progress_dialog.cancel()
+
+        return error
+
+    def createBulletPoints(self, summary_text):
+        sentences = summary_text.split('. ')
+        bullet_points = '\n'.join([f"- {sentence.strip()}" for sentence in sentences if sentence.strip()])
+        return bullet_points
     def set_default_dock_layout(self):
 
         # Set default visibility
@@ -663,8 +707,6 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
-
-
 
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
