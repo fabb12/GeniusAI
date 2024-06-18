@@ -97,9 +97,9 @@ class VideoAudioManager(QMainWindow):
 
         self.api_key = "ef38b436326ec387ecb1a570a8641b84"
         # Inizializza il modello di riassunto
-        self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
-        self.setGeometry(500, 500, 1200, 800)
+
+        #self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
         self.playerOutput = QMediaPlayer()
@@ -122,10 +122,10 @@ class VideoAudioManager(QMainWindow):
         self.current_audio_path = None
         self.updateViewMenu()
         # Aggiungi l'istanza di TeamsCallRecorder
-        self.teams_call_recorder = TeamsCallRecorder(self)
+        #self.teams_call_recorder = TeamsCallRecorder(self)
 
         # Avvia la registrazione automatica delle chiamate
-        self.teams_call_recorder.start()
+        #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def keyPressEvent(self, event):
@@ -152,10 +152,6 @@ class VideoAudioManager(QMainWindow):
         else:
             super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
-    def closeEvent(self, event):
-        # Ferma il TeamsCallRecorder quando l'applicazione si chiude
-        self.teams_call_recorder.stop()
-        super().closeEvent(event)
 
     def select_screen_for_window(self, window):
         monitor_index = None
@@ -642,6 +638,7 @@ class VideoAudioManager(QMainWindow):
         dialog = SettingsDialog(self)
         dialog.exec()
     def summarizeText(self):
+        self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
         input_text = self.transcriptionTextArea.toPlainText()
         if input_text:
             # Genera il riassunto
@@ -1360,6 +1357,7 @@ class VideoAudioManager(QMainWindow):
 
     def closeEvent(self, event):
         self.dockSettingsManager.save_settings()
+        #self.teams_call_recorder.stop()
         event.accept()
 
     def selectDefaultScreen(self):
