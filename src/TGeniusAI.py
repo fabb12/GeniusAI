@@ -213,8 +213,7 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.downloadDock, 'top')
 
         self.recordingDock = self.createRecordingDock()
-        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.recordingDock.setStyleSheet(self.styleSheet())
         area.addDock(self.recordingDock, 'right')
 
@@ -1426,9 +1425,8 @@ class VideoAudioManager(QMainWindow):
         self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         infoLayout.addWidget(self.recordingStatusLabel)
 
-        self.audioStatusLabel = QLabel("Stato Audio: Verifica in corso...")
-        self.audioStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.audioStatusLabel)
+        self.audioTestResultLabel = QLabel("Risultato Test Audio: N/A")
+        self.audioTestResultLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
         # Main Layout for Recording Management
         recordingLayout = QVBoxLayout()
@@ -1449,12 +1447,14 @@ class VideoAudioManager(QMainWindow):
         # Audio selection group box
         audioGroupBox = QGroupBox("Seleziona Audio")
         audioLayout = QVBoxLayout(audioGroupBox)
+        audioLayout.addWidget(self.audioTestResultLabel)
 
         self.audio_buttons = []
         audio_devices = self.print_audio_devices()
         if audio_devices:
             for device in audio_devices:
                 radio_button = QRadioButton(device)
+                radio_button.toggled.connect(self.selectAudioDevice)
                 audioLayout.addWidget(radio_button)
                 self.audio_buttons.append(radio_button)
         else:
@@ -1520,6 +1520,40 @@ class VideoAudioManager(QMainWindow):
         self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
         return dock
 
+    def selectAudioDevice(self):
+        selected_audio = None
+        for button in self.audio_buttons:
+            if button.isChecked():
+                selected_audio = button.text()
+                break
+
+        if selected_audio:
+            device_index = self.extract_device_index(selected_audio)
+            if device_index is not None:
+                is_device_working = self.test_audio_device(device_index)
+                if is_device_working:
+                    self.audioTestResultLabel.setText("Risultato Test Audio: Funzionante")
+                else:
+                    self.audioTestResultLabel.setText("Risultato Test Audio: Non Funzionante")
+            else:
+                self.audioTestResultLabel.setText("Risultato Test Audio: Dispositivo non trovato")
+
+    def extract_device_index(self, device_text):
+        match = re.match(r"Input Device ID (\d+) -", device_text)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def test_audio_device(self, device_index):
+        p = pyaudio.PyAudio()
+        try:
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
+            stream.close()
+            p.terminate()
+            return True
+        except Exception as e:
+            p.terminate()
+            return False
     def selectScreen(self, screen_index):
         self.selected_screen_index = screen_index
         for button in self.screen_buttons:
@@ -1721,7 +1755,6 @@ class VideoAudioManager(QMainWindow):
             self.recorder_thread = ScreenRecorder(self.video_writer, None, monitor_index=monitor_index,
                                                   audio_input=None, audio_channels=0)
 
-        self.recorder_thread.audio_ready_signal.connect(self.updateAudioStatus)
         self.recorder_thread.error_signal.connect(self.showError)
         self.recorder_thread.start()
 
@@ -1826,37 +1859,6 @@ class VideoAudioManager(QMainWindow):
             logging.debug(f'Video elaborato con successo.')
         except Exception as e:
             logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
-
-    def mergeAudioVideo(self, video_path, audio_path):
-        try:
-            # Verifica l'esistenza dei file
-            if not os.path.exists(video_path) or not os.path.exists(audio_path):
-                raise FileNotFoundError(f"Uno o entrambi i file non trovati: {video_path}, {audio_path}")
-
-            video_clip = VideoFileClip(video_path)
-            audio_clip = AudioFileClip(audio_path)
-
-            # Verifica che i clip non siano None
-            if video_clip is None or audio_clip is None:
-                raise ValueError("Non è stato possibile caricare i clip video o audio.")
-
-            final_clip = video_clip.set_audio(audio_clip)
-            output_path = video_path.replace('.avi', '_final.mp4')
-            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-
-        except FileNotFoundError as e:
-            QMessageBox.critical(self, "File non trovato", str(e))
-        except ValueError as e:
-            QMessageBox.critical(self, "Errore di caricamento", str(e))
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore durante l'unione di audio e video: {e}")
-
-    def updateAudioStatus(self, is_audio_ready):
-        if is_audio_ready:
-            self.audioStatusLabel.setText("Audio pronto")
-        else:
-            self.audioStatusLabel.setText("Audio non pronto")
 
     def showError(self, message):
         QMessageBox.critical(self, "Errore", message)
