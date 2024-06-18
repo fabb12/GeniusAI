@@ -1,7 +1,7 @@
 import json
 from PyQt6.QtWidgets import QApplication, QMainWindow
 from PyQt6.QtCore import QPoint, QSize
-
+import logging
 
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
@@ -49,7 +49,7 @@ class DockSettingsManager:
             for name, dock in self.docks.items():
                 dock_settings = settings.get(name, {})
                 dock.setVisible(dock_settings.get('visible', True))
-                dock.resize(QSize(dock_settings.get('width', 200), dock_settings.get('height', 200)))
+                dock.resize(QSize(dock_settings.get('width', 600), dock_settings.get('height', 200)))
                 dock.move(QPoint(dock_settings.get('x', 100), dock_settings.get('y', 100)))
 
             self.main_window.updateViewMenu()

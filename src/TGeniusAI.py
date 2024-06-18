@@ -54,11 +54,34 @@ from Settings import SettingsDialog
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
+
 # Configura il logging
-logging.basicConfig(filename='transcription_log.txt', level=logging.DEBUG, format='[%(asctime)s - %(levelname)s] - %(message)s')
-# Reindirizza stdout e stderr a os.devnull per ignorare l'output
-sys.stdout = open(os.devnull, 'w')
-sys.stderr = open(os.devnull, 'w')
+logging.basicConfig(
+    filename='transcription_log.txt',
+    level=logging.DEBUG,
+    format='[%(asctime)s - %(levelname)s] - %(message)s'
+)
+
+
+# Crea un gestore di logging per stdout e stderr
+class StreamToLogger(object):
+    def __init__(self, logger, log_level):
+        self.logger = logger
+        self.log_level = log_level
+        self.linebuf = ''
+
+    def write(self, buf):
+        for line in buf.rstrip().splitlines():
+            self.logger.log(self.log_level, line.rstrip())
+
+    def flush(self):
+        pass
+
+
+# Reindirizza stdout e stderr al logger
+sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -76,7 +99,7 @@ class VideoAudioManager(QMainWindow):
         # Inizializza il modello di riassunto
         self.summarizer = pipeline("summarization", model="facebook/bart-large-cnn")
 
-        #self.setGeometry(500, 500, 1200, 800)
+        self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
         self.playerOutput = QMediaPlayer()
@@ -167,6 +190,13 @@ class VideoAudioManager(QMainWindow):
                                         QSizePolicy.Policy.Expanding)
         area.addDock(self.videoPlayerDock, 'left')
 
+        self.videoPlayerOutput = Dock("Video Player Output", closable=True)
+        self.videoPlayerOutput.setStyleSheet(self.styleSheet())
+        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding,
+                                             QSizePolicy.Policy.Expanding)
+        area.addDock(self.videoPlayerOutput, 'left')
+
+
         self.transcriptionDock = Dock("Trascrizione e Sintesi Audio", closable=True)
         self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
@@ -183,13 +213,13 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
         self.downloadDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.downloadDock, 'left')
+        area.addDock(self.downloadDock, 'top')
 
         self.recordingDock = self.createRecordingDock()
         self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
         self.recordingDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.recordingDock, 'left')
+        area.addDock(self.recordingDock, 'right')
 
         self.audioDock = self.createAudioDock()
         self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding,
@@ -197,11 +227,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(self.styleSheet())
         area.addDock(self.audioDock, 'bottom')
 
-        self.videoPlayerOutput = Dock("Video Player Output", closable=True)
-        self.videoPlayerOutput.setStyleSheet(self.styleSheet())
-        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
-        area.addDock(self.videoPlayerOutput, 'left')
+
 
         # Creazione del dock merge videos
         self.videoMergeDock = self.createVideoMergeDock()
@@ -608,7 +634,7 @@ class VideoAudioManager(QMainWindow):
         toolbar.addAction(apiKeyAction)
 
         # Aggiungi pulsante per aprire le impostazioni
-        settingsAction = QAction(QIcon("./res/settings.png"), "Impostazioni", self)
+        settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
         settingsAction.triggered.connect(self.showSettingsDialog)
         toolbar.addAction(settingsAction)
 
@@ -628,11 +654,6 @@ class VideoAudioManager(QMainWindow):
 
 
     def set_default_dock_layout(self):
-        area = self.centralWidget()
-
-        # Add only the specified docks
-        area.addDock(self.videoPlayerOutput, 'left')
-        area.addDock(self.recordingDock, 'right')
 
         # Set default visibility
         self.videoPlayerOutput.setVisible(True)

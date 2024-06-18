@@ -4,7 +4,6 @@ from bark.generation import generate_text_semantic
 from bark.api import semantic_to_waveform
 from bark import generate_audio, preload_models
 from scipy.io.wavfile import write as write_wav
-from IPython.display import Audio
 import nltk
 """
 [laughter]

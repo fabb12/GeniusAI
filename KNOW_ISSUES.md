@@ -2,6 +2,13 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 
+## [1.2.0] - 2024-06-18
+- [ ] aggiungere stretch video player output
+- [ ] aggiungere log nel file di testo
+- [ ] aggiungre indicatore presenza audio 
+- [ ] aggiungere tasto pausa rec
+- [ ] aggiugnre progress bar per la resgistazione
+- [ ] aggiungere nome timecode per video registrato
 ## [1.1.15] - 2024-06-10
 
 - [x] aggiungere titolo del file da registrare nel dock di registrazione
