@@ -143,7 +143,7 @@ class ScreenRecorder(QThread):
         try:
             # Usa ffmpeg per unire il video e l'audio
             command = [
-                'ffmpeg', '-y', '-i', video_path, '-i', new_audio_path,
+                './ffmpeg/bin/ffmpeg', '-y', '-i', video_path, '-i', new_audio_path,
                 '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', output_path
             ]
             subprocess.run(command, check=True)

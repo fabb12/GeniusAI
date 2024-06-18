@@ -574,7 +574,7 @@ class VideoAudioManager(QMainWindow):
         bottonLayout = QHBoxLayout()
         bottonLayout.addWidget(self.generateAudioButton)
         bottonLayout.addWidget(self.generatePresentationButton)
-        bottonLayout.addWidget(self.summarizeButton)
+       # bottonLayout.addWidget(self.summarizeButton)
         innerLayout.addLayout(bottonLayout)
 
         # Impostazione del layout interno al GroupBox
@@ -1492,7 +1492,7 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiungi la checkbox per abilitare la registrazione automatica delle chiamate di Teams
         self.autoRecordTeamsCheckBox = QCheckBox("Abilita registrazione automatica per Teams")
-        recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
+        #recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
 
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))

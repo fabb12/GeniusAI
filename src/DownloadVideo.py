@@ -2,9 +2,14 @@ import yt_dlp
 from PyQt6.QtCore import QThread, pyqtSignal
 import tempfile
 import os
+from yt_dlp.postprocessor import FFmpegPostProcessor
+
+# Set the location of ffmpeg and ffprobe to the root directory of your project
+ffmpeg_path = os.path.abspath('./ffmpeg/bin')
+FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_path)
 
 class DownloadThread(QThread):
-    finished = pyqtSignal(str, str, str)  # Emits path of file and video title
+    finished = pyqtSignal(str, str, str)  # Emits path of file, video title, and language
     error = pyqtSignal(str)
     progress = pyqtSignal(int)            # Signal for download progress
 
@@ -32,7 +37,7 @@ class DownloadThread(QThread):
             }],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
             'quiet': True,
-            'ffmpeg_location': r'C:\ffmpeg\bin',
+            'ffmpeg_location': ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
 
@@ -60,7 +65,7 @@ class DownloadThread(QThread):
             }],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
             'quiet': True,
-            'ffmpeg_location': r'C:\ffmpeg\bin',
+            'ffmpeg_location': ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
 
