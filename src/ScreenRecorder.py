@@ -10,6 +10,7 @@ from queue import Queue
 from threading import Lock
 import subprocess
 from screeninfo import get_monitors
+from moviepy.editor import VideoFileClip, AudioFileClip
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
@@ -141,14 +142,15 @@ class ScreenRecorder(QThread):
 
     def unisciVideoAAudio(self, video_path, new_audio_path, output_path):
         try:
-            # Usa ffmpeg per unire il video e l'audio
-            command = [
-                './ffmpeg/bin/ffmpeg', '-y', '-i', video_path, '-i', new_audio_path,
-                '-c:v', 'copy', '-c:a', 'aac', '-strict', 'experimental', output_path
-            ]
-            subprocess.run(command, check=True)
+            video = VideoFileClip(video_path)
+            audio = AudioFileClip(new_audio_path)
+
+            # Imposta la nuova traccia audio al video
+            final_video = video.set_audio(audio)
+            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
             print(f"Unione di {video_path} e {new_audio_path} completata con successo.")
-        except subprocess.CalledProcessError as e:
+        except Exception as e:
             print(f"Errore durante l'unione di audio e video: {e}")
 
     def handle_mouse_events(self):
