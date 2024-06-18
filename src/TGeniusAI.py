@@ -8,7 +8,6 @@ import tempfile
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
                              QLineEdit,  QHBoxLayout, QGroupBox, QTextEdit, QComboBox)
 from PyQt6.QtGui import QIcon
-from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from pyqtgraph.dockarea.Dock import Dock
 from pyqtgraph.dockarea.DockArea import DockArea
@@ -21,7 +20,6 @@ from AudioGenerationREST import AudioGenerationThread
 from VideoCutting import VideoCuttingThread
 import cv2
 from ScreenRecorder import ScreenRecorder
-import pygetwindow as gw
 from screeninfo import get_monitors
 from SettingsManager import DockSettingsManager
 from PyQt6.QtCore import  QTime
@@ -47,6 +45,7 @@ import subprocess
 import os
 import logging
 from bs4 import BeautifulSoup
+import numpy as np
 from ScreenButton import ScreenButton
 from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
@@ -1520,6 +1519,7 @@ class VideoAudioManager(QMainWindow):
         self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
         return dock
 
+
     def selectAudioDevice(self):
         selected_audio = None
         for button in self.audio_buttons:
@@ -1529,6 +1529,7 @@ class VideoAudioManager(QMainWindow):
 
         if selected_audio:
             device_index = self.extract_device_index(selected_audio)
+            self.selected_audio_device = device_index
             if device_index is not None:
                 is_device_working = self.test_audio_device(device_index)
                 if is_device_working:
@@ -1548,12 +1549,16 @@ class VideoAudioManager(QMainWindow):
         p = pyaudio.PyAudio()
         try:
             stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
+            data = stream.read(1024)
             stream.close()
             p.terminate()
-            return True
+            if np.frombuffer(data, dtype=np.int16).any():
+                return True
+            return False
         except Exception as e:
             p.terminate()
             return False
+
     def selectScreen(self, screen_index):
         self.selected_screen_index = screen_index
         for button in self.screen_buttons:
