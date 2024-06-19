@@ -1,131 +1,81 @@
-import numpy as np
-import cv2
-from PyQt6.QtCore import QThread, pyqtSignal, QTime, QTimer
-import sounddevice as sd
-import soundfile as sf
-import time
-from mss import mss
 import ctypes.wintypes
-from queue import Queue
-from threading import Lock
 import subprocess
 from screeninfo import get_monitors
-from moviepy.editor import VideoFileClip, AudioFileClip
+from PyQt6.QtCore import QThread, pyqtSignal
+import os
+import re
+import datetime
+from PyQt6.QtCore import QTime, QThread, pyqtSignal
+from PyQt6.QtWidgets import QMessageBox
+from screeninfo import get_monitors
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
-    audio_ready_signal = pyqtSignal(bool)  # Segnale per indicare se l'audio è pronto
 
-    def __init__(self, video_writer, audio_path=None, monitor_index=0, audio_input=None, audio_channels=2):
+    def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_input=None, audio_channels=2, frames=25):
         super().__init__()
-        self.video_writer = video_writer
-        self.audio_path = audio_path
+        self.output_path = output_path
+        self.ffmpeg_path = os.path.abspath(ffmpeg_path)
         self.monitor_index = monitor_index
         self.audio_input = audio_input
         self.audio_channels = audio_channels
+        self.frame_rate = frames
         self.is_running = True
-        self.frame_rate = 25  # Frames per second
-        self.audio_rate = 44100  # Audio sample rate
-        self.frame_period = 1.0 / self.frame_rate
-        self.audio_queue = Queue()
-        self.lock = Lock()
-        self.sync_event = Lock()
-        self.drawing = False  # True quando il mouse è premuto
-        self.start_point = (0, 0)
-        self.end_point = (0, 0)
         self.enlarge_circle = False
         self.enlarge_timestamp = 0
 
+        # Check if ffmpeg.exe exists
+        if not os.path.isfile(self.ffmpeg_path):
+            self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
+            self.is_running = False
+
     def run(self):
         self.recording_started_signal.emit()
-        start_time = time.time()
 
-        if self.audio_input is not None:
-            try:
-                self.audio_file = sf.SoundFile(self.audio_path, mode='w', samplerate=self.audio_rate,
-                                               channels=self.audio_channels, format='WAV')
-                self.stream = sd.InputStream(samplerate=self.audio_rate, channels=self.audio_channels,
-                                             device=self.audio_input, callback=self.audio_callback)
-                self.stream.start()
-                self.audio_ready_signal.emit(True)  # Audio pronto
-            except Exception as e:
-                self.audio_ready_signal.emit(False)  # Audio non pronto
-                self.error_signal.emit(f"Audio input error: {str(e)}")
-                return
-        else:
-            self.stream = None
-            self.audio_ready_signal.emit(False)
+        monitor = get_monitors()[self.monitor_index]
+        screen_width = monitor.width
+        screen_height = monitor.height
 
-        self.sync_event.acquire()  # Wait for audio to be ready
+        # Ensure audio input is not None
+        audio_input = self.audio_input if self.audio_input else 'none'
 
-        with mss() as sct:
-            next_frame_time = start_time + self.frame_period
-            try:
-                while self.is_running:
-                    current_time = time.time()
-                    if current_time >= next_frame_time:
-                        try:
-                            img = sct.grab(sct.monitors[self.monitor_index + 1 ])
-                            frame = np.array(img)
-                            frame = cv2.cvtColor(frame, cv2.COLOR_BGRA2BGR)
+        ffmpeg_command = [
+            self.ffmpeg_path,  # Use the provided ffmpeg path
+            '-f', 'gdigrab',  # For Windows screen capture
+            '-framerate', str(self.frame_rate),
+            '-offset_x', '0',
+            '-offset_y', '0',
+            '-video_size', f'{screen_width}x{screen_height}',
+            '-i', 'desktop',
+            '-f', 'dshow',  # For Windows audio capture
+            '-i', f'{audio_input}',  # Use the correct audio input
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-y', self.output_path,
+            '-loglevel', 'verbose',  # Add verbose logging
+            '-report'  # Generate detailed report
+        ]
 
-                            # Aggiungi cerchio rosso attorno al puntatore del mouse
-                            mouse_x, mouse_y = self.get_mouse_position()
-                            if self.enlarge_circle and current_time - self.enlarge_timestamp < 0.5:
-                                radius = 14
-                            else:
-                                radius = 8
-                                self.enlarge_circle = False
-                            cv2.circle(frame, (mouse_x, mouse_y), radius, (0, 0, 255), -1)  # Cerchio rosso
+        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
-                            self.video_writer.write(frame)
-                            next_frame_time += self.frame_period
-                        except Exception as e:
-                            self.error_signal.emit(f"Screen capture error: {str(e)}")
-                            self.stop()
-                            break
+        while self.is_running:
+            output = self.ffmpeg_process.stderr.readline()
+            if output:
+                print(output.decode().strip())
+            if self.ffmpeg_process.poll() is not None:
+                break
 
-                    # Sincronizzazione precisa
-                    sleep_time = next_frame_time - time.time()
-                    if sleep_time > 0:
-                        time.sleep(sleep_time)
-            except Exception as e:
-                self.error_signal.emit(f"Recording error: {str(e)}")
-            finally:
-                if self.stream is not None:
-                    self.stream.stop()
-                    self.stream.close()
-                    self.audio_file.close()
-                self.recording_stopped_signal.emit()
-
-    def audio_callback(self, indata, frames, time, status):
-        if status:
-            self.error_signal.emit(f"Audio stream status: {status}")
-
-        # Normalizza il volume
-        amplified_audio = self.normalize_audio(indata)
-
-        self.audio_file.write(amplified_audio)
-        self.audio_queue.put(amplified_audio)
-        if not self.sync_event.locked():
-            self.sync_event.release()  # Release sync event when the first audio data is received
-
-    def normalize_audio(self, indata, factor=2.0):
-        """
-        Normalizza il volume del segnale audio.
-        :param indata: Input audio data
-        :param factor: Amplification factor
-        :return: Amplified audio data
-        """
-        return indata * factor
+        self.stop_recording()
 
     def get_mouse_position(self):
         # Ottieni la posizione del puntatore del mouse
         mouse_x, mouse_y = 0, 0
         try:
-            import ctypes
             cursor_info = ctypes.windll.user32.GetCursorPos
             cursor_info.restype = ctypes.wintypes.BOOL
             cursor_info.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
@@ -136,28 +86,18 @@ class ScreenRecorder(QThread):
             self.error_signal.emit(f"Failed to get mouse position: {str(e)}")
         return mouse_x, mouse_y
 
+    def stop_recording(self):
+        self.is_running = False
+        if self.ffmpeg_process:
+            self.ffmpeg_process.terminate()
+            self.ffmpeg_process.wait()
+            while True:
+                retcode = self.ffmpeg_process.poll()
+                if retcode is not None:
+                    break
+        self.recording_stopped_signal.emit()
+
     def stop(self):
         self.is_running = False
-        self.wait()
+        self.stop_recording()
 
-    def unisciVideoAAudio(self, video_path, new_audio_path, output_path):
-        try:
-            video = VideoFileClip(video_path)
-            audio = AudioFileClip(new_audio_path)
-
-            # Imposta la nuova traccia audio al video
-            final_video = video.set_audio(audio)
-            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            print(f"Unione di {video_path} e {new_audio_path} completata con successo.")
-        except Exception as e:
-            print(f"Errore durante l'unione di audio e video: {e}")
-
-    def handle_mouse_events(self):
-        cv2.namedWindow('Screen Capture')
-        cv2.setMouseCallback('Screen Capture', self.mouse_callback)
-
-    def mouse_callback(self, event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            self.enlarge_circle = True
-            self.enlarge_timestamp = time.time()

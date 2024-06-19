@@ -89,7 +89,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 2
-        self.version_patch = 0
+        self.version_patch = 1
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -945,26 +945,6 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput.setVolume(value / 100.0)
     def setVolumeOutput(self, value):
         self.audioOutputOutput.setVolume(value / 100.0)
-
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key.Key_Right:
-            # Avanza di 2 secondi
-            current_position = self.player.position()
-            new_position = current_position + 2000  # 2000 ms = 2 secondi
-            self.player.setPosition(new_position)
-        elif event.key() == Qt.Key.Key_Left:
-            # Torna indietro di 2 secondi
-            current_position = self.player.position()
-            new_position = max(0, current_position - 2000)  # Evita di andare sotto lo 0
-            self.player.setPosition(new_position)
-        elif event.key() == Qt.Key.Key_Space:
-            # Pausa o riproduzione a seconda dello stato corrente
-            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-                self.player.pause()
-            else:
-                self.player.play()
-        else:
-            super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
         hours, remainder = divmod(position // 1000, 3600)
@@ -1426,6 +1406,7 @@ class VideoAudioManager(QMainWindow):
 
         self.audioTestResultLabel = QLabel("Risultato Test Audio: N/A")
         self.audioTestResultLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        infoLayout.addWidget(self.audioTestResultLabel)
 
         # Main Layout for Recording Management
         recordingLayout = QVBoxLayout()
@@ -1491,7 +1472,7 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiungi la checkbox per abilitare la registrazione automatica delle chiamate di Teams
         self.autoRecordTeamsCheckBox = QCheckBox("Abilita registrazione automatica per Teams")
-        #recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
+        # recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
 
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
@@ -1519,25 +1500,14 @@ class VideoAudioManager(QMainWindow):
         self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
         return dock
 
-
     def selectAudioDevice(self):
         selected_audio = None
         for button in self.audio_buttons:
             if button.isChecked():
                 selected_audio = button.text()
                 break
-
-        if selected_audio:
-            device_index = self.extract_device_index(selected_audio)
-            self.selected_audio_device = device_index
-            if device_index is not None:
-                is_device_working = self.test_audio_device(device_index)
-                if is_device_working:
-                    self.audioTestResultLabel.setText("Risultato Test Audio: Funzionante")
-                else:
-                    self.audioTestResultLabel.setText("Risultato Test Audio: Non Funzionante")
-            else:
-                self.audioTestResultLabel.setText("Risultato Test Audio: Dispositivo non trovato")
+        self.audio_input = selected_audio  # Update the audio input name
+        self.audioTestResultLabel.setText(f"Risultato Test Audio: {selected_audio}")
 
     def extract_device_index(self, device_text):
         match = re.match(r"Input Device ID (\d+) -", device_text)
@@ -1600,6 +1570,7 @@ class VideoAudioManager(QMainWindow):
             self.filePathLineEdit.setText(fileName)
 
         # Metodi per iniziare e fermare la registrazione
+
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
         info = p.get_host_api_info_by_index(0)
@@ -1610,11 +1581,12 @@ class VideoAudioManager(QMainWindow):
             device_info = p.get_device_info_by_host_api_device_index(0, i)
             if device_info.get('maxInputChannels') > 0:
                 # Format the device info for display and usage
-                formatted_device_info = f"Input Device ID {i} - {device_info.get('name')}, Max Input Channels: {device_info.get('maxInputChannels')}"
+                formatted_device_info = f"{device_info.get('name')}"
                 available_audio_devices.append(formatted_device_info)
 
         p.terminate()
         return available_audio_devices
+
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
         background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
@@ -1707,7 +1679,7 @@ class VideoAudioManager(QMainWindow):
             self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
 
     def startScreenRecording(self):
-        # Trova il dispositivo audio selezionato
+        self.startRecordingButton.setEnabled(False)
         selected_audio = None
         for button in self.audio_buttons:
             if button.isChecked():
@@ -1732,7 +1704,6 @@ class VideoAudioManager(QMainWindow):
         else:
             audio_input_index = None
 
-        monitors = get_monitors()
         monitor_index = self.selected_screen_index if self.selected_screen_index is not None else 0
 
         recording_name = self.recordingNameLineEdit.text().strip()
@@ -1746,19 +1717,23 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.avi")
+        video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.mp4")
 
-        fourcc = cv2.VideoWriter_fourcc(*'XVID')
-        width, height = monitors[monitor_index].width, monitors[monitor_index].height
-        self.video_writer = cv2.VideoWriter(video_file_path_with_timestamp, fourcc, 25.0, (width, height))
+        ffmpeg_path = os.path.abspath('ffmpeg.exe')
+        if not os.path.exists(ffmpeg_path):
+            QMessageBox.critical(self, "Errore",
+                                 "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")
+            self.startRecordingButton.setEnabled(True)
+            return
 
-        if not save_video_only:
-            audioFileName = os.path.join(default_folder, f"{recording_name}.wav")
-            self.recorder_thread = ScreenRecorder(self.video_writer, audioFileName, monitor_index=monitor_index,
-                                                  audio_input=audio_input_index, audio_channels=2)
-        else:
-            self.recorder_thread = ScreenRecorder(self.video_writer, None, monitor_index=monitor_index,
-                                                  audio_input=None, audio_channels=0)
+        self.recorder_thread = ScreenRecorder(
+            output_path=video_file_path_with_timestamp,
+            ffmpeg_path=ffmpeg_path,
+            monitor_index=monitor_index,
+            audio_input=audio_input_index if not save_video_only else None,
+            audio_channels=2 if not save_video_only else 0,
+            frames=25
+        )
 
         self.recorder_thread.error_signal.connect(self.showError)
         self.recorder_thread.start()
@@ -1766,105 +1741,34 @@ class VideoAudioManager(QMainWindow):
         self.recordingTime = QTime(0, 0, 0)
         self.rec_timer.start(1000)
         self.current_video_path = video_file_path_with_timestamp
-        if not save_video_only:
-            self.current_audio_path = audioFileName
         self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di Schermo {monitor_index + 1}')
 
     def stopScreenRecording(self):
+        self.startRecordingButton.setEnabled(True)
         self.rec_timer.stop()
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
             self.recorder_thread.stop()
 
-        if hasattr(self, 'video_writer') and self.video_writer is not None:
-            self.video_writer.release()
-            self.video_writer = None
-
         if hasattr(self, 'current_video_path'):
             video_path = self.current_video_path
 
-            if self.saveVideoOnlyCheckBox.isChecked():
-                if video_path and os.path.exists(video_path):
-                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
-                    QMessageBox.information(self, "File Salvato",
-                                            f"Il video è stato salvato correttamente:\nVideo: {video_path}")
-                else:
-                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file video trovato.")
-                    QMessageBox.warning(self, "File non trovato", "Il file video non è stato trovato.")
-                self.loadVideoOutput(video_path)
+            if video_path and os.path.exists(video_path):
+                self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
+                QMessageBox.information(self, "File Salvato",
+                                        f"Il video è stato salvato correttamente:\nVideo: {video_path}")
             else:
-                if video_path and os.path.exists(video_path) and hasattr(self,
-                                                                         'current_audio_path') and self.current_audio_path:
-                    audio_path = self.current_audio_path
-                    if os.path.exists(audio_path):
-                        try:
-                            folder_path = self.folderPathLineEdit.text().strip() or os.path.join(os.getcwd(),
-                                                                                                 'screenrecorder')
-                            output_path = os.path.join(folder_path,
-                                                       f"{os.path.splitext(os.path.basename(video_path))[0]}_final.mp4")
-                            self.recorder_thread.unisciVideoAAudio(video_path, audio_path, output_path)
-                            self.recorder_thread = None
-
-                            # Aggiungi il passaggio per adattare la velocità del video all'audio
-                            adjusted_output_path = os.path.join(folder_path,
-                                                                f"{os.path.splitext(os.path.basename(output_path))[0]}_adjusted.mp4")
-                            self.adattaVelocitaVideoAAudio(output_path, audio_path, adjusted_output_path)
-
-                            self.recordingStatusLabel.setText("Stato: Registrazione Terminata e file salvati.")
-                            QMessageBox.information(self, "File Salvato",
-                                                    f"Il video finale è stato salvato correttamente:\nVideo: {adjusted_output_path}")
-                            self.loadVideoOutput(adjusted_output_path)
-                        except Exception as e:
-                            self.recordingStatusLabel.setText(
-                                f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
-                            QMessageBox.critical(self, "Errore",
-                                                 f"Errore durante l'unione o il salvataggio dei file: {str(e)}")
-                    else:
-                        self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
-                        QMessageBox.warning(self, "File non trovato",
-                                            f"Uno o entrambi i file non trovati:\nVideo: {video_path}\nAudio: {audio_path}")
-                else:
-                    self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
-                    QMessageBox.warning(self, "File non trovato",
-                                        f"Uno o entrambi i file non trovati:\nVideo: {video_path}")
+                self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file video trovato.")
+                QMessageBox.warning(self, "File non trovato", "Il file video non è stato trovato.")
+            self.loadVideoOutput(video_path)
 
             self.current_video_path = None
-            self.current_audio_path = None
         else:
             self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
 
         if self.rec_timer.isActive():
             self.rec_timer.stop()
         self.timecodeLabel.setText('00:00:00')
-
-    def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
-        try:
-            # Carica il nuovo file audio e calcola la sua durata
-            new_audio = AudioFileClip(new_audio_path)
-            durata_audio = new_audio.duration
-
-            # Carica il video (senza audio) e calcola la sua durata
-            video_clip = VideoFileClip(video_path)
-            durata_video = video_clip.duration
-
-            # Calcola il fattore di velocità necessario per far combaciare le durate
-            fattore_velocita = durata_video / durata_audio
-
-            # Applica il fattore di velocità al video
-            video_modificato = video_clip.fx(vfx.speedx, fattore_velocita)
-
-            # Imposta il nuovo audio sul video modificato
-            final_video = video_modificato.set_audio(new_audio)
-
-            # Scrivi il video finale mantenendo lo stesso frame rate del video originale
-            original_frame_rate = video_clip.fps
-
-            # Specifica del codec libx264 per il video e aac per l'audio
-            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=original_frame_rate)
-            logging.debug(f'Video elaborato con successo.')
-        except Exception as e:
-            logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
-
     def showError(self, message):
         QMessageBox.critical(self, "Errore", message)
 
@@ -2375,8 +2279,6 @@ class VideoAudioManager(QMainWindow):
 
         return error
 
-
-
     def impostaFont(shape, size_pt, text):
         """
         Imposta il font per una shape data con la grandezza specificata.
@@ -2644,33 +2546,48 @@ class VideoAudioManager(QMainWindow):
     def pauseVideo(self):
         self.player.pause()
 
+    from moviepy.editor import VideoFileClip, AudioFileClip, vfx
+    import logging
+
     def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
         try:
+            # Log dei percorsi dei file
+            logging.debug(f"Percorso video: {video_path}")
+            logging.debug(f"Percorso nuovo audio: {new_audio_path}")
+            logging.debug(f"Percorso output: {output_path}")
+
             # Carica il nuovo file audio e calcola la sua durata
             new_audio = AudioFileClip(new_audio_path)
             durata_audio = new_audio.duration
+            logging.debug(f"Durata audio: {durata_audio} secondi")
 
             # Carica il video (senza audio) e calcola la sua durata
             video_clip = VideoFileClip(video_path)
             durata_video = video_clip.duration
+            logging.debug(f"Durata video: {durata_video} secondi")
 
             # Calcola il fattore di velocità necessario per far combaciare le durate
-            fattore_velocita = durata_video / durata_audio
+            fattore_velocita = durata_audio / durata_video
+            logging.debug(f"Fattore velocità: {fattore_velocita}")
 
-            # Applica il fattore di velocità al video
-            video_modificato = video_clip.fx(vfx.speedx, fattore_velocita)
+            # Ridimensiona la durata del video per far combaciare con l'audio
+            video_modificato = video_clip.set_duration(durata_audio).fx(vfx.speedx, fattore_velocita)
+            logging.debug("Fattore velocità applicato al video")
 
             # Imposta il nuovo audio sul video modificato
             final_video = video_modificato.set_audio(new_audio)
+            logging.debug("Nuovo audio impostato sul video modificato")
 
             # Scrivi il video finale mantenendo lo stesso frame rate del video originale
             original_frame_rate = video_clip.fps
+            logging.debug(f"Frame rate originale: {original_frame_rate}")
 
             # Specifica del codec libx264 per il video e aac per l'audio
             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=original_frame_rate)
-            logging.debug(f'Video elaborato con successo.')
+            logging.debug('Video elaborato con successo.')
         except Exception as e:
             logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
+
     def stopVideo(self):
         self.player.stop()
 
