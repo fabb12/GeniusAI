@@ -1,13 +1,8 @@
-import ctypes.wintypes
+import os
+import re
 import subprocess
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
-import os
-import re
-import datetime
-from PyQt6.QtCore import QTime, QThread, pyqtSignal
-from PyQt6.QtWidgets import QMessageBox
-from screeninfo import get_monitors
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
@@ -23,8 +18,6 @@ class ScreenRecorder(QThread):
         self.audio_channels = audio_channels
         self.frame_rate = frames
         self.is_running = True
-        self.enlarge_circle = False
-        self.enlarge_timestamp = 0
 
         # Check if ffmpeg.exe exists
         if not os.path.isfile(self.ffmpeg_path):
@@ -50,7 +43,7 @@ class ScreenRecorder(QThread):
             '-video_size', f'{screen_width}x{screen_height}',
             '-i', 'desktop',
             '-f', 'dshow',  # For Windows audio capture
-            '-i', f'{audio_input}',  # Use the correct audio input
+            '-i', f'audio={audio_input}',  # Use the correct audio input
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
@@ -60,6 +53,9 @@ class ScreenRecorder(QThread):
             '-loglevel', 'verbose',  # Add verbose logging
             '-report'  # Generate detailed report
         ]
+
+        print("Running ffmpeg command:")
+        print(" ".join(ffmpeg_command))
 
         self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
 
@@ -71,20 +67,6 @@ class ScreenRecorder(QThread):
                 break
 
         self.stop_recording()
-
-    def get_mouse_position(self):
-        # Ottieni la posizione del puntatore del mouse
-        mouse_x, mouse_y = 0, 0
-        try:
-            cursor_info = ctypes.windll.user32.GetCursorPos
-            cursor_info.restype = ctypes.wintypes.BOOL
-            cursor_info.argtypes = [ctypes.POINTER(ctypes.wintypes.POINT)]
-            pt = ctypes.wintypes.POINT()
-            if cursor_info(ctypes.byref(pt)):
-                mouse_x, mouse_y = pt.x, pt.y
-        except Exception as e:
-            self.error_signal.emit(f"Failed to get mouse position: {str(e)}")
-        return mouse_x, mouse_y
 
     def stop_recording(self):
         self.is_running = False
@@ -101,3 +83,39 @@ class ScreenRecorder(QThread):
         self.is_running = False
         self.stop_recording()
 
+def get_audio_devices():
+    ffmpeg_command = ['ffmpeg', '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
+    process = subprocess.Popen(ffmpeg_command, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
+    stdout, stderr = process.communicate()
+
+    audio_devices = []
+    for line in stderr.decode().split('\n'):
+        if 'audio' in line:
+            match = re.search(r'\[dshow @ \w+\]  "(.*?)"', line)
+            if match:
+                audio_devices.append(match.group(1))
+    return audio_devices
+
+def main():
+    audio_devices = get_audio_devices()
+    print("Available audio devices:")
+    for i, device in enumerate(audio_devices):
+        print(f"{i}: {device}")
+
+    if audio_devices:
+        selected_device = audio_devices[0]  # You can change this to select a different device
+        print(f"Selected audio device: {selected_device}")
+
+        # Use the selected_device in your ScreenRecorder or ffmpeg command
+        output_path = "output.mp4"
+        ffmpeg_path = "ffmpeg.exe"  # Assicurati che ffmpeg.exe sia nel percorso specificato o nel PATH del sistema
+        monitor_index = 0
+        audio_input = selected_device
+
+        recorder = ScreenRecorder(output_path, ffmpeg_path, monitor_index, audio_input)
+        recorder.run()
+    else:
+        print("No audio devices found.")
+
+if __name__ == "__main__":
+    main()
