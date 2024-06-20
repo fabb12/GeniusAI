@@ -1142,14 +1142,20 @@ class VideoAudioManager(QMainWindow):
 
         self.audioPathLineEdit = QLineEdit()
         self.audioPathLineEdit.setReadOnly(True)
+
         browseAudioButton = QPushButton('Scegli Audio Principale')
         browseAudioButton.clicked.connect(self.browseAudio)
+
+        self.alignAudioVideoCheckBox = QCheckBox('Allinea video e audio')
+
         applyAudioButton = QPushButton('Applica Audio Principale')
         applyAudioButton.clicked.connect(
-            lambda: self.applyNewAudioToVideo(self.videoPathLineEdit, self.audioPathLineEdit.text()))
+            lambda: self.applyNewAudioToVideo(self.videoPathLineEdit, self.audioPathLineEdit.text(),
+                                              self.alignAudioVideoCheckBox.isChecked()))
 
         layout.addWidget(self.audioPathLineEdit)
         layout.addWidget(browseAudioButton)
+        layout.addWidget(self.alignAudioVideoCheckBox)
         layout.addWidget(applyAudioButton)
         audioReplacementGroup.setLayout(layout)
 
@@ -2402,17 +2408,36 @@ class VideoAudioManager(QMainWindow):
         video_clip.audio.write_audiofile(temp_audio_path)
         return temp_audio_path
 
-    def applyNewAudioToVideo(self, video_path, audio_path):
-        # Carica il video e l'audio modificato
-        video_clip = VideoFileClip(video_path)
-        audio_clip = AudioFileClip(audio_path)
-        final_clip = video_clip.set_audio(audio_clip)
-        # Salvataggio del video finale
-        output_video_path = video_path.replace('.mp4', '_new_audio.mp4')
-        final_clip.write_videofile(output_video_path, codec='libx264', audio_codec='aac')
+    def applyNewAudioToVideo(self, video_path_line_edit, new_audio_path, align_audio_video):
+        video_path = video_path_line_edit
+        if not video_path or not new_audio_path:
+            QMessageBox.warning(self, "Attenzione", "Seleziona sia un file video che un file audio.")
+            return
 
-        # Aggiorna l'interfaccia utente per riflettere il cambio
-        self.loadVideoOutput(output_video_path)
+        # Determina il percorso di output
+        output_path = os.path.join(os.path.dirname(video_path), "output_" + os.path.basename(video_path))
+
+        try:
+            if align_audio_video:
+                self.adattaVelocitaVideoAAudio(video_path, new_audio_path, output_path)
+            else:
+                video_clip = VideoFileClip(video_path)
+                new_audio = AudioFileClip(new_audio_path)
+
+                # Imposta il nuovo audio sul video
+                final_video = video_clip.set_audio(new_audio)
+
+                # Scrivi il video finale mantenendo lo stesso frame rate del video originale
+                final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps)
+                logging.debug('Video elaborato con successo senza adattamento velocità.')
+
+            QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
+
+            self.loadVideoOutput(output_path)
+        except Exception as e:
+            logging.debug(f"Errore durante l'applicazione del nuovo audio: {e}")
+            QMessageBox.critical(self, "Errore",
+                                 f"Si è verificato un errore durante l'applicazione del nuovo audio:\n{str(e)}")
 
     def cutVideo(self):
         media_path = self.videoPathLineEdit
@@ -2555,10 +2580,7 @@ class VideoAudioManager(QMainWindow):
     def pauseVideo(self):
         self.player.pause()
 
-    from moviepy.editor import VideoFileClip, AudioFileClip, vfx
-    import logging
-
-    def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
+    def adattaVelocitaVideoAAudio(self,video_path, new_audio_path, output_path):
         try:
             # Log dei percorsi dei file
             logging.debug(f"Percorso video: {video_path}")
@@ -2575,13 +2597,16 @@ class VideoAudioManager(QMainWindow):
             durata_video = video_clip.duration
             logging.debug(f"Durata video: {durata_video} secondi")
 
-            # Calcola il fattore di velocità necessario per far combaciare le durate
-            fattore_velocita = durata_audio / durata_video
-            logging.debug(f"Fattore velocità: {fattore_velocita}")
-
-            # Ridimensiona la durata del video per far combaciare con l'audio
-            video_modificato = video_clip.set_duration(durata_audio).fx(vfx.speedx, fattore_velocita)
-            logging.debug("Fattore velocità applicato al video")
+            if durata_video > durata_audio:
+                # Se la durata del video è maggiore di quella dell'audio, velocizza il video
+                fattore_velocita = durata_video / durata_audio
+                video_modificato = video_clip.fx(vfx.speedx, fattore_velocita).set_duration(durata_audio)
+                logging.debug(f"Video velocizzato con fattore: {fattore_velocita}")
+            else:
+                # Se la durata del video è minore o uguale a quella dell'audio, rallenta il video
+                fattore_velocita = durata_audio / durata_video
+                video_modificato = video_clip.fx(vfx.speedx, fattore_velocita).set_duration(durata_audio)
+                logging.debug(f"Video rallentato con fattore: {fattore_velocita}")
 
             # Imposta il nuovo audio sul video modificato
             final_video = video_modificato.set_audio(new_audio)
@@ -2599,15 +2624,6 @@ class VideoAudioManager(QMainWindow):
 
     def stopVideo(self):
         self.player.stop()
-
-    def unisci_video(self, lista_percorsi_video, percorso_file_output):
-        try:
-            clips = [VideoFileClip(video) for video in lista_percorsi_video]
-            video_finale = concatenate_videoclips(clips)
-            video_finale.write_videofile(percorso_file_output, codec="libx264", audio_codec="aac")
-            QMessageBox.information(self, "Successo", f"Video unito creato con successo in {percorso_file_output}.")
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Errore durante l'unione dei video: {e}")
 
     def creaPresentazione(self):
         file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")

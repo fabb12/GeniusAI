@@ -2,24 +2,33 @@ import shutil
 import os
 import re
 import zipfile
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
 current_dir = os.getcwd()
+
+# Collect all submodules and data files of required packages to avoid missing imports
+hiddenimports = (
+    collect_submodules('cv2') +
+    collect_submodules('moviepy') +
+    collect_submodules('numpy') +
+    collect_submodules('pydub') +
+    collect_submodules('PyQt6') +
+    collect_submodules('pycountry') +
+    collect_submodules('speech_recognition')
+)
+datas = collect_data_files('cv2') + collect_data_files('moviepy') + collect_data_files('numpy') + collect_data_files('pydub') + collect_data_files('PyQt6') + collect_data_files('pycountry') + collect_data_files('speech_recognition')
 
 a = Analysis(
     ['src/TGeniusAI.py'],
     pathex=['.'],
     binaries=[],
     datas=[
-        (os.path.join(current_dir, 'src', 'res'), 'res'),  # Includi la cartella delle risorse
-        (os.path.join(current_dir, 'Readme.md'), '.'),  # Aggiungi Readme.md nella cartella TGeniusAI
-        #(os.path.join(current_dir, 'ffmpeg', 'bin', 'ffmpeg.exe'), '.')  # Aggiungi ffmpeg.exe
-    ],
-    hiddenimports=[
-        'cv2', 'moviepy', 'numpy', 'pydub', 'PyQt6.QtCore',
-        'PyQt6.QtGui', 'PyQt6.QtWidgets', 'pycountry', 'speech_recognition'
-    ],
+        (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
+        (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
+    ] + datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
     excludes=['PyQt5'],
@@ -45,8 +54,8 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,  # Imposta console a False per rimuovere la console
-    icon=os.path.join('src', 'res', 'eye.ico')  # Specifica il percorso dell'icona nella cartella res sotto src
+    console=False,  # Set console to False to remove console window
+    icon=os.path.join('src', 'res', 'eye.ico')  # Specify the icon path in the res folder under src
 )
 
 coll = COLLECT(
@@ -60,13 +69,13 @@ coll = COLLECT(
     console=False
 )
 
-# Script personalizzato per spostare i file nella cartella corretta e creare un file ZIP
+# Custom script to move files to the correct folder and create a ZIP file
 def move_files_up_and_create_zip():
     internal_dir = os.path.join(current_dir, 'dist', 'TGeniusAI', '_internal')
     release_dir = os.path.join(current_dir, 'dist', 'Release')
     tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
 
-    # Crea la cartella Release se non esiste
+    # Create the Release folder if it doesn't exist
     os.makedirs(release_dir, exist_ok=True)
 
     files_to_move = ['Readme.md']
@@ -86,7 +95,7 @@ def move_files_up_and_create_zip():
                 shutil.rmtree(dest_path)
             shutil.move(src_path, dest_path)
 
-    # Estrai la versione del software dal codice principale
+    # Extract the software version from the main code
     version_pattern = re.compile(r'self\.version_major = (\d+).*self\.version_minor = (\d+).*self\.version_patch = (\d+)', re.DOTALL)
     with open('src/TGeniusAI.py', 'r') as f:
         content = f.read()
@@ -96,7 +105,7 @@ def move_files_up_and_create_zip():
     else:
         version = "v0.0.0"
 
-    # Crea un file ZIP contenente tutti i file nella cartella TGeniusAI
+    # Create a ZIP file containing all files in the TGeniusAI folder
     zip_file_path = os.path.join(release_dir, f"TGeniusAI_{version}.zip")
     with zipfile.ZipFile(zip_file_path, 'w') as zipf:
         for root, dirs, files in os.walk(tgeniusai_dir):
