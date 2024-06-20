@@ -154,21 +154,6 @@ class VideoAudioManager(QMainWindow):
             super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
 
-    def select_screen_for_window(self, window):
-        monitor_index = None
-        for i, monitor in enumerate(get_monitors()):
-            if window.left >= monitor.x and window.top >= monitor.y:
-                monitor_index = i
-                break
-
-        if monitor_index is not None:
-            self.selected_screen_index = monitor_index
-            for button in self.screen_buttons:
-                if button.screen_number == monitor_index + 1:
-                    button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
-                else:
-                    button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
-
     def initUI(self):
 
         self.setWindowTitle('ThemaGeniusAI - Alpha | {}'.format(self.version))
@@ -1638,13 +1623,14 @@ class VideoAudioManager(QMainWindow):
 
     def selectAudioDevice(self):
         selected_audio = None
-        for button in self.audio_buttons:
+        device_index = None
+        for index, button in enumerate(self.audio_buttons):
             if button.isChecked():
                 selected_audio = button.text()
+                device_index = index
                 break
         self.audio_input = selected_audio  # Update the audio input name
         if selected_audio:
-            device_index = self.extract_device_index(selected_audio)
             if device_index is not None and self.test_audio_device(device_index):
                 self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
             else:
@@ -1733,7 +1719,7 @@ class VideoAudioManager(QMainWindow):
 
         video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.mp4")
 
-        ffmpeg_path = os.path.abspath('ffmpeg.exe')
+        ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
             QMessageBox.critical(self, "Errore",
                                  "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")

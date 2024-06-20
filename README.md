@@ -73,13 +73,6 @@ ThemaGeniusAI è un'applicazione avanzata basata su AI per la gestione di video 
 
 1. Crea una presentazione PowerPoint dalle trascrizioni cliccando su `Genera Presentazione`.
 
-## Contribuzione
-
-Contribuisci al progetto inviando segnalazioni di bug o richiedendo nuove funzionalità tramite il repository GitHub del progetto.
-
-## Licenza
-
-ThemaGeniusAI è distribuito sotto la licenza MIT. Consulta il file LICENSE per maggiori dettagli.
 
 ---
 

@@ -28,12 +28,14 @@ class ScreenRecorder(QThread):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
             self.is_running = False
 
+    def get_monitor_offset(self):
+        monitor = get_monitors()[self.monitor_index]
+        return monitor.x, monitor.y, monitor.width, monitor.height
+
     def run(self):
         self.recording_started_signal.emit()
 
-        monitor = get_monitors()[self.monitor_index]
-        screen_width = monitor.width
-        screen_height = monitor.height
+        offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
 
         # Ensure audio input is not None
         audio_input = self.audio_input if self.audio_input else 'none'
@@ -41,8 +43,8 @@ class ScreenRecorder(QThread):
             self.ffmpeg_path,  # Use the provided ffmpeg path
             '-f', 'gdigrab',  # For Windows screen capture
             '-framerate', str(self.frame_rate),
-            '-offset_x', '0',
-            '-offset_y', '0',
+            '-offset_x', str(offset_x),
+            '-offset_y', str(offset_y),
             '-video_size', f'{screen_width}x{screen_height}',
             '-i', 'desktop',
             '-f', 'dshow',  # For Windows audio capture
@@ -57,9 +59,10 @@ class ScreenRecorder(QThread):
             #'-report'  # Generate detailed report
         ]
 
+        # Use CREATE_NO_WINDOW to hide the console window
+        creationflags = subprocess.CREATE_NO_WINDOW
 
-        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
-
+        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
         while self.is_running:
             output = self.ffmpeg_process.stderr.readline()

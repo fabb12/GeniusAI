@@ -6,9 +6,8 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] su alcune macchine la velocita' del video e' sbagliata rispetto a quello originale
 - [x] aggiungere stretch video player output
 - [x] aggiungere log nel file di testo
-- [ ] aggiungre indicatore presenza audio 
+- [x] aggiungre indicatore presenza audio 
 - [ ] aggiungere tasto pausa rec
-- [ ] aggiugnre progress bar per la registrazione
 - [ ] aggiungere nome timecode per video registrato
 ## [1.1.15] - 2024-06-10
 
