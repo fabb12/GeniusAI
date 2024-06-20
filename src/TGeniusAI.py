@@ -51,6 +51,7 @@ from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
 from Settings import SettingsDialog
 from Summarizer import SummarizerThread
+from difflib import SequenceMatcher
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -1385,10 +1386,145 @@ class VideoAudioManager(QMainWindow):
         if self.screen_buttons:
             self.selectScreen(0)
 
+
+
+    def selectScreen(self, screen_index):
+        self.selected_screen_index = screen_index
+        for button in self.screen_buttons:
+            if button.screen_number == screen_index + 1:
+                button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
+            else:
+                button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
+
+
+    def browseFolderLocation(self):
+        folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
+        if folder:
+            self.folderPathLineEdit.setText(folder)
+    def openFolder(self):
+        folder_path = self.folderPathLineEdit.text() or "screenrecorder"
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+
+    def openFolderInFileSystem(self):
+        if hasattr(self, 'selected_directory') and os.path.isdir(self.selected_directory):
+            # Aprire la cartella nel file system
+            if os.name == 'nt':  # Windows
+                os.startfile(self.selected_directory)
+            elif os.name == 'posix':  # MacOS, Linux
+                subprocess.Popen(['open', self.selected_directory])
+            else:
+                logging.debug("Sistema operativo non supportato.")
+        else:
+            logging.debug("Nessuna cartella selezionata o cartella non esistente.")
+
+    def setDefaultAudioDevice(self):
+        """Imposta il primo dispositivo audio come predefinito se disponibile."""
+        if self.audio_buttons:
+            self.audio_buttons[0].setChecked(True)
+
+    def browseFileLocation(self):
+        """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
+        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video", "", "Video Files (*.avi)")
+        if fileName:
+            self.filePathLineEdit.setText(fileName)
+
+        # Metodi per iniziare e fermare la registrazione
+
+
+
+    def applyBackgroundAudioToVideo(self):
+        video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
+        background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
+        background_volume = self.volumeSlider.value() / 100.0  # Volume dell'audio di sottofondo
+
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
+            return
+
+        if not background_audio_path or not os.path.exists(background_audio_path):
+            QMessageBox.warning(self, "Errore", "Carica un audio di sottofondo prima di applicarlo.")
+            return
+
+        try:
+            # Carica video e audio di sottofondo
+            video_clip = VideoFileClip(video_path)
+            background_audio_clip = AudioFileClip(background_audio_path).volumex(background_volume)
+
+            # Combina l'audio di sottofondo con l'audio originale del video, se presente
+            if video_clip.audio:
+                combined_audio = CompositeAudioClip([video_clip.audio, background_audio_clip])
+            else:
+                combined_audio = background_audio_clip
+
+            # Imposta l'audio combinato nel video e salva il nuovo file
+            final_clip = video_clip.set_audio(combined_audio)
+            output_path = tempfile.mktemp(suffix='.mp4')
+            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            QMessageBox.information(self, "Successo",
+                                    f"Il video con audio di sottofondo è stato salvato in {output_path}")
+            self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+
+    def applyAudioWithPauses(self):
+        video_path = self.videoPathLineEdit  # Path of the currently loaded video
+
+        # Retrieve the timecode and pause duration from user input
+        timecode = self.timecodePauseLineEdit.text()
+        pause_duration = float(self.pauseDurationLineEdit.text() or 0)
+
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare la pausa audio.")
+            return
+
+        try:
+            # Estrai l'audio dal video
+            video_clip = VideoFileClip(video_path)
+            audio_clip = video_clip.audio
+            original_audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
+            audio_clip.write_audiofile(original_audio_path)  # Save the extracted audio
+
+            # Convert the timecode into seconds
+            hours, minutes, seconds = map(int, timecode.split(':'))
+            start_time = hours * 3600 + minutes * 60 + seconds
+
+            # Load the audio using moviepy
+            original_audio = AudioFileClip(original_audio_path)
+            total_duration = original_audio.duration
+
+            # Create the silent audio segment for the pause
+            silent_audio = AudioFileClip("silent.mp3").set_duration(pause_duration)
+
+            # Split the audio and insert the silent segment
+            first_part = original_audio.subclip(0, start_time)
+            second_part = original_audio.subclip(start_time, total_duration)
+            new_audio = concatenate_audioclips([first_part, silent_audio, second_part])
+
+            # Save the modified audio to a temporary path
+            temp_audio_path = tempfile.mktemp(suffix='.mp3')
+            new_audio.write_audiofile(temp_audio_path)
+
+            # Adapt the speed of the video to match the new audio duration
+            output_path = tempfile.mktemp(suffix='.mp4')
+            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
+
+            QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
+            self.loadVideoOutput(output_path)
+
+            # Clean up the temporary audio file
+            os.remove(temp_audio_path)
+            os.remove(original_audio_path)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante l'applicazione della pausa audio", str(e))
+
+    def updateTimecodeRec(self):
+        if self.recordingTime is not None:
+            self.recordingTime = self.recordingTime.addSecs(1)
+            self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
     def createRecordingDock(self):
         dock = Dock("Registrazione", closable=True)
-
-        self.rec_timer = QTimer(self)
+        self.rec_timer = QTimer()
         self.rec_timer.timeout.connect(self.updateTimecodeRec)
 
         # Group Box for Info
@@ -1507,13 +1643,12 @@ class VideoAudioManager(QMainWindow):
                 selected_audio = button.text()
                 break
         self.audio_input = selected_audio  # Update the audio input name
-        self.audioTestResultLabel.setText(f"Risultato Test Audio: {selected_audio}")
-
-    def extract_device_index(self, device_text):
-        match = re.match(r"Input Device ID (\d+) -", device_text)
-        if match:
-            return int(match.group(1))
-        return None
+        if selected_audio:
+            device_index = self.extract_device_index(selected_audio)
+            if device_index is not None and self.test_audio_device(device_index):
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
+            else:
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica KO")
 
     def test_audio_device(self, device_index):
         p = pyaudio.PyAudio()
@@ -1521,165 +1656,58 @@ class VideoAudioManager(QMainWindow):
             stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
             data = stream.read(1024)
             stream.close()
-            p.terminate()
             if np.frombuffer(data, dtype=np.int16).any():
                 return True
             return False
         except Exception as e:
-            p.terminate()
             return False
+        finally:
+            p.terminate()
 
-    def selectScreen(self, screen_index):
-        self.selected_screen_index = screen_index
-        for button in self.screen_buttons:
-            if button.screen_number == screen_index + 1:
-                button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
-            else:
-                button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
-
-
-    def browseFolderLocation(self):
-        folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
-        if folder:
-            self.folderPathLineEdit.setText(folder)
-    def openFolder(self):
-        folder_path = self.folderPathLineEdit.text() or "screenrecorder"
-        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
-
-    def openFolderInFileSystem(self):
-        if hasattr(self, 'selected_directory') and os.path.isdir(self.selected_directory):
-            # Aprire la cartella nel file system
-            if os.name == 'nt':  # Windows
-                os.startfile(self.selected_directory)
-            elif os.name == 'posix':  # MacOS, Linux
-                subprocess.Popen(['open', self.selected_directory])
-            else:
-                logging.debug("Sistema operativo non supportato.")
-        else:
-            logging.debug("Nessuna cartella selezionata o cartella non esistente.")
-
-    def setDefaultAudioDevice(self):
-        """Imposta il primo dispositivo audio come predefinito se disponibile."""
-        if self.audio_buttons:
-            self.audio_buttons[0].setChecked(True)
-
-    def browseFileLocation(self):
-        """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
-        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video", "", "Video Files (*.avi)")
-        if fileName:
-            self.filePathLineEdit.setText(fileName)
-
-        # Metodi per iniziare e fermare la registrazione
+    def extract_device_index(self, device_text):
+        match = re.match(r"Input Device ID (\d+) -", device_text)
+        if match:
+            return int(match.group(1))
+        return None
 
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
-        info = p.get_host_api_info_by_index(0)
-        num_devices = info.get('deviceCount')
-        available_audio_devices = []
+        num_devices = p.get_device_count()
+        audio_devices = {}
+
+        def is_similar(name1, name2, threshold=0.8):
+            # Check if two names are similar above a certain threshold
+            return SequenceMatcher(None, name1, name2).ratio() > threshold
 
         for i in range(num_devices):
-            device_info = p.get_device_info_by_host_api_device_index(0, i)
-            if device_info.get('maxInputChannels') > 0:
-                # Format the device info for display and usage
-                formatted_device_info = f"{device_info.get('name')}"
-                available_audio_devices.append(formatted_device_info)
+            device_info = p.get_device_info_by_index(i)
+            if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
+                # Include only the primary microphone and stereo mix
+                if 'microphone' in device_info.get('name').lower() or 'stereo mix' in device_info.get('name').lower():
+                    device_name = device_info.get('name')
+
+                    # Check for duplicates with similar names
+                    to_add = True
+                    to_remove = None
+                    for existing_name in audio_devices.keys():
+                        if is_similar(device_name, existing_name):
+                            if len(device_name) > len(existing_name):
+                                to_remove = existing_name
+                            else:
+                                to_add = False
+                            break
+
+                    if to_remove:
+                        del audio_devices[to_remove]
+                    if to_add:
+                        audio_devices[device_name] = device_info.get('name')
 
         p.terminate()
-        return available_audio_devices
-
-    def applyBackgroundAudioToVideo(self):
-        video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
-        background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
-        background_volume = self.volumeSlider.value() / 100.0  # Volume dell'audio di sottofondo
-
-        if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
-            return
-
-        if not background_audio_path or not os.path.exists(background_audio_path):
-            QMessageBox.warning(self, "Errore", "Carica un audio di sottofondo prima di applicarlo.")
-            return
-
-        try:
-            # Carica video e audio di sottofondo
-            video_clip = VideoFileClip(video_path)
-            background_audio_clip = AudioFileClip(background_audio_path).volumex(background_volume)
-
-            # Combina l'audio di sottofondo con l'audio originale del video, se presente
-            if video_clip.audio:
-                combined_audio = CompositeAudioClip([video_clip.audio, background_audio_clip])
-            else:
-                combined_audio = background_audio_clip
-
-            # Imposta l'audio combinato nel video e salva il nuovo file
-            final_clip = video_clip.set_audio(combined_audio)
-            output_path = tempfile.mktemp(suffix='.mp4')
-            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            QMessageBox.information(self, "Successo",
-                                    f"Il video con audio di sottofondo è stato salvato in {output_path}")
-            self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
-
-    def applyAudioWithPauses(self):
-        video_path = self.videoPathLineEdit  # Path of the currently loaded video
-
-        # Retrieve the timecode and pause duration from user input
-        timecode = self.timecodePauseLineEdit.text()
-        pause_duration = float(self.pauseDurationLineEdit.text() or 0)
-
-        if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare la pausa audio.")
-            return
-
-        try:
-            # Estrai l'audio dal video
-            video_clip = VideoFileClip(video_path)
-            audio_clip = video_clip.audio
-            original_audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
-            audio_clip.write_audiofile(original_audio_path)  # Save the extracted audio
-
-            # Convert the timecode into seconds
-            hours, minutes, seconds = map(int, timecode.split(':'))
-            start_time = hours * 3600 + minutes * 60 + seconds
-
-            # Load the audio using moviepy
-            original_audio = AudioFileClip(original_audio_path)
-            total_duration = original_audio.duration
-
-            # Create the silent audio segment for the pause
-            silent_audio = AudioFileClip("silent.mp3").set_duration(pause_duration)
-
-            # Split the audio and insert the silent segment
-            first_part = original_audio.subclip(0, start_time)
-            second_part = original_audio.subclip(start_time, total_duration)
-            new_audio = concatenate_audioclips([first_part, silent_audio, second_part])
-
-            # Save the modified audio to a temporary path
-            temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            new_audio.write_audiofile(temp_audio_path)
-
-            # Adapt the speed of the video to match the new audio duration
-            output_path = tempfile.mktemp(suffix='.mp4')
-            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
-
-            QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
-            self.loadVideoOutput(output_path)
-
-            # Clean up the temporary audio file
-            os.remove(temp_audio_path)
-            os.remove(original_audio_path)
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'applicazione della pausa audio", str(e))
-
-    def updateTimecodeRec(self):
-        if self.recordingTime is not None:
-            self.recordingTime = self.recordingTime.addSecs(1)
-            self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
+        return list(audio_devices.keys())  # Convert the dictionary keys back to a list
 
     def startScreenRecording(self):
         self.startRecordingButton.setEnabled(False)
+        self.stopRecordingButton.setEnabled(True)
         selected_audio = None
         for button in self.audio_buttons:
             if button.isChecked():
@@ -1689,20 +1717,6 @@ class VideoAudioManager(QMainWindow):
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
-
-        def extract_device_name(selected_audio):
-            match = re.match(r"Input Device ID (\d+) - (.+?),", selected_audio)
-            if match:
-                return int(match.group(1)), match.group(2).strip()
-            return None, None
-
-        if not save_video_only:
-            device_id, selected_audio_name = extract_device_name(selected_audio)
-            audio_input_index = None
-            if self.selected_screen_index is not None and selected_audio_name:
-                audio_input_index = device_id
-        else:
-            audio_input_index = None
 
         monitor_index = self.selected_screen_index if self.selected_screen_index is not None else 0
 
@@ -1726,11 +1740,17 @@ class VideoAudioManager(QMainWindow):
             self.startRecordingButton.setEnabled(True)
             return
 
+        if not save_video_only and not selected_audio:
+            QMessageBox.critical(self, "Errore",
+                                 "Nessun dispositivo audio selezionato. Seleziona un dispositivo audio o abilita l'opzione 'Salva solo il video'.")
+            self.startRecordingButton.setEnabled(True)
+            return
+
         self.recorder_thread = ScreenRecorder(
             output_path=video_file_path_with_timestamp,
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
-            audio_input=audio_input_index if not save_video_only else None,
+            audio_input=self.audio_input if not save_video_only else None,
             audio_channels=2 if not save_video_only else 0,
             frames=25
         )
@@ -1745,10 +1765,12 @@ class VideoAudioManager(QMainWindow):
 
     def stopScreenRecording(self):
         self.startRecordingButton.setEnabled(True)
+        self.stopRecordingButton.setEnabled(False)
         self.rec_timer.stop()
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
             self.recorder_thread.stop()
+            self.recorder_thread.wait()  # Ensure the thread has finished
 
         if hasattr(self, 'current_video_path'):
             video_path = self.current_video_path
@@ -1769,6 +1791,7 @@ class VideoAudioManager(QMainWindow):
         if self.rec_timer.isActive():
             self.rec_timer.stop()
         self.timecodeLabel.setText('00:00:00')
+
     def showError(self, message):
         QMessageBox.critical(self, "Errore", message)
 
@@ -2513,12 +2536,12 @@ class VideoAudioManager(QMainWindow):
             self.loadVideo(self.videoPathLineEdit, os.path.basename(file_urls[0]))
 
     def browseVideo(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
         if fileName:
            self.loadVideo(fileName)
 
     def browseVideoOutput(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac)")
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
         if fileName:
            self.loadVideoOutput(fileName)
 
