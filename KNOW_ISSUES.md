@@ -1,8 +1,10 @@
 # Known Issues
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
-
-## [1.2.0] - 2024-06-18
+## [1.2.2] -
+- [ ] controllare periferiche audio come vengono associate
+- 
+## [1.2.1] - 2024-06-20
 - [x] su alcune macchine la velocita' del video e' sbagliata rispetto a quello originale
 - [x] aggiungere stretch video player output
 - [x] aggiungere log nel file di testo
