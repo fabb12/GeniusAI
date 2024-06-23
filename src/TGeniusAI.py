@@ -246,25 +246,40 @@ class VideoAudioManager(QMainWindow):
         # Creazione dei pulsanti di controllo playback
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon("./res/play.png"))
+        self.playButton.setToolTip("Riproduci")
+
         self.pauseButton = QPushButton('')
         self.pauseButton.setIcon(QIcon("./res/pausa.png"))
+        self.pauseButton.setToolTip("Pausa")
+
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("./res/stop.png"))
+        self.stopButton.setToolTip("Ferma")
+
         self.setStartBookmarkButton = QPushButton('')
         self.setStartBookmarkButton.setIcon(QIcon("./res/bookmark_1.png"))
+        self.setStartBookmarkButton.setToolTip("Imposta segnalibro di inizio")
+
         self.setEndBookmarkButton = QPushButton('')
         self.setEndBookmarkButton.setIcon(QIcon("./res/bookmark_2.png"))
+        self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine")
+
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("./res/taglia.png"))
+        self.cutButton.setToolTip("Taglia")
+
         self.rewindButton = QPushButton('<< 5s')
         self.rewindButton.setIcon(QIcon("./res/rewind.png"))
+        self.rewindButton.setToolTip("Indietro di 5 secondi")
+
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("./res/forward.png"))
+        self.forwardButton.setToolTip("Avanti di 5 secondi")
 
         self.deleteButton = QPushButton('')
         self.deleteButton.setIcon(QIcon("./res/trash-bin.png"))
+        self.deleteButton.setToolTip("Cancella parte selezionata")
         # Collegamento dei pulsanti ai loro slot funzionali
-        self.deleteButton.clicked.connect(self.deleteVideoSegment)
 
         # Collegam  ento dei pulsanti ai loro slot funzionali
         self.playButton.clicked.connect(self.playVideo)
@@ -276,6 +291,7 @@ class VideoAudioManager(QMainWindow):
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
         self.forwardButton.clicked.connect(self.forward5Seconds)
+        self.deleteButton.clicked.connect(self.deleteVideoSegment)
 
         # Creazione e configurazione del display del timecode
         self.currentTimeLabel = QLabel('00:00')
@@ -1513,6 +1529,78 @@ class VideoAudioManager(QMainWindow):
         if self.recordingTime is not None:
             self.recordingTime = self.recordingTime.addSecs(1)
             self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
+
+
+    def selectAudioDevice(self):
+        selected_audio = None
+        device_index = None
+        for index, button in enumerate(self.audio_buttons):
+            if button.isChecked():
+                selected_audio = button.text()
+                device_index = index
+                break
+        self.audio_input = selected_audio  # Update the audio input name
+        if selected_audio:
+            if device_index is not None and self.test_audio_device(device_index):
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
+            else:
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica KO")
+
+    def test_audio_device(self, device_index):
+        p = pyaudio.PyAudio()
+        try:
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
+            data = stream.read(1024)
+            stream.close()
+            if np.frombuffer(data, dtype=np.int16).any():
+                return True
+            return False
+        except Exception as e:
+            return False
+        finally:
+            p.terminate()
+
+    def extract_device_index(self, device_text):
+        match = re.match(r"Input Device ID (\d+) -", device_text)
+        if match:
+            return int(match.group(1))
+        return None
+
+    def print_audio_devices(self):
+        p = pyaudio.PyAudio()
+        num_devices = p.get_device_count()
+        audio_devices = {}
+
+        def is_similar(name1, name2, threshold=0.8):
+            # Check if two names are similar above a certain threshold
+            return SequenceMatcher(None, name1, name2).ratio() > threshold
+
+        for i in range(num_devices):
+            device_info = p.get_device_info_by_index(i)
+            if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
+                # Include only the primary microphone and stereo mix
+                if 'microphone' in device_info.get('name').lower() or 'stereo mix' in device_info.get('name').lower():
+                    device_name = device_info.get('name')
+
+                    # Check for duplicates with similar names
+                    to_add = True
+                    to_remove = None
+                    for existing_name in audio_devices.keys():
+                        if is_similar(device_name, existing_name):
+                            if len(device_name) > len(existing_name):
+                                to_remove = existing_name
+                            else:
+                                to_add = False
+                            break
+
+                    if to_remove:
+                        del audio_devices[to_remove]
+                    if to_add:
+                        audio_devices[device_name] = device_info.get('name')
+
+        p.terminate()
+        return list(audio_devices.keys())  # Convert the dictionary keys back to a list
+
     def createRecordingDock(self):
         dock = Dock("Registrazione", closable=True)
         self.rec_timer = QTimer()
@@ -1603,14 +1691,25 @@ class VideoAudioManager(QMainWindow):
 
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
+        self.startRecordingButton.setToolTip("Inizia la registrazione")
+
         self.stopRecordingButton = QPushButton("")
         self.stopRecordingButton.setIcon(QIcon("./res/stop.png"))
+        self.stopRecordingButton.setToolTip("Ferma la registrazione")
+
+        self.pauseRecordingButton = QPushButton("")
+        self.pauseRecordingButton.setIcon(QIcon("./res/pausa_play.png"))
+        self.pauseRecordingButton.setToolTip("Pausa/Riprendi la registrazione")
+        self.pauseRecordingButton.setEnabled(False)
+
         buttonLayout = QHBoxLayout()
         buttonLayout.addWidget(self.startRecordingButton)
         buttonLayout.addWidget(self.stopRecordingButton)
+        buttonLayout.addWidget(self.pauseRecordingButton)
 
         self.startRecordingButton.clicked.connect(self.startScreenRecording)
         self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
+        self.pauseRecordingButton.clicked.connect(self.togglePauseResumeRecording)
 
         recordingLayout.addLayout(buttonLayout)
 
@@ -1627,79 +1726,18 @@ class VideoAudioManager(QMainWindow):
         self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
         return dock
 
-    def selectAudioDevice(self):
-        selected_audio = None
-        device_index = None
-        for index, button in enumerate(self.audio_buttons):
-            if button.isChecked():
-                selected_audio = button.text()
-                device_index = index
-                break
-        self.audio_input = selected_audio  # Update the audio input name
-        if selected_audio:
-            if device_index is not None and self.test_audio_device(device_index):
-                self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
-            else:
-                self.audioTestResultLabel.setText(f"Test Audio: Periferica KO")
-
-    def test_audio_device(self, device_index):
-        p = pyaudio.PyAudio()
-        try:
-            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
-            data = stream.read(1024)
-            stream.close()
-            if np.frombuffer(data, dtype=np.int16).any():
-                return True
-            return False
-        except Exception as e:
-            return False
-        finally:
-            p.terminate()
-
-    def extract_device_index(self, device_text):
-        match = re.match(r"Input Device ID (\d+) -", device_text)
-        if match:
-            return int(match.group(1))
-        return None
-
-    def print_audio_devices(self):
-        p = pyaudio.PyAudio()
-        num_devices = p.get_device_count()
-        audio_devices = {}
-
-        def is_similar(name1, name2, threshold=0.8):
-            # Check if two names are similar above a certain threshold
-            return SequenceMatcher(None, name1, name2).ratio() > threshold
-
-        for i in range(num_devices):
-            device_info = p.get_device_info_by_index(i)
-            if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
-                # Include only the primary microphone and stereo mix
-                if 'microphone' in device_info.get('name').lower() or 'stereo mix' in device_info.get('name').lower():
-                    device_name = device_info.get('name')
-
-                    # Check for duplicates with similar names
-                    to_add = True
-                    to_remove = None
-                    for existing_name in audio_devices.keys():
-                        if is_similar(device_name, existing_name):
-                            if len(device_name) > len(existing_name):
-                                to_remove = existing_name
-                            else:
-                                to_add = False
-                            break
-
-                    if to_remove:
-                        del audio_devices[to_remove]
-                    if to_add:
-                        audio_devices[device_name] = device_info.get('name')
-
-        p.terminate()
-        return list(audio_devices.keys())  # Convert the dictionary keys back to a list
-
     def startScreenRecording(self):
         self.startRecordingButton.setEnabled(False)
+        self.pauseRecordingButton.setEnabled(True)
         self.stopRecordingButton.setEnabled(True)
+        self.recording_segments = []  # Initialize the list to store recording segments
+        self.is_paused = False
+
+        self.recordingTime = QTime(0, 0, 0)
+        self.rec_timer.start(1000)
+        self._startRecordingSegment()
+
+    def _startRecordingSegment(self):
         selected_audio = None
         for button in self.audio_buttons:
             if button.isChecked():
@@ -1723,7 +1761,7 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        video_file_path_with_timestamp = os.path.join(default_folder, f"{recording_name}.mp4")
+        segment_file_path = os.path.join(default_folder, f"{recording_name}_{len(self.recording_segments)}.mp4")
 
         ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
@@ -1739,7 +1777,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         self.recorder_thread = ScreenRecorder(
-            output_path=video_file_path_with_timestamp,
+            output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
             audio_input=self.audio_input if not save_video_only else None,
@@ -1750,13 +1788,35 @@ class VideoAudioManager(QMainWindow):
         self.recorder_thread.error_signal.connect(self.showError)
         self.recorder_thread.start()
 
-        self.recordingTime = QTime(0, 0, 0)
-        self.rec_timer.start(1000)
-        self.current_video_path = video_file_path_with_timestamp
+        self.recording_segments.append(segment_file_path)
+        self.current_video_path = segment_file_path
         self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di Schermo {monitor_index + 1}')
 
+    def togglePauseResumeRecording(self):
+        if self.is_paused:
+            self.resumeScreenRecording()
+        else:
+            self.pauseScreenRecording()
+
+    def pauseScreenRecording(self):
+        if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
+            self.recorder_thread.stop()
+            self.recorder_thread.wait()  # Ensure the thread has finished
+            self.rec_timer.stop()
+            self.recordingStatusLabel.setText('Stato: Registrazione in pausa')
+            self.is_paused = True
+
+    def resumeScreenRecording(self):
+        self._startRecordingSegment()
+        self.rec_timer.start(1000)
+        self.recordingStatusLabel.setText('Stato: Registrazione ripresa')
+
+        self.is_paused = False
+
     def stopScreenRecording(self):
+        self.pauseRecordingButton.setEnabled(False)
         self.startRecordingButton.setEnabled(True)
+        self.pauseRecordingButton.setEnabled(False)
         self.stopRecordingButton.setEnabled(False)
         self.rec_timer.stop()
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
@@ -1765,24 +1825,29 @@ class VideoAudioManager(QMainWindow):
             self.recorder_thread.wait()  # Ensure the thread has finished
 
         if hasattr(self, 'current_video_path'):
-            video_path = self.current_video_path
+            self._mergeSegments()
 
-            if video_path and os.path.exists(video_path):
-                self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
-                QMessageBox.information(self, "File Salvato",
-                                        f"Il video è stato salvato correttamente:\nVideo: {video_path}")
-            else:
-                self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file video trovato.")
-                QMessageBox.warning(self, "File non trovato", "Il file video non è stato trovato.")
-            self.loadVideoOutput(video_path)
-
-            self.current_video_path = None
-        else:
-            self.recordingStatusLabel.setText("Stato: Registrazione Terminata senza file da salvare.")
-
-        if self.rec_timer.isActive():
-            self.rec_timer.stop()
+        self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
+
+    def _mergeSegments(self):
+        output_path = self.recording_segments[0].rsplit('_', 1)[0] + '_final.mp4'
+        ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
+
+        with open("segments.txt", "w") as file:
+            for segment in self.recording_segments:
+                file.write(f"file '{segment}'\n")
+
+        merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', 'segments.txt', '-c', 'copy', output_path]
+        subprocess.run(merge_command)
+
+        QMessageBox.information(self, "File Salvato",
+                                f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
+        self.loadVideoOutput(output_path)
+
+    def updateTimecodeRec(self):
+        self.recordingTime = self.recordingTime.addSecs(1)
+        self.timecodeLabel.setText(self.recordingTime.toString('hh:mm:ss'))
 
     def showError(self, message):
         QMessageBox.critical(self, "Errore", message)
