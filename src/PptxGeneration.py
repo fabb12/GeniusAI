@@ -1,8 +1,7 @@
-from PyQt6.QtWidgets import QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from pptx import Presentation
 from pptx.util import Pt, Inches
 import re
-
 class PptxGeneration:
     @staticmethod
     def impostaFont(shape, size_pt, text):
@@ -34,7 +33,8 @@ class PptxGeneration:
                                                        "PowerPoint Presentation (*.pptx)")
             if save_path:
                 # Utilizza il testo presente per generare la presentazione e salvare al percorso specificato
-                PptxGeneration.createPresentationFromText(testo_attuale, save_path)
+                PptxGeneration.createPresentationFromText(parent, testo_attuale,
+                                                          save_path)  # Aggiunto parent come primo argomento
             else:
                 QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
@@ -92,44 +92,27 @@ class PptxGeneration:
             else:
                 QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
-    @staticmethod
-    def createPresentationFromText(testo, output_file):
-
-        # Create a PowerPoint presentation
+    def createPresentationFromText(parent, testo, output_file):
         prs = Presentation()
-
-        # Select the 'Title and Content' layout which is commonly layout index 1
         title_and_content_layout = prs.slide_layouts[1]
 
         def imposta_testo_e_font(paragraph, text, size_pt, bold=False):
-            """
-            Helper function to set text and font properties for a given paragraph.
-            """
-            # Remove asterisks from the text before setting it
-            text = text.replace('*', '')  # Removes all asterisks
-
+            text = text.replace('*', '')
             run = paragraph.add_run()
             run.text = text
             run.font.size = Pt(size_pt)
             run.font.bold = bold
 
-        # Clean the text: remove format specific asterisks and adjust bullet points
-        clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo)  # Remove asterisks around titles
-        clean_text = re.sub(r'-\s*', '\u2022 ', clean_text)  # Replace dashes before bullets with bullet points
+        clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo)
+        clean_text = re.sub(r'-\s*', '\u2022 ', clean_text)
 
-        # Regex to extract structured information such as title, subtitle, and content
         pattern = r"Titolo:\s*(.*?)\s+Sottotitolo:\s*(.*?)\s+Contenuto:\s*(.*?)\s*(?=Titolo|$)"
         slides_data = re.findall(pattern, clean_text, re.DOTALL)
 
         for titolo_text, sottotitolo_text, contenuto_text in slides_data:
-            # Add a slide with the predefined layout
             slide = prs.slides.add_slide(title_and_content_layout)
-
-            # Set the main title
             titolo = slide.shapes.title
             imposta_testo_e_font(titolo.text_frame.add_paragraph(), titolo_text.strip(), 32, bold=True)
-
-            # Create a textbox for the subtitle directly below the title
             left = Inches(1)
             top = Inches(1.5)
             width = Inches(8)
@@ -137,23 +120,46 @@ class PptxGeneration:
             sottotitolo_shape = slide.shapes.add_textbox(left, top, width, height)
             sottotitolo_frame = sottotitolo_shape.text_frame
             imposta_testo_e_font(sottotitolo_frame.add_paragraph(), sottotitolo_text.strip(), 24, bold=False)
-
-            # Set the content
             contenuto_box = slide.placeholders[1]
             for line in contenuto_text.strip().split('\n'):
                 p = contenuto_box.text_frame.add_paragraph()
                 if ':' in line:
                     part1, part2 = line.split(':', 1)
-                    imposta_testo_e_font(p, part1.strip() + ':', 20, bold=True)  # Bold the part before the colon
-                    imposta_testo_e_font(p, part2.strip(), 20, bold=False)  # Normal text for the part after the colon
+                    imposta_testo_e_font(p, part1.strip() + ':', 20, bold=True)
+                    imposta_testo_e_font(p, part2.strip(), 20, bold=False)
                 else:
-                    imposta_testo_e_font(p, line.strip(), 20, bold=False)  # Normal text if no colon is present
+                    imposta_testo_e_font(p, line.strip(), 20, bold=False)
 
-        # Save the presentation if slides have been created
         if prs.slides:
             prs.save(output_file)
-            QMessageBox.information(None, "Successo",
-                                    "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
+            QMessageBox.information(None, "Successo", "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
+            PptxGeneration.visualizzaPresentazione(parent, output_file)
         else:
-            QMessageBox.warning(None, "Attenzione",
-                                "Non sono state generate slides a causa di dati di input non validi o mancanti.")
+            QMessageBox.warning(None, "Attenzione", "Non sono state generate slides a causa di dati di input non validi o mancanti.")
+
+    @staticmethod
+    def visualizzaPresentazione(parent, file_path):
+        prs = Presentation(file_path)
+        dialog = QDialog(parent)
+        dialog.setWindowTitle("Visualizza Presentazione")
+        layout = QVBoxLayout()
+
+        for i, slide in enumerate(prs.slides):
+            slide_label = QLabel(f"Slide {i+1}: {slide.shapes.title.text if slide.shapes.title else 'Senza titolo'}")
+            layout.addWidget(slide_label)
+
+        buttonLayout = QHBoxLayout()
+        fineSlideButton = QPushButton("Imposta Fine Slide")
+        fineSlideButton.clicked.connect(lambda: PptxGeneration.impostaFineSlide(prs, dialog))
+        buttonLayout.addWidget(fineSlideButton)
+
+        layout.addLayout(buttonLayout)
+        dialog.setLayout(layout)
+        dialog.exec()
+
+    @staticmethod
+    def impostaFineSlide(prs, dialog):
+        # Logica per impostare la fine della slide
+        # Qui puoi implementare la funzionalità che desideri
+        dialog.accept()
+        QMessageBox.information(dialog, "Informazione", "Fine della slide impostata con successo.")
