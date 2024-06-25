@@ -3,10 +3,6 @@ import subprocess
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
 import os
-import re
-import datetime
-import pyaudio
-import numpy as np
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)

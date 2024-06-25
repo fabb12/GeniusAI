@@ -6,7 +6,7 @@ from pptx import Presentation
 import re
 import tempfile
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
-                             QLineEdit,  QHBoxLayout, QGroupBox, QTextEdit, QComboBox)
+                             QLineEdit,  QHBoxLayout, QGroupBox,  QComboBox)
 from PyQt6.QtGui import QIcon
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from pyqtgraph.dockarea.Dock import Dock
@@ -18,18 +18,16 @@ from DownloadVideo import DownloadThread
 from AudioTranscript import TranscriptionThread
 from AudioGenerationREST import AudioGenerationThread
 from VideoCutting import VideoCuttingThread
-import cv2
 from ScreenRecorder import ScreenRecorder
 from screeninfo import get_monitors
 from SettingsManager import DockSettingsManager
 from PyQt6.QtCore import  QTime
-from pptx.util import Pt, Inches
 from num2words import num2words
 from langdetect import detect, LangDetectException
 import pycountry
 from CustVideoWidget import CropVideoWidget
 from moviepy.audio.AudioClip import CompositeAudioClip
-from PyQt6.QtCore import pyqtSignal
+
 import shutil
 import pyaudio
 from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
@@ -47,46 +45,23 @@ import logging
 from bs4 import BeautifulSoup
 import numpy as np
 from ScreenButton import ScreenButton
+from CustumTextEdit import CustomTextEdit
 from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
 from Settings import SettingsDialog
 from Summarizer import SummarizerThread
 from difflib import SequenceMatcher
+import StreamToLogger
+from PptxGeneration import PptxGeneration
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
-
-# Configura il logging
-logging.basicConfig(
-    filename='console_log.txt',
-    level=logging.DEBUG,
-    format='[%(asctime)s - %(levelname)s] - %(message)s'
-)
-
-
-# Crea un gestore di logging per stdout e stderr
-class StreamToLogger(object):
-    def __init__(self, logger, log_level):
-        self.logger = logger
-        self.log_level = log_level
-        self.linebuf = ''
-
-    def write(self, buf):
-        for line in buf.rstrip().splitlines():
-            self.logger.log(self.log_level, line.rstrip())
-
-    def flush(self):
-        pass
-
-
-# Reindirizza stdout e stderr al logger
-sys.stdout = StreamToLogger(logging.getLogger('STDOUT'), logging.INFO)
-sys.stderr = StreamToLogger(logging.getLogger('STDERR'), logging.ERROR)
-
-
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
+
+        StreamToLogger.setup_logging()
+
         # Version information
         self.version_major = 1
         self.version_minor = 2
@@ -217,10 +192,6 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(self.styleSheet())
         area.addDock(self.videoMergeDock, 'bottom')
 
-        if hasattr(self, 'applyDarkMode'):
-            self.applyDarkMode()
-
-        self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
 
 
         # Setup del dock del video player
@@ -565,7 +536,7 @@ class VideoAudioManager(QMainWindow):
         self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
 
         self.generatePresentationButton = QPushButton('Genera Presentazione')
-        self.generatePresentationButton.clicked.connect(self.generaPresentationConTestoAttuale)
+        self.generatePresentationButton.clicked.connect(self.creaPresentazione)
 
         # Aggiunta dei layout e widget al layout interno
         innerLayout.addLayout(buttonsLayout)  # Aggiungi il layout dei pulsanti in orizzontale
@@ -636,6 +607,15 @@ class VideoAudioManager(QMainWindow):
         settingsAction.triggered.connect(self.showSettingsDialog)
         toolbar.addAction(settingsAction)
 
+
+        if hasattr(self, 'applyDarkMode'):
+            self.applyDarkMode()
+
+        self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
+
+
+    def creaPresentazione(self):
+        PptxGeneration.creaPresentazione(self, self.transcriptionTextArea)
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
         dialog.exec()
@@ -1560,12 +1540,6 @@ class VideoAudioManager(QMainWindow):
         finally:
             p.terminate()
 
-    def extract_device_index(self, device_text):
-        match = re.match(r"Input Device ID (\d+) -", device_text)
-        if match:
-            return int(match.group(1))
-        return None
-
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
         num_devices = p.get_device_count()
@@ -2278,11 +2252,6 @@ class VideoAudioManager(QMainWindow):
     def updateTranscriptionLanguageDisplay(self, language):
         self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
 
-    def removeTimecodes(self, text):
-        # Regex to remove timecodes in the format [00:01]
-        import re
-        return re.sub(r'\s*\[\d{2}:\d{2}\]', '', text)
-
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video selezionato.")
@@ -2358,18 +2327,6 @@ class VideoAudioManager(QMainWindow):
             progress_dialog.cancel()
 
         return error
-
-    def impostaFont(shape, size_pt, text):
-        """
-        Imposta il font per una shape data con la grandezza specificata.
-        """
-        text_frame = shape.text_frame
-        p = text_frame.paragraphs[0]
-        run = p.add_run()
-        run.text = text
-
-        font = run.font
-        font.size = Pt(size_pt)  # Imposta la grandezza del font
 
     def generateAudioWithElevenLabs(self):
         if not self.api_key:
@@ -2690,163 +2647,7 @@ class VideoAudioManager(QMainWindow):
     def stopVideo(self):
         self.player.stop()
 
-    def creaPresentazione(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")
-        if file_path:
-            try:
-                # Qui chiamiamo la funzione `crea_presentation_da_file`, passando il percorso del file selezionato
-                self.createPresentationFromFile(file_path)
-                QMessageBox.information(self, "Successo", "Presentazione PowerPoint generata con successo.")
-            except Exception as e:
-                QMessageBox.critical(self, "Errore",
-                                     f"Si è verificato un errore durante la generazione della presentazione: {e}")
 
-    def createPresentationFromFile(self, file_path):
-        # Tentativo di lettura del file con diverse codifiche
-        encodings = ['utf-8', 'windows-1252', 'iso-8859-1']  # Lista di codifiche comuni
-        text_content = None
-        for encoding in encodings:
-            try:
-                with open(file_path, 'r', encoding=encoding) as file:
-                    text_content = file.read()
-                break  # Se la lettura riesce, interrompe il ciclo
-            except UnicodeDecodeError:
-                continue  # Prova la prossima codifica
-            except IOError as e:
-                QMessageBox.critical(self, "Errore di lettura file", f"Impossibile leggere il file: {str(e)}")
-                return
-            except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Errore non previsto: {str(e)}")
-                return
-
-        if text_content is None:
-            QMessageBox.critical(self, "Errore di lettura",
-                                 "Non è stato possibile decodificare il file con le codifiche standard.")
-            return
-
-        # Chiedi all'utente dove salvare la presentazione PowerPoint
-        output_file, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
-                                                     "PowerPoint Presentation (*.pptx)")
-        if not output_file:
-            QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
-            return
-
-        # Crea la presentazione PowerPoint utilizzando il testo letto dal file
-        self.createPresentationFromText(text_content, output_file)
-
-    def generaPresentationConTestoAttuale(self):
-        testo_attuale = self.transcriptionTextArea.toPlainText()
-        if testo_attuale.strip() == "":
-            # Se la QTextEdit è vuota, chiede all'utente di selezionare un file
-            file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")
-            if file_path:
-                self.createPresentationFromFile(file_path)
-            else:
-                # Se l'utente non seleziona un file, mostra un messaggio e non fa nulla
-                QMessageBox.warning(self, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
-        else:
-            # Prompt the user to choose a location to save the presentation
-            save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
-                                                       "PowerPoint Presentation (*.pptx)")
-            if save_path:
-                # Utilizza il testo presente per generare la presentazione e salvare al percorso specificato
-                self.createPresentationFromText(testo_attuale, save_path)
-            else:
-                QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
-
-    def createPresentationFromText(self, testo, output_file):
-
-        # Create a PowerPoint presentation
-        prs = Presentation()
-
-        # Select the 'Title and Content' layout which is commonly layout index 1
-        title_and_content_layout = prs.slide_layouts[1]
-
-        def imposta_testo_e_font(paragraph, text, size_pt, bold=False):
-            """
-            Helper function to set text and font properties for a given paragraph.
-            """
-            # Remove asterisks from the text before setting it
-            text = text.replace('*', '')  # Removes all asterisks
-
-            run = paragraph.add_run()
-            run.text = text
-            run.font.size = Pt(size_pt)
-            run.font.bold = bold
-
-        # Clean the text: remove format specific asterisks and adjust bullet points
-        clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo)  # Remove asterisks around titles
-        clean_text = re.sub(r'-\s*', '\u2022 ', clean_text)  # Replace dashes before bullets with bullet points
-
-        # Regex to extract structured information such as title, subtitle, and content
-        pattern = r"Titolo:\s*(.*?)\s+Sottotitolo:\s*(.*?)\s+Contenuto:\s*(.*?)\s*(?=Titolo|$)"
-        slides_data = re.findall(pattern, clean_text, re.DOTALL)
-
-        for titolo_text, sottotitolo_text, contenuto_text in slides_data:
-            # Add a slide with the predefined layout
-            slide = prs.slides.add_slide(title_and_content_layout)
-
-            # Set the main title
-            titolo = slide.shapes.title
-            imposta_testo_e_font(titolo.text_frame.add_paragraph(), titolo_text.strip(), 32, bold=True)
-
-            # Create a textbox for the subtitle directly below the title
-            left = Inches(1)
-            top = Inches(1.5)
-            width = Inches(8)
-            height = Inches(1)
-            sottotitolo_shape = slide.shapes.add_textbox(left, top, width, height)
-            sottotitolo_frame = sottotitolo_shape.text_frame
-            imposta_testo_e_font(sottotitolo_frame.add_paragraph(), sottotitolo_text.strip(), 24, bold=False)
-
-            # Set the content
-            contenuto_box = slide.placeholders[1]
-            for line in contenuto_text.strip().split('\n'):
-                p = contenuto_box.text_frame.add_paragraph()
-                if ':' in line:
-                    part1, part2 = line.split(':', 1)
-                    imposta_testo_e_font(p, part1.strip() + ':', 20, bold=True)  # Bold the part before the colon
-                    imposta_testo_e_font(p, part2.strip(), 20, bold=False)  # Normal text for the part after the colon
-                else:
-                    imposta_testo_e_font(p, line.strip(), 20, bold=False)  # Normal text if no colon is present
-
-        # Save the presentation if slides have been created
-        if prs.slides:
-            prs.save(output_file)
-            QMessageBox.information(self, "Successo",
-                                    "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
-        else:
-            QMessageBox.warning(self, "Attenzione",
-                                "Non sono state generate slides a causa di dati di input non validi o mancanti.")
-
-class CustomComboBox(QComboBox):
-    popupOpened = pyqtSignal()
-
-    def showPopup(self):
-        self.popupOpened.emit()
-        super().showPopup()
-
-class CustomTextEdit(QTextEdit):
-    cursorPositionChanged = pyqtSignal()
-
-    def __init__(self, parent=None):
-        super().__init__(parent)
-
-    def keyPressEvent(self, event):
-        super().keyPressEvent(event)
-        self.cursorPositionChanged.emit()
-
-    def mousePressEvent(self, event):
-        super().mousePressEvent(event)
-        self.cursorPositionChanged.emit()
-
-    def insertFromMimeData(self, source):
-        if source.hasText():
-            plain_text = source.text()
-            self.insertPlainText(plain_text)
-        else:
-            super().insertFromMimeData(source)
-        self.cursorPositionChanged.emit()
 
 
 if __name__ == '__main__':
