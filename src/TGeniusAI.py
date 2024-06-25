@@ -90,7 +90,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 2
-        self.version_patch = 1
+        self.version_patch = 2
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
