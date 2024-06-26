@@ -9,7 +9,7 @@ class ScreenRecorder(QThread):
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
 
-    def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_input=None, audio_channels=2, frames=25):
+    def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_input=None, audio_channels=2, frames=25, record_audio=True):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -17,6 +17,7 @@ class ScreenRecorder(QThread):
         self.audio_input = audio_input
         self.audio_channels = audio_channels
         self.frame_rate = frames
+        self.record_audio = record_audio
         self.is_running = True
 
         # Check if ffmpeg.exe exists
@@ -33,8 +34,6 @@ class ScreenRecorder(QThread):
 
         offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
 
-        # Ensure audio input is not None
-        audio_input = self.audio_input if self.audio_input else 'none'
         ffmpeg_command = [
             self.ffmpeg_path,  # Use the provided ffmpeg path
             '-f', 'gdigrab',  # For Windows screen capture
@@ -43,17 +42,19 @@ class ScreenRecorder(QThread):
             '-offset_y', str(offset_y),
             '-video_size', f'{screen_width}x{screen_height}',
             '-i', 'desktop',
-            '-f', 'dshow',  # For Windows audio capture
-            '-i', f'audio={audio_input}',  # Use the correct audio input
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-y', self.output_path,
-            #'-loglevel', 'verbose',  # Add verbose logging
-            #'-report'  # Generate detailed report
+            '-y', self.output_path
         ]
+
+        if self.record_audio and self.audio_input:
+            ffmpeg_command.extend([
+                '-f', 'dshow',  # For Windows audio capture
+                '-i', f'audio={self.audio_input}',  # Use the correct audio input
+                '-c:a', 'aac',
+                '-b:a', '192k'
+            ])
 
         # Use CREATE_NO_WINDOW to hide the console window
         creationflags = subprocess.CREATE_NO_WINDOW

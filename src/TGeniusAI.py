@@ -1733,7 +1733,10 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        segment_file_path = os.path.join(default_folder, f"{recording_name}_{len(self.recording_segments)}.mp4")
+        if len(self.recording_segments) == 0:
+            segment_file_path = os.path.join(default_folder, f"{recording_name}.mp4")
+        else:
+            segment_file_path = os.path.join(default_folder, f"{recording_name}_{len(self.recording_segments)}.mp4")
 
         ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
@@ -1752,7 +1755,7 @@ class VideoAudioManager(QMainWindow):
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
-            audio_input=self.audio_input if not save_video_only else None,
+            audio_input=selected_audio if not save_video_only else None,
             audio_channels=2 if not save_video_only else 0,
             frames=25
         )
@@ -1802,20 +1805,30 @@ class VideoAudioManager(QMainWindow):
         self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
 
+    import datetime
+
     def _mergeSegments(self):
-        output_path = self.recording_segments[0].rsplit('_', 1)[0] + '_final.mp4'
-        ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
+        if len(self.recording_segments) > 1:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            output_path = self.recording_segments[0].rsplit('_', 1)[0] + f'_final_{timestamp}.mp4'
+            ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
 
-        with open("segments.txt", "w") as file:
-            for segment in self.recording_segments:
-                file.write(f"file '{segment}'\n")
+            segments_file = "segments.txt"
+            with open(segments_file, "w") as file:
+                for segment in self.recording_segments:
+                    file.write(f"file '{segment}'\n")
 
-        merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', 'segments.txt', '-c', 'copy', output_path]
-        subprocess.run(merge_command)
+            merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
+            subprocess.run(merge_command)
 
-        QMessageBox.information(self, "File Salvato",
-                                f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
-        self.loadVideoOutput(output_path)
+            QMessageBox.information(self, "File Salvato",
+                                    f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
+            self.loadVideoOutput(output_path)
+        else:
+            output_path = self.recording_segments[0]
+            QMessageBox.information(self, "File Salvato",
+                                    f"Il video è stato salvato correttamente:\nVideo: {output_path}")
+            self.loadVideoOutput(output_path)
 
     def updateTimecodeRec(self):
         self.recordingTime = self.recordingTime.addSecs(1)
