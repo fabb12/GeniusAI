@@ -868,8 +868,6 @@ class VideoAudioManager(QMainWindow):
             elif event.type() == QEvent.Type.MouseButtonPress and event.buttons() & Qt.MouseButton.LeftButton:
                 self.is_panning = True
                 self.last_mouse_position = event.position().toPoint()
-                if self.recorder_thread:
-                    self.recorder_thread.enlarge_circle()
                 return True
             elif event.type() == QEvent.Type.MouseMove and self.is_panning:
                 self.handlePanEvent(event)
