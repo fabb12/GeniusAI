@@ -1835,7 +1835,8 @@ class VideoAudioManager(QMainWindow):
         self.timecodeLabel.setText(self.recordingTime.toString('hh:mm:ss'))
 
     def showError(self, message):
-        QMessageBox.critical(self, "Errore", message)
+        logging.error("Error recording thread:",message)
+        #QMessageBox.critical(self, "Errore", message)
 
     def saveText(self):
         # Apri il dialogo di salvataggio file e ottieni il percorso del file e il filtro selezionato dall'utente
