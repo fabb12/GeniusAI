@@ -615,7 +615,7 @@ class VideoAudioManager(QMainWindow):
 
 
     def creaPresentazione(self):
-        PptxGeneration.creaPresentazione(self, self.transcriptionTextArea)
+        PptxGeneration.creaPresentazione(self, self.transcriptionTextArea, 5)
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
         dialog.exec()

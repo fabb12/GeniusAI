@@ -1,134 +1,137 @@
+import anthropic
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from pptx import Presentation
 from pptx.util import Pt, Inches
+from pptx.dml.color import RGBColor
 import re
+#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
 class PptxGeneration:
     @staticmethod
     def impostaFont(shape, size_pt, text):
-        """
-        Imposta il font per una shape data con la grandezza specificata.
-        """
         text_frame = shape.text_frame
         p = text_frame.paragraphs[0]
         run = p.add_run()
         run.text = text
-
         font = run.font
-        font.size = Pt(size_pt)  # Imposta la grandezza del font
+        font.size = Pt(size_pt)
 
     @staticmethod
-    def creaPresentazione(parent, transcriptionTextArea):
+    def generaTestoPerSlide(testo, num_slide):
+        client = anthropic.Anthropic(api_key="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")
+        message = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=1000,
+            temperature=0.7,
+            system=f"You are a professional slide deck designer. Transform the following text into a format suitable for PowerPoint slides."
+                   f" Each slide should have a title, subtitle, and content."
+                   f" Follow this format for {num_slide} slides:\n\nTitolo: [Titolo della slide]\nSottotitolo:."
+                   f" [Sottotitolo della slide]\nContenuto:\n- Punto elenco 1\n- Punto elenco 2\nSezione 1: \nSezione 2: ",
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"{testo}\n\nAssistant:"
+                        }
+                    ]
+                }
+            ]
+        )
+        # Estrai il testo risultante e i token utilizzati
+        testo_resultante = message.content[0].text
+        input_tokens = message.usage.input_tokens
+        output_tokens = message.usage.output_tokens
+
+        return testo_resultante, input_tokens, output_tokens
+    @staticmethod
+    def creaPresentazione(parent, transcriptionTextArea, num_slide):
         testo_attuale = transcriptionTextArea.toPlainText()
         if testo_attuale.strip() == "":
-            # Se la QTextEdit è vuota, chiede all'utente di selezionare un file
             file_path, _ = QFileDialog.getOpenFileName(parent, "Seleziona File di Testo", "", "Text Files (*.txt)")
             if file_path:
                 PptxGeneration.createPresentationFromFile(parent, file_path)
             else:
-                # Se l'utente non seleziona un file, mostra un messaggio e non fa nulla
                 QMessageBox.warning(parent, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
         else:
-            # Prompt the user to choose a location to save the presentation
             save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "",
                                                        "PowerPoint Presentation (*.pptx)")
             if save_path:
-                # Utilizza il testo presente per generare la presentazione e salvare al percorso specificato
-                PptxGeneration.createPresentationFromText(parent, testo_attuale,
-                                                          save_path)  # Aggiunto parent come primo argomento
+                testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
+                                                                                                  num_slide)
+                print(f"Token di input utilizzati: {input_tokens}")
+                print(f"Token di output utilizzati: {output_tokens}")
+                transcriptionTextArea.setPlainText(testo_per_slide)
+                PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path)
             else:
                 QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
     @staticmethod
-    def createPresentationFromFile(parent, file_path):
-        encodings = ['utf-8', 'windows-1252', 'iso-8859-1']
-        text_content = None
-        for encoding in encodings:
-            try:
-                with open(file_path, 'r', encoding=encoding) as file:
-                    text_content = file.read()
-                break  # Se la lettura riesce, interrompe il ciclo
-            except UnicodeDecodeError:
-                continue  # Prova la prossima codifica
-            except IOError as e:
-                QMessageBox.critical(parent, "Errore di lettura file", f"Impossibile leggere il file: {str(e)}")
-                return
-            except Exception as e:
-                QMessageBox.critical(parent, "Errore", f"Errore non previsto: {str(e)}")
-                return
-
-        if text_content is None:
-            QMessageBox.critical(parent, "Errore di lettura",
-                                 "Non è stato possibile decodificare il file con le codifiche standard.")
-            return
-
-        # Chiedi all'utente dove salvare la presentazione PowerPoint
-        output_file, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "",
-                                                     "PowerPoint Presentation (*.pptx)")
-        if not output_file:
-            QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
-            return
-
-        # Crea la presentazione PowerPoint utilizzando il testo letto dal file
-        PptxGeneration.createPresentationFromText(text_content, output_file)
-
-    @staticmethod
-    def generaPresentationConTestoAttuale(parent, transcriptionTextArea):
-        testo_attuale = transcriptionTextArea.toPlainText()
-        if testo_attuale.strip() == "":
-            # Se la QTextEdit è vuota, chiede all'utente di selezionare un file
-            file_path, _ = QFileDialog.getOpenFileName(parent, "Seleziona File di Testo", "", "Text Files (*.txt)")
-            if file_path:
-                PptxGeneration.createPresentationFromFile(parent, file_path)
-            else:
-                # Se l'utente non seleziona un file, mostra un messaggio e non fa nulla
-                QMessageBox.warning(parent, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
-        else:
-            # Prompt the user to choose a location to save the presentation
-            save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "",
-                                                       "PowerPoint Presentation (*.pptx)")
-            if save_path:
-                # Utilizza il testo presente per generare la presentazione e salvare al percorso specificato
-                PptxGeneration.createPresentationFromText(testo_attuale, save_path)
-            else:
-                QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
-
     def createPresentationFromText(parent, testo, output_file):
         prs = Presentation()
-        title_and_content_layout = prs.slide_layouts[1]
+        title_slide_layout = prs.slide_layouts[0]
+        content_slide_layout = prs.slide_layouts[1]
 
-        def imposta_testo_e_font(paragraph, text, size_pt, bold=False):
-            text = text.replace('*', '')
+        def imposta_testo_e_font(paragraph, text, size_pt, bold=False, color=None):
             run = paragraph.add_run()
             run.text = text
-            run.font.size = Pt(size_pt)
-            run.font.bold = bold
+            font = run.font
+            font.name = 'Calibri'
+            font.size = Pt(size_pt)
+            font.bold = bold
+            if color:
+                font.color.rgb = RGBColor(*color)
+
+        def aggiungi_paragrafo_formattato(shape, text, size_pt, bold=False, color=None, bullet=False):
+            paragraph = shape.text_frame.add_paragraph()
+            if bullet:
+                paragraph.level = 0
+            imposta_testo_e_font(paragraph, text, size_pt, bold, color)
+            return paragraph
+
+        def aggiungi_footer(slide):
+            footer = slide.shapes.add_textbox(Inches(0.5), Inches(7), Inches(9), Inches(0.5))
+            footer_text = footer.text_frame.add_paragraph()
+            imposta_testo_e_font(footer_text, "Made by GeniusAI", 10, color=(255, 255, 255))
+            footer_text.alignment = 2  # Centro allineato
 
         clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo)
-        clean_text = re.sub(r'-\s*', '\u2022 ', clean_text)
+        clean_text = re.sub(r'-\s*', '', clean_text)
 
         pattern = r"Titolo:\s*(.*?)\s+Sottotitolo:\s*(.*?)\s+Contenuto:\s*(.*?)\s*(?=Titolo|$)"
         slides_data = re.findall(pattern, clean_text, re.DOTALL)
 
-        for titolo_text, sottotitolo_text, contenuto_text in slides_data:
-            slide = prs.slides.add_slide(title_and_content_layout)
-            titolo = slide.shapes.title
-            imposta_testo_e_font(titolo.text_frame.add_paragraph(), titolo_text.strip(), 32, bold=True)
-            left = Inches(1)
-            top = Inches(1.5)
-            width = Inches(8)
-            height = Inches(1)
-            sottotitolo_shape = slide.shapes.add_textbox(left, top, width, height)
-            sottotitolo_frame = sottotitolo_shape.text_frame
-            imposta_testo_e_font(sottotitolo_frame.add_paragraph(), sottotitolo_text.strip(), 24, bold=False)
-            contenuto_box = slide.placeholders[1]
-            for line in contenuto_text.strip().split('\n'):
-                p = contenuto_box.text_frame.add_paragraph()
-                if ':' in line:
-                    part1, part2 = line.split(':', 1)
-                    imposta_testo_e_font(p, part1.strip() + ':', 20, bold=True)
-                    imposta_testo_e_font(p, part2.strip(), 20, bold=False)
-                else:
-                    imposta_testo_e_font(p, line.strip(), 20, bold=False)
+        for index, (titolo_text, sottotitolo_text, contenuto_text) in enumerate(slides_data):
+            if index == 0:
+                slide = prs.slides.add_slide(title_slide_layout)
+                title = slide.shapes.title
+                subtitle = slide.placeholders[1]
+            else:
+                slide = prs.slides.add_slide(content_slide_layout)
+                title = slide.shapes.title
+                content = slide.placeholders[1]
+
+            aggiungi_paragrafo_formattato(title, titolo_text.strip(), 44, bold=True, color=(0, 0, 0))
+
+            if index == 0:
+                aggiungi_paragrafo_formattato(subtitle, sottotitolo_text.strip(), 32, color=(89, 89, 89))
+            else:
+                subtitle_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(9), Inches(0.5))
+                aggiungi_paragrafo_formattato(subtitle_shape, sottotitolo_text.strip(), 28, color=(89, 89, 89))
+
+                for line in contenuto_text.strip().split('\n'):
+                    line = line.strip()
+                    if line.startswith('•'):
+                        aggiungi_paragrafo_formattato(content, line[1:].strip(), 24, bullet=True)
+                    elif ':' in line:
+                        parts = line.split(':', 1)
+                        p = aggiungi_paragrafo_formattato(content, parts[0].strip() + ':', 24, bold=True)
+                        if len(parts) > 1:
+                            imposta_testo_e_font(p, parts[1].strip(), 24)
+                    else:
+                        aggiungi_paragrafo_formattato(content, line, 24)
+
+            aggiungi_footer(slide)  # Aggiunge il footer a ogni slide
 
         if prs.slides:
             prs.save(output_file)
@@ -159,7 +162,5 @@ class PptxGeneration:
 
     @staticmethod
     def impostaFineSlide(prs, dialog):
-        # Logica per impostare la fine della slide
-        # Qui puoi implementare la funzionalità che desideri
         dialog.accept()
         QMessageBox.information(dialog, "Informazione", "Fine della slide impostata con successo.")
