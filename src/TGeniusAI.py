@@ -56,6 +56,36 @@ from PptxGeneration import PptxGeneration
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
+
+"""
+
+class CropSelectionWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.rubberBand = QRubberBand(QRubberBand.Shape.Rectangle, self)
+        self.origin = None
+        self.cropRect = QRect()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.origin = event.pos()
+            self.rubberBand.setGeometry(QRect(self.origin, self.origin))
+            self.rubberBand.show()
+
+    def mouseMoveEvent(self, event):
+        if self.origin:
+            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.cropRect = self.rubberBand.geometry()
+            self.rubberBand.hide()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setPen(QPen(Qt.GlobalColor.red, 2, Qt.PenStyle.DashLine))
+        painter.drawRect(self.cropRect)
+"""
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -193,6 +223,52 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.videoMergeDock, 'bottom')
 
 
+        # Generazione AI Dock
+
+        # Add Generazione AI dock
+        self.generazioneAIDock = Dock("Generazione AI", closable=True)
+        self.generazioneAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.addDock(self.generazioneAIDock, 'right')
+
+        # Generazione AI UI setup
+        generazioneAIDockWidget = QGroupBox("Impostazioni Generazione AI")
+        generazioneAILayout = QVBoxLayout()
+
+        # Number of slides input
+        self.numSlidesLabel = QLabel("Numero di Slide:")
+        self.numSlidesInput = QLineEdit()
+        self.numSlidesInput.setPlaceholderText("Inserisci numero di slide")
+        generazioneAILayout.addWidget(self.numSlidesLabel)
+        generazioneAILayout.addWidget(self.numSlidesInput)
+
+        # Company name input
+        self.companyNameLabel = QLabel("Nome della Compagnia:")
+        self.companyNameInput = QLineEdit()
+        self.companyNameInput.setPlaceholderText("Inserisci nome della compagnia")
+        generazioneAILayout.addWidget(self.companyNameLabel)
+        generazioneAILayout.addWidget(self.companyNameInput)
+
+        # Language input
+        self.languageLabel = QLabel("Lingua:")
+        self.languageInput = QComboBox()
+        self.languageInput.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        generazioneAILayout.addWidget(self.languageLabel)
+        generazioneAILayout.addWidget(self.languageInput)
+
+        # Save PowerPoint checkbox
+        self.savePowerPointCheckbox = QCheckBox("Salva il file PowerPoint")
+        self.savePowerPointCheckbox.setChecked(True)
+        generazioneAILayout.addWidget(self.savePowerPointCheckbox)
+
+        # Generate presentation button
+        self.generatePresentationButton = QPushButton('Genera Presentazione con AI')
+        self.generatePresentationButton.clicked.connect(self.creaPresentazione)
+        generazioneAILayout.addWidget(self.generatePresentationButton)
+
+        generazioneAIDockWidget.setLayout(generazioneAILayout)
+        self.generazioneAIDock.addWidget(generazioneAIDockWidget)
+
+        #####
 
         # Setup del dock del video player
         self.videoCropWidget = CropVideoWidget()
@@ -517,8 +593,6 @@ class VideoAudioManager(QMainWindow):
         self.summarizeButton = QPushButton('Riassumi')
         self.summarizeButton.clicked.connect(self.summarizeText)  # Collega la funzione di riassunto
 
-        # Aggiungi il pulsante Riassumi al layout
-
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
@@ -535,8 +609,6 @@ class VideoAudioManager(QMainWindow):
         self.generateAudioButton = QPushButton('Genera Audio con AI')
         self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
 
-        self.generatePresentationButton = QPushButton('Genera Presentazione')
-        self.generatePresentationButton.clicked.connect(self.creaPresentazione)
 
         # Aggiunta dei layout e widget al layout interno
         innerLayout.addLayout(buttonsLayout)  # Aggiungi il layout dei pulsanti in orizzontale
@@ -544,8 +616,6 @@ class VideoAudioManager(QMainWindow):
         innerLayout.addWidget(self.transcriptionLanguageLabel)
         bottonLayout = QHBoxLayout()
         bottonLayout.addWidget(self.generateAudioButton)
-        bottonLayout.addWidget(self.generatePresentationButton)
-       # bottonLayout.addWidget(self.summarizeButton)
         innerLayout.addLayout(bottonLayout)
 
         # Impostazione del layout interno al GroupBox
@@ -581,7 +651,8 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'videoMergeDock': self.videoMergeDock
+            'videoMergeDock': self.videoMergeDock,
+            'generazioneAIDock': self.generazioneAIDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -613,9 +684,56 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
 
-
     def creaPresentazione(self):
-        PptxGeneration.creaPresentazione(self, self.transcriptionTextArea, 5)
+        try:
+            num_slide = int(self.numSlidesInput.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, "Errore", "Per favore, inserisci un numero valido per le slide.")
+            return
+
+        company = self.companyNameInput.text().strip()
+        language = self.languageInput.currentText()
+        save_presentation = self.savePowerPointCheckbox.isChecked()
+
+        if not company:
+            QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
+            return
+
+        if not language:
+            QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
+            return
+
+        testo_attuale = self.transcriptionTextArea.toPlainText()
+        if testo_attuale.strip() == "":
+            file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")
+            if file_path:
+                PptxGeneration.createPresentationFromFile(self, file_path, num_slide, company, language)
+            else:
+                QMessageBox.warning(self, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
+        else:
+            if save_presentation:
+                save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
+                                                           "PowerPoint Presentation (*.pptx)")
+                if save_path:
+                    testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
+                                                                                                      num_slide,
+                                                                                                      company,
+                                                                                                      language)
+                    print(f"Token di input utilizzati: {input_tokens}")
+                    print(f"Token di output utilizzati: {output_tokens}")
+                    self.transcriptionTextArea.setPlainText(testo_per_slide)
+                    PptxGeneration.createPresentationFromText(self, testo_per_slide, save_path)
+                else:
+                    QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+            else:
+                testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
+                                                                                                  num_slide, company,
+                                                                                                  language)
+                print(f"Token di input utilizzati: {input_tokens}")
+                print(f"Token di output utilizzati: {output_tokens}")
+                self.transcriptionTextArea.setPlainText(testo_per_slide)
+                PptxGeneration.createPresentationFromText(self, testo_per_slide, None)
+
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
         dialog.exec()
@@ -687,6 +805,7 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
+        self.generazioneAIDock.setVisible(False)
 
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
@@ -2076,6 +2195,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
+        self.actionTogglegGenerazioneAIDock = self.createToggleAction(self.generazioneAIDock, 'Mostra/Nascondi Generazion AI')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -2086,6 +2206,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
+        viewMenu.addAction(self.actionTogglegGenerazioneAIDock)
 
 
         # Aggiungi azioni per mostrare/nascondere tutti i docks
@@ -2127,6 +2248,7 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
+        self.generazioneAIDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
     def hideAllDocks(self):
@@ -2139,6 +2261,7 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
+        self.generazioneAIDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
         action = QAction(menuText, self, checkable=True)
@@ -2160,6 +2283,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
+        self.actionTogglegGenerazioneAIDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -2172,6 +2296,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
+        self.actionTogglegGenerazioneAIDock.setChecked(self.generazioneAIDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",

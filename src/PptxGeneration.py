@@ -5,6 +5,10 @@ from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 import re
 #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
+
+antrophic_key = "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"
+model_3_5_sonnet = "claude-3-5-sonnet-20240620"
+model_3_haiku = "claude-3-haiku-20240307"
 class PptxGeneration:
     @staticmethod
     def impostaFont(shape, size_pt, text):
@@ -16,16 +20,26 @@ class PptxGeneration:
         font.size = Pt(size_pt)
 
     @staticmethod
-    def generaTestoPerSlide(testo, num_slide):
-        client = anthropic.Anthropic(api_key="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")
+    def generaTestoPerSlide(testo, num_slide, company_name, language):
+        client = anthropic.Anthropic(api_key=antrophic_key)
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model=model_3_5_sonnet,
             max_tokens=1000,
             temperature=0.7,
-            system=f"You are a professional slide deck designer. Transform the following text into a format suitable for PowerPoint slides."
-                   f" Each slide should have a title, subtitle, and content."
-                   f" Follow this format for {num_slide} slides:\n\nTitolo: [Titolo della slide]\nSottotitolo:."
-                   f" [Sottotitolo della slide]\nContenuto:\n- Punto elenco 1\n- Punto elenco 2\nSezione 1: \nSezione 2: ",
+            system=(
+                "You are a professional slide deck designer. Your task is to transform the following "
+                "text into a format suitable for PowerPoint slides. Each slide should include a title, "
+                "subtitle, and content with bullet points. "
+                f"Please follow this structure for {num_slide} slides:\n\n"
+                "Titolo: [Title of the slide]\n"
+                "Sottotitolo: [Subtitle of the slide]\n"
+                "Contenuto:\n- Bullet point 1\n- Bullet point 2\n\n"
+                f"Ensure the final presentation is in {language}. "
+                f"The presentation is targeted at the company {company_name}. "
+                f"Gather all relevant information about {company_name}, including its scope, main products, "
+                f"and the market it operates in. Use this information to create a personalized AI-generated presentation "
+                f"for {company_name} based on the topic provided."
+            ),
             messages=[
                 {
                     "role": "user",
@@ -44,8 +58,9 @@ class PptxGeneration:
         output_tokens = message.usage.output_tokens
 
         return testo_resultante, input_tokens, output_tokens
+
     @staticmethod
-    def creaPresentazione(parent, transcriptionTextArea, num_slide):
+    def creaPresentazione(parent, transcriptionTextArea, num_slide, company_name, language):
         testo_attuale = transcriptionTextArea.toPlainText()
         if testo_attuale.strip() == "":
             file_path, _ = QFileDialog.getOpenFileName(parent, "Seleziona File di Testo", "", "Text Files (*.txt)")
@@ -58,7 +73,9 @@ class PptxGeneration:
                                                        "PowerPoint Presentation (*.pptx)")
             if save_path:
                 testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
-                                                                                                  num_slide)
+                                                                                                  num_slide,
+                                                                                                  company_name,
+                                                                                                  language)
                 print(f"Token di input utilizzati: {input_tokens}")
                 print(f"Token di output utilizzati: {output_tokens}")
                 transcriptionTextArea.setPlainText(testo_per_slide)
@@ -66,6 +83,7 @@ class PptxGeneration:
             else:
                 QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
+    @staticmethod
     @staticmethod
     def createPresentationFromText(parent, testo, output_file):
         prs = Presentation()
@@ -106,16 +124,14 @@ class PptxGeneration:
                 slide = prs.slides.add_slide(title_slide_layout)
                 title = slide.shapes.title
                 subtitle = slide.placeholders[1]
+                aggiungi_paragrafo_formattato(title, titolo_text.strip(), 44, bold=True, color=(0, 0, 0))
+                aggiungi_paragrafo_formattato(subtitle, sottotitolo_text.strip(), 32, color=(89, 89, 89))
             else:
                 slide = prs.slides.add_slide(content_slide_layout)
                 title = slide.shapes.title
                 content = slide.placeholders[1]
+                aggiungi_paragrafo_formattato(title, titolo_text.strip(), 44, bold=True, color=(0, 0, 0))
 
-            aggiungi_paragrafo_formattato(title, titolo_text.strip(), 44, bold=True, color=(0, 0, 0))
-
-            if index == 0:
-                aggiungi_paragrafo_formattato(subtitle, sottotitolo_text.strip(), 32, color=(89, 89, 89))
-            else:
                 subtitle_shape = slide.shapes.add_textbox(Inches(0.5), Inches(1.5), Inches(9), Inches(0.5))
                 aggiungi_paragrafo_formattato(subtitle_shape, sottotitolo_text.strip(), 28, color=(89, 89, 89))
 
@@ -135,12 +151,13 @@ class PptxGeneration:
 
         if prs.slides:
             prs.save(output_file)
-            QMessageBox.information(None, "Successo", "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
+            QMessageBox.information(None, "Successo",
+                                    "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
             PptxGeneration.visualizzaPresentazione(parent, output_file)
         else:
-            QMessageBox.warning(None, "Attenzione", "Non sono state generate slides a causa di dati di input non validi o mancanti.")
+            QMessageBox.warning(None, "Attenzione",
+                                "Non sono state generate slides a causa di dati di input non validi o mancanti.")
 
-    @staticmethod
     def visualizzaPresentazione(parent, file_path):
         prs = Presentation(file_path)
         dialog = QDialog(parent)
