@@ -255,14 +255,14 @@ class VideoAudioManager(QMainWindow):
         generazioneAILayout.addWidget(self.languageLabel)
         generazioneAILayout.addWidget(self.languageInput)
 
-        # Save PowerPoint checkbox
-        self.savePowerPointCheckbox = QCheckBox("Salva il file PowerPoint")
-        self.savePowerPointCheckbox.setChecked(True)
-        generazioneAILayout.addWidget(self.savePowerPointCheckbox)
+        # Generate text button
+        self.generateTextButton = QPushButton('Genera Testo per Presentazione con AI ')
+        self.generateTextButton.clicked.connect(self.generateTextForPresentation)
+        generazioneAILayout.addWidget(self.generateTextButton)
 
         # Generate presentation button
-        self.generatePresentationButton = QPushButton('Genera Presentazione con AI')
-        self.generatePresentationButton.clicked.connect(self.creaPresentazione)
+        self.generatePresentationButton = QPushButton('Genera Presentazione')
+        self.generatePresentationButton.clicked.connect(self.generateAIPresentation)
         generazioneAILayout.addWidget(self.generatePresentationButton)
 
         generazioneAIDockWidget.setLayout(generazioneAILayout)
@@ -605,9 +605,7 @@ class VideoAudioManager(QMainWindow):
 
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # Pulsanti per le diverse funzionalità
-        self.generateAudioButton = QPushButton('Genera Audio con AI')
-        self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
+
 
 
         # Aggiunta dei layout e widget al layout interno
@@ -615,7 +613,7 @@ class VideoAudioManager(QMainWindow):
         innerLayout.addWidget(self.transcriptionTextArea)
         innerLayout.addWidget(self.transcriptionLanguageLabel)
         bottonLayout = QHBoxLayout()
-        bottonLayout.addWidget(self.generateAudioButton)
+        #bottonLayout.addWidget(self.generateAudioButton)
         innerLayout.addLayout(bottonLayout)
 
         # Impostazione del layout interno al GroupBox
@@ -684,7 +682,7 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
 
-    def creaPresentazione(self):
+    def generateTextForPresentation(self):
         try:
             num_slide = int(self.numSlidesInput.text().strip())
         except ValueError:
@@ -693,7 +691,37 @@ class VideoAudioManager(QMainWindow):
 
         company = self.companyNameInput.text().strip()
         language = self.languageInput.currentText()
-        save_presentation = self.savePowerPointCheckbox.isChecked()
+
+        if not company:
+            QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
+            return
+
+        if not language:
+            QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
+            return
+
+        testo_attuale = self.transcriptionTextArea.toPlainText()
+        if testo_attuale.strip() == "":
+            QMessageBox.warning(self, "Attenzione", "Inserisci del testo o seleziona un file di testo.")
+            return
+
+        testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
+                                                                                          num_slide,
+                                                                                          company,
+                                                                                          language)
+        print(f"Token di input utilizzati: {input_tokens}")
+        print(f"Token di output utilizzati: {output_tokens}")
+        self.transcriptionTextArea.setPlainText(testo_per_slide)
+
+    def generateAIPresentation(self):
+        try:
+            num_slide = int(self.numSlidesInput.text().strip())
+        except ValueError:
+            QMessageBox.warning(self, "Errore", "Per favore, inserisci un numero valido per le slide.")
+            return
+
+        company = self.companyNameInput.text().strip()
+        language = self.languageInput.currentText()
 
         if not company:
             QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
@@ -711,28 +739,12 @@ class VideoAudioManager(QMainWindow):
             else:
                 QMessageBox.warning(self, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
         else:
-            if save_presentation:
-                save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
-                                                           "PowerPoint Presentation (*.pptx)")
-                if save_path:
-                    testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
-                                                                                                      num_slide,
-                                                                                                      company,
-                                                                                                      language)
-                    print(f"Token di input utilizzati: {input_tokens}")
-                    print(f"Token di output utilizzati: {output_tokens}")
-                    self.transcriptionTextArea.setPlainText(testo_per_slide)
-                    PptxGeneration.createPresentationFromText(self, testo_per_slide, save_path)
-                else:
-                    QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+            save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
+                                                       "PowerPoint Presentation (*.pptx)")
+            if save_path:
+                PptxGeneration.createPresentationFromText(self, testo_attuale, save_path)
             else:
-                testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
-                                                                                                  num_slide, company,
-                                                                                                  language)
-                print(f"Token di input utilizzati: {input_tokens}")
-                print(f"Token di output utilizzati: {output_tokens}")
-                self.transcriptionTextArea.setPlainText(testo_per_slide)
-                PptxGeneration.createPresentationFromText(self, testo_per_slide, None)
+                QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
@@ -1178,6 +1190,11 @@ class VideoAudioManager(QMainWindow):
         self.speakerBoostCheckBox.setToolTip(
             "Potenzia la somiglianza col parlante originale a costo di maggiori risorse.")
         layout.addWidget(self.speakerBoostCheckBox)
+
+        # Pulsanti per le diverse funzionalità
+        self.generateAudioButton = QPushButton('Genera Audio con AI')
+        self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
+        layout.addWidget(self.generateAudioButton)
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup

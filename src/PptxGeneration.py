@@ -20,6 +20,25 @@ class PptxGeneration:
         font.size = Pt(size_pt)
 
     @staticmethod
+    def createPresentationFromFile(parent, file_path, num_slide, company_name, language):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                testo = file.read()
+            testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo, num_slide,
+                                                                                              company_name, language)
+            print(f"Token di input utilizzati: {input_tokens}")
+            print(f"Token di output utilizzati: {output_tokens}")
+
+            save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "",
+                                                       "PowerPoint Presentation (*.pptx)")
+            if save_path:
+                PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path)
+            else:
+                QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+        except Exception as e:
+            QMessageBox.critical(parent, "Errore", f"Si è verificato un errore durante la lettura del file: {e}")
+
+    @staticmethod
     def generaTestoPerSlide(testo, num_slide, company_name, language):
         client = anthropic.Anthropic(api_key=antrophic_key)
         message = client.messages.create(
@@ -83,7 +102,6 @@ class PptxGeneration:
             else:
                 QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
 
-    @staticmethod
     @staticmethod
     def createPresentationFromText(parent, testo, output_file):
         prs = Presentation()
@@ -154,10 +172,9 @@ class PptxGeneration:
             QMessageBox.information(None, "Successo",
                                     "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
             PptxGeneration.visualizzaPresentazione(parent, output_file)
-        else:
-            QMessageBox.warning(None, "Attenzione",
-                                "Non sono state generate slides a causa di dati di input non validi o mancanti.")
 
+        else:               QMessageBox.warning(None, "Attenzione",
+                                "Non sono state generate slides a causa di dati di input non validi o mancanti.")
     def visualizzaPresentazione(parent, file_path):
         prs = Presentation(file_path)
         dialog = QDialog(parent)
