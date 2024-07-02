@@ -62,7 +62,6 @@ class DockSettingsManager:
             self.docks[name].setVisible(visible)
 
     def loadDockSettingsUser1(self):
-
         self.docks['videoPlayerOutput'].setVisible(True)
         self.docks['recordingDock'].setVisible(True)
 
@@ -72,6 +71,7 @@ class DockSettingsManager:
         self.docks['editingDock'].setVisible(False)
         self.docks['downloadDock'].setVisible(False)
         self.docks['videoMergeDock'].setVisible(False)
+        self.docks['generazioneAIDock'].setVisible(False)
 
     def resetAll(self):
         self.docks['recordingDock'].setVisible(False)
@@ -96,3 +96,4 @@ class DockSettingsManager:
         self.docks['downloadDock'].setVisible(False)
         self.docks['recordingDock'].setVisible(False)
         self.docks['videoMergeDock'].setVisible(False)
+        self.docks['generazioneAIDock'].setVisible(False)

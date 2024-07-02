@@ -27,6 +27,8 @@ a = Analysis(
     datas=[
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
+        (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add Readme.md
+        (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),  # Add Readme.md
     ] + datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -78,7 +80,7 @@ def move_files_up_and_create_zip():
     # Create the Release folder if it doesn't exist
     os.makedirs(release_dir, exist_ok=True)
 
-    files_to_move = ['Readme.md']
+    files_to_move = ['Readme.md','KNOW_ISSUES.md','CHANGELOG.md']
     folders_to_move = ['res']
 
     for file_name in files_to_move:

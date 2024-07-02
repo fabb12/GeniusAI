@@ -2,7 +2,6 @@ import sys
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
 from moviepy.editor import ImageClip, CompositeVideoClip
-from pptx import Presentation
 import re
 import tempfile
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
@@ -95,7 +94,7 @@ class VideoAudioManager(QMainWindow):
         # Version information
         self.version_major = 1
         self.version_minor = 2
-        self.version_patch = 2
+        self.version_patch = 5
         build_date = datetime.datetime.now().strftime("%Y%m%d")
 
         # Comporre la stringa di versione
@@ -190,7 +189,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionDock.setStyleSheet(self.styleSheet())
         area.addDock(self.transcriptionDock, 'right')
 
-        self.editingDock = Dock("Opzioni di Editing", closable=True)
+        self.editingDock = Dock("Generazione Audio AI di Editing", closable=True)
         self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
         self.editingDock.setStyleSheet(self.styleSheet())
@@ -1490,7 +1489,7 @@ class VideoAudioManager(QMainWindow):
         logging.debug(f"Volume del sottofondo regolato al {value}%")
     def setupDockSettingsManager(self):
 
-        settings_file = '../dock_settings.json'
+        settings_file = './dock_settings.json'
         if os.path.exists(settings_file):
             self.dockSettingsManager.load_settings(settings_file)
         else:
@@ -2207,7 +2206,7 @@ class VideoAudioManager(QMainWindow):
                                                                          'Mostra/Nascondi Video Player Output')
         self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
                                                                      'Mostra/Nascondi Trascrizione')
-        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Editing')
+        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
         self.actionToggleDownloadDock = self.createToggleAction(self.downloadDock, 'Mostra/Nascondi Download')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
