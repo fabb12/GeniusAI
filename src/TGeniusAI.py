@@ -56,35 +56,9 @@ from PptxGeneration import PptxGeneration
 # ef38b436326ec387ecb1a570a8641b84
 # a1dfc77969cd40068d3b3477af3ea6b5
 
-"""
-
-class CropSelectionWidget(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.rubberBand = QRubberBand(QRubberBand.Shape.Rectangle, self)
-        self.origin = None
-        self.cropRect = QRect()
-
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.origin = event.pos()
-            self.rubberBand.setGeometry(QRect(self.origin, self.origin))
-            self.rubberBand.show()
-
-    def mouseMoveEvent(self, event):
-        if self.origin:
-            self.rubberBand.setGeometry(QRect(self.origin, event.pos()).normalized())
-
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.cropRect = self.rubberBand.geometry()
-            self.rubberBand.hide()
-
-    def paintEvent(self, event):
-        painter = QPainter(self)
-        painter.setPen(QPen(Qt.GlobalColor.red, 2, Qt.PenStyle.DashLine))
-        painter.drawRect(self.cropRect)
-"""
+# Configura il percorso di ffmpeg
+FFMPEG_PATH = './ffmpeg/bin/ffmpeg.exe'
+AudioSegment.converter = FFMPEG_PATH
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -210,7 +184,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
         self.audioDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.audioDock, 'bottom')
+        area.addDock(self.audioDock, 'left')
 
 
 
@@ -219,7 +193,7 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                            QSizePolicy.Policy.Expanding)
         self.videoMergeDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.videoMergeDock, 'bottom')
+        area.addDock(self.videoMergeDock, 'top')
 
 
         # Generazione AI Dock
