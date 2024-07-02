@@ -4,6 +4,10 @@ Tutti i cambiamenti notevoli a questo progetto saranno documentati in questo fil
 
 Il formato è basato su [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), e questo progetto aderisce a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] - 2024-07-02
+### Added
+- Aggiunto Antrophic Cloud3 API per generazione testo
+
 ## [1.2.2] - 2024-06-24
 ### Added
 - Aggiunto tasto di pausa/ripresa della registrazione

@@ -2,7 +2,7 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 
-## [1.2.2] -
+## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
 ## [1.2.1] - 2024-06-20
