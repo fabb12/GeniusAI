@@ -1171,6 +1171,7 @@ class VideoAudioManager(QMainWindow):
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
+
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
@@ -1193,17 +1194,14 @@ class VideoAudioManager(QMainWindow):
             # Creare un clip di immagine dal frame congelato e impostare la sua durata
             freeze_clip = ImageClip(freeze_frame).set_duration(pause_duration).set_fps(video_clip.fps)
 
-            # Creazione di due parti di video originali
-            original_video_part1 = video_clip.subclip(0, start_time)
-            original_video_part2 = video_clip.subclip(start_time)
+            # Utilizzare il metodo `fx` per evitare subclip multipli
+            original_video_part1 = video_clip.subclip(0, start_time).fx(vfx.freeze, t=start_time,
+                                                                        freeze_duration=pause_duration)
 
-            # Combinazione delle clip video senza l'audio
-            video_only = concatenate_videoclips(
-                [original_video_part1.without_audio(), freeze_clip, original_video_part2.without_audio()],
-                method="compose")
-
-            # Ricreare il video con l'audio originale
-            final_video = CompositeVideoClip([video_only.set_audio(video_clip.audio)])
+            # Creazione del video finale con audio originale
+            final_video = concatenate_videoclips([original_video_part1, freeze_clip, video_clip.subclip(start_time)],
+                                                 method="compose")
+            final_video = final_video.set_audio(video_clip.audio)
 
             # Salvataggio del video finale
             output_path = tempfile.mktemp(suffix='.mp4')
@@ -2766,7 +2764,7 @@ class VideoAudioManager(QMainWindow):
                 logging.debug(f"Video velocizzato con fattore: {fattore_velocita}")
             else:
                 # Se la durata del video è minore o uguale a quella dell'audio, rallenta il video
-                fattore_velocita = durata_audio / durata_video
+                fattore_velocita = durata_video / durata_audio
                 video_modificato = video_clip.fx(vfx.speedx, fattore_velocita).set_duration(durata_audio)
                 logging.debug(f"Video rallentato con fattore: {fattore_velocita}")
 
