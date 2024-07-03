@@ -1331,17 +1331,17 @@ class VideoAudioManager(QMainWindow):
         self.backgroundAudioPathLineEdit.setReadOnly(True)
         browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
         browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
-        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
-        self.volumeSlider.setRange(0, 100)
-        self.volumeSlider.setValue(50)
-        self.volumeSlider.valueChanged.connect(self.adjustBackgroundVolume)
+        self.volumeSliderBack = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSliderBack.setRange(0, 100)
+        self.volumeSliderBack.setValue(50)
+        self.volumeSliderBack.valueChanged.connect(self.adjustBackgroundVolume)
         applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
         applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
 
         layout.addWidget(self.backgroundAudioPathLineEdit)
         layout.addWidget(browseBackgroundAudioButton)
         layout.addWidget(QLabel("Volume Sottofondo:"))
-        layout.addWidget(self.volumeSlider)
+        layout.addWidget(self.volumeSliderBack)
         layout.addWidget(applyBackgroundButton)
         backgroundAudioGroup.setLayout(layout)
 
@@ -1527,7 +1527,7 @@ class VideoAudioManager(QMainWindow):
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
         background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
-        background_volume = self.volumeSlider.value() / 100.0  # Volume dell'audio di sottofondo
+        background_volume = self.volumeSliderBack.value() / 100.0  # Volume dell'audio di sottofondo
 
         if not video_path or not os.path.exists(video_path):
             QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
