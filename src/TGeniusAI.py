@@ -53,8 +53,9 @@ from difflib import SequenceMatcher
 import StreamToLogger
 from PptxGeneration import PptxGeneration
 # fea27867f451afb3ee369dcc7fcfb074
-# ef38b436326ec387ecb1a570a8641b84
+# ef38b436326ec387ecb1a570a8641b84 <-----
 # a1dfc77969cd40068d3b3477af3ea6b5
+
 
 # Configura il percorso di ffmpeg
 FFMPEG_PATH = './ffmpeg/bin/ffmpeg.exe'
@@ -1323,6 +1324,7 @@ class VideoAudioManager(QMainWindow):
         videoPauseGroup.setLayout(layout)
 
         return videoPauseGroup
+
     def createBackgroundAudioGroup(self):
         backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
         layout = QVBoxLayout()
@@ -1332,9 +1334,12 @@ class VideoAudioManager(QMainWindow):
         browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
         browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
         self.volumeSliderBack = QSlider(Qt.Orientation.Horizontal)
-        self.volumeSliderBack.setRange(0, 100)
-        self.volumeSliderBack.setValue(10)
+        self.volumeSliderBack.setRange(0, 1000)
+        self.volumeSliderBack.setValue(6)
         self.volumeSliderBack.valueChanged.connect(self.adjustBackgroundVolume)
+
+        self.volumeLabelBack = QLabel(f"Volume Sottofondo: {self.volumeSliderBack.value() / 1000:.3f}")
+
         applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
         applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
 
@@ -1342,10 +1347,16 @@ class VideoAudioManager(QMainWindow):
         layout.addWidget(browseBackgroundAudioButton)
         layout.addWidget(QLabel("Volume Sottofondo:"))
         layout.addWidget(self.volumeSliderBack)
+        layout.addWidget(self.volumeLabelBack)
         layout.addWidget(applyBackgroundButton)
         backgroundAudioGroup.setLayout(layout)
 
         return backgroundAudioGroup
+
+    def adjustBackgroundVolume(self):
+        slider_value = self.volumeSliderBack.value()
+        normalized_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
+        self.volumeLabelBack.setText(f"Volume Sottofondo: {normalized_volume:.3f}")
     def setTimecodePauseFromSlider(self):
         current_position = self.player.position()
         self.timecodePauseLineEdit.setText(self.formatTimecode(current_position))
@@ -1451,14 +1462,18 @@ class VideoAudioManager(QMainWindow):
                                                   "Video Files (*.mp4 *.mov *.avi)")
         if fileName:
             self.mergeVideoPathLineEdit.setText(fileName)
+
     def browseBackgroundAudio(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", "",
+        # Imposta il percorso di default per l'apertura della finestra di dialogo
+        default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'res', 'music')
+        if not os.path.exists(default_dir):
+            QMessageBox.warning(self, "Errore", "La cartella di default non esiste.")
+            return
+
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", default_dir,
                                                   "Audio Files (*.mp3 *.wav)")
         if fileName:
             self.backgroundAudioPathLineEdit.setText(fileName)
-    def adjustBackgroundVolume(self, value):
-        logging.debug(f"Volume del sottofondo regolato al {value}%")
-
     def setupDockSettingsManager(self):
 
         settings_file = './dock_settings.json'
@@ -1523,7 +1538,8 @@ class VideoAudioManager(QMainWindow):
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
         background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
-        background_volume = self.volumeSliderBack.value() / 100.0  # Volume dell'audio di sottofondo
+        slider_value = self.volumeSliderBack.value()
+        background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1  # Normalizza e usa una scala logaritmica
 
         if not video_path or not os.path.exists(video_path):
             QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
@@ -1559,8 +1575,6 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
-
-
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
 

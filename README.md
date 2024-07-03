@@ -1,79 +1,83 @@
-# ThemaGeniusAI - Alpha
+# ThemaGeniusAI - README
 
-ThemaGeniusAI è un'applicazione avanzata basata su AI per la gestione di video e audio, progettata per semplificare il processo di editing video, trascrizione audio e creazione di contenuti. Questo README fornisce una panoramica delle varie funzionalità disponibili in ThemaGeniusAI, inclusa la generazione di documentazione e la creazione di tutorial video.
+## Panoramica
+
+ThemaGeniusAI è un'applicazione completa per la gestione di video e audio. Offre una vasta gamma di funzionalità, tra cui riproduzione di video, editing, generazione audio, trascrizione e registrazione dello schermo. Questo README fornisce una panoramica delle funzioni e delle caratteristiche principali di ThemaGeniusAI.
 
 ## Funzionalità
 
-### 1. Gestione Video e Audio
+### 1. Riproduzione di Video e Audio
+- **Play/Pausa/Stop**: Controlla la riproduzione di file video e audio.
+- **Controllo del Volume**: Regola il volume dell'uscita audio.
+- **Controllo della Velocità**: Regola la velocità di riproduzione del video.
+- **Visualizzazione del Timecode**: Mostra il tempo corrente e totale del media in riproduzione.
+- **Ritaglio Video**: Zooma e muovi l'area di riproduzione del video.
 
-- **Riproduzione ed Editing Video**: Carica, riproduci, metti in pausa, ferma e taglia file video. Supporta vari formati video.
-- **Gestione Audio**: Sostituisci l'audio principale, applica pause audio e aggiungi audio di sottofondo ai video.
-- **Ritaglio Video**: Ritaglia video con un widget di ritaglio personalizzabile.
-- **Regolazione della Velocità**: Regola la velocità di riproduzione con una barra di scorrimento.
-- **Segnalibri**: Imposta segnalibri di inizio e fine per segmenti video.
+### 2. Editing di Video e Audio
+- **Imposta Segnalibri**: Imposta segnalibri di inizio e fine per segnare sezioni del video.
+- **Taglia Video**: Taglia sezioni del video tra i segnalibri impostati.
+- **Elimina Segmento Video**: Rimuovi segmenti del video tra i segnalibri impostati.
+- **Applica Ritaglio**: Ritaglia il video in un'area specifica.
+- **Unisci Video**: Unisci due video a un timecode specificato.
 
-### 2. Trascrizione e Sintesi
+### 3. Gestione Audio
+- **Sostituisci Audio**: Sostituisci la traccia audio principale di un video con un altro file audio.
+- **Applica Pause**: Inserisci pause silenziose nella traccia audio a timecode specificati.
+- **Applica Audio di Sottofondo**: Aggiungi audio di sottofondo al video e regola il suo volume.
 
-- **Trascrizione Video**: Trascrivi video in testo con rilevamento automatico della lingua.
-- **Generazione Audio**: Genera audio dalle trascrizioni utilizzando l'intelligenza artificiale, supportando più lingue e impostazioni vocali.
-- **Inserimento Timecode**: Inserisci automaticamente timecode nelle trascrizioni.
-- **Editing Testo**: Editor di testo avanzato per modificare e formattare le trascrizioni.
+### 4. Trascrizione e Riassunto
+- **Trascrivi Video**: Genera una trascrizione testuale dell'audio del video.
+- **Riassumi Testo**: Riassumi il testo trascritto in punti elenco.
+- **Inserimento Timecode**: Inserisci automaticamente timecode nel testo trascritto.
+- **Rileva Lingua**: Rileva automaticamente la lingua del testo trascritto.
 
-### 3. Download e Registrazione
+### 5. Generazione Audio con AI
+- **Genera Audio con AI**: Genera audio utilizzando l'AI di Eleven Labs con impostazioni personalizzabili per voce, stabilità e stile.
+- **Applica Audio Generato**: Applica l'audio generato al video, con opzioni per allineare il video alla nuova durata dell'audio.
 
-- **Download Video**: Scarica video da URL, con opzione per scaricare solo l'audio.
-- **Registrazione Schermo**: Registra lo schermo o finestre specifiche con opzioni audio avanzate.
-- **Gestione Registrazione**: Avvia, ferma e salva registrazioni video e audio.
+### 6. Registrazione Schermo
+- **Registra Schermo**: Registra lo schermo con opzioni per selezionare lo schermo e la fonte audio.
+- **Pausa/Riprendi Registrazione**: Metti in pausa e riprendi la registrazione dello schermo.
+- **Salva Registrazione**: Salva lo schermo registrato come file video.
 
-### 4. Generazione di Documentazione
+### 7. Download Video
+- **Scarica Video da YouTube**: Scarica video da YouTube, con opzioni per scaricare solo il video o anche l'audio.
+- **Monitoraggio del Progresso**: Mostra il progresso del download.
 
-- **Generazione Presentazioni**: Crea presentazioni PowerPoint dai testi delle trascrizioni o da file di testo esterni.
-- **Generazione Video Tutorial**: Utilizza le trascrizioni e gli strumenti di editing per creare tutorial video completi.
+### 8. Impostazioni e Personalizzazione
+- **Gestione Layout Dock**: Salva e carica layout personalizzati per i componenti dell'interfaccia dockabile.
+- **Modalità Scura**: Applica un tema scuro all'interfaccia dell'applicazione.
+- **Gestione Chiave API**: Imposta e gestisci la chiave API per i servizi AI.
 
-### 5. Funzionalità Avanzate
+## Guida Rapida
 
-- **Unione Video**: Unisci più video in un unico file.
-- **Applicazione Pause Video**: Aggiungi pause con frame congelato ai video.
-- **Personalizzazione Dock**: Personalizza e salva layout dei dock per un'esperienza utente ottimizzata.
-
-## Installazione
-
-1. Assicurati di avere Python installato sul tuo sistema.
-2. Installa le dipendenze richieste eseguendo:
+### Installazione
+1. Assicurati di avere Python installato.
+2. Installa le dipendenze richieste:
    ```bash
    pip install -r requirements.txt
    ```
-3. Esegui l'applicazione:
+
+### Avvio dell'Applicazione
+1. Avvia l'applicazione utilizzando il seguente comando:
    ```bash
    python main.py
    ```
 
-## Utilizzo
+## Uso
 
-### Interfaccia Principale
+### Caricamento e Riproduzione di Video
+1. Utilizza l'opzione **Open Video/Audio** nel menu **File** per caricare un file video o audio.
+2. Controlla la riproduzione utilizzando i pulsanti play, pausa e stop.
 
-- La finestra principale di ThemaGeniusAI è suddivisa in diversi dock, ognuno dedicato a una specifica funzionalità, come riproduzione video, trascrizione, editing, download e registrazione.
+### Editing di Video
+1. Imposta segnalibri per marcare i punti di inizio e fine per tagliare o eliminare segmenti video.
+2. Utilizza i pulsanti **Cut Video** o **Delete Video Segment** per eseguire le rispettive azioni.
 
-### Caricamento e Riproduzione Video
+### Trascrizione e Generazione di Audio
+1. Carica un video e utilizza il pulsante **Transcribe Video** per generare una trascrizione.
+2. Utilizza il pulsante **Generate AI Audio** per generare audio utilizzando l'AI.
 
-1. Carica un video cliccando su `File > Open Video/Audio`.
-2. Usa i controlli di riproduzione (play, pausa, stop) per gestire il video.
-
-### Trascrizione e Sintesi Audio
-
-1. Carica un video e clicca su `Trascrivi Video`.
-2. Dopo la trascrizione, genera l'audio cliccando su `Genera Audio con AI`.
-
-### Download e Registrazione
-
-1. Per scaricare un video, inserisci l'URL e clicca su `Download Video`.
-2. Per registrare lo schermo, seleziona le opzioni desiderate e clicca su `Start Recording`.
-
-### Generazione di Presentazioni
-
-1. Crea una presentazione PowerPoint dalle trascrizioni cliccando su `Genera Presentazione`.
-
-
----
-
-Per ulteriori informazioni, consulta la documentazione completa o contatta l'autore del progetto.
+### Registrazione dello Schermo
+1. Seleziona lo schermo e la fonte audio nel dock **Recording**.
+2. Avvia la registrazione utilizzando i pulsanti appropriati.
