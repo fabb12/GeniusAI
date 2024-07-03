@@ -1333,7 +1333,7 @@ class VideoAudioManager(QMainWindow):
         browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
         self.volumeSliderBack = QSlider(Qt.Orientation.Horizontal)
         self.volumeSliderBack.setRange(0, 100)
-        self.volumeSliderBack.setValue(50)
+        self.volumeSliderBack.setValue(10)
         self.volumeSliderBack.valueChanged.connect(self.adjustBackgroundVolume)
         applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
         applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
@@ -1457,8 +1457,8 @@ class VideoAudioManager(QMainWindow):
         if fileName:
             self.backgroundAudioPathLineEdit.setText(fileName)
     def adjustBackgroundVolume(self, value):
-        # Qui dovrai implementare la logica per regolare il volume del sottofondo
         logging.debug(f"Volume del sottofondo regolato al {value}%")
+
     def setupDockSettingsManager(self):
 
         settings_file = './dock_settings.json'
@@ -1520,10 +1520,6 @@ class VideoAudioManager(QMainWindow):
         if fileName:
             self.filePathLineEdit.setText(fileName)
 
-        # Metodi per iniziare e fermare la registrazione
-
-
-
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
         background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
@@ -1542,11 +1538,16 @@ class VideoAudioManager(QMainWindow):
             video_clip = VideoFileClip(video_path)
             background_audio_clip = AudioFileClip(background_audio_path).volumex(background_volume)
 
+            # Verifica che la durata dell'audio di sottofondo sia sufficiente
+            if background_audio_clip.duration < video_clip.duration:
+                background_audio_clip = background_audio_clip.loop(duration=video_clip.duration)
+
             # Combina l'audio di sottofondo con l'audio originale del video, se presente
             if video_clip.audio:
-                combined_audio = CompositeAudioClip([video_clip.audio, background_audio_clip])
+                combined_audio = CompositeAudioClip(
+                    [video_clip.audio, background_audio_clip.set_duration(video_clip.duration)])
             else:
-                combined_audio = background_audio_clip
+                combined_audio = background_audio_clip.set_duration(video_clip.duration)
 
             # Imposta l'audio combinato nel video e salva il nuovo file
             final_clip = video_clip.set_audio(combined_audio)
@@ -1558,6 +1559,7 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+
 
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
