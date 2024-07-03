@@ -48,10 +48,10 @@ from CustumTextEdit import CustomTextEdit
 from MonitorTeams import TeamsCallRecorder
 from transformers import pipeline
 from Settings import SettingsDialog
-from Summarizer import SummarizerThread
 from difflib import SequenceMatcher
 import StreamToLogger
 from PptxGeneration import PptxGeneration
+from ProcessTextAI import ProcessTextAI
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84 <-----
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -97,7 +97,6 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineOutputEdit = ''
         self.is_recording = False
         self.video_writer = None
-        self.summarizer_thread = None
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
@@ -108,7 +107,7 @@ class VideoAudioManager(QMainWindow):
         #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
-    def keyPressEvent(self, event):
+    """def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Right:
             # Avanza di 10 secondi
             current_position = self.player.position()
@@ -132,7 +131,7 @@ class VideoAudioManager(QMainWindow):
         else:
             super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
-
+    """
     def initUI(self):
 
         self.setWindowTitle('ThemaGeniusAI - Alpha | {}'.format(self.version))
@@ -517,6 +516,8 @@ class VideoAudioManager(QMainWindow):
 
         # TextArea per la trascrizione
         self.transcriptionTextArea = CustomTextEdit(self)
+        self.transcriptionTextArea.setReadOnly(False)
+
         self.transcriptionTextArea.setUndoRedoEnabled(True)
 
         self.transcriptionTextArea.setStyleSheet("""
@@ -557,15 +558,17 @@ class VideoAudioManager(QMainWindow):
         self.syncButton = QPushButton('Sincronizza Video')
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
 
+        # Nuovo pulsante per sistemare il testo usando AI
+        self.processTextButton = QPushButton('Sistema Testo con AI')
+        self.processTextButton.clicked.connect(self.processTextWithAI)
+
+        # Aggiungi entrambi i pulsanti al layout
+
         # Nuovi controlli per inserire la pausa
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
         self.insertPauseButton = QPushButton('Inserisci Pausa')
         self.insertPauseButton.clicked.connect(self.insertPause)
-
-        # Nuovo pulsante Riassumi
-        self.summarizeButton = QPushButton('Riassumi')
-        self.summarizeButton.clicked.connect(self.summarizeText)  # Collega la funzione di riassunto
 
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
@@ -576,6 +579,7 @@ class VideoAudioManager(QMainWindow):
         buttonsLayout.addWidget(self.insertPauseButton)
         buttonsLayout.addWidget(self.timecodeCheckbox)
         buttonsLayout.addWidget(self.syncButton)
+        buttonsLayout.addWidget(self.processTextButton)
 
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -687,6 +691,55 @@ class VideoAudioManager(QMainWindow):
         print(f"Token di output utilizzati: {output_tokens}")
         self.transcriptionTextArea.setPlainText(testo_per_slide)
 
+    def processTextWithAI(self):
+        # Ottieni il testo corrente dal transcriptionTextArea
+        current_text = self.transcriptionTextArea.toPlainText()
+
+        if not current_text.strip():
+            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
+            return
+
+        # Mostra un dialogo di progresso
+        self.progressDialog = QProgressDialog("Sistemazione testo in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        # Esegui il thread per il processo AI
+        self.text_ai_thread = ProcessTextAI(current_text, self.api_key, self.languageComboBox.currentText())
+        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
+        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
+        self.text_ai_thread.process_error.connect(self.onProcessError)
+        self.text_ai_thread.start()
+
+    def handleTimecodeToggle(self, checked):
+        self.transcriptionTextArea.setReadOnly(
+            checked)  # Disabilita la modifica del testo quando la checkbox è abilitata
+        # Update the timecode insertion enabled state based on checkbox
+        self.timecodeEnabled = checked
+
+        # Trigger text change processing to update timecodes
+        current_html = self.transcriptionTextArea.toHtml()
+        if checked:
+            self.original_text_html = current_html
+            self.handleTextChange()
+        else:
+            self.transcriptionTextArea.setHtml(self.original_text_html)
+
+
+    def updateProgressDialog(self, value, label):
+        if not self.progressDialog.wasCanceled():
+            self.progressDialog.setValue(value)
+            self.progressDialog.setLabelText(label)
+
+    def onProcessComplete(self, result):
+        self.progressDialog.close()
+        self.transcriptionTextArea.setPlainText(result)
+
+    def onProcessError(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore", error_message)
+
     def generateAIPresentation(self):
         try:
             num_slide = int(self.numSlidesInput.text().strip())
@@ -724,60 +777,6 @@ class VideoAudioManager(QMainWindow):
         dialog = SettingsDialog(self)
         dialog.exec()
 
-    def summarizeText(self):
-        input_text = self.transcriptionTextArea.toPlainText()
-        if not input_text.strip():
-            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da riassumere.")
-            return
-
-        self.progressDialog = QProgressDialog("Riassunto in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Riassunto")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.canceled.connect(self.stopSummarization)
-        self.progressDialog.show()
-
-        input_length = len(input_text.split())
-        summary_length = max(50, input_length // 3)
-        self.summarizer_thread = SummarizerThread(input_text, summary_length, self)
-        self.summarizer_thread.update_progress.connect(self.updateProgressDialog(self.progressDialog))
-        self.summarizer_thread.summarization_complete.connect(self.completeSummarization(self.progressDialog))
-        self.summarizer_thread.error_occurred.connect(self.handleSummarizationErrors(self.progressDialog))
-        self.summarizer_thread.start()
-
-    def stopSummarization(self):
-        if self.summarizer_thread:
-            self.summarizer_thread.terminate()
-            self.progressDialog.close()
-
-    def updateProgressDialog(self, progress_dialog):
-        def update(value, label):
-            if not progress_dialog.wasCanceled():
-                progress_dialog.setValue(value)
-                progress_dialog.setLabelText(label)
-
-        return update
-
-    def completeSummarization(self, progress_dialog):
-        def complete(summary_text):
-            if not progress_dialog.wasCanceled():
-                bullet_points = self.createBulletPoints(summary_text)
-                self.transcriptionTextArea.setPlainText(bullet_points)
-                progress_dialog.setValue(100)
-                progress_dialog.close()
-
-        return complete
-
-    def handleSummarizationErrors(self, progress_dialog):
-        def error(message):
-            QMessageBox.critical(self, "Errore durante il Riassunto", f"Errore: {message}")
-            progress_dialog.cancel()
-
-        return error
-
-    def createBulletPoints(self, summary_text):
-        sentences = summary_text.split('. ')
-        bullet_points = '\n'.join([f"- {sentence.strip()}" for sentence in sentences if sentence.strip()])
-        return bullet_points
     def set_default_dock_layout(self):
 
         # Set default visibility
@@ -1073,6 +1072,8 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
+        self.videoMergeDock.setStyleSheet(style)
+        self.generazioneAIDock.setStyleSheet(style)
     def getDarkStyle(self):
         return """
         QWidget {
@@ -2315,17 +2316,6 @@ class VideoAudioManager(QMainWindow):
                           <br>
                           Autore: FFA <br>""")
 
-    def handleTimecodeToggle(self, checked):
-        # Update the timecode insertion enabled state based on checkbox
-        self.timecodeEnabled = checked
-
-        # Trigger text change processing to update timecodes
-        current_html = self.transcriptionTextArea.toHtml()
-        if checked:
-            self.original_text_html = current_html
-            self.handleTextChange()
-        else:
-            self.transcriptionTextArea.setHtml(self.original_text_html)
 
     def handleTextChange(self):
         current_html = self.transcriptionTextArea.toHtml()
@@ -2756,7 +2746,7 @@ class VideoAudioManager(QMainWindow):
     def pauseVideo(self):
         self.player.pause()
 
-    def adattaVelocitaVideoAAudio(self,video_path, new_audio_path, output_path):
+    def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
         try:
             # Log dei percorsi dei file
             logging.debug(f"Percorso video: {video_path}")
@@ -2773,31 +2763,22 @@ class VideoAudioManager(QMainWindow):
             durata_video = video_clip.duration
             logging.debug(f"Durata video: {durata_video} secondi")
 
-            if durata_video > durata_audio:
-                # Se la durata del video è maggiore di quella dell'audio, velocizza il video
-                fattore_velocita = durata_video / durata_audio
-                video_modificato = video_clip.fx(vfx.speedx, fattore_velocita).set_duration(durata_audio)
-                logging.debug(f"Video velocizzato con fattore: {fattore_velocita}")
-            else:
-                # Se la durata del video è minore o uguale a quella dell'audio, rallenta il video
-                fattore_velocita = durata_video / durata_audio
-                video_modificato = video_clip.fx(vfx.speedx, fattore_velocita).set_duration(durata_audio)
-                logging.debug(f"Video rallentato con fattore: {fattore_velocita}")
+            # Calcola il fattore di velocità
+            fattore_velocita = round(durata_video / durata_audio, 1)
+            logging.debug(f"Fattore di velocità: {fattore_velocita}")
+
+            # Modifica la velocità del video
+            video_modificato = video_clip.fx(vfx.speedx, fattore_velocita)
 
             # Imposta il nuovo audio sul video modificato
             final_video = video_modificato.set_audio(new_audio)
-            logging.debug("Nuovo audio impostato sul video modificato")
 
             # Scrivi il video finale mantenendo lo stesso frame rate del video originale
-            original_frame_rate = video_clip.fps
-            logging.debug(f"Frame rate originale: {original_frame_rate}")
-
-            # Specifica del codec libx264 per il video e aac per l'audio
-            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=original_frame_rate)
+            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps)
             logging.debug('Video elaborato con successo.')
-        except Exception as e:
-            logging.debug(f"Errore durante l'adattamento della velocità del video: {e}")
 
+        except Exception as e:
+            logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
 
