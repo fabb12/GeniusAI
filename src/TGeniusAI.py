@@ -1466,13 +1466,20 @@ class VideoAudioManager(QMainWindow):
 
     def browseBackgroundAudio(self):
         # Imposta il percorso di default per l'apertura della finestra di dialogo
-        default_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'res', 'music')
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        parent_dir = os.path.dirname(current_dir)
+        default_dir = os.path.join(parent_dir, 'res', 'music')
+
+        # Verifica se la cartella di default esiste
         if not os.path.exists(default_dir):
             QMessageBox.warning(self, "Errore", "La cartella di default non esiste.")
             return
 
+        # Apri la finestra di dialogo per selezionare il file audio
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", default_dir,
                                                   "Audio Files (*.mp3 *.wav)")
+
+        # Se un file è stato selezionato, imposta il percorso nel LineEdit
         if fileName:
             self.backgroundAudioPathLineEdit.setText(fileName)
     def setupDockSettingsManager(self):
