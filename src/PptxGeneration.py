@@ -41,23 +41,30 @@ class PptxGeneration:
     @staticmethod
     def generaTestoPerSlide(testo, num_slide, company_name, language):
         client = anthropic.Anthropic(api_key=antrophic_key)
+
+        # Costruisci la parte del messaggio relativa alla compagnia se company_name è fornito
+        company_info = (
+            f" The presentation is targeted at the company {company_name}. "
+            f"Gather all relevant information about {company_name}, including its scope, main products, "
+            f"and the market it operates in. Use this information to create a personalized AI-generated presentation "
+            f"for {company_name} based on the topic provided."
+            if company_name else ""
+        )
+
         message = client.messages.create(
             model=model_3_5_sonnet,
             max_tokens=1000,
             temperature=0.7,
             system=(
-                "You are a professional slide deck designer. Your task is to transform the following "
-                "text into a format suitable for PowerPoint slides. Each slide should include a title, "
-                "subtitle, and content with bullet points. "
-                f"Please follow this structure for {num_slide} slides:\n\n"
-                "Titolo: [Title of the slide]\n"
-                "Sottotitolo: [Subtitle of the slide]\n"
-                "Contenuto:\n- Bullet point 1\n- Bullet point 2\n\n"
-                f"Ensure the final presentation is in {language}. "
-                f"The presentation is targeted at the company {company_name}. "
-                f"Gather all relevant information about {company_name}, including its scope, main products, "
-                f"and the market it operates in. Use this information to create a personalized AI-generated presentation "
-                f"for {company_name} based on the topic provided."
+                    "You are a professional slide deck designer. Your task is to transform the following "
+                    "text into a format suitable for PowerPoint slides. Each slide should include a title, "
+                    "subtitle, and content with bullet points. "
+                    f"Please follow this structure for {num_slide} slides:\n\n"
+                    "Titolo: [Title of the slide]\n"
+                    "Sottotitolo: [Subtitle of the slide]\n"
+                    "Contenuto:\n- Bullet point 1\n- Bullet point 2\n\n"
+                    f"Ensure the final presentation is in {language}." +
+                    company_info
             ),
             messages=[
                 {

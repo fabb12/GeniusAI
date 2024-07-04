@@ -670,9 +670,9 @@ class VideoAudioManager(QMainWindow):
         company = self.companyNameInput.text().strip()
         language = self.languageInput.currentText()
 
-        if not company:
-            QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
-            return
+       # if not company:
+       #     QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
+       #     return
 
         if not language:
             QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
@@ -750,9 +750,9 @@ class VideoAudioManager(QMainWindow):
         company = self.companyNameInput.text().strip()
         language = self.languageInput.currentText()
 
-        if not company:
-            QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
-            return
+        #if not company:
+        #    QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
+        #    return
 
         if not language:
             QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
