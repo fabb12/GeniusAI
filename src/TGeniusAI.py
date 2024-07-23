@@ -1104,17 +1104,29 @@ class VideoAudioManager(QMainWindow):
             color: #ffffff;
         }
         """
+
     def setupVoiceSettingsUI(self):
         voiceSettingsGroup = QGroupBox("Impostazioni Voce")
         layout = QVBoxLayout()
 
-        # QComboBox per la selezione della voce
+        # QComboBox per la selezione della voce con opzione per inserire custom ID
         self.voiceSelectionComboBox = QComboBox()
+        self.voiceSelectionComboBox.setEditable(True)
         self.voiceSelectionComboBox.addItem("Alessio", "BTpQARcEj1XqVxdZjTI7")
         self.voiceSelectionComboBox.addItem("Marco", "GcAgjAjkhWsmUd4GlPiv")
         self.voiceSelectionComboBox.addItem("Matilda", "atq1BFi5ZHt88WgSOJRB")
         self.voiceSelectionComboBox.addItem("Mika", "B2j2knC2POvVW0XJE6Hi")
         layout.addWidget(self.voiceSelectionComboBox)
+
+        # Campo di input per ID voce
+        self.voiceIdInput = QLineEdit()
+        self.voiceIdInput.setPlaceholderText("ID Voce")
+        layout.addWidget(self.voiceIdInput)
+
+        # Pulsante per aggiungere la voce personalizzata
+        self.addVoiceButton = QPushButton('Aggiungi Voce Personalizzata')
+        self.addVoiceButton.clicked.connect(self.addCustomVoice)
+        layout.addWidget(self.addVoiceButton)
 
         # Radio buttons per la selezione del genere vocale
 
@@ -1173,6 +1185,17 @@ class VideoAudioManager(QMainWindow):
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
+
+    def addCustomVoice(self):
+        custom_name = self.voiceSelectionComboBox.currentText().strip()
+        voice_id = self.voiceIdInput.text().strip()
+        if custom_name and voice_id:
+            self.voiceSelectionComboBox.addItem(custom_name, voice_id)
+            self.voiceSelectionComboBox.setCurrentText(custom_name)
+            self.voiceIdInput.clear()
+        else:
+            QMessageBox.warning(self, "Errore",
+                                "Entrambi i campi devono essere compilati per aggiungere una voce personalizzata.")
 
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
