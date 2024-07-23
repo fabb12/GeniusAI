@@ -1,0 +1,71 @@
+{
+    "main_window": {
+        "width": 1920,
+        "height": 1009,
+        "x": 0,
+        "y": -8
+    },
+    "videoPlayerDock": {
+        "visible": true,
+        "x": 423,
+        "y": 0,
+        "width": 418,
+        "height": 950
+    },
+    "transcriptionDock": {
+        "visible": true,
+        "x": 846,
+        "y": 0,
+        "width": 755,
+        "height": 950
+    },
+    "editingDock": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 314,
+        "height": 934
+    },
+    "downloadDock": {
+        "visible": false,
+        "x": 0,
+        "y": 0,
+        "width": 1601,
+        "height": 0
+    },
+    "recordingDock": {
+        "visible": false,
+        "x": 0,
+        "y": 0,
+        "width": 314,
+        "height": 950
+    },
+    "audioDock": {
+        "visible": false,
+        "x": 0,
+        "y": 0,
+        "width": 0,
+        "height": 950
+    },
+    "videoPlayerOutput": {
+        "visible": true,
+        "x": 0,
+        "y": 0,
+        "width": 418,
+        "height": 950
+    },
+    "videoMergeDock": {
+        "visible": false,
+        "x": 0,
+        "y": 0,
+        "width": 1920,
+        "height": 0
+    },
+    "generazioneAIDock": {
+        "visible": false,
+        "x": 1920,
+        "y": 0,
+        "width": 0,
+        "height": 950
+    }
+}
