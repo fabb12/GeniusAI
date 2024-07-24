@@ -2,6 +2,9 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 
+ [x] da sisteamre il nome del file quando viene tagliato e cancellato ,mettere il timecode nel nome
+    da sistemare il nome del file qunado viene genrare un file con uno nome personalizzato mettere un timecode
+
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 

@@ -655,6 +655,7 @@ class VideoAudioManager(QMainWindow):
         toolbar.addAction(settingsAction)
 
 
+
         if hasattr(self, 'applyDarkMode'):
             self.applyDarkMode()
 
@@ -669,10 +670,6 @@ class VideoAudioManager(QMainWindow):
 
         company = self.companyNameInput.text().strip()
         language = self.languageInput.currentText()
-
-       # if not company:
-       #     QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
-       #     return
 
         if not language:
             QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
@@ -1177,6 +1174,10 @@ class VideoAudioManager(QMainWindow):
         self.speakerBoostCheckBox.setToolTip(
             "Potenzia la somiglianza col parlante originale a costo di maggiori risorse.")
         layout.addWidget(self.speakerBoostCheckBox)
+
+        # Sincronizzazione labiale
+        self.useWav2LipCheckbox = QCheckBox("Sincronizzazione labiale")
+        layout.addWidget(self.useWav2LipCheckbox)
 
         # Pulsanti per le diverse funzionalità
         self.generateAudioButton = QPushButton('Genera Audio con AI')
@@ -2546,6 +2547,19 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.canceled.connect(self.audio_thread.terminate)
         self.progressDialog.show()
 
+    def runWav2Lip(self, video_path, audio_path, output_path):
+        command = [
+            'python', './Wav2Lip-master/inference.py',
+            '--checkpoint_path', './Wav2Lip-master/checkpoints',  # Sostituisci con il percorso al tuo checkpoint
+            '--face', video_path,
+            '--audio', audio_path,
+            '--outfile', output_path
+        ]
+
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Errore nell'esecuzione di Wav2Lip: {result.stderr}")
+
     def onAudioGenerationCompleted(self, audio_path):
         timecode = self.timecodePauseLineEdit.text()
         pause_duration = float(self.pauseAudioDurationLineEdit.text() or 0)
@@ -2580,14 +2594,28 @@ class VideoAudioManager(QMainWindow):
             # Clean up the temporary silent audio file
             os.remove(silent_audio_path)
 
-        base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
-        timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
-        output_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_GeniusAI_{timestamp}.mp4")
-        self.adattaVelocitaVideoAAudio(self.videoPathLineEdit, audio_path, output_path)
+        if self.useWav2LipCheckbox.isChecked():
+            base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
+            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
+            output_video_path = os.path.join(os.path.dirname(self.videoPathLineEdit),
+                                             f"{base_name}_Wav2Lip_{timestamp}.mp4")
+            try:
+                self.runWav2Lip(self.videoPathLineEdit, audio_path, output_video_path)
+                QMessageBox.information(self, "Completato",
+                                        f"Video generato con successo! Il video è stato salvato in: {output_video_path}")
+                self.loadVideoOutput(output_video_path)
+            except Exception as e:
+                QMessageBox.critical(self, "Errore", str(e))
+        else:
+            base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
+            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
+            output_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_GeniusAI_{timestamp}.mp4")
+            self.adattaVelocitaVideoAAudio(self.videoPathLineEdit, audio_path, output_path)
 
-        QMessageBox.information(self, "Completato",
-                                f"Processo completato con successo! L'audio è stato salvato in: {audio_path}")
-        self.loadVideoOutput(output_path)
+            QMessageBox.information(self, "Completato",
+                                    f"Processo completato con successo! L'audio è stato salvato in: {audio_path}")
+            self.loadVideoOutput(output_path)
+
     def onError(self, error_message):
         QMessageBox.critical(self, "Errore", "Errore durante la generazione dell'audio: " + error_message)
 
