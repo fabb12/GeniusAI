@@ -345,6 +345,14 @@ class VideoAudioManager(QMainWindow):
         changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
                                                                   os.path.basename(self.videoPathLineOutputEdit)))
 
+
+        # Pulsante per sincronizzare le posizioni
+        syncPositionButton = QPushButton('Sync Position')
+        syncPositionButton.setIcon(QIcon("./res/sync.png"))
+        syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
+        syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
+
+
         # Collegamento dei pulsanti ai loro slot funzionali
         playButtonOutput.clicked.connect(lambda: self.playerOutput.play())
         pauseButtonOutput.clicked.connect(lambda: self.playerOutput.pause())
@@ -356,6 +364,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayoutOutput.addWidget(pauseButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
+        playbackControlLayoutOutput.addWidget(syncPositionButton)  # Aggiungi il pulsante qui
 
         # Slider per il controllo della posizione del video output
         videoSliderOutput = CustomSlider(Qt.Orientation.Horizontal)
@@ -661,6 +670,12 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
 
+    def syncOutputWithSourcePosition(self):
+        source_position = self.player.position()
+        self.playerOutput.setPosition(source_position)
+        self.playVideo()
+        self.playerOutput.play()
+
     def generateTextForPresentation(self):
         try:
             num_slide = int(self.numSlidesInput.text().strip())
@@ -792,6 +807,7 @@ class VideoAudioManager(QMainWindow):
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
+
     def deleteVideoSegment(self):
         if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
             QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di eliminare.")
@@ -835,8 +851,12 @@ class VideoAudioManager(QMainWindow):
             # Sincronizza il video con l'audio
             final_video = final_video.set_audio(final_audio)
 
-            # Salva il video finale
-            output_path = os.path.join(os.path.dirname(video_path), "video_modified.mp4")
+            # Genera un nome di file univoco usando un timestamp con precisione al millisecondo
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+            output_dir = os.path.dirname(video_path)
+            output_name = f"video_modified_{timestamp}.mp4"
+            output_path = os.path.join(output_dir, output_name)
+
             final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
             QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
@@ -1178,6 +1198,7 @@ class VideoAudioManager(QMainWindow):
         # Sincronizzazione labiale
         self.useWav2LipCheckbox = QCheckBox("Sincronizzazione labiale")
         layout.addWidget(self.useWav2LipCheckbox)
+        self.useWav2LipCheckbox.setVisible(False)
 
         # Pulsanti per le diverse funzionalità
         self.generateAudioButton = QPushButton('Genera Audio con AI')
@@ -1894,10 +1915,12 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        if len(self.recording_segments) == 0:
-            segment_file_path = os.path.join(default_folder, f"{recording_name}.mp4")
-        else:
-            segment_file_path = os.path.join(default_folder, f"{recording_name}_{len(self.recording_segments)}.mp4")
+        segment_file_path = os.path.join(default_folder, f"{recording_name}.mp4")
+
+        # Aggiungi un timestamp univoco se il file esiste già
+        while os.path.exists(segment_file_path):
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}.mp4")
 
         ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
