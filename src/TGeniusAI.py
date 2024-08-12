@@ -144,7 +144,7 @@ class VideoAudioManager(QMainWindow):
                                         QSizePolicy.Policy.Expanding)
 
         # Creazione dei docks esistenti...
-        self.videoPlayerDock = Dock("Video Player Source", closable=True)
+        self.videoPlayerDock = Dock("Video Player Input", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
         self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
@@ -341,7 +341,7 @@ class VideoAudioManager(QMainWindow):
 
         changeButtonOutput = QPushButton('')
         changeButtonOutput.setIcon(QIcon("./res/change.png"))
-        changeButtonOutput.setToolTip('Sposta video in Video Player Source')
+        changeButtonOutput.setToolTip('Sposta video in Video Player Input')
         changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
                                                                   os.path.basename(self.videoPathLineOutputEdit)))
 
@@ -449,8 +449,6 @@ class VideoAudioManager(QMainWindow):
         self.volumeSliderOutput.valueChanged.connect(self.setVolumeOutput)
 
 
-        videoPlayerLayout.addWidget(QLabel("Volume"))
-        videoPlayerLayout.addWidget(self.volumeSlider)
 
         videoOutputLayout.addWidget(QLabel("Volume"))
         videoOutputLayout.addWidget(self.volumeSliderOutput)
@@ -490,25 +488,27 @@ class VideoAudioManager(QMainWindow):
         self.languageComboBox.addItem("Spagnolo", "es")
         self.languageComboBox.addItem("Tedesco", "de")
 
+        videoVolumeLayout = QHBoxLayout()
+        videoVolumeLayout.addWidget(QLabel("Volume"))
+        videoVolumeLayout.addWidget(self.volumeSlider)
 
-        #---speed
+
         # Spinbox per il controllo della velocità
         self.speedSpinBox = QSpinBox()
         self.speedSpinBox.setMinimum(1)  # Imposta la velocità minima a 1x
-        self.speedSpinBox.setMaximum(20)  # Imposta la velocità massima a 10x
+        self.speedSpinBox.setMaximum(20)  # Imposta la velocità massima a 20x
         self.speedSpinBox.setValue(1)  # Velocità di default a 1x
         self.speedSpinBox.setToolTip("Imposta la velocità di riproduzione")
 
         # Connect the spinbox's value changed signal to the updateSpeed function
         self.speedSpinBox.valueChanged.connect(self.updateSpeedFromSpinBox)
 
+        videoVolumeLayout.addWidget(QLabel("Velocità (x):"))
+        videoVolumeLayout.addWidget(self.speedSpinBox)
         # Layout for speed control
-        speedControlLayout = QHBoxLayout()
-        speedControlLayout.addWidget(QLabel("Speed Multiplier:"))
-        speedControlLayout.addWidget(self.speedSpinBox)
+        videoVolumeLayout.addWidget(self.speedSpinBox)
 
-        # Add this layout to the video player layout where other controls are added
-        videoPlayerLayout.addLayout(speedControlLayout)
+        videoPlayerLayout.addLayout(videoVolumeLayout)
 
         # Aggiunta della label e della combo box al layout orizzontale
         languageSelectionLayout.addWidget(languageLabel)
@@ -1813,18 +1813,14 @@ class VideoAudioManager(QMainWindow):
 
         self.folderPathLineEdit = QLineEdit()
         self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
-        saveOptionsLayout.addWidget(self.folderPathLineEdit)
 
         self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
+        saveOptionsLayout.addWidget(QLabel("Percorso File:"))
 
-        self.recordingNameLineEdit = QLineEdit()
-        self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
-        saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
-        saveOptionsLayout.addWidget(self.recordingNameLineEdit)
+        saveOptionsLayout.addWidget(self.folderPathLineEdit)
 
         buttonsLayout = QHBoxLayout()
-
         browseButton = QPushButton('Sfoglia')
         browseButton.clicked.connect(self.browseFolderLocation)
         buttonsLayout.addWidget(browseButton)
@@ -1833,7 +1829,12 @@ class VideoAudioManager(QMainWindow):
         open_folder_button.clicked.connect(self.openFolder)
         buttonsLayout.addWidget(open_folder_button)
 
+        self.recordingNameLineEdit = QLineEdit()
+        self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
         saveOptionsLayout.addLayout(buttonsLayout)
+
+        saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
+        saveOptionsLayout.addWidget(self.recordingNameLineEdit)
 
         recordingLayout.addWidget(saveOptionsGroup)
 
@@ -2242,7 +2243,7 @@ class VideoAudioManager(QMainWindow):
 
     def setupViewMenuActions(self, viewMenu):
         # Azione per il Video Player Dock
-        self.actionToggleVideoPlayerDock = QAction('Mostra/Nascondi Video Player Source', self, checkable=True)
+        self.actionToggleVideoPlayerDock = QAction('Mostra/Nascondi Video Player Input', self, checkable=True)
         self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
         self.actionToggleVideoPlayerDock.triggered.connect(
             lambda: self.toggleDockVisibilityAndUpdateMenu(self.videoPlayerDock,
