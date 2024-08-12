@@ -263,14 +263,10 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
 
-        # Creazione dei pulsanti di controllo playback
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon("./res/play.png"))
-        self.playButton.setToolTip("Riproduci")
-
-        self.pauseButton = QPushButton('')
-        self.pauseButton.setIcon(QIcon("./res/pausa.png"))
-        self.pauseButton.setToolTip("Pausa")
+        self.playButton.setToolTip("Riproduci/Pausa")
+        self.playButton.clicked.connect(self.togglePlayPause)
 
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("./res/stop.png"))
@@ -302,8 +298,6 @@ class VideoAudioManager(QMainWindow):
         # Collegamento dei pulsanti ai loro slot funzionali
 
         # Collegam  ento dei pulsanti ai loro slot funzionali
-        self.playButton.clicked.connect(self.playVideo)
-        self.pauseButton.clicked.connect(self.pauseVideo)
         self.stopButton.clicked.connect(self.stopVideo)
        # self.cropButton.clicked.connect(self.applyCrop)  # Assumendo che la funzione cutVideo sia definita
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
@@ -331,11 +325,12 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
-        # Creazione dei pulsanti di controllo playback per il video output
-        playButtonOutput = QPushButton('')
-        playButtonOutput.setIcon(QIcon("./res/play.png"))
-        pauseButtonOutput = QPushButton('')
-        pauseButtonOutput.setIcon(QIcon("./res/pausa.png"))
+        self.playButtonOutput = QPushButton('')
+        self.playButtonOutput.setIcon(QIcon("./res/play.png"))
+        self.playButtonOutput.setToolTip("Riproduci/Pausa")
+        self.playButtonOutput.clicked.connect(self.togglePlayPauseOutput)
+
+
         stopButtonOutput = QPushButton('')
         stopButtonOutput.setIcon(QIcon("./res/stop.png"))
 
@@ -352,16 +347,11 @@ class VideoAudioManager(QMainWindow):
         syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
         syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
 
-
-        # Collegamento dei pulsanti ai loro slot funzionali
-        playButtonOutput.clicked.connect(lambda: self.playerOutput.play())
-        pauseButtonOutput.clicked.connect(lambda: self.playerOutput.pause())
         stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
         # Layout per i controlli di playback
         playbackControlLayoutOutput = QHBoxLayout()
-        playbackControlLayoutOutput.addWidget(playButtonOutput)
-        playbackControlLayoutOutput.addWidget(pauseButtonOutput)
+        playbackControlLayoutOutput.addWidget(self.playButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
         playbackControlLayoutOutput.addWidget(syncPositionButton)  # Aggiungi il pulsante qui
@@ -420,7 +410,6 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout = QHBoxLayout()
         playbackControlLayout.addWidget(self.rewindButton)  # Pulsante indietro di 5 secondi
         playbackControlLayout.addWidget(self.playButton)
-        playbackControlLayout.addWidget(self.pauseButton)
         playbackControlLayout.addWidget(self.stopButton)
         playbackControlLayout.addWidget(self.forwardButton)  # Pulsante avanti di 5 secondi
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
@@ -663,6 +652,22 @@ class VideoAudioManager(QMainWindow):
             self.applyDarkMode()
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
+
+    def togglePlayPauseOutput(self):
+        if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.playerOutput.pause()
+            self.playButtonOutput.setIcon(QIcon("./res/play.png"))  # Cambia l'icona in Play
+        else:
+            self.playerOutput.play()
+            self.playButtonOutput.setIcon(QIcon("./res/pausa.png"))  # Cambia l'icona in Pausa
+
+    def togglePlayPause(self):
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.player.pause()
+            self.playButton.setIcon(QIcon("./res/play.png"))  # Cambia l'icona in Play
+        else:
+            self.player.play()
+            self.playButton.setIcon(QIcon("./res/pausa.png"))  # Cambia l'icona in Pausa
 
     def updateSpeedFromSpinBox(self, value):
         # Convert the spinbox value to a playback rate
@@ -2259,7 +2264,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
-        self.actionTogglegGenerazioneAIDock = self.createToggleAction(self.generazioneAIDock, 'Mostra/Nascondi Generazion AI')
+        self.actionTogglegGenerazioneAIDock = self.createToggleAction(self.generazioneAIDock, 'Mostra/Nascondi Generazione AI')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
