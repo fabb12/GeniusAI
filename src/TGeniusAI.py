@@ -5,7 +5,7 @@ from moviepy.editor import ImageClip, CompositeVideoClip
 import re
 import tempfile
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
-                             QLineEdit,  QHBoxLayout, QGroupBox,  QComboBox)
+                             QLineEdit,  QHBoxLayout, QGroupBox,  QComboBox, QSpinBox)
 from PyQt6.QtGui import QIcon
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from pyqtgraph.dockarea.Dock import Dock
@@ -29,7 +29,7 @@ from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 import shutil
 import pyaudio
-from PyQt6.QtCore import QEvent, Qt, QSize, QTimer, QPoint
+from PyQt6.QtCore import QEvent, QTimer, QPoint
 from PyQt6.QtWidgets import QSlider
 from PyQt6.QtCore import Qt
 from CustomSlider import CustomSlider
@@ -492,26 +492,20 @@ class VideoAudioManager(QMainWindow):
 
 
         #---speed
-        self.speedSlider = QSlider(Qt.Orientation.Horizontal)
-        self.speedSlider.setMinimum(25)  # Minimum speed at 25% of normal speed
-        self.speedSlider.setMaximum(400)  # Maximum speed at 400% of normal speed
-        self.speedSlider.setValue(100)  # Default value set to 100% speed
-        self.speedSlider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.speedSlider.setTickInterval(25)
-        self.speedSlider.setToolTip("Adjust Playback Speed")
+        # Spinbox per il controllo della velocità
+        self.speedSpinBox = QSpinBox()
+        self.speedSpinBox.setMinimum(1)  # Imposta la velocità minima a 1x
+        self.speedSpinBox.setMaximum(20)  # Imposta la velocità massima a 10x
+        self.speedSpinBox.setValue(1)  # Velocità di default a 1x
+        self.speedSpinBox.setToolTip("Imposta la velocità di riproduzione")
 
-        # Add a label to show the speed percentage
-        self.speedLabel = QLabel("100%")
-        self.speedLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Connect the slider's value changed signal to the updateSpeed function
-        self.speedSlider.valueChanged.connect(self.updateSpeed)
+        # Connect the spinbox's value changed signal to the updateSpeed function
+        self.speedSpinBox.valueChanged.connect(self.updateSpeedFromSpinBox)
 
         # Layout for speed control
         speedControlLayout = QHBoxLayout()
-        speedControlLayout.addWidget(QLabel("Speed:"))
-        speedControlLayout.addWidget(self.speedSlider)
-        speedControlLayout.addWidget(self.speedLabel)
+        speedControlLayout.addWidget(QLabel("Speed Multiplier:"))
+        speedControlLayout.addWidget(self.speedSpinBox)
 
         # Add this layout to the video player layout where other controls are added
         videoPlayerLayout.addLayout(speedControlLayout)
@@ -670,6 +664,10 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
 
+    def updateSpeedFromSpinBox(self, value):
+        # Convert the spinbox value to a playback rate
+        playbackRate = value
+        self.player.setPlaybackRate(playbackRate)
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
         self.playerOutput.setPosition(source_position)
