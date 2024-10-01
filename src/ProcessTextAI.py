@@ -29,7 +29,7 @@ class ProcessTextAI(QThread):
         client = anthropic.Anthropic(api_key=antrophic_key)
         message = client.messages.create(
             model=model_3_5_sonnet,
-            max_tokens=1000,
+            max_tokens=8192,
             temperature=0.7,
             system=(
                 f"You are an expert in text transcription and formatting. Your task is to process the following "
