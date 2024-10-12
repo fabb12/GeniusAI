@@ -50,6 +50,7 @@ from difflib import SequenceMatcher
 import StreamToLogger
 from PptxGeneration import PptxGeneration
 from ProcessTextAI import ProcessTextAI
+from SplashScreen import SplashScreen
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84 <-----
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -141,6 +142,7 @@ class VideoAudioManager(QMainWindow):
         self.setCentralWidget(area)
         self.setSizePolicy(QSizePolicy.Policy.Expanding,
                                         QSizePolicy.Policy.Expanding)
+
 
         # Creazione dei docks esistenti...
         self.videoPlayerDock = Dock("Video Player Input", closable=True)
@@ -2889,9 +2891,32 @@ class VideoAudioManager(QMainWindow):
 
 
 
-
-if __name__ == '__main__':
+if __name__ == "__main__":
+    # Crea l'applicazione
     app = QApplication(sys.argv)
+
+    # Specifica la cartella delle immagini
+    image_folder = './res/splash_images'  # Assicurati che la cartella esista e contenga immagini
+
+    # Crea la splash screen con un'immagine casuale dalla cartella
+    splash = SplashScreen(image_folder)
+    splash.show()
+
+    # Simula il caricamento iniziale dell'applicazione
+    splash.showMessage("Caricamento risorse...")  # Messaggio personalizzato
+    time.sleep(2)  # Simula un ritardo
+
+    splash.showMessage("Inizializzazione interfaccia...")  # Altro messaggio
+    time.sleep(1)  # Simula un altro ritardo
+
+    # Crea l'interfaccia principale dell'applicazione
     window = VideoAudioManager()
+
+    # Mostra la finestra principale
     window.show()
+
+    # Chiudi la splash screen dopo il caricamento dell'interfaccia principale
+    splash.finish(window)
+
+    # Esegui l'app
     sys.exit(app.exec())
