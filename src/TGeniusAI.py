@@ -45,8 +45,6 @@ from bs4 import BeautifulSoup
 import numpy as np
 from ScreenButton import ScreenButton
 from CustumTextEdit import CustomTextEdit
-from MonitorTeams import TeamsCallRecorder
-from transformers import pipeline
 from Settings import SettingsDialog
 from difflib import SequenceMatcher
 import StreamToLogger
@@ -66,14 +64,16 @@ class VideoAudioManager(QMainWindow):
 
         StreamToLogger.setup_logging()
 
-        # Version information
-        self.version_major = 1
-        self.version_minor = 2
-        self.version_patch = 7
-        build_date = datetime.datetime.now().strftime("%Y%m%d")
 
-        # Comporre la stringa di versione
-        self.version = f"{self.version_major}.{self.version_minor}.{self.version_patch} - {build_date}"
+        # File di versione
+        self.version_file = "../version_info.txt"
+
+        # Carica le informazioni di versione dal file esterno
+        self.version, self.build_date = self.load_version_info()
+
+        # Imposta il titolo della finestra con la versione e la data di build
+        self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
+
 
         self.api_key = "ef38b436326ec387ecb1a570a8641b84"
         # Inizializza il modello di riassunto
@@ -134,7 +134,6 @@ class VideoAudioManager(QMainWindow):
     """
     def initUI(self):
 
-        self.setWindowTitle('ThemaGeniusAI - Alpha | {}'.format(self.version))
         self.setWindowIcon(QIcon('./res/eye.png'))
 
         # Creazione e configurazione dell'area del dock
@@ -652,6 +651,27 @@ class VideoAudioManager(QMainWindow):
             self.applyDarkMode()
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
+
+    def load_version_info(self):
+        """
+        Carica le informazioni di versione e data dal file di versione.
+        """
+        version = "Sconosciuta"
+        build_date = "Sconosciuta"
+
+        # Verifica se il file esiste
+        if os.path.exists(self.version_file):
+            with open(self.version_file, 'r') as file:
+                lines = file.readlines()
+                for line in lines:
+                    if "Version" in line:
+                        version = line.split(":")[1].strip()  # Estrai la versione
+                    elif "Build Date" in line:
+                        build_date = line.split(":")[1].strip()  # Estrai la data di build
+        else:
+            print(f"File {self.version_file} non trovato.")
+
+        return version, build_date
 
     def togglePlayPauseOutput(self):
         if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -1676,7 +1696,7 @@ class VideoAudioManager(QMainWindow):
 
             # Adapt the speed of the video to match the new audio duration
             output_path = tempfile.mktemp(suffix='.mp4')
-            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
+            #self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
 
             QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
             self.loadVideoOutput(output_path)
@@ -2369,7 +2389,7 @@ class VideoAudioManager(QMainWindow):
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
-                          f"""<b>Thema Genius</b> version: {self.version}<br>
+                          f"""<b>Genius AI</b> version: {self.version}<br>
                           AI-based video and audio management application.<br>
                           <br>
                           Autore: FFA <br>""")
