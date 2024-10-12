@@ -1698,7 +1698,7 @@ class VideoAudioManager(QMainWindow):
 
             # Adapt the speed of the video to match the new audio duration
             output_path = tempfile.mktemp(suffix='.mp4')
-            #self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
+            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
 
             QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
             self.loadVideoOutput(output_path)
