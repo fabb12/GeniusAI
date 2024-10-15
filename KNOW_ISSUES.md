@@ -1,10 +1,14 @@
 # Known Issues
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
-
- [x] da sisteamre il nome del file quando viene tagliato e cancellato ,mettere il timecode nel nome
-    da sistemare il nome del file qunado viene genrare un file con uno nome personalizzato mettere un timecode
-
+## [1.3.1] - ??
+- [ ] aggiungere dock per inserire copertina iniziale
+- [ ] sistemare inserimento pausa nel audio 
+- [ ] implementare un sistema di auto apprendimento della dinamica del video 
+- [ ] implementare integrazione della webcam
+- [ ] aggiungere tasto condividi via what app  , teams ecc...
+- [x] agginugere splash screen
+- 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
@@ -14,11 +18,11 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungere log nel file di testo
 - [x] aggiungre indicatore presenza audio 
 - [x] aggiungere tasto pausa rec
-- [ ] aggiungere nome timecode per video registrato
+- [x] aggiungere nome timecode per video registrato
 ## [1.1.15] - 2024-06-10
 
 - [x] aggiungere titolo del file da registrare nel dock di registrazione
 - [x] aggiungere interruzione trascrizione
 - [ ] aggiungere la funzione ritaglio
 - [x] aggiugere chiusura dock
-- [x] modificare il processo di registrazione usando ffmpeg
+- [x] modificare il processo di registrazione usand
