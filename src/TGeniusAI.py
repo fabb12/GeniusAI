@@ -67,7 +67,7 @@ class VideoAudioManager(QMainWindow):
 
 
         # File di versione
-        self.version_file = "../version_info.txt"
+        self.version_file = "./version_info.txt"
 
         # Carica le informazioni di versione dal file esterno
         self.version, self.build_date = self.load_version_info()
