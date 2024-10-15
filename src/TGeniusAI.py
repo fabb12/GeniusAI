@@ -51,6 +51,7 @@ import StreamToLogger
 from PptxGeneration import PptxGeneration
 from ProcessTextAI import ProcessTextAI
 from SplashScreen import SplashScreen
+from ShareVideo import VideoSharingManager
 # fea27867f451afb3ee369dcc7fcfb074
 # ef38b436326ec387ecb1a570a8641b84 <-----
 # a1dfc77969cd40068d3b3477af3ea6b5
@@ -101,6 +102,8 @@ class VideoAudioManager(QMainWindow):
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
+        self.videoSharingManager = VideoSharingManager(self)
+
         # Aggiungi l'istanza di TeamsCallRecorder
         #self.teams_call_recorder = TeamsCallRecorder(self)
 
@@ -647,13 +650,20 @@ class VideoAudioManager(QMainWindow):
         settingsAction.triggered.connect(self.showSettingsDialog)
         toolbar.addAction(settingsAction)
 
+        shareAction = QAction(QIcon("./res/share.png"), "Condividi Video", self)
+        shareAction.triggered.connect(self.onShareButtonClicked)
+        toolbar.addAction(shareAction)
+
 
 
         if hasattr(self, 'applyDarkMode'):
             self.applyDarkMode()
 
         self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
-
+    def onShareButtonClicked(self):
+        # Usa il percorso del video nel dock Video Player Output
+        video_path = self.videoPathLineOutputEdit
+        self.videoSharingManager.shareVideo(video_path)
     def load_version_info(self):
         """
         Carica le informazioni di versione e data dal file di versione.
