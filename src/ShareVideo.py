@@ -1,6 +1,5 @@
 import os
 import subprocess
-import pywhatkit as kit  # Libreria per WhatsApp
 from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QListWidget, QDialogButtonBox
 
 
