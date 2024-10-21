@@ -566,18 +566,6 @@ class VideoAudioManager(QMainWindow):
         self.insertPauseButton = QPushButton('Inserisci Pausa')
         self.insertPauseButton.clicked.connect(self.insertPause)
 
-        # Aggiungi un campo di input per la ricerca del testo
-        self.searchInput = QLineEdit()
-        self.searchInput.setPlaceholderText("Inserisci il testo da cercare...")
-
-        # Aggiungi il pulsante per cercare il testo
-        self.searchButton = QPushButton('Cerca')
-        self.searchButton.clicked.connect(lambda: self.transcriptionTextArea.search_text(self.searchInput.text()))
-
-        # Aggiungi il campo di ricerca e il pulsante al layout
-        buttonsLayout.addWidget(self.searchInput)  # Campo di input per la ricerca
-        buttonsLayout.addWidget(self.searchButton)  # Pulsante per avviare la ricerca
-
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
