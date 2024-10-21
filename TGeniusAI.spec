@@ -2,6 +2,7 @@ import shutil
 import os
 import re
 import zipfile
+import datetime
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
@@ -27,8 +28,8 @@ a = Analysis(
     datas=[
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
-        (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add Readme.md
-        (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),  # Add Readme.md
+        (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add CHANGELOG.md
+        (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),  # Add KNOW_ISSUES.md
     ] + datas,
     hiddenimports=hiddenimports,
     hookspath=[],
@@ -71,33 +72,9 @@ coll = COLLECT(
     console=False
 )
 
-# Custom script to move files to the correct folder and create a ZIP file
-def move_files_up_and_create_zip():
-    internal_dir = os.path.join(current_dir, 'dist', 'TGeniusAI', '_internal')
-    release_dir = os.path.join(current_dir, 'dist', 'Release')
-    tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
-
-    # Create the Release folder if it doesn't exist
-    os.makedirs(release_dir, exist_ok=True)
-
-    files_to_move = ['Readme.md','KNOW_ISSUES.md','CHANGELOG.md']
-    folders_to_move = ['res']
-
-    for file_name in files_to_move:
-        src_path = os.path.join(internal_dir, file_name)
-        dest_path = os.path.join(tgeniusai_dir, file_name)
-        if os.path.exists(src_path):
-            shutil.move(src_path, dest_path)
-
-    for folder_name in folders_to_move:
-        src_path = os.path.join(internal_dir, folder_name)
-        dest_path = os.path.join(tgeniusai_dir, folder_name)
-        if os.path.exists(src_path):
-            if os.path.exists(dest_path):
-                shutil.rmtree(dest_path)
-            shutil.move(src_path, dest_path)
-
-    # Extract the software version from the main code
+# Custom script to create the version_info.txt file and move files to the correct folder
+def create_version_info():
+    # Estrai la versione dal codice sorgente
     version_pattern = re.compile(r'self\.version_major = (\d+).*self\.version_minor = (\d+).*self\.version_patch = (\d+)', re.DOTALL)
     with open('src/TGeniusAI.py', 'r') as f:
         content = f.read()
@@ -107,7 +84,54 @@ def move_files_up_and_create_zip():
     else:
         version = "v0.0.0"
 
-    # Create a ZIP file containing all files in the TGeniusAI folder
+    # Ottieni la data corrente
+    build_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Crea il file version_info.txt
+    version_info_content = f"Version: {version}\nBuild Date: {build_date}\n"
+    version_info_path = os.path.join(current_dir, 'version_info.txt')
+
+    with open(version_info_path, 'w') as version_file:
+        version_file.write(version_info_content)
+
+    return version_info_path, version
+
+
+def move_files_up_and_create_zip():
+    internal_dir = os.path.join(current_dir, 'dist', 'TGeniusAI', '_internal')
+    release_dir = os.path.join(current_dir, 'dist', 'Release')
+    tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
+
+    # Crea la cartella di rilascio se non esiste
+    os.makedirs(release_dir, exist_ok=True)
+
+    # File da spostare
+    files_to_move = ['Readme.md', 'KNOW_ISSUES.md', 'CHANGELOG.md']
+    folders_to_move = ['res']
+
+    # Sposta i file
+    for file_name in files_to_move:
+        src_path = os.path.join(internal_dir, file_name)
+        dest_path = os.path.join(tgeniusai_dir, file_name)
+        if os.path.exists(src_path):
+            shutil.move(src_path, dest_path)
+
+    # Sposta le cartelle
+    for folder_name in folders_to_move:
+        src_path = os.path.join(internal_dir, folder_name)
+        dest_path = os.path.join(tgeniusai_dir, folder_name)
+        if os.path.exists(src_path):
+            if os.path.exists(dest_path):
+                shutil.rmtree(dest_path)
+            shutil.move(src_path, dest_path)
+
+    # Crea il file version_info.txt
+    version_info_path, version = create_version_info()
+
+    # Sposta il file version_info.txt nella cartella di destinazione
+    shutil.move(version_info_path, os.path.join(tgeniusai_dir, 'version_info.txt'))
+
+    # Crea un file ZIP con tutti i file nella cartella TGeniusAI
     zip_file_path = os.path.join(release_dir, f"TGeniusAI_{version}.zip")
     with zipfile.ZipFile(zip_file_path, 'w') as zipf:
         for root, dirs, files in os.walk(tgeniusai_dir):
@@ -116,4 +140,6 @@ def move_files_up_and_create_zip():
                 arcname = os.path.relpath(file_path, tgeniusai_dir)
                 zipf.write(file_path, arcname)
 
+
+# Esegui lo script per spostare i file e creare lo ZIP
 move_files_up_and_create_zip()

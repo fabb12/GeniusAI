@@ -513,19 +513,18 @@ class VideoAudioManager(QMainWindow):
         # TextArea per la trascrizione
         self.transcriptionTextArea = CustomTextEdit(self)
         self.transcriptionTextArea.setReadOnly(False)
-
         self.transcriptionTextArea.setUndoRedoEnabled(True)
-
         self.transcriptionTextArea.setStyleSheet("""
-               QTextEdit {
-                   color: white;
-                   font-size: 12pt;
-                   font-family: 'Arial';
-                   background-color: #333;
-               }
-           """)
+                     QTextEdit {
+                         color: white;
+                         font-size: 12pt;
+                         font-family: 'Arial';
+                         background-color: #333;
+                     }
+                 """)
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
+
         self.resetButton = QPushButton()
         self.resetButton.setIcon(QIcon("./res/reset.png"))  # Assicurati che il percorso dell'icona sia corretto
         self.resetButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
