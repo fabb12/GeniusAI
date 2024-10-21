@@ -2,6 +2,8 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 ## [1.3.1] - ??
+- [ ] aggiungere ctrl-f nel text edit 
+- [ ] sistemare i dock quando vengono sganciati
 - [ ] aggiungere dock per inserire copertina iniziale
 - [ ] sistemare inserimento pausa nel audio 
 - [ ] implementare un sistema di auto apprendimento della dinamica del video 
