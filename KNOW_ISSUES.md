@@ -10,6 +10,8 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] implementare integrazione della webcam
 - [ ] aggiungere tasto condividi via what app  , teams ecc...
 - [x] agginugere splash screen
+- [ ] aggiungere sync trascrizione video originali 
+- [ ] aggiugere caricamento metadati video e trascrizione
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
