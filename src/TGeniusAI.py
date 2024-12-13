@@ -543,6 +543,11 @@ class VideoAudioManager(QMainWindow):
         self.saveButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
         self.saveButton.clicked.connect(self.saveText)
 
+        self.loadButton = QPushButton()
+        self.loadButton.setIcon(QIcon("./res/load.png"))  # Assicurati che il percorso dell'icona sia corretto
+        self.loadButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
+        self.loadButton.clicked.connect(self.loadText)
+
         # Checkbox to toggle timecode insertion
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
 
@@ -554,8 +559,10 @@ class VideoAudioManager(QMainWindow):
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
 
         # Nuovo pulsante per sistemare il testo usando AI
-        self.processTextButton = QPushButton('Sistema Testo con AI')
+        self.processTextButton = QPushButton('Riassunto AI')
+        self.fixTextButton = QPushButton('Sistema Testo AI')
         self.processTextButton.clicked.connect(self.processTextWithAI)
+        self.fixTextButton.clicked.connect(self.fixTextWithAI)
 
         # Aggiungi entrambi i pulsanti al layout
 
@@ -568,6 +575,7 @@ class VideoAudioManager(QMainWindow):
         # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
+        buttonsLayout.addWidget(self.loadButton)
         buttonsLayout.addWidget(self.saveButton)
         buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
         buttonsLayout.addWidget(self.pauseTimeEdit)
@@ -575,6 +583,7 @@ class VideoAudioManager(QMainWindow):
         buttonsLayout.addWidget(self.timecodeCheckbox)
         buttonsLayout.addWidget(self.syncButton)
         buttonsLayout.addWidget(self.processTextButton)
+        buttonsLayout.addWidget(self.fixTextButton)
 
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
@@ -746,7 +755,13 @@ class VideoAudioManager(QMainWindow):
             return
 
         # Mostra un dialogo di progresso
-        self.progressDialog = QProgressDialog("Sistemazione testo in corso...", "Annulla", 0, 100, self)
+        self.text_ai_thread = ProcessTextAI(
+            current_text,
+            self.api_key,
+            self.languageComboBox.currentText(),
+            mode="summary"
+        )
+
         self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
@@ -758,6 +773,32 @@ class VideoAudioManager(QMainWindow):
         self.text_ai_thread.process_error.connect(self.onProcessError)
         self.text_ai_thread.start()
 
+    def fixTextWithAI(self):
+        # Ottieni il testo corrente dal transcriptionTextArea
+        current_text = self.transcriptionTextArea.toPlainText()
+
+        if not current_text.strip():
+            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
+            return
+
+        # Mostra un dialogo di progresso
+        self.progressDialog = QProgressDialog("Sistemazione testo in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        # Esegui il thread per il processo AI
+        self.text_ai_thread = ProcessTextAI(
+            current_text,
+            self.api_key,
+            self.languageComboBox.currentText(),
+            mode="fix"
+        )
+
+        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
+        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
+        self.text_ai_thread.process_error.connect(self.onProcessError)
+        self.text_ai_thread.start()
     def handleTimecodeToggle(self, checked):
         self.transcriptionTextArea.setReadOnly(
             checked)  # Disabilita la modifica del testo quando la checkbox è abilitata
@@ -938,7 +979,9 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setSource(QUrl())
         self.videoPathLineOutputEdit = ''
         self.fileNameLabelOutput.setText("Nessun video caricato")
+
     def get_nearest_timecode(self):
+        # Posizione attuale del cursore nella trascrizione
         cursor_position = self.transcriptionTextArea.textCursor().position()
         text = self.transcriptionTextArea.toPlainText()
 
@@ -947,32 +990,49 @@ class VideoAudioManager(QMainWindow):
         matches = list(timecode_pattern.finditer(text))
 
         if not matches:
+            logging.debug("Nessun timecode trovato nella trascrizione.")
             return None
 
         nearest_timecode = None
         min_distance = float('inf')
 
         for match in matches:
-            start, end = match.span()
-            distance = abs(cursor_position - start)
+            start, end = match.span()  # Ottieni la posizione del timecode
+            distance = abs(cursor_position - start)  # Distanza dal cursore
 
             if distance < min_distance:
                 min_distance = distance
                 nearest_timecode = match
 
         if nearest_timecode:
-            minutes, seconds = map(int, nearest_timecode.groups())
-            timecode_seconds = minutes * 60 + seconds
-            return timecode_seconds
+            try:
+                minutes, seconds = map(int, nearest_timecode.groups())
+                timecode_seconds = minutes * 60 + seconds
+                logging.debug(f"Timecode più vicino: {timecode_seconds} secondi")
+                return timecode_seconds
+            except ValueError:
+                logging.error("Errore durante la conversione del timecode in secondi.")
+                return None
+
+        logging.debug("Nessun timecode valido trovato.")
+        return None
 
         return None
+
     def sync_video_to_transcription(self):
         timecode_seconds = self.get_nearest_timecode()
 
         if timecode_seconds is not None:
-            self.player.setPosition(timecode_seconds * 1000)  # Converti in millisecondi
+            try:
+                self.player.setPosition(timecode_seconds * 1000)  # Converti in millisecondi
+                logging.info(f"Video sincronizzato al timecode: {timecode_seconds} secondi")
+            except Exception as e:
+                logging.error(f"Errore durante la sincronizzazione del video: {e}")
+                QMessageBox.critical(self, "Errore", "Impossibile sincronizzare il video.")
         else:
+            logging.warning("Nessun timecode trovato o cursore posizionato in un'area senza timecode.")
             QMessageBox.warning(self, "Attenzione", "Nessun timecode trovato nella trascrizione.")
+
     def setStartBookmark(self):
         self.videoSlider.setBookmarkStart(self.player.position())
     def setEndBookmark(self):
@@ -2073,6 +2133,23 @@ class VideoAudioManager(QMainWindow):
                 logging.debug("File salvato correttamente!")
             except Exception as e:
                 logging.debug("Errore durante il salvataggio del file:", e)
+
+    def loadText(self):
+        # Apri il dialogo per la selezione del file da caricare
+        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "Text files (*.txt);;All files (*.*)")
+
+        # Controlla se l'utente ha effettivamente selezionato un file
+        if path:
+            try:
+                # Leggi il contenuto del file
+                with open(path, 'r') as file:
+                    text_loaded = file.read()
+
+                # Imposta il contenuto nel QTextEdit
+                self.transcriptionTextArea.setPlainText(text_loaded)
+                logging.debug("File caricato correttamente!")
+            except Exception as e:
+                logging.debug("Errore durante il caricamento del file:", e)
 
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""

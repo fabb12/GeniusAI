@@ -8,7 +8,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare inserimento pausa nel audio 
 - [ ] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
-- [ ] aggiungere tasto condividi via what app  , teams ecc...
+- [x] aggiungere tasto condividi via what app  , teams ecc...
 - [x] agginugere splash screen
 - [ ] aggiungere sync trascrizione video originali 
 - [ ] aggiugere caricamento metadati video e trascrizione

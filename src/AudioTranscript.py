@@ -40,24 +40,23 @@ class TranscriptionThread(QThread):
 
             for index, (chunk, start_time) in enumerate(chunks):
                 if not self._is_running:  # Check if the thread should stop
-                    logging.debug("Checkpoint: Stopping transcription")  # Checkpoint
                     self.transcription_complete.emit(transcription, [])  # Emit current transcription
                     return
 
                 logging.debug(f"Checkpoint: Transcribing chunk {index + 1}/{total_chunks}")  # Checkpoint
                 text, start_time, _ = self.transcribeAudioChunk(chunk, start_time)
-                start_mins, start_secs = divmod(start_time // 1000, 60)
-                current_time_in_seconds = (start_mins * 60) + start_secs
 
-                if last_timestamp is None or (current_time_in_seconds - last_timestamp >= 30):
-                    transcription += f"[{start_mins:02d}:{start_secs:02d}] {text}\n\n"
-                    last_timestamp = current_time_in_seconds
-                else:
-                    transcription += f"{text}\n\n"
+                # Calcola il timecode corrente
+                current_time_seconds = start_time // 1000
+                start_mins, start_secs = divmod(current_time_seconds, 60)
+
+                # Aggiungi il timecode e la trascrizione
+                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n"
+                transcription += f"{text}\n\n"
 
                 self.partial_text = transcription  # Update partial transcription
 
-                # Calculate the progress percentage
+                # Calcola la percentuale di progresso
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
                 self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
@@ -95,12 +94,18 @@ class TranscriptionThread(QThread):
 
         return temp_audio_file_path
 
-    def splitAudio(self, audio_input, length=60000):
+    def splitAudio(self, audio_input, length=30000):  # 30 secondi in millisecondi
         logging.debug("Checkpoint: Inside splitAudio")  # Checkpoint
         audio = AudioFileClip(audio_input)
+
         if audio.duration <= 0:
             raise ValueError("La durata dell'audio è non valida o negativa.")
-        chunks = [(audio.subclip(i / 1000, min(i + length, audio.duration * 1000) / 1000), i) for i in range(0, int(audio.duration * 1000), length)]
+
+        # Dividi l'audio in blocchi di lunghezza fissa
+        chunks = [
+            (audio.subclip(start / 1000, min((start + length) / 1000, audio.duration)), start)
+            for start in range(0, int(audio.duration * 1000), length)
+        ]
         return chunks
 
     def get_locale_from_language(self, language_code):
@@ -126,42 +131,25 @@ class TranscriptionThread(QThread):
         logging.debug("Checkpoint: Inside transcribeAudioChunk")  # Checkpoint
         recognizer = sr.Recognizer()
 
-        # Salva il chunk audio in un file temporaneo
         try:
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio_file:
-                if temp_audio_file is None:
-                    raise Exception("Failed to create temporary file")
                 audio_chunk.write_audiofile(temp_audio_file.name, codec='pcm_s16le')
                 temp_audio_file_path = temp_audio_file.name
-            logging.debug(f"Checkpoint: Temporary audio file created at {temp_audio_file_path}")  # Checkpoint
-        except Exception as e:
-            logging.debug(f"Checkpoint: Error creating temporary audio file - {e}")  # Checkpoint
-            return f"[Errore: {e}]", start_time, None
 
-        try:
             with sr.AudioFile(temp_audio_file_path) as source:
-                logging.debug("Checkpoint: Audio file loaded into recognizer")  # Checkpoint
                 audio_data = recognizer.record(source)
                 language_video = self.parent().languageComboBox.currentData()  # Ottiene il codice lingua dalla comboBox
-                logging.debug(f"Checkpoint: Language video obtained from combo box - {language_video}")  # Checkpoint
                 locale = self.get_locale_from_language(language_video)
-                logging.debug(f"Checkpoint: Locale for recognition - {locale}")  # Checkpoint
                 text = recognizer.recognize_google(audio_data, language=locale)
-                logging.debug(f"Checkpoint: Successfully recognized text - {text}")  # Checkpoint
-            return text, start_time, language_video
+
+                return text, start_time, language_video
+
         except sr.UnknownValueError:
-            logging.debug("Checkpoint: Speech recognition could not understand audio")  # Checkpoint
-            return "[Incomprensibile]", start_time, language_video
+            return "[Incomprensibile]", start_time, None
         except sr.RequestError as e:
-            logging.debug(f"Checkpoint: API request error - {e}")  # Checkpoint
-            return f"[Errore: {e}]", start_time, language_video
+            return f"[Errore: {e}]", start_time, None
         except Exception as e:
-            logging.debug(f"Checkpoint: General error during transcription - {e}")  # Checkpoint
-            return f"[Errore: {e}]", start_time, language_video
+            return f"[Errore: {e}]", start_time, None
         finally:
             if os.path.exists(temp_audio_file_path):
-                try:
-                    os.remove(temp_audio_file_path)  # Elimina il file temporaneo
-                    logging.debug(f"Checkpoint: Temporary audio file {temp_audio_file_path} removed")  # Checkpoint
-                except Exception as e:
-                    logging.debug(f"Checkpoint: Error removing temporary audio file - {e}")  # Checkpoint
+                os.remove(temp_audio_file_path)
