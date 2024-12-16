@@ -12,6 +12,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] agginugere splash screen
 - [ ] aggiungere sync trascrizione video originali 
 - [ ] aggiugere caricamento metadati video e trascrizione
+- [ ] aggiugnre il testo che viene eveidenzaio mentro e' in playback
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate

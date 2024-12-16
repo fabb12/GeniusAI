@@ -1,7 +1,7 @@
 ; Script di Inno Setup per installare ThemaGeniusAI senza richiedere privilegi di amministratore
 ; Salvare questo file con estensione .iss
 
-#define MyAppVersion "1.3.1"  ; Definisci qui la versione del programma
+#define MyAppVersion "1.4.0"  ; Definisci qui la versione del programma
 
 [Setup]
 ; Nome del programma che verrà visualizzato nel pannello di controllo
@@ -9,11 +9,11 @@ AppName=ThemaGeniusAI
 ; Versione del programma
 AppVersion={#MyAppVersion}
 ; Nome completo con versione
-AppVerName=ThemaGeniusAI {#MyAppVersion}
+AppVerName=GeniusAI {#MyAppVersion}
 ; Directory di destinazione (installazione nella cartella AppData locale dell'utente)
-DefaultDirName={userappdata}\ThemaGeniusAI
+DefaultDirName={userappdata}\GeniusAI
 ; Nome del file di output
-OutputBaseFilename=Setup_ThemaGeniusAI_v{#MyAppVersion}
+OutputBaseFilename=Setup_GeniusAI_v{#MyAppVersion}
 ; Directory di output per il file di setup
 OutputDir=userdocs:Inno Setup Output
 ; Non richiedere privilegi di amministratore
@@ -47,11 +47,11 @@ Source: "dist\TGeniusAI\version_info.txt"; DestDir: "{app}"; Flags: ignoreversio
 
 [Icons]
 ; Crea un'icona sul desktop per l'eseguibile principale
-Name: "{userdesktop}\ThemaGeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\res\eye.ico"
+Name: "{userdesktop}\GeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\res\eye.ico"
 ; Crea un'icona nel menu Start per l'eseguibile principale
-Name: "{group}\ThemaGeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\res\eye.ico"
+Name: "{group}\GeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\res\eye.ico"
 
 [Run]
 ; Avvia l'applicazione al termine dell'installazione
-Filename: "{app}\TGeniusAI.exe"; Description: "Avvia ThemaGeniusAI"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\TGeniusAI.exe"; Description: "Avvia GeniusAI"; Flags: nowait postinstall skipifsilent
 
