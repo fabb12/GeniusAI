@@ -1,10 +1,10 @@
 ; Script di Inno Setup per installare ThemaGeniusAI senza richiedere privilegi di amministratore
 ; Salvare questo file con estensione .iss
 
-#define MyAppVersion "1.4.0"  ; Definisci qui la versione del programma
+#define MyAppVersion "1.4.1"  ; Definisci qui la versione del programma
 
 [Setup]
-; Nome del programma che verrà visualizzato nel pannello di controllo
+; Nome del programma che verrï¿½ visualizzato nel pannello di controllo
 AppName=ThemaGeniusAI
 ; Versione del programma
 AppVersion={#MyAppVersion}
