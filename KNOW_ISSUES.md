@@ -8,11 +8,13 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare inserimento pausa nel audio 
 - [ ] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
-- [x] aggiungere tasto condividi via what app  , teams ecc...
-- [x] agginugere splash screen
+- [ ] aggiungere registrazione solo audio
+- [x] aggiungere tasto condividi via what app , teams ecc...
+- [x] aggiungere splash screen
 - [ ] aggiungere sync trascrizione video originali 
-- [ ] aggiugere caricamento metadati video e trascrizione
-- [ ] aggiugnre il testo che viene eveidenzaio mentro e' in playback
+- [ ] aggiungere caricamento metadati video e trascrizione
+- [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
+- [ ] aggiungere zoom testo in area trascrizione con rotella + / -
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
