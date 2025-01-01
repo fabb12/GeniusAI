@@ -192,6 +192,10 @@ GeniusAI/
   ```
 - L'installer verrà generato nella cartella di output specificata nel file `.iss`.
 
+
+## **Video Demo**
+[![Guarda il video Demo](https://img.youtube.com/vi/ajhi_4QfYA8/0.jpg)](https://www.youtube.com/watch?v=ajhi_4QfYA8)
+
 ## ℹ️ **Autore e Informazioni**
 
 - Sviluppato da FFA.
