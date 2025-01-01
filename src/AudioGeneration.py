@@ -6,9 +6,9 @@ from elevenlabs.client import ElevenLabs, Voice, VoiceSettings
 
 # Imposta la chiave API per il servizio di generazione vocale di ElevenLabs
 #set_api_key("ef38b436326ec387ecb1a570a8641b84")  # Nuovo profilo - chatgpt6644
-
 #set_api_key("21308405b32449577068ce04e5c5e2ea") - old profile
 #set_api_key("a1dfc77969cd40068d3b3477af3ea6b5") # new profiel - chatgpt66445
+
 class AudioGenerationThread(QThread):
     completed = pyqtSignal(str)  # Segnale per notificare il completamento con il percorso del file
     error = pyqtSignal(str)  # Segnale per notificare gli errori
