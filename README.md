@@ -76,6 +76,48 @@ Il testo trascritto può essere modificato per ottimizzare la qualità finale de
 - **PyQt6**, **moviepy**, **pydub**, **pyaudio**, ecc.
 - **ffmpeg** (non incluso, scaricabile dal sito ufficiale: [https://www.ffmpeg.org/download.html](https://www.ffmpeg.org/download.html) e da collocare nella cartella `./src/ffmpeg`).
 
+## 📂 **Struttura del Progetto**
+```plaintext
+GeniusAI/
+├─ generate_requirements.py    # Script per generare il file requirements.txt basato sugli import dei file Python
+├─ install_requirements.py     # Script per installare le dipendenze da requirements.txt
+├─ TGeniusAI.spec              # File di configurazione PyInstaller per generare un eseguibile standalone
+├─ TGeniusAI.iss               # Script Inno Setup per creare un installer Windows
+├─ README.md                   # Documentazione principale del progetto
+├─ requirements.txt            # Elenco delle dipendenze necessarie
+├─ version_info.txt            # Informazioni su versione e data di build
+├─ res/                        # Risorse statiche (icone, immagini, configurazioni)
+├─ ffmpeg/                     # Cartella per ffmpeg (da scaricare separatamente)
+│  ├─ bin/
+│     ├─ ffmpeg.exe            # Eseguibile ffmpeg per elaborazione audio/video
+├─ src/                        # Codice sorgente principale dell'applicazione
+│  ├─ AudioGeneration.py       # Gestione della generazione audio tramite AI
+│  ├─ AudioGenerationREST.py   # Generazione audio via API REST
+│  ├─ AudioTranscript.py       # Trascrizione automatica dell'audio
+│  ├─ CropOverlay.py           # Overlay per ritaglio video
+│  ├─ CustomSlider.py          # Slider personalizzato per controllo video
+│  ├─ CustumTextEdit.py        # Widget di testo personalizzato per trascrizioni
+│  ├─ CustVideoWidget.py       # Widget video personalizzato per operazioni video
+│  ├─ DownloadVideo.py         # Gestione del download dei video
+│  ├─ LipSync.py               # Sincronizzazione labiale
+│  ├─ MonitorTeams.py          # Monitoraggio chiamate Teams
+│  ├─ PptxGeneration.py        # Generazione presentazioni PowerPoint
+│  ├─ ProcessTextAI.py         # Elaborazione testo con intelligenza artificiale
+│  ├─ ScreenButton.py          # Pulsanti personalizzati per registrazione schermo
+│  ├─ ScreenRecorder.py        # Funzionalità per registrazione schermo
+│  ├─ Settings.py              # Impostazioni generali
+│  ├─ SettingsDialog.py        # Finestra per configurare impostazioni API e generali
+│  ├─ SettingsManager.py       # Gestione layout e salvataggio dei Dock
+│  ├─ ShareVideo.py            # Gestione condivisione video
+│  ├─ SplashScreen.py          # Gestione SplashScreen iniziale
+│  ├─ StreamToLogger.py        # Gestione streaming log
+│  ├─ Summarizer.py            # Generazione riassunti tramite AI
+│  ├─ TestVideo.py             # Test per funzionalità video
+│  ├─ TGeniusAI.py             # **Entry Point principale**: Avvio GUI e gestione principale dell'app
+│  ├─ VideoCutting.py          # Taglio video basato su segnalibri
+├─ logs/                       # File di log per monitorare errori ed eventi
+│  ├─ app.log                  # Registro principale dell'applicazione
+```
 ## Installazione
 
 1. **Clona il repository**:
@@ -91,7 +133,6 @@ Il testo trascritto può essere modificato per ottimizzare la qualità finale de
    # oppure:
    .\venv\Scripts\activate    # per Windows
    ```
-
 
 ## ▶️ **Avvio**
 
