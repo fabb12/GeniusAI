@@ -9,7 +9,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
 - [x] aggiungere tasto condividi via what app  , teams ecc...
-- [x] agginugere splash screen
+- [x] aggiungere splash screen
 - [ ] aggiungere sync trascrizione video originali 
 - [ ] aggiugere caricamento metadati video e trascrizione
 - 
