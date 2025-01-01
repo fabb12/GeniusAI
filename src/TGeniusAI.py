@@ -136,6 +136,7 @@ class VideoAudioManager(QMainWindow):
             super().keyPressEvent(event)  # gestione degli altri eventi di tastiera
 
     """
+
     def initUI(self):
 
         self.setWindowIcon(QIcon('./res/eye.png'))
@@ -143,103 +144,107 @@ class VideoAudioManager(QMainWindow):
         # Creazione e configurazione dell'area del dock
         area = DockArea()
         self.setCentralWidget(area)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
-
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.setToolTip("Area principale dei dock")
 
         # Creazione dei docks esistenti...
         self.videoPlayerDock = Dock("Video Player Input", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
-        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
+        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerDock.setToolTip("Dock per la riproduzione video di input")
         area.addDock(self.videoPlayerDock, 'left')
 
         self.videoPlayerOutput = Dock("Video Player Output", closable=True)
         self.videoPlayerOutput.setStyleSheet(self.styleSheet())
-        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                             QSizePolicy.Policy.Expanding)
+        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerOutput.setToolTip("Dock per la riproduzione video di output")
         area.addDock(self.videoPlayerOutput, 'left')
 
-
         self.transcriptionDock = Dock("Trascrizione e Sintesi Audio", closable=True)
-        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.transcriptionDock.setStyleSheet(self.styleSheet())
+        self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
 
         self.editingDock = Dock("Generazione Audio AI di Editing", closable=True)
-        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.editingDock.setStyleSheet(self.styleSheet())
+        self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
         area.addDock(self.editingDock, 'right')
 
         self.downloadDock = self.createDownloadDock()
-        self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.downloadDock.setStyleSheet(self.styleSheet())
+        self.downloadDock.setToolTip("Dock per il download dei contenuti video/audio")
         area.addDock(self.downloadDock, 'top')
 
         self.recordingDock = self.createRecordingDock()
         self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.recordingDock.setStyleSheet(self.styleSheet())
+        self.recordingDock.setToolTip("Dock per la registrazione")
         area.addDock(self.recordingDock, 'right')
 
         self.audioDock = self.createAudioDock()
-        self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.audioDock.setStyleSheet(self.styleSheet())
+        self.audioDock.setToolTip("Dock per la gestione audio")
         area.addDock(self.audioDock, 'left')
-
-
 
         # Creazione del dock merge videos
         self.videoMergeDock = self.createVideoMergeDock()
-        self.videoMergeDock.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                           QSizePolicy.Policy.Expanding)
+        self.videoMergeDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoMergeDock.setStyleSheet(self.styleSheet())
+        self.videoMergeDock.setToolTip("Dock per l'unione di più video")
         area.addDock(self.videoMergeDock, 'top')
 
-
         # Generazione AI Dock
-
-        # Add Generazione AI dock
         self.generazioneAIDock = Dock("Generazione AI", closable=True)
         self.generazioneAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.generazioneAIDock.setToolTip("Dock per la generazione di contenuti con AI")
         area.addDock(self.generazioneAIDock, 'right')
 
         # Generazione AI UI setup
         generazioneAIDockWidget = QGroupBox("Impostazioni Generazione AI")
+        generazioneAIDockWidget.setToolTip("Impostazioni per generare testo e presentazioni con AI")
         generazioneAILayout = QVBoxLayout()
 
         # Number of slides input
         self.numSlidesLabel = QLabel("Numero di Slide:")
+        self.numSlidesLabel.setToolTip("Specifica il numero di slide da generare")
         self.numSlidesInput = QLineEdit()
         self.numSlidesInput.setPlaceholderText("Inserisci numero di slide")
+        self.numSlidesInput.setToolTip("Inserisci il numero di diapositive che vuoi generare")
         generazioneAILayout.addWidget(self.numSlidesLabel)
         generazioneAILayout.addWidget(self.numSlidesInput)
 
         # Company name input
         self.companyNameLabel = QLabel("Nome della Compagnia:")
+        self.companyNameLabel.setToolTip("Nome della compagnia per cui generare la presentazione")
         self.companyNameInput = QLineEdit()
         self.companyNameInput.setPlaceholderText("Inserisci nome della compagnia")
+        self.companyNameInput.setToolTip("Inserisci il nome della compagnia per personalizzare la presentazione")
         generazioneAILayout.addWidget(self.companyNameLabel)
         generazioneAILayout.addWidget(self.companyNameInput)
 
         # Language input
         self.languageLabel = QLabel("Lingua:")
+        self.languageLabel.setToolTip("Lingua in cui generare la presentazione")
         self.languageInput = QComboBox()
         self.languageInput.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        self.languageInput.setToolTip("Seleziona la lingua desiderata per la presentazione generata")
         generazioneAILayout.addWidget(self.languageLabel)
         generazioneAILayout.addWidget(self.languageInput)
 
         # Generate text button
         self.generateTextButton = QPushButton('Genera Testo per Presentazione con AI ')
         self.generateTextButton.clicked.connect(self.generateTextForPresentation)
+        self.generateTextButton.setToolTip("Clicca per generare il testo per la presentazione tramite AI")
         generazioneAILayout.addWidget(self.generateTextButton)
 
         # Generate presentation button
         self.generatePresentationButton = QPushButton('Genera Presentazione')
         self.generatePresentationButton.clicked.connect(self.generateAIPresentation)
+        self.generatePresentationButton.setToolTip("Clicca per generare la presentazione completa con AI")
         generazioneAILayout.addWidget(self.generatePresentationButton)
 
         generazioneAIDockWidget.setLayout(generazioneAILayout)
@@ -250,8 +255,8 @@ class VideoAudioManager(QMainWindow):
         # Setup del dock del video player
         self.videoCropWidget = CropVideoWidget()
         self.videoCropWidget.setAcceptDrops(True)
-        self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
+        self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
 
         self.zoom_level = 1.0  # Inizia con zoom al 100%
@@ -261,49 +266,49 @@ class VideoAudioManager(QMainWindow):
         self.last_mouse_position = QPoint()
 
         self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
+        self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
 
         # Label per mostrare il nome del file video
         self.fileNameLabel = QLabel("Nessun video caricato")
         self.fileNameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
+        self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
 
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon("./res/play.png"))
-        self.playButton.setToolTip("Riproduci/Pausa")
+        self.playButton.setToolTip("Riproduci/Pausa il video input")
         self.playButton.clicked.connect(self.togglePlayPause)
 
         self.stopButton = QPushButton('')
         self.stopButton.setIcon(QIcon("./res/stop.png"))
-        self.stopButton.setToolTip("Ferma")
+        self.stopButton.setToolTip("Ferma la riproduzione del video input")
 
         self.setStartBookmarkButton = QPushButton('')
         self.setStartBookmarkButton.setIcon(QIcon("./res/bookmark_1.png"))
-        self.setStartBookmarkButton.setToolTip("Imposta segnalibro di inizio")
+        self.setStartBookmarkButton.setToolTip("Imposta segnalibro di inizio sul video input")
 
         self.setEndBookmarkButton = QPushButton('')
         self.setEndBookmarkButton.setIcon(QIcon("./res/bookmark_2.png"))
-        self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine")
+        self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine sul video input")
 
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon("./res/taglia.png"))
-        self.cutButton.setToolTip("Taglia")
+        self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
 
         self.rewindButton = QPushButton('<< 5s')
         self.rewindButton.setIcon(QIcon("./res/rewind.png"))
-        self.rewindButton.setToolTip("Indietro di 5 secondi")
+        self.rewindButton.setToolTip("Riavvolgi il video di 5 secondi")
 
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("./res/forward.png"))
-        self.forwardButton.setToolTip("Avanti di 5 secondi")
+        self.forwardButton.setToolTip("Avanza il video di 5 secondi")
 
         self.deleteButton = QPushButton('')
         self.deleteButton.setIcon(QIcon("./res/trash-bin.png"))
-        self.deleteButton.setToolTip("Cancella parte selezionata")
-        # Collegamento dei pulsanti ai loro slot funzionali
+        self.deleteButton.setToolTip("Cancella la parte selezionata del video")
 
-        # Collegam  ento dei pulsanti ai loro slot funzionali
+        # Collegamenti pulsanti
         self.stopButton.clicked.connect(self.stopVideo)
-       # self.cropButton.clicked.connect(self.applyCrop)  # Assumendo che la funzione cutVideo sia definita
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
@@ -313,39 +318,37 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione e configurazione del display del timecode
         self.currentTimeLabel = QLabel('00:00')
+        self.currentTimeLabel.setToolTip("Mostra il tempo corrente del video input")
         self.totalTimeLabel = QLabel('/ 00:00')
+        self.totalTimeLabel.setToolTip("Mostra la durata totale del video input")
         timecodeLayout = QHBoxLayout()
         timecodeLayout.addWidget(self.currentTimeLabel)
         timecodeLayout.addWidget(self.totalTimeLabel)
 
-
         # Video Player output
-        # Setup del widget video per l'output
         self.videoOutputWidget = CropVideoWidget()
         self.videoOutputWidget.setAcceptDrops(True)
-        self.videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
+        self.videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoOutputWidget.setToolTip("Area di visualizzazione e ritaglio video output")
 
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
         self.playButtonOutput = QPushButton('')
         self.playButtonOutput.setIcon(QIcon("./res/play.png"))
-        self.playButtonOutput.setToolTip("Riproduci/Pausa")
+        self.playButtonOutput.setToolTip("Riproduci/Pausa il video output")
         self.playButtonOutput.clicked.connect(self.togglePlayPauseOutput)
-
 
         stopButtonOutput = QPushButton('')
         stopButtonOutput.setIcon(QIcon("./res/stop.png"))
+        stopButtonOutput.setToolTip("Ferma la riproduzione del video output")
 
         changeButtonOutput = QPushButton('')
         changeButtonOutput.setIcon(QIcon("./res/change.png"))
-        changeButtonOutput.setToolTip('Sposta video in Video Player Input')
+        changeButtonOutput.setToolTip("Sposta il video output nel Video Player Input")
         changeButtonOutput.clicked.connect(lambda: self.loadVideo(self.videoPathLineOutputEdit,
                                                                   os.path.basename(self.videoPathLineOutputEdit)))
 
-
-        # Pulsante per sincronizzare le posizioni
         syncPositionButton = QPushButton('Sync Position')
         syncPositionButton.setIcon(QIcon("./res/sync.png"))
         syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
@@ -353,164 +356,143 @@ class VideoAudioManager(QMainWindow):
 
         stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
-        # Layout per i controlli di playback
+        # Layout per controlli di playback output
         playbackControlLayoutOutput = QHBoxLayout()
         playbackControlLayoutOutput.addWidget(self.playButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
-        playbackControlLayoutOutput.addWidget(syncPositionButton)  # Aggiungi il pulsante qui
+        playbackControlLayoutOutput.addWidget(syncPositionButton)
 
-        # Slider per il controllo della posizione del video output
+        # Slider per output
         videoSliderOutput = CustomSlider(Qt.Orientation.Horizontal)
-        videoSliderOutput.setRange(0, 1000)  # Inizializza con un range di esempio
+        videoSliderOutput.setRange(0, 1000)  # Range di esempio
+        videoSliderOutput.setToolTip("Slider per navigare all'interno del video output")
         videoSliderOutput.sliderMoved.connect(lambda position: self.playerOutput.setPosition(position))
 
-
-        # Creazione delle QLabel per il timecode
+        # Timecode output
         self.currentTimeLabelOutput = QLabel('00:00')
+        self.currentTimeLabelOutput.setToolTip("Mostra il tempo corrente del video output")
         self.totalTimeLabelOutput = QLabel('/ 00:00')
+        self.totalTimeLabelOutput.setToolTip("Mostra la durata totale del video output")
         timecodeLayoutOutput = QHBoxLayout()
         timecodeLayoutOutput.addWidget(self.currentTimeLabelOutput)
         timecodeLayoutOutput.addWidget(self.totalTimeLabelOutput)
 
-        # Inserisci il layout del timecode nel layout principale del video output
-
         self.timecodeEnabled = False
-        # Label per mostrare il nome del file video output
+
         self.fileNameLabelOutput = QLabel("Nessun video caricato")
         self.fileNameLabelOutput.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.fileNameLabelOutput.setStyleSheet("QLabel { font-weight: bold; }")
+        self.fileNameLabelOutput.setToolTip("Nome del file video attualmente caricato nel Player Output")
 
-        # Layout principale per il dock del video player output
+        # Layout principale video output
         videoOutputLayout = QVBoxLayout()
         videoOutputLayout.addWidget(self.fileNameLabelOutput)
-
         videoOutputLayout.addWidget(self.videoOutputWidget)
         videoOutputLayout.addLayout(timecodeLayoutOutput)
         videoOutputLayout.addWidget(videoSliderOutput)
         videoOutputLayout.addLayout(playbackControlLayoutOutput)
 
-
         self.playerOutput.durationChanged.connect(self.updateDurationOutput)
         self.playerOutput.positionChanged.connect(self.updateTimeCodeOutput)
 
-        # Widget per contenere il layout del video player output
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
-        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
+        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoPlayerOutput.addWidget(videoPlayerOutputWidget)
 
-
-        # Collegamento degli eventi del player multimediale ai metodi corrispondenti
         self.playerOutput.durationChanged.connect(lambda duration: videoSliderOutput.setRange(0, duration))
         self.playerOutput.positionChanged.connect(lambda position: videoSliderOutput.setValue(position))
 
         # trascrizione video
         self.transcribeButton = QPushButton('Trascrivi Video')
+        self.transcribeButton.setToolTip("Avvia la trascrizione del video attualmente caricato")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
 
-        # Layout per i controlli di playback
+        # Layout playback input
         playbackControlLayout = QHBoxLayout()
-        playbackControlLayout.addWidget(self.rewindButton)  # Pulsante indietro di 5 secondi
+        playbackControlLayout.addWidget(self.rewindButton)
         playbackControlLayout.addWidget(self.playButton)
         playbackControlLayout.addWidget(self.stopButton)
-        playbackControlLayout.addWidget(self.forwardButton)  # Pulsante avanti di 5 secondi
+        playbackControlLayout.addWidget(self.forwardButton)
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
-        playbackControlLayout.addWidget(self.deleteButton)  #
+        playbackControlLayout.addWidget(self.deleteButton)
 
-        # Layout principale per il dock del video player
+        # Layout principale video player input
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(self.videoCropWidget)  # Aggiunta del widget video
-        videoPlayerLayout.addLayout(timecodeLayout)  # Aggiunta del display del timecode
-        videoPlayerLayout.addWidget(self.videoSlider)  # Aggiunta della slider
+        videoPlayerLayout.addWidget(self.videoCropWidget)
+        videoPlayerLayout.addLayout(timecodeLayout)
+        videoPlayerLayout.addWidget(self.videoSlider)
+        videoPlayerLayout.addLayout(playbackControlLayout)
 
-        videoPlayerLayout.addLayout(playbackControlLayout)  # Aggiunta dei controlli di playback
-
-        # Set up controlli volume
+        # Controlli volume input
         self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
         self.volumeSlider.setRange(0, 100)
         self.volumeSlider.setValue(int(self.audioOutput.volume() * 100))
+        self.volumeSlider.setToolTip("Regola il volume dell'audio input")
         self.volumeSlider.valueChanged.connect(self.setVolume)
 
         self.volumeSliderOutput = QSlider(Qt.Orientation.Horizontal)
         self.volumeSliderOutput.setRange(0, 100)
         self.volumeSliderOutput.setValue(int(self.audioOutputOutput.volume() * 100))
+        self.volumeSliderOutput.setToolTip("Regola il volume dell'audio output")
         self.volumeSliderOutput.valueChanged.connect(self.setVolumeOutput)
-
-
 
         videoOutputLayout.addWidget(QLabel("Volume"))
         videoOutputLayout.addWidget(self.volumeSliderOutput)
 
-
-        # Widget per contenere il layout del video player
         videoPlayerWidget = QWidget()
-        videoPlayerWidget.setSizePolicy(QSizePolicy.Policy.Expanding,
-                                        QSizePolicy.Policy.Expanding)
+        videoPlayerWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         videoPlayerWidget.setLayout(videoPlayerLayout)
         self.videoPlayerDock.addWidget(videoPlayerWidget)
 
-        # Setup del dock di trascrizione e sintesi audio
+        # Setup trascrizione
         transGroupBox = QGroupBox("Gestione Trascrizione")
+        transGroupBox.setToolTip("Strumenti per trascrizione, incolla, salva e modifica testo")
 
-        # Creazione di un layout interno per il GroupBox
         innerLayout = QVBoxLayout()
-
-        # Layout orizzontale per i pulsanti "Incolla" e "Salva"
         buttonsLayout = QHBoxLayout()
 
-        # Inizializzazione della QLabel per la lingua della trascrizione
         self.transcriptionLanguageLabel = QLabel("Lingua rilevata: Nessuna")
+        self.transcriptionLanguageLabel.setToolTip("Mostra la lingua rilevata nel video")
         self.transcriptionLanguageLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-        # Layout orizzontale per la label e la combo box della selezione della lingua
         languageSelectionLayout = QHBoxLayout()
-        languageLabel = QLabel("Seleziona lingua video:")  # Creazione della QLabel per il testo
-        languageLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)  # Allinea il testo a destra
+        languageLabel = QLabel("Seleziona lingua video:")
+        languageLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        languageLabel.setToolTip("Seleziona la lingua del video per la trascrizione")
 
-        # Inizializzazione della QComboBox per la lingua
         self.languageComboBox = QComboBox()
-
         self.languageComboBox.addItem("Italiano", "it")
         self.languageComboBox.addItem("Inglese", "en")
         self.languageComboBox.addItem("Francese", "fr")
         self.languageComboBox.addItem("Spagnolo", "es")
         self.languageComboBox.addItem("Tedesco", "de")
+        self.languageComboBox.setToolTip("Seleziona la lingua corretta per il video")
 
         videoVolumeLayout = QHBoxLayout()
         videoVolumeLayout.addWidget(QLabel("Volume"))
         videoVolumeLayout.addWidget(self.volumeSlider)
 
-
-        # Spinbox per il controllo della velocità
         self.speedSpinBox = QSpinBox()
-        self.speedSpinBox.setMinimum(1)  # Imposta la velocità minima a 1x
-        self.speedSpinBox.setMaximum(20)  # Imposta la velocità massima a 20x
-        self.speedSpinBox.setValue(1)  # Velocità di default a 1x
-        self.speedSpinBox.setToolTip("Imposta la velocità di riproduzione")
-
-        # Connect the spinbox's value changed signal to the updateSpeed function
+        self.speedSpinBox.setMinimum(1)
+        self.speedSpinBox.setMaximum(20)
+        self.speedSpinBox.setValue(1)
+        self.speedSpinBox.setToolTip("Imposta la velocità di riproduzione del video input")
         self.speedSpinBox.valueChanged.connect(self.updateSpeedFromSpinBox)
 
         videoVolumeLayout.addWidget(QLabel("Velocità (x):"))
         videoVolumeLayout.addWidget(self.speedSpinBox)
-        # Layout for speed control
-        videoVolumeLayout.addWidget(self.speedSpinBox)
-
         videoPlayerLayout.addLayout(videoVolumeLayout)
 
-        # Aggiunta della label e della combo box al layout orizzontale
         languageSelectionLayout.addWidget(languageLabel)
         languageSelectionLayout.addWidget(self.languageComboBox)
         languageSelectionLayout.addStretch(1)
-        # Aggiunta del layout di selezione della lingua al layout interno del GroupBox
-        innerLayout.addLayout(languageSelectionLayout)  # Usa addLayout qui
+        innerLayout.addLayout(languageSelectionLayout)
 
-        # TextArea per la trascrizione
         self.transcriptionTextArea = CustomTextEdit(self)
         self.transcriptionTextArea.setReadOnly(False)
         self.transcriptionTextArea.setUndoRedoEnabled(True)
@@ -523,61 +505,64 @@ class VideoAudioManager(QMainWindow):
                      }
                  """)
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
+        self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
 
         self.resetButton = QPushButton()
-        self.resetButton.setIcon(QIcon("./res/reset.png"))  # Assicurati che il percorso dell'icona sia corretto
-        self.resetButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
+        self.resetButton.setIcon(QIcon("./res/reset.png"))
+        self.resetButton.setFixedSize(24, 24)
+        self.resetButton.setToolTip("Ripulisce la trascrizione")
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
-        self.detected_language_code = 'it-IT'  # Imposta una lingua di default
+        self.detected_language_code = 'it-IT'
         self.video_download_language = None
-        # Pulsante per incollare nel QTextEdit
+
         self.pasteButton = QPushButton()
-        self.pasteButton.setIcon(QIcon("./res/paste.png"))  # Assicurati che il percorso dell'icona sia corretto
-        self.pasteButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
+        self.pasteButton.setIcon(QIcon("./res/paste.png"))
+        self.pasteButton.setFixedSize(24, 24)
+        self.pasteButton.setToolTip("Incolla il testo dagli appunti")
         self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
 
-        # Pulsante per salvare il testo
         self.saveButton = QPushButton()
-        self.saveButton.setIcon(QIcon("./res/save.png"))  # Assicurati che il percorso dell'icona sia corretto
-        self.saveButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
+        self.saveButton.setIcon(QIcon("./res/save.png"))
+        self.saveButton.setFixedSize(24, 24)
+        self.saveButton.setToolTip("Salva la trascrizione su file")
         self.saveButton.clicked.connect(self.saveText)
 
         self.loadButton = QPushButton()
-        self.loadButton.setIcon(QIcon("./res/load.png"))  # Assicurati che il percorso dell'icona sia corretto
-        self.loadButton.setFixedSize(24, 24)  # Imposta la dimensione del pulsante
+        self.loadButton.setIcon(QIcon("./res/load.png"))
+        self.loadButton.setFixedSize(24, 24)
+        self.loadButton.setToolTip("Carica una trascrizione da file")
         self.loadButton.clicked.connect(self.loadText)
 
-        # Checkbox to toggle timecode insertion
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
+        self.timecodeCheckbox.setChecked(False)
+        self.timecodeCheckbox.setToolTip("Aggiunge i timecode all'audio durante la trascrizione")
+        self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
 
-        self.timecodeCheckbox.setChecked(False)  # Initially unchecked
-        self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)  # Connect to a method to handle changes
-
-        # Aggiungi il pulsante di sincronizzazione
         self.syncButton = QPushButton('Sincronizza Video')
+        self.syncButton.setToolTip("Sincronizza la posizione del video con la trascrizione")
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
 
-        # Nuovo pulsante per sistemare il testo usando AI
         self.processTextButton = QPushButton('Riassunto AI')
-        self.fixTextButton = QPushButton('Sistema Testo AI')
+        self.processTextButton.setToolTip("Genera un riassunto del testo tramite AI")
         self.processTextButton.clicked.connect(self.processTextWithAI)
+
+        self.fixTextButton = QPushButton('Sistema Testo AI')
+        self.fixTextButton.setToolTip("Sistema e migliora il testo tramite AI")
         self.fixTextButton.clicked.connect(self.fixTextWithAI)
 
-        # Aggiungi entrambi i pulsanti al layout
-
-        # Nuovi controlli per inserire la pausa
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
+        self.pauseTimeEdit.setToolTip("Specifica la durata di una pausa in secondi")
         self.insertPauseButton = QPushButton('Inserisci Pausa')
+        self.insertPauseButton.setToolTip("Inserisci una pausa nel testo")
         self.insertPauseButton.clicked.connect(self.insertPause)
 
-        # Aggiungi i pulsanti "Incolla" e "Salva" al layout orizzontale
         buttonsLayout.addWidget(self.resetButton)
         buttonsLayout.addWidget(self.pasteButton)
         buttonsLayout.addWidget(self.loadButton)
         buttonsLayout.addWidget(self.saveButton)
-        buttonsLayout.addWidget(self.transcribeButton)  # Aggiunta della slider
+        buttonsLayout.addWidget(self.transcribeButton)
         buttonsLayout.addWidget(self.pauseTimeEdit)
         buttonsLayout.addWidget(self.insertPauseButton)
         buttonsLayout.addWidget(self.timecodeCheckbox)
@@ -587,42 +572,29 @@ class VideoAudioManager(QMainWindow):
 
         buttonsLayout.setAlignment(Qt.AlignmentFlag.AlignLeft)
 
-
-
-
-        # Aggiunta dei layout e widget al layout interno
-        innerLayout.addLayout(buttonsLayout)  # Aggiungi il layout dei pulsanti in orizzontale
+        innerLayout.addLayout(buttonsLayout)
         innerLayout.addWidget(self.transcriptionTextArea)
         innerLayout.addWidget(self.transcriptionLanguageLabel)
         bottonLayout = QHBoxLayout()
-        #bottonLayout.addWidget(self.generateAudioButton)
         innerLayout.addLayout(bottonLayout)
 
-        # Impostazione del layout interno al GroupBox
         transGroupBox.setLayout(innerLayout)
 
-        # Creazione del widget e assegnazione del layout con GroupBox
         widgetTranscription = QWidget()
         widgetTranscription.setLayout(QVBoxLayout())
         widgetTranscription.layout().addWidget(transGroupBox)
-
-        # Aggiunta del widget al dock
         self.transcriptionDock.addWidget(widgetTranscription)
-        # Layout principale per il dock delle opzioni di editing
 
         voiceSettingsWidget = self.setupVoiceSettingsUI()
+        voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
         self.editingDock.addWidget(voiceSettingsWidget)
 
-        # Setup della barra dei menu e della dark mode, se necessario
         self.setupMenuBar()
 
-        # Collegamento degli eventi del player multimediale ai metodi corrispondenti
-        self.player.durationChanged.connect(self.durationChanged)  # Assicurati che questo slot sia definito
-        self.player.positionChanged.connect(self.positionChanged)  # Assicurati che questo slot sia definito
+        self.player.durationChanged.connect(self.durationChanged)
+        self.player.positionChanged.connect(self.positionChanged)
+        self.videoSlider.sliderMoved.connect(self.setPosition)
 
-        self.videoSlider.sliderMoved.connect(self.setPosition)  # Assicurati che questo slot sia definito
-
-        # Definizione dei docks
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
             'transcriptionDock': self.transcriptionDock,
@@ -634,40 +606,44 @@ class VideoAudioManager(QMainWindow):
             'videoMergeDock': self.videoMergeDock,
             'generazioneAIDock': self.generazioneAIDock
         }
+
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
-        # Creazione della toolbar
         toolbar = QToolBar("Main Toolbar")
+        toolbar.setToolTip("Barra degli strumenti principale")
         self.addToolBar(toolbar)
 
         loadDockSettings1Action = QAction(QIcon("./res/load1.png"), "User1", self)
+        loadDockSettings1Action.setToolTip("Carica le impostazioni dei dock per l'utente 1")
         loadDockSettings1Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser1)
         toolbar.addAction(loadDockSettings1Action)
 
         loadDockSettings2Action = QAction(QIcon("./res/load2.png"), "User2", self)
+        loadDockSettings2Action.setToolTip("Carica le impostazioni dei dock per l'utente 2")
         loadDockSettings2Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser2)
         toolbar.addAction(loadDockSettings2Action)
 
-        # Aggiunta del pulsante per impostare la API Key
         apiKeyAction = QAction(QIcon("./res/key.png"), "Imposta API Key", self)
+        apiKeyAction.setToolTip("Imposta la chiave API per le funzionalità AI")
         apiKeyAction.triggered.connect(self.showApiKeyDialog)
         toolbar.addAction(apiKeyAction)
 
-        # Aggiungi pulsante per aprire le impostazioni
         settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
+        settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
         toolbar.addAction(settingsAction)
 
         shareAction = QAction(QIcon("./res/share.png"), "Condividi Video", self)
+        shareAction.setToolTip("Condividi il video attualmente caricato")
         shareAction.triggered.connect(self.onShareButtonClicked)
         toolbar.addAction(shareAction)
-
-
 
         if hasattr(self, 'applyDarkMode'):
             self.applyDarkMode()
 
-        self.applyStyleToAllDocks()  # Applica lo stile dark a tutti i dock
+        self.applyStyleToAllDocks()
+
+
     def onShareButtonClicked(self):
         # Usa il percorso del video nel dock Video Player Output
         video_path = self.videoPathLineOutputEdit
