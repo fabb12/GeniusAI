@@ -1,8 +1,8 @@
 # GeniusAI 
 
-Questo programma offre un'interfaccia avanzata per la gestione di **video** e **audio**, facilitando la creazione di video tutorial. 
+Questo programma offre un'interfaccia avanzata per la gestione di **video** e **audio**, facilitando la creazione di video tutorial.
 
-Include funzionalità di **AI Generative** per la trascrizione automatica dei testi, con possibilità di generare riassunti chiari e strutturati, **TTS** per tracce audio professionali, **editing video** e **registrazione dello schermo**.&#x20;
+Include funzionalità di **AI Generative** per la trascrizione automatica dei testi, con possibilità di generare riassunti chiari e strutturati, **TTS** per tracce audio professionali, **editing video** e **registrazione dello schermo**.
 
 L'interfaccia grafica è stata sviluppata utilizzando **PyQt6**, garantendo un ambiente intuitivo e flessibile. Inoltre, è stato implementato un sistema di **docking delle finestre**, che permette all'utente di personalizzare il layout dell'applicazione per migliorare l'esperienza di utilizzo.
 
@@ -74,7 +74,7 @@ Il testo trascritto può essere modificato per ottimizzare la qualità finale de
 
 - **Python 3.8+**
 - **PyQt6**, **moviepy**, **pydub**, **pyaudio**, ecc.
-- **ffmpeg** (incluso nella cartella `./ffmpeg/bin/`).
+- **ffmpeg** (non incluso, scaricabile dal sito ufficiale: [https://www.ffmpeg.org/download.html](https://www.ffmpeg.org/download.html) e da collocare nella cartella `./src/ffmpeg`).
 
 ## ▶️ **Avvio**
 
@@ -97,6 +97,42 @@ Il testo trascritto può essere modificato per ottimizzare la qualità finale de
 ## 🔑 **API Key**
 
 - Imposta la chiave API per la generazione vocale nelle impostazioni.
+
+## 🛠️ **Generazione del file requirements.txt**
+
+- Utilizza lo script `generate_requirements.py` per creare o aggiornare automaticamente il file `requirements.txt` con le librerie effettivamente utilizzate nel progetto.
+- Esegui lo script:
+  ```bash
+  python generate_requirements.py
+  ```
+
+## 🛠️ **Installazione delle Dipendenze con install_requirements.py**
+
+- Utilizza lo script `install_requirements.py` per installare in modo sicuro tutte le dipendenze elencate nel file `requirements.txt`.
+- Esegui lo script:
+  ```bash
+  python install_requirements.py
+  ```
+- Lo script installerà le dipendenze una alla volta, segnalando eventuali pacchetti problematici.
+
+## 🛠️ **Generazione dell'Eseguibile (.exe) con PyInstaller**
+
+- Utilizza il file `.spec` per generare un eseguibile standalone.
+- Comando di creazione:
+  ```bash
+  pyinstaller TGeniusAI.spec
+  ```
+- L'eseguibile verrà creato nella cartella `dist/`.
+- Una versione archivio `.zip` sarà disponibile nella cartella `dist/Release`.
+
+## 🛠️ **Creazione dell'Installer Windows con Inno Setup (.iss)**
+
+- Utilizza il file `.iss` per creare un installer Windows senza richiedere privilegi di amministratore.
+- Esegui il comando nel software **Inno Setup Compiler**:
+  ```
+  ISCC TGeniusAI.iss
+  ```
+- L'installer verrà generato nella cartella di output specificata nel file `.iss`.
 
 ## ℹ️ **Autore e Informazioni**
 
