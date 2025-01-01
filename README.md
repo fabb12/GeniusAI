@@ -6,6 +6,9 @@ Include funzionalità di **AI Generative** per la trascrizione automatica dei te
 
 L'interfaccia grafica è stata sviluppata utilizzando **PyQt6**, garantendo un ambiente intuitivo e flessibile. Inoltre, è stato implementato un sistema di **docking delle finestre**, che permette all'utente di personalizzare il layout dell'applicazione per migliorare l'esperienza di utilizzo.
 
+## **Video Demo**
+[![Guarda il video Demo](https://img.youtube.com/vi/ajhi_4QfYA8/0.jpg)](https://www.youtube.com/watch?v=ajhi_4QfYA8)
+
 ### 📚 **Processo Principale:**
 
 1. **Registrazione del Video:** L'utente registra un video del tutorial che desidera creare.
@@ -192,9 +195,6 @@ GeniusAI/
   ```
 - L'installer verrà generato nella cartella di output specificata nel file `.iss`.
 
-
-## **Video Demo**
-[![Guarda il video Demo](https://img.youtube.com/vi/ajhi_4QfYA8/0.jpg)](https://www.youtube.com/watch?v=ajhi_4QfYA8)
 
 ## ℹ️ **Autore e Informazioni**
 
