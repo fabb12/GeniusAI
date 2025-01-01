@@ -122,7 +122,7 @@ GeniusAI/
 
 1. **Clona il repository**:
    ```bash
-   git clone https://github.com/fabb12/MFHelpDeskAI.git
+   git clone https://github.com/fabb12/GeniusAi.git
    cd MFHelpDeskAI
    ```
 
