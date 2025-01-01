@@ -76,6 +76,23 @@ Il testo trascritto può essere modificato per ottimizzare la qualità finale de
 - **PyQt6**, **moviepy**, **pydub**, **pyaudio**, ecc.
 - **ffmpeg** (non incluso, scaricabile dal sito ufficiale: [https://www.ffmpeg.org/download.html](https://www.ffmpeg.org/download.html) e da collocare nella cartella `./src/ffmpeg`).
 
+## Installazione
+
+1. **Clona il repository**:
+   ```bash
+   git clone https://github.com/fabb12/MFHelpDeskAI.git
+   cd MFHelpDeskAI
+   ```
+
+2. **Crea un ambiente virtuale**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate   # per Mac/Linux
+   # oppure:
+   .\venv\Scripts\activate    # per Windows
+   ```
+
+
 ## ▶️ **Avvio**
 
 1. Installa le dipendenze:
