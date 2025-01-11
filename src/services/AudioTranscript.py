@@ -5,7 +5,6 @@ import speech_recognition as sr
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip, VideoFileClip
-import sys
 
 
 class TranscriptionThread(QThread):

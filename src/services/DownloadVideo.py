@@ -5,7 +5,7 @@ import os
 from yt_dlp.postprocessor import FFmpegPostProcessor
 
 # Set the location of ffmpeg and ffprobe to the root directory of your project
-ffmpeg_path = os.path.abspath('./ffmpeg/bin')
+ffmpeg_path = os.path.abspath('../ffmpeg/bin')
 FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_path)
 
 class DownloadThread(QThread):
@@ -17,7 +17,6 @@ class DownloadThread(QThread):
         super().__init__()
         self.url = url
         self.download_video = download_video
-        # Crea una directory temporanea nella cartella principale
         self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
 
     def run(self):

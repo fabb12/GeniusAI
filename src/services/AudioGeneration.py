@@ -1,25 +1,27 @@
 from PyQt6.QtCore import QThread, pyqtSignal
 import tempfile
 import time
-
+import os
+from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs, Voice, VoiceSettings
 
-# Imposta la chiave API per il servizio di generazione vocale di ElevenLabs
-#set_api_key("ef38b436326ec387ecb1a570a8641b84")  # Nuovo profilo - chatgpt6644
-#set_api_key("21308405b32449577068ce04e5c5e2ea") - old profile
-#set_api_key("a1dfc77969cd40068d3b3477af3ea6b5") # new profiel - chatgpt66445
+load_dotenv()
+
+anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+model_3_5_sonnet = os.getenv("MODEL_3_5_SONNET")
+model_3_haiku = os.getenv("MODEL_3_HAIKU")
+elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
 class AudioGenerationThread(QThread):
-    completed = pyqtSignal(str)  # Segnale per notificare il completamento con il percorso del file
-    error = pyqtSignal(str)  # Segnale per notificare gli errori
-    progress = pyqtSignal(int)  # Segnale per l'aggiornamento del progresso, se necessario
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int)
 
     def __init__(self, text, voice_settings, parent=None):
         super().__init__(parent)
         self.text = text
         self.voice_settings = voice_settings
-        #self.client = ElevenLabs(api_key="ef38b436326ec387ecb1a570a8641b84")  # Utilizza la chiave API di default o specifica
-        self.client = ElevenLabs(api_key="a1dfc77969cd40068d3b3477af3ea6b5")  # Utilizza la chiave API di default o specifica
+        self.client = ElevenLabs(api_key=elevenlabs_api_key)
 
     def run(self):
         try:

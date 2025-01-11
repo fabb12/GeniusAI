@@ -16,7 +16,7 @@ class StreamToLogger(object):
 
 def setup_logging():
     logging.basicConfig(
-        filename='console_log.txt',
+        filename='../console_log.txt',
         level=logging.DEBUG,
         format='[%(asctime)s - %(levelname)s] - %(message)s'
     )

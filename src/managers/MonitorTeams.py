@@ -1,7 +1,6 @@
 import pygetwindow as gw
 import time
 from threading import Thread
-from screeninfo import get_monitors
 
 class TeamsCallRecorder(Thread):
     def __init__(self, video_audio_manager):

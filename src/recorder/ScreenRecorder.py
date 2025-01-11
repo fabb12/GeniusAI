@@ -1,4 +1,3 @@
-import ctypes.wintypes
 import subprocess
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal

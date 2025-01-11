@@ -17,7 +17,7 @@ class VideoSharingManager:
             # Condivisione su Teams
             self.shareOnTeams(video_path)
 
-            # Condivisione su WhatsApp (opzionale)
+            # Condivisione su WhatsApp
             # self.shareOnWhatsApp(video_path)
 
         except Exception as e:
@@ -26,7 +26,7 @@ class VideoSharingManager:
     def shareOnTeams(self, file_path):
         try:
             # Carica i contatti dal file .txt
-            contacts = self.get_contacts_from_txt('contatti_teams.txt')
+            contacts = self.get_contacts_from_txt('../contatti_teams.txt')
 
             # Mostra la finestra di dialogo per la selezione dei contatti
             dialog = ContactSelectionDialog(contacts, self.parent)

@@ -15,7 +15,7 @@ class Wav2LipSync:
         self.checkpoint_file = checkpoint_file
 
         # Verifica se ffmpeg è installato
-        if not shutil.which("ffmpeg"):
+        if not shutil.which("../ffmpeg"):
             raise EnvironmentError("FFmpeg non è installato o non è nel percorso di sistema. "
                                    "Installa FFmpeg e aggiungilo al percorso di sistema.")
 

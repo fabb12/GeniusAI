@@ -1,70 +1,72 @@
 import sys
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import (QFileDialog,  QMessageBox,QSizePolicy)
-from moviepy.editor import ImageClip, CompositeVideoClip
 import re
+import shutil
+import subprocess
 import tempfile
-from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,QGridLayout, QPushButton, QLabel, QCheckBox, QRadioButton,
-                             QLineEdit,  QHBoxLayout, QGroupBox,  QComboBox, QSpinBox)
-from PyQt6.QtGui import QIcon
-from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
-from pyqtgraph.dockarea.Dock import Dock
-from pyqtgraph.dockarea.DockArea import DockArea
 import datetime
 import time
-from PyQt6.QtWidgets import QProgressDialog
-from DownloadVideo import DownloadThread
-from AudioTranscript import TranscriptionThread
-from AudioGenerationREST import AudioGenerationThread
-from VideoCutting import VideoCuttingThread
-from ScreenRecorder import ScreenRecorder
+import logging
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+
+# Librerie PyQt6
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices)
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
+    QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
+    QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
+    QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider
+)
+
+# PyQtGraph (docking)
+from pyqtgraph.dockarea.Dock import Dock
+from pyqtgraph.dockarea.DockArea import DockArea
+
+from moviepy.editor import (
+    ImageClip, CompositeVideoClip, concatenate_audioclips,
+    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
+)
+from moviepy.audio.AudioClip import CompositeAudioClip
+from pydub import AudioSegment
+
+import numpy as np
+import pyaudio
 from screeninfo import get_monitors
-from SettingsManager import DockSettingsManager
-from PyQt6.QtCore import  QTime
+from bs4 import BeautifulSoup
 from num2words import num2words
 from langdetect import detect, LangDetectException
 import pycountry
-from CustVideoWidget import CropVideoWidget
-from moviepy.audio.AudioClip import CompositeAudioClip
-from pydub import AudioSegment
-import shutil
-import pyaudio
-from PyQt6.QtCore import QEvent, QTimer, QPoint
-from PyQt6.QtWidgets import QSlider
-from PyQt6.QtCore import Qt
-from CustomSlider import CustomSlider
-from PyQt6.QtWidgets import QToolBar
-from SettingsDialog import ApiKeyDialog
-from moviepy.editor import concatenate_audioclips, concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
-from PyQt6.QtGui import QDesktopServices
-from PyQt6.QtCore import QUrl
-import subprocess
-import os
-import logging
-from bs4 import BeautifulSoup
-import numpy as np
-from ScreenButton import ScreenButton
-from CustumTextEdit import CustomTextEdit
-from Settings import SettingsDialog
 from difflib import SequenceMatcher
-import StreamToLogger
-from PptxGeneration import PptxGeneration
-from ProcessTextAI import ProcessTextAI
-from SplashScreen import SplashScreen
-from ShareVideo import VideoSharingManager
-# fea27867f451afb3ee369dcc7fcfb074
-# ef38b436326ec387ecb1a570a8641b84 <-----
-# a1dfc77969cd40068d3b3477af3ea6b5
 
+from services.DownloadVideo import DownloadThread
+from services.AudioTranscript import TranscriptionThread
+from services.AudioGenerationREST import AudioGenerationThread
+from services.VideoCutting import VideoCuttingThread
+from recorder.ScreenRecorder import ScreenRecorder
+from managers.SettingsManager import DockSettingsManager
+from ui.CustVideoWidget import CropVideoWidget
+from ui.CustomSlider import CustomSlider
+from managers.SettingsDialog import ApiKeyDialog
+from managers.Settings import SettingsDialog
+from ui.ScreenButton import ScreenButton
+from ui.CustumTextEdit import CustomTextEdit
+from services.PptxGeneration import PptxGeneration
+from services.ProcessTextAI import ProcessTextAI
+from ui.SplashScreen import SplashScreen
+from services.ShareVideo import VideoSharingManager
+from managers.StreamToLogger import setup_logging
 
-# Configura il percorso di ffmpeg
-FFMPEG_PATH = './ffmpeg/bin/ffmpeg.exe'
+import os
+from dotenv import load_dotenv
+
+FFMPEG_PATH = 'ffmpeg/bin/ffmpeg.exe'
 AudioSegment.converter = FFMPEG_PATH
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        StreamToLogger.setup_logging()
+
+        setup_logging()
 
         # File di versione
         self.version_file = "./version_info.txt"
@@ -75,17 +77,16 @@ class VideoAudioManager(QMainWindow):
         # Imposta il titolo della finestra con la versione e la data di build
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
 
-        # [TODO] Da mettere in un file .env (ElevenLabs Token)
-        self.api_key = "ef38b436326ec387ecb1a570a8641b84"
+        self.api_key = os.getenv("ELEVENLABS_API_KEY")
 
         #self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
-        self.audioOutput = QAudioOutput()  # Crea un'istanza di QAudioOutput
+        self.audioOutput = QAudioOutput()
         self.playerOutput = QMediaPlayer()
         self.audioOutputOutput = QAudioOutput()
 
-        self.player.setAudioOutput(self.audioOutput)  # Imposta l'audio output del player
-        self.audioOutput.setVolume(1.0)  # Imposta il volume al massimo (1.0 = 100%)
+        self.player.setAudioOutput(self.audioOutput)
+        self.audioOutput.setVolume(1.0)
         self.recentFiles = []
         self.initUI()
         self.setupDockSettingsManager()
@@ -704,7 +705,6 @@ class VideoAudioManager(QMainWindow):
         # Mostra un dialogo di progresso
         self.text_ai_thread = ProcessTextAI(
             current_text,
-            self.api_key,
             self.languageComboBox.currentText(),
             mode="summary"
         )
@@ -714,7 +714,7 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.show()
 
         # Esegui il thread per il processo AI
-        self.text_ai_thread = ProcessTextAI(current_text, self.api_key, self.languageComboBox.currentText())
+        self.text_ai_thread = ProcessTextAI(current_text, self.languageComboBox.currentText())
         self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
         self.text_ai_thread.process_complete.connect(self.onProcessComplete)
         self.text_ai_thread.process_error.connect(self.onProcessError)
@@ -737,7 +737,6 @@ class VideoAudioManager(QMainWindow):
         # Esegui il thread per il processo AI
         self.text_ai_thread = ProcessTextAI(
             current_text,
-            self.api_key,
             self.languageComboBox.currentText(),
             mode="fix"
         )
@@ -902,14 +901,17 @@ class VideoAudioManager(QMainWindow):
         pause_tag = f'<break time="{pause_time}" />'
         cursor.insertText(f' {pause_tag} ')
         self.transcriptionTextArea.setTextCursor(cursor)
+
     def rewind5Seconds(self):
         current_position = self.player.position()
         new_position = max(0, current_position - 5000)  # Indietro di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
+
     def forward5Seconds(self):
         current_position = self.player.position()
         new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
+
     def releaseSourceVideo(self):
         self.player.stop()
         time.sleep(.01)
@@ -982,8 +984,10 @@ class VideoAudioManager(QMainWindow):
 
     def setStartBookmark(self):
         self.videoSlider.setBookmarkStart(self.player.position())
+
     def setEndBookmark(self):
         self.videoSlider.setBookmarkEnd(self.player.position())
+
     def cutVideoBetweenBookmarks(self):
         if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
             QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di tagliare.")
@@ -1045,6 +1049,7 @@ class VideoAudioManager(QMainWindow):
         self.player.setPlaybackRate(playbackRate)
         # Update the speed label to reflect the current speed
         self.speedLabel.setText(f"{value}%")
+
     def handleWheelEvent(self, event):
         mouse_pos = event.position().toPoint()
         widget_pos = self.videoCropWidget.pos()
@@ -1060,6 +1065,7 @@ class VideoAudioManager(QMainWindow):
             self.zoom_level *= 0.9
 
         self.applyVideoZoom(mouse_x_in_widget, mouse_y_in_widget, old_zoom_level)
+
     def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
         # Calcola le nuove dimensioni basate sul livello di zoom attuale
         original_size = self.videoCropWidget.sizeHint()
@@ -1074,6 +1080,7 @@ class VideoAudioManager(QMainWindow):
         current_pos = self.videoCropWidget.pos()
         new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
         self.videoCropWidget.move(new_pos)
+
     def handlePanEvent(self, event):
         # Calcola la differenza di movimento
         current_position = event.position().toPoint()
@@ -1083,10 +1090,13 @@ class VideoAudioManager(QMainWindow):
         # Sposta il contenuto del widget di video
         new_pos = self.videoCropWidget.pos() + delta
         self.videoCropWidget.move(new_pos)
+
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)
+
     def setVolumeOutput(self, value):
         self.audioOutputOutput.setVolume(value / 100.0)
+
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
         hours, remainder = divmod(position // 1000, 3600)
@@ -1121,6 +1131,7 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
+
     def applyStyleToAllDocks(self):
         style = self.getDarkStyle()
         self.videoPlayerDock.setStyleSheet(style)
@@ -1132,6 +1143,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutput.setStyleSheet(style)
         self.videoMergeDock.setStyleSheet(style)
         self.generazioneAIDock.setStyleSheet(style)
+
     def getDarkStyle(self):
         return """
         QWidget {
@@ -1260,6 +1272,7 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Errore",
                                 "Entrambi i campi devono essere compilati per aggiungere una voce personalizzata.")
 
+
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
@@ -1349,6 +1362,7 @@ class VideoAudioManager(QMainWindow):
         audioReplacementGroup.setLayout(layout)
 
         return audioReplacementGroup
+
     def createAudioPauseGroup(self):
         audioPauseGroup = QGroupBox("Applica Pause Audio")
         layout = QVBoxLayout()
@@ -1382,6 +1396,7 @@ class VideoAudioManager(QMainWindow):
         audioPauseGroup.setLayout(layout)
 
         return audioPauseGroup
+
     def createVideoPauseGroup(self):
         videoPauseGroup = QGroupBox("Applica Pausa Video")
         layout = QVBoxLayout()
@@ -1450,6 +1465,7 @@ class VideoAudioManager(QMainWindow):
     def setTimecodeVideoFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
+
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
         dock = Dock("Unione Video", closable=True)
@@ -1498,13 +1514,16 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         return dock
+
     def setTimecodeMergeFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
+
     def formatTimecode(self, position_ms):
         hours, remainder = divmod(position_ms // 1000, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+
     def mergeVideo(self):
         base_video_path = self.videoPathLineEdit
         merge_video_path = self.mergeVideoPathLineEdit.text()
@@ -1544,6 +1563,7 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.warning(self, "Errore", "Si è verificato un errore durante l'unione dei video: " + str(e))
+
     def browseMergeVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
                                                   "Video Files (*.mp4 *.mov *.avi)")
@@ -1669,6 +1689,7 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
 
@@ -1919,7 +1940,7 @@ class VideoAudioManager(QMainWindow):
         dock.addWidget(widget)
 
         self.setDefaultAudioDevice()
-        self.selectDefaultScreen()  # Aggiungi questa linea per selezionare il primo schermo di default
+        self.selectDefaultScreen()
         return dock
 
     def startScreenRecording(self):
@@ -1959,12 +1980,11 @@ class VideoAudioManager(QMainWindow):
 
         segment_file_path = os.path.join(default_folder, f"{recording_name}.mp4")
 
-        # Aggiungi un timestamp univoco se il file esiste già
         while os.path.exists(segment_file_path):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}.mp4")
 
-        ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
+        ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
             QMessageBox.critical(self, "Errore",
                                  "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")
@@ -2037,7 +2057,7 @@ class VideoAudioManager(QMainWindow):
         if len(self.recording_segments) > 1:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             output_path = self.recording_segments[0].rsplit('_', 1)[0] + f'_final_{timestamp}.mp4'
-            ffmpeg_path = './ffmpeg/bin/ffmpeg.exe'
+            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
 
             segments_file = "segments.txt"
             with open(segments_file, "w") as file:
@@ -2705,7 +2725,7 @@ class VideoAudioManager(QMainWindow):
     def browseAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
         if fileName:
-            self.audioPathLineEdit.setText(fileName)  # Aggiorna il campo di testo con il percorso del file
+            self.audioPathLineEdit.setText(fileName)
 
     def extractAudioFromVideo(self, video_path):
         # Estrai l'audio dal video e salvalo temporaneamente
@@ -2804,6 +2824,7 @@ class VideoAudioManager(QMainWindow):
     # Slot per cambiare la posizione del video quando lo slider viene mosso
     def setPosition(self, position):
         self.player.setPosition(position)
+
     def applyDarkMode(self):
         self.setStyleSheet("""
             QWidget {
@@ -2870,7 +2891,7 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFilesMenu()
 
     def updateRecentFilesMenu(self):
-        self.recentMenu.clear()  # Pulisce le voci precedenti
+        self.recentMenu.clear()
         for file in self.recentFiles:
             action = QAction(os.path.basename(file), self)
             action.triggered.connect(lambda checked, f=file: self.openRecentFile(f))
@@ -2880,6 +2901,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineEdit = filePath
         self.player.setSource(QUrl.fromLocalFile(filePath))
         self.fileNameLabel.setText(os.path.basename(filePath))
+
     def playVideo(self):
         self.player.play()
 
@@ -2922,10 +2944,7 @@ class VideoAudioManager(QMainWindow):
     def stopVideo(self):
         self.player.stop()
 
-
-
 if __name__ == "__main__":
-    # Crea l'applicazione
     app = QApplication(sys.argv)
 
     # Specifica la cartella delle immagini
@@ -2935,21 +2954,16 @@ if __name__ == "__main__":
     splash = SplashScreen(image_folder)
     splash.show()
 
-    # Simula il caricamento iniziale dell'applicazione
-    splash.showMessage("Caricamento risorse...")  # Messaggio personalizzato
-    time.sleep(2)  # Simula un ritardo
+    splash.showMessage("Caricamento risorse...")
+    time.sleep(1)  # Simula un ritardo
 
-    splash.showMessage("Inizializzazione interfaccia...")  # Altro messaggio
+    splash.showMessage("Inizializzazione interfaccia...")
     time.sleep(1)  # Simula un altro ritardo
 
-    # Crea l'interfaccia principale dell'applicazione
     window = VideoAudioManager()
 
-    # Mostra la finestra principale
     window.show()
 
-    # Chiudi la splash screen dopo il caricamento dell'interfaccia principale
     splash.finish(window)
 
-    # Esegui l'app
     sys.exit(app.exec())

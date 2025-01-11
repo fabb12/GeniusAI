@@ -4,11 +4,16 @@ from pptx import Presentation
 from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 import re
-#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
+import os
+from dotenv import load_dotenv
 
-antrophic_key = "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"
-model_3_5_sonnet = "claude-3-5-sonnet-20240620"
-model_3_haiku = "claude-3-haiku-20240307"
+load_dotenv()
+
+# Recupera le variabili d'ambiente
+anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+model_3_5_sonnet = os.getenv("MODEL_3_5_SONNET")
+model_3_haiku = os.getenv("MODEL_3_HAIKU")
+
 class PptxGeneration:
     @staticmethod
     def impostaFont(shape, size_pt, text):
@@ -40,7 +45,7 @@ class PptxGeneration:
 
     @staticmethod
     def generaTestoPerSlide(testo, num_slide, company_name, language):
-        client = anthropic.Anthropic(api_key=antrophic_key)
+        client = anthropic.Anthropic(api_key=anthropic_key)
 
         # Costruisci la parte del messaggio relativa alla compagnia se company_name è fornito
         company_info = (

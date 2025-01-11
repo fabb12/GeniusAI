@@ -1,18 +1,24 @@
 import anthropic
 from PyQt6.QtCore import QThread, pyqtSignal
-antrophic_key = "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"
-model_3_5_sonnet = "claude-3-5-sonnet-20240620"
-model_3_haiku = "claude-3-haiku-20240307"
+import os
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
+anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+model_3_5_sonnet = os.getenv("MODEL_3_5_SONNET")
+model_3_haiku = os.getenv("MODEL_3_HAIKU")
+
 
 class ProcessTextAI(QThread):
     update_progress = pyqtSignal(int, str)
     process_complete = pyqtSignal(str)
     process_error = pyqtSignal(str)
 
-    def __init__(self, text, api_key, language, mode="summary", parent=None):
+    def __init__(self, text, language, mode="summary", parent=None):
         super().__init__(parent)
         self.text = text
-        self.api_key = api_key
         self.language = language
         self.result = None
         self.mode = mode  # Aggiunto il parametro mode per scegliere l'operazione
@@ -33,7 +39,7 @@ class ProcessTextAI(QThread):
             self.process_error.emit(f"Errore durante la computazione del testo: {e}")
 
     def computeText(self, text):
-        client = anthropic.Anthropic(api_key=antrophic_key)
+        client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
             model=model_3_5_sonnet,
             max_tokens=8192,
@@ -66,7 +72,7 @@ class ProcessTextAI(QThread):
 
         return testo_resultante, input_tokens, output_tokens
     def computeTextFix(self, text):
-        client = anthropic.Anthropic(api_key=antrophic_key)
+        client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
             model=model_3_5_sonnet,
             max_tokens=8192,
