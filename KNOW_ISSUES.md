@@ -1,13 +1,20 @@
 # Known Issues
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
-## [1.3.1] - ??
+## [1.4.0] - ??
+- [ ] aggiungere ctrl-f nel text edit 
+- [ ] sistemare i dock quando vengono sganciati
 - [ ] aggiungere dock per inserire copertina iniziale
 - [ ] sistemare inserimento pausa nel audio 
 - [ ] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
-- [ ] aggiungere tasto condividi via what app  , teams ecc...
-- [x] agginugere splash screen
+- [ ] aggiungere registrazione solo audio
+- [x] aggiungere tasto condividi via what app , teams ecc...
+- [x] aggiungere splash screen
+- [ ] aggiungere sync trascrizione video originali 
+- [ ] aggiungere caricamento metadati video e trascrizione
+- [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
+- [ ] aggiungere zoom testo in area trascrizione con rotella + / -
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
