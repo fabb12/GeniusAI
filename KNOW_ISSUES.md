@@ -1,7 +1,7 @@
 # Known Issues
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
-## [1.4.0] - ??
+## [1.4.0] - ?? 
 - [ ] aggiungere ctrl-f nel text edit 
 - [ ] sistemare i dock quando vengono sganciati
 - [ ] aggiungere dock per inserire copertina iniziale
