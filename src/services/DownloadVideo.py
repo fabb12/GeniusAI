@@ -5,8 +5,8 @@ import os
 from yt_dlp.postprocessor import FFmpegPostProcessor
 
 # Set the location of ffmpeg and ffprobe to the root directory of your project
-ffmpeg_path = os.path.abspath('../ffmpeg/bin')
-FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_path)
+#ffmpeg_path = os.path.abspath('../ffmpeg/bin')
+#FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_path)
 
 class DownloadThread(QThread):
     finished = pyqtSignal(str, str, str)  # Emits path of file, video title, and language
