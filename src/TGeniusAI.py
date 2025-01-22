@@ -2135,7 +2135,7 @@ class VideoAudioManager(QMainWindow):
 
         # Bottone per iniziare il download
         download_btn = QPushButton("Download Video")
-        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(),  FFMPEG_PATH,))
+        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(), 'ffmpeg/bin',))
 
         # Aggiunta dei controlli al layout della GroupBox
         downloadLayout.addWidget(url_label)
