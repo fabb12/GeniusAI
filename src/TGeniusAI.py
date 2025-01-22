@@ -61,6 +61,8 @@ from dotenv import load_dotenv
 
 FFMPEG_PATH = 'ffmpeg/bin/ffmpeg.exe'
 AudioSegment.converter = FFMPEG_PATH
+FFMPEG_PATH_DOWNLOAD = 'ffmpeg/bin'
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -2135,7 +2137,7 @@ class VideoAudioManager(QMainWindow):
 
         # Bottone per iniziare il download
         download_btn = QPushButton("Download Video")
-        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(), 'ffmpeg/bin',))
+        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(), FFMPEG_PATH_DOWNLOAD))
 
         # Aggiunta dei controlli al layout della GroupBox
         downloadLayout.addWidget(url_label)
