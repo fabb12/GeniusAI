@@ -13,9 +13,10 @@ class DownloadThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int)            # Signal for download progress
 
-    def __init__(self, url, download_video):
+    def __init__(self, url, download_video, ffmpeg_path):
         super().__init__()
         self.url = url
+        self.ffmpeg_path = ffmpeg_path
         self.download_video = download_video
         self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
 
@@ -36,7 +37,7 @@ class DownloadThread(QThread):
             }],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
             'quiet': True,
-            'ffmpeg_location': ffmpeg_path,
+            'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
 
@@ -64,7 +65,7 @@ class DownloadThread(QThread):
             }],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
             'quiet': True,
-            'ffmpeg_location': ffmpeg_path,
+            'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
 

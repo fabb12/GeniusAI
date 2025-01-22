@@ -2135,7 +2135,7 @@ class VideoAudioManager(QMainWindow):
 
         # Bottone per iniziare il download
         download_btn = QPushButton("Download Video")
-        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked()))
+        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(),  FFMPEG_PATH,))
 
         # Aggiunta dei controlli al layout della GroupBox
         downloadLayout.addWidget(url_label)
@@ -2154,9 +2154,9 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
-    def handleDownload(self, url, download_video):
+    def handleDownload(self, url, download_video, ffmpeg_path):
         if url:
-            self.downloadThread = DownloadThread(url, download_video)
+            self.downloadThread = DownloadThread(url, download_video, ffmpeg_path)
             self.downloadThread.finished.connect(self.onDownloadFinished)
             self.downloadThread.error.connect(self.onError)
             self.downloadThread.progress.connect(self.updateDownloadProgress)  # Connect to the new progress signal

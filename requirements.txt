@@ -16,3 +16,4 @@ bs4
 num2words
 langdetect
 python-dotenv
+pyinstaller

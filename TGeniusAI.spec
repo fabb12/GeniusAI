@@ -19,12 +19,33 @@ hiddenimports = (
     collect_submodules('pycountry') +
     collect_submodules('speech_recognition')
 )
-datas = collect_data_files('cv2') + collect_data_files('moviepy') + collect_data_files('numpy') + collect_data_files('pydub') + collect_data_files('PyQt6') + collect_data_files('pycountry') + collect_data_files('speech_recognition')
+datas = (
+    collect_data_files('cv2') +
+    collect_data_files('moviepy') +
+    collect_data_files('numpy') +
+    collect_data_files('pydub') +
+    collect_data_files('PyQt6') +
+    collect_data_files('pycountry') +
+    collect_data_files('speech_recognition')
+)
+
+# Additional DLLs and plugins for PyQt6
+extra_dll_paths = [
+    os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')
+]
+extra_datas = collect_data_files('PyQt6', subdir='Qt6/plugins')
+
+datas += extra_datas
+
+binaries = []
+for dll_path in extra_dll_paths:
+    if os.path.exists(dll_path):
+        binaries.append((dll_path, '.'))
 
 a = Analysis(
     ['src/TGeniusAI.py'],
-    pathex=['.'],
-    binaries=[],
+    pathex=['.', os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')],
+    binaries=binaries,
     datas=[
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
@@ -74,7 +95,7 @@ coll = COLLECT(
 
 # Custom script to create the version_info.txt file and move files to the correct folder
 def create_version_info():
-    # Estrai la versione dal codice sorgente
+    # Extract version from the source code
     version_pattern = re.compile(r'self\.version_major = (\d+).*self\.version_minor = (\d+).*self\.version_patch = (\d+)', re.DOTALL)
     with open('src/TGeniusAI.py', 'r') as f:
         content = f.read()
@@ -84,10 +105,10 @@ def create_version_info():
     else:
         version = "v0.0.0"
 
-    # Ottieni la data corrente
+    # Get the current date
     build_date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Crea il file version_info.txt
+    # Create the version_info.txt file
     version_info_content = f"Version: {version}\nBuild Date: {build_date}\n"
     version_info_path = os.path.join(current_dir, 'version_info.txt')
 
@@ -102,21 +123,21 @@ def move_files_up_and_create_zip():
     release_dir = os.path.join(current_dir, 'dist', 'Release')
     tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
 
-    # Crea la cartella di rilascio se non esiste
+    # Create the release folder if it doesn't exist
     os.makedirs(release_dir, exist_ok=True)
 
-    # File da spostare
+    # Files to move
     files_to_move = ['Readme.md', 'KNOW_ISSUES.md', 'CHANGELOG.md']
     folders_to_move = ['res']
 
-    # Sposta i file
+    # Move the files
     for file_name in files_to_move:
         src_path = os.path.join(internal_dir, file_name)
         dest_path = os.path.join(tgeniusai_dir, file_name)
         if os.path.exists(src_path):
             shutil.move(src_path, dest_path)
 
-    # Sposta le cartelle
+    # Move the folders
     for folder_name in folders_to_move:
         src_path = os.path.join(internal_dir, folder_name)
         dest_path = os.path.join(tgeniusai_dir, folder_name)
@@ -125,13 +146,13 @@ def move_files_up_and_create_zip():
                 shutil.rmtree(dest_path)
             shutil.move(src_path, dest_path)
 
-    # Crea il file version_info.txt
+    # Create the version_info.txt file
     version_info_path, version = create_version_info()
 
-    # Sposta il file version_info.txt nella cartella di destinazione
+    # Move the version_info.txt file to the destination folder
     shutil.move(version_info_path, os.path.join(tgeniusai_dir, 'version_info.txt'))
 
-    # Crea un file ZIP con tutti i file nella cartella TGeniusAI
+    # Create a ZIP file with all files in the TGeniusAI folder
     zip_file_path = os.path.join(release_dir, f"TGeniusAI_{version}.zip")
     with zipfile.ZipFile(zip_file_path, 'w') as zipf:
         for root, dirs, files in os.walk(tgeniusai_dir):
@@ -140,6 +161,5 @@ def move_files_up_and_create_zip():
                 arcname = os.path.relpath(file_path, tgeniusai_dir)
                 zipf.write(file_path, arcname)
 
-
-# Esegui lo script per spostare i file e creare lo ZIP
+# Run the script to move files and create the ZIP
 move_files_up_and_create_zip()
