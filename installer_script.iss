@@ -1,7 +1,7 @@
 ; Script di Inno Setup per installare GeniusAI senza richiedere privilegi di amministratore
 ; Salvare questo file con estensione .iss
 
-#define MyAppVersion "1.4.1"  ; Definisci qui la versione del programma
+#define MyAppVersion "1.5.3"  ; Definisci qui la versione del programma
 
 [Setup]
 ; Nome del programma che verr� visualizzato nel pannello di controllo
