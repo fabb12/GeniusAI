@@ -47,6 +47,7 @@ a = Analysis(
     pathex=['.', os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')],
     binaries=binaries,
     datas=[
+        (os.path.join(current_dir, '.env'), '.'),
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
         (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
         (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add CHANGELOG.md

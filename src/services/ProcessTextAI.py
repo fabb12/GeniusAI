@@ -71,6 +71,7 @@ class ProcessTextAI(QThread):
         output_tokens = message.usage.output_tokens
 
         return testo_resultante, input_tokens, output_tokens
+
     def computeTextFix(self, text):
         client = anthropic.Anthropic(api_key=anthropic_key)
         message = client.messages.create(
