@@ -1,7 +1,7 @@
 ; Script di Inno Setup per installare GeniusAI senza richiedere privilegi di amministratore
 ; Salvare questo file con estensione .iss
 
-#define MyAppVersion "1.5.3"  ; Definisci qui la versione del programma
+#define MyAppVersion "1.5.4"  ; Definisci qui la versione del programma
 
 [Setup]
 ; Nome del programma che verr� visualizzato nel pannello di controllo
@@ -38,7 +38,7 @@ Source: "dist\TGeniusAI\res\*"; DestDir: "{app}\res"; Flags: ignoreversion recur
 ; Copia eventuali file di configurazione o dati aggiuntivi
 Source: "dist\TGeniusAI\CHANGELOG.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "dist\TGeniusAI\KNOW_ISSUES.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "dist\TGeniusAI\Readme.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "dist\TGeniusAI\README.md"; DestDir: "{app}"; Flags: ignoreversion
 ; Includi la cartella _internal (opzionale)
 Source: "dist\TGeniusAI\_internal\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 
