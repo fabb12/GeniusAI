@@ -144,7 +144,7 @@ class FrameExtractor:
 # ===========================
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: python frameextractor.py <video_path> <num_frames> <anthropic_api_key>")
+        print("Usage: python frameextractor.py <video_path> <num_frames>  <anthropic_api_key>")
         sys.exit(1)
 
     video_path = sys.argv[1]
