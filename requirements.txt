@@ -17,3 +17,4 @@ num2words
 langdetect
 python-dotenv
 pyinstaller
+opencv-python
