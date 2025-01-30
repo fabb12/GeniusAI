@@ -143,13 +143,13 @@ class FrameExtractor:
 #  MAIN: Esegui come script
 # ===========================
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
-        print("Usage: python frameextractor.py <video_path> <num_frames>  <anthropic_api_key>")
+    if len(sys.argv) != 4:
+        print("Usage: python frameextractor.py <video_path> <num_frames> <anthropic_api_key>")
         sys.exit(1)
 
     video_path = sys.argv[1]
     num_frames = int(sys.argv[2])
-    anthropic_api_key = "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"
+    anthropic_api_key = sys.argv[3]
 
     extractor = FrameExtractor(video_path, num_frames, anthropic_api_key)
     extractor.process_video()
