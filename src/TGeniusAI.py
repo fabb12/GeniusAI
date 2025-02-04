@@ -709,7 +709,7 @@ class VideoAudioManager(QMainWindow):
             self.languageComboBox.currentText(),
             mode="summary"
         )
-
+        self.progressDialog = QProgressDialog("Riassunto testo in corso...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()

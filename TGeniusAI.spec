@@ -47,9 +47,9 @@ a = Analysis(
     pathex=['.', os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')],
     binaries=binaries,
     datas=[
-        (os.path.join(current_dir, '.env'), '.'),
+        (os.path.join(current_dir, '.env'), '.'),  # Add venv
         (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
-        (os.path.join(current_dir, 'Readme.md'), '.'),  # Add Readme.md
+        (os.path.join(current_dir, 'README.md'), '.'),  # Add Readme.md
         (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add CHANGELOG.md
         (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),  # Add KNOW_ISSUES.md
     ] + datas,
@@ -128,7 +128,7 @@ def move_files_up_and_create_zip():
     os.makedirs(release_dir, exist_ok=True)
 
     # Files to move
-    files_to_move = ['Readme.md', 'KNOW_ISSUES.md', 'CHANGELOG.md']
+    files_to_move = ['README.md', 'KNOW_ISSUES.md', 'CHANGELOG.md']
     folders_to_move = ['res']
 
     # Move the files
