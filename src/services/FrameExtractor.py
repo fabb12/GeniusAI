@@ -8,7 +8,6 @@ from moviepy.editor import VideoFileClip
 from tqdm import tqdm
 
 
-
 class FrameExtractor:
     def __init__(self, video_path, num_frames, anthropic_api_key, batch_size=5):
         self.video_path = video_path
@@ -18,8 +17,8 @@ class FrameExtractor:
 
     def extract_frames(self):
         """
-        Estrae i frame a intervalli equidistanti
-        e ritorna una lista con base64 e timestamp.
+        Estrae i frame a intervalli equidistanti e ritorna una lista contenente il frame in base64
+        insieme al rispettivo timestamp.
         """
         video = VideoFileClip(self.video_path)
         duration = video.duration
@@ -39,19 +38,18 @@ class FrameExtractor:
 
     def analyze_frames_batch(self, frame_list, language):
         """
-        1) Invia i frame a Claude in batch.
-        2) Claude restituisce un JSON con 'frame' e 'description' per ciascun frame.
-        3) Converte i secondi in mm:ss e popola frame_data.
-        4) Ritorna l'array di descrizioni dettagliate per ogni frame (non il discorso finale).
+        Invia i frame a Claude in batch e riceve un JSON per ciascun frame,
+        contenente 'frame' e 'description'. Converte il timestamp in formato mm:ss
+        e ritorna un array di descrizioni dettagliate per ogni frame.
         """
         frame_data = []
         total_batches = len(frame_list) // self.batch_size + (1 if len(frame_list) % self.batch_size != 0 else 0)
 
         for batch_idx in tqdm(range(total_batches), desc="Processing Batches"):
-            batch = frame_list[batch_idx * self.batch_size : (batch_idx + 1) * self.batch_size]
+            batch = frame_list[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
             messages = [{"role": "user", "content": []}]
 
-            # Allego i frame sotto forma di immagine + un prompt
+            # Aggiungo ogni frame (con la sua immagine) al prompt
             for idx, frame in enumerate(batch):
                 current_index = batch_idx * self.batch_size + idx
                 messages[0]["content"].append({"type": "text", "text": f"Frame {current_index}:"})
@@ -64,18 +62,18 @@ class FrameExtractor:
                     },
                 })
 
-            # Prompt per un array JSON
+            # Prompt per richiedere un array JSON con le informazioni per ciascun frame
             messages[0]["content"].append({
                 "type": "text",
                 "text": f"""
-Please return a strict JSON array in {language}. 
-There are {len(batch)} frames here. 
-Each element must be an object like:
-{{
-  "frame": <LOCAL_INDEX>,
-  "description": "<text describing the frame>"
-}}
-Do not include extra text or disclaimers besides the JSON array.
+                Please return a strict JSON array in {language}. 
+                There are {len(batch)} frames here. 
+                Each element must be an object like:
+                {{
+                  "frame": <LOCAL_INDEX>,
+                  "description": "<text describing the frame>"
+                }}
+                Do not include extra text or disclaimers besides the JSON array.
                 """
             })
 
@@ -85,20 +83,19 @@ Do not include extra text or disclaimers besides the JSON array.
                     max_tokens=2048,
                     messages=messages
                 )
-
                 raw_text = response.content[0].text.strip()
 
-                # Esegui il parsing JSON
+                # Parsing del JSON restituito
                 frames_json = json.loads(raw_text)
 
                 for item in frames_json:
                     local_index = item["frame"]
                     desc = item["description"]
 
-                    # Indice globale
+                    # Calcolo dell'indice globale
                     frame_number = batch_idx * self.batch_size + local_index
 
-                    # timestamp e formattazione
+                    # Converto il timestamp in minuti e secondi (mm:ss)
                     timestamp_seconds = batch[local_index]['timestamp']
                     minutes = int(timestamp_seconds // 60)
                     seconds = int(timestamp_seconds % 60)
@@ -116,31 +113,43 @@ Do not include extra text or disclaimers besides the JSON array.
 
         return frame_data
 
+    def get_video_duration(self):
+        """
+        Restituisce la durata del video in secondi.
+        """
+        video = VideoFileClip(self.video_path)
+        return video.duration
+
     def generate_video_summary(self, frame_data, language):
         """
-        Dato un array di descrizioni frame_data, chiede a Claude di generare
-        un discorso finale che descriva l'intero video.
+        Genera un discorso finale narrativo che descriva l'intero video tutorial.
+        Il testo, da utilizzare come presentazione orale, deve essere fluido e chiaro,
+        senza riferimenti a timestamp o numeri di frame, e deve includere pause
+        nel formato <break time="Xs" />, dove il valore di X può variare in base al ritmo del discorso.
+        La lunghezza del discorso deve essere approssimativamente pari al minutaggio del video.
         """
-        # Creiamo un testo di input con info su ogni frame
-        # Esempio: "Frame 0 (02:00): Descrizione..."
-        frames_info = []
-        for fd in frame_data:
-            frames_info.append(
-                f"Frame {fd['frame_number']} ({fd['timestamp']}): {fd['description']}"
-            )
-        joined_info = "\n".join(frames_info)
+        video_duration = self.get_video_duration()
+        video_duration_minutes = video_duration / 60
+
+        # Utilizzo solo le descrizioni estratte, senza riferimenti tecnici
+        descriptions = [fd['description'] for fd in frame_data]
+        joined_descriptions = "\n".join(descriptions)
 
         messages = [{"role": "user", "content": []}]
         messages[0]["content"].append({
             "type": "text",
             "text": f"""
-Genera un testo discorsivo in {language} che descriva l'intero video.
-Ecco le informazioni estratte dai frame:
+            Genera un discorso narrativo in {language} che descriva l'intero video tutorial. 
+            Immagina di essere un presentatore che introduce il video: il discorso deve essere fluido, chiaro e coinvolgente.
+            Inserisci delle pause nel discorso utilizzando il formato <break time="Xs" />, dove il valore di X può variare 
+            in base al ritmo naturale e alle esigenze di enfasi del discorso.
+            Il testo finale NON deve includere riferimenti a timestamp, numeri di frame o dettagli tecnici, 
+            ma deve essere basato sulle seguenti informazioni:
 
-{joined_info}
+            {joined_descriptions}
 
-Fornisci una narrazione finale coesa, come se presentassi il video
-dall'inizio alla fine, utilizzando i dettagli dei frame. 
+            Il discorso finale deve avere una lunghezza approssimativamente pari a {video_duration_minutes:.2f} minuti,
+            in modo da riflettere il minutaggio complessivo del video.
             """
         })
 
@@ -156,39 +165,42 @@ dall'inizio alla fine, utilizzando i dettagli dei frame.
             print(f"Error generating final summary: {e}")
             return None
 
-    def process_video(self, output_json="video_analysis.json"):
+    def process_video(self, output_json="video_analysis.json", language="italiano"):
         """
-        Extracts frames, analyzes them, and generates a video summary.
-        :param output_json: Path to save JSON file with frame descriptions.
+        Esegue l'intero processo: estrazione dei frame, analisi dei frame e generazione del discorso finale.
+        Salva l'analisi in un file JSON.
         """
-        print("Extracting frames...")
+        print("Estrazione dei frame...")
         frames = self.extract_frames()
-        print(f"Extracted {len(frames)} frames.")
+        print(f"Frame estratti: {len(frames)}.")
 
-        print("Analyzing frames with Claude Vision...")
-        frame_data = self.analyze_frames_batch(frames)
+        print("Analisi dei frame con Claude Vision...")
+        frame_data = self.analyze_frames_batch(frames, language)
 
-        print("Generating video summary...")
-        summary = self.generate_video_summary(frame_data)
+        print("Generazione del discorso finale del video...")
+        summary = self.generate_video_summary(frame_data, language)
+
+        output = {
+            "frames": frame_data,
+            "video_summary": summary
+        }
 
         with open(output_json, "w", encoding="utf-8") as f:
-            json.dump({"frames": frame_data, "video_summary": summary}, f, indent=4)
+            json.dump(output, f, indent=4, ensure_ascii=False)
 
-        print(f"Video analysis saved to {output_json}")
-        print("\nVideo Summary:\n", summary)
+        print(f"Analisi del video salvata in {output_json}")
+        print("\nDiscorso Finale del Video:\n", summary)
 
 
-# ===========================
-#  MAIN: Esegui come script
-# ===========================
 if __name__ == "__main__":
-    if len(sys.argv) != 4:
-        print("Usage: python frameextractor.py <video_path> <num_frames> <anthropic_api_key>")
+    if len(sys.argv) < 4 or len(sys.argv) > 5:
+        print("Usage: python frameextractor.py <video_path> <num_frames> <anthropic_api_key> [language]")
         sys.exit(1)
 
     video_path = sys.argv[1]
     num_frames = int(sys.argv[2])
     anthropic_api_key = sys.argv[3]
+    language = sys.argv[4] if len(sys.argv) == 5 else "italiano"
 
     extractor = FrameExtractor(video_path, num_frames, anthropic_api_key)
-    extractor.process_video()
+    extractor.process_video(language=language)
