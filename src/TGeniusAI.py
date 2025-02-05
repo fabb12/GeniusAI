@@ -636,30 +636,28 @@ class VideoAudioManager(QMainWindow):
 
     def onExtractFramesClicked(self):
         """
-        Quando l'utente clicca su 'Es trai testo dai frame':
-        1) Verifica che sia caricato un video (self.videoPathLineEdit).
-        2) Prende il numero di frame (self.frameCountSpin.value()).
-        3) Usa FrameExtractor per estrarre i frame e ottenere un discorso completo da Anthropic.
-        4) Inserisce il testo ottenuto nella transcriptionTextArea.
+        Passi:
+        1) Verifica video caricato
+        2) Istanzia FrameExtractor
+        3) Estrae i frame
+        4) Ottiene frame_data (descrizioni di ogni frame)
+        5) Genera un discorso finale dell'intero video
+        6) Mostra il risultato nella transcriptionTextArea
         """
-        # Verifica che sia caricato un video
         if not self.videoPathLineEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato. Carica un video prima di estrarre i frame.")
             return
 
-        # Recupera il numero di frame selezionato dalla UI
         num_frames = self.frameCountSpin.value()
-
-        # Assicuriamoci di avere una API Key disponibile
-        api_key = self.api_llm  # La variabile che memorizza la chiave di Anthropic
+        api_key = self.api_llm  # Tua variabile con la chiave
         if not api_key:
             QMessageBox.warning(self, "API Key mancante", "Imposta la chiave API prima di estrarre i frame.")
             return
 
         try:
-            # 1) Istanzia FrameExtractor
+            # 1) Crea l'extractor
             extractor = FrameExtractor(
-                video_path=self.videoPathLineEdit,  # oppure self.videoPathLineEdit.text() se usi QLineEdit
+                video_path=self.videoPathLineEdit,
                 num_frames=num_frames,
                 anthropic_api_key=api_key
             )
@@ -667,31 +665,38 @@ class VideoAudioManager(QMainWindow):
             # 2) Estrae i frame
             frames = extractor.extract_frames()
 
-            # 3) Analizza i frame (in batch) per ottenere un testo discorsivo completo
-            #    (assumendo che la funzione "analyze_frames_batch" ora restituisca una singola stringa)
-            discourse_text = extractor.analyze_frames_batch(
+            # 3) Analizza i frame => otteniamo un array di { frame_number, description, timestamp }
+            frame_data = extractor.analyze_frames_batch(
                 frames,
-                self.languageInput.currentText()  # Lingua selezionata nel comboBox, es. "Italian"
+                self.languageInput.currentText()  # "Italian", "English", ...
             )
 
-            # 4) Aggiunge il testo finale all’area di trascrizione
+            # 4) Opzionale: se vuoi mostrare i dettagli di ogni frame
+            details_list = []
+            for fd in frame_data:
+                # "Frame 0 (03:00): <desc>"
+                details_list.append(f"Frame {fd['frame_number']} ({fd['timestamp']}): {fd['description']}")
+            details_text = "\n".join(details_list)
+
+            # 5) Generiamo un discorso/riassunto finale
+            final_discourse = extractor.generate_video_summary(frame_data, self.languageInput.currentText())
+
+            # 6) Creiamo un testo conclusivo
+            #    [DETTAGLI FRAME] + [DISCORSO FINALE]
+            final_text = (
+                    "[DETTAGLI FRAME]\n" + details_text +
+                    "\n\n[DISCORSO FINALE]\n" + (final_discourse or "N/A")
+            )
+
+            # Aggiunta all'area di trascrizione
             current_text = self.transcriptionTextArea.toPlainText()
-            self.transcriptionTextArea.setPlainText(
-                current_text + "\n\n[TESTO ESTRATTO DAI FRAME]\n" + discourse_text
-            )
+            self.transcriptionTextArea.setPlainText(current_text + "\n\n" + final_text)
 
-            QMessageBox.information(
-                self,
-                "Estrazione completata",
-                "Il testo dei frame è stato aggiunto alla trascrizione come discorso unico."
-            )
+            QMessageBox.information(self, "Estrazione completata",
+                                    "Testo estratto dai frame e riassunto finale completati.")
 
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Errore",
-                f"Si è verificato un errore durante l'estrazione dei frame:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'estrazione dei frame:\n{str(e)}")
 
     def onShareButtonClicked(self):
         # Usa il percorso del video nel dock Video Player Output

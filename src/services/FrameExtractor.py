@@ -8,15 +8,9 @@ from moviepy.editor import VideoFileClip
 from tqdm import tqdm
 
 
+
 class FrameExtractor:
     def __init__(self, video_path, num_frames, anthropic_api_key, batch_size=5):
-        """
-        Initializes the FrameExtractor class.
-        :param video_path: Path to the input video file.
-        :param num_frames: Number of frames to extract evenly spaced throughout the video.
-        :param anthropic_api_key: API key for Anthropic's Claude Vision.
-        :param batch_size: Number of frames to send per request to Claude API.
-        """
         self.video_path = video_path
         self.num_frames = num_frames
         self.batch_size = batch_size
@@ -24,8 +18,8 @@ class FrameExtractor:
 
     def extract_frames(self):
         """
-        Extracts frames from the video at equal intervals.
-        :return: List of extracted frames in Base64 format.
+        Estrae i frame a intervalli equidistanti
+        e ritorna una lista con base64 e timestamp.
         """
         video = VideoFileClip(self.video_path)
         duration = video.duration
@@ -45,97 +39,121 @@ class FrameExtractor:
 
     def analyze_frames_batch(self, frame_list, language):
         """
-        Elabora i frame in batch e produce un UNICO discorso nella lingua desiderata,
-        dove Claude descrive i frame in modo sequenziale.
-
-        :param frame_list: Lista di frame estratti (base64) e relativo timestamp in secondi.
-        :param language: Lingua in cui Claude dovrà generare la descrizione (es. 'Italian', 'Spanish', 'English').
-        :return: stringa contenente l'intero discorso che descrive tutti i frame.
+        1) Invia i frame a Claude in batch.
+        2) Claude restituisce un JSON con 'frame' e 'description' per ciascun frame.
+        3) Converte i secondi in mm:ss e popola frame_data.
+        4) Ritorna l'array di descrizioni dettagliate per ogni frame (non il discorso finale).
         """
-        full_discourse_parts = []
+        frame_data = []
         total_batches = len(frame_list) // self.batch_size + (1 if len(frame_list) % self.batch_size != 0 else 0)
 
         for batch_idx in tqdm(range(total_batches), desc="Processing Batches"):
-            # Prendiamo i frame di questo batch
-            batch = frame_list[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
-
+            batch = frame_list[batch_idx * self.batch_size : (batch_idx + 1) * self.batch_size]
             messages = [{"role": "user", "content": []}]
 
-            # Prepara un breve elenco di info di base su ciascun frame:
-            #  "Frame X (mm:ss)" per passarlo a Claude in un testo riassuntivo
-            frames_info_text = []
+            # Allego i frame sotto forma di immagine + un prompt
             for idx, frame in enumerate(batch):
-                # Calcoliamo l'indice globale e formattiamo il timestamp
-                global_index = batch_idx * self.batch_size + idx
-                timestamp_seconds = frame["timestamp"]
-                minutes = int(timestamp_seconds // 60)
-                seconds = int(timestamp_seconds % 60)
-                frames_info_text.append(
-                    f"Frame {global_index} ({minutes:02d}:{seconds:02d})"
-                )
+                current_index = batch_idx * self.batch_size + idx
+                messages[0]["content"].append({"type": "text", "text": f"Frame {current_index}:"})
+                messages[0]["content"].append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": frame["data"],
+                    },
+                })
 
-            # Creiamo un prompt in cui chiediamo a Claude di generare un discorso unico
-            # in {language} che descriva i frame elencati (riferendosi al 'global_index')
-            text_prompt = (
-                f"Please produce a cohesive explanation in {language} describing the following frames:\n"
-                f"{', '.join(frames_info_text)}.\n"
-                "Pretend you are narrating a video; mention key visual elements in each frame "
-                "and how they connect to each other. Provide a single, continuous paragraph. "
-                "Avoid extra disclaimers or code fences."
-            )
-
-            # Aggiungiamo il blocco di testo (prompt)
-            messages[0]["content"].append({"type": "text", "text": text_prompt})
+            # Prompt per un array JSON
+            messages[0]["content"].append({
+                "type": "text",
+                "text": f"""
+Please return a strict JSON array in {language}. 
+There are {len(batch)} frames here. 
+Each element must be an object like:
+{{
+  "frame": <LOCAL_INDEX>,
+  "description": "<text describing the frame>"
+}}
+Do not include extra text or disclaimers besides the JSON array.
+                """
+            })
 
             try:
-                # Chiamiamo l'API di Anthropic
                 response = self.client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=2048,
                     messages=messages
                 )
 
-                # Claude restituisce il discorso (testo) per questo batch
-                batch_discourse = response.content[0].text.strip()
+                raw_text = response.content[0].text.strip()
 
-                # Lo aggiungiamo alla lista di "pezzi" di discorso
-                full_discourse_parts.append(batch_discourse)
+                # Esegui il parsing JSON
+                frames_json = json.loads(raw_text)
 
+                for item in frames_json:
+                    local_index = item["frame"]
+                    desc = item["description"]
+
+                    # Indice globale
+                    frame_number = batch_idx * self.batch_size + local_index
+
+                    # timestamp e formattazione
+                    timestamp_seconds = batch[local_index]['timestamp']
+                    minutes = int(timestamp_seconds // 60)
+                    seconds = int(timestamp_seconds % 60)
+
+                    frame_data.append({
+                        "frame_number": frame_number,
+                        "description": desc.strip(),
+                        "timestamp": f"{minutes:02d}:{seconds:02d}",
+                    })
+
+            except json.JSONDecodeError as e:
+                print(f"Errore nel parsing JSON: {e}")
             except Exception as e:
                 print(f"Error analyzing batch {batch_idx}: {e}")
-                # In caso di errore, possiamo aggiungere un placeholder
-                full_discourse_parts.append(f"[Errore batch {batch_idx}]")
 
-        # Al termine, uniamo i vari “pezzi” in un singolo testo discorsivo
-        final_discourse = "\n\n".join(full_discourse_parts)
-        return final_discourse
+        return frame_data
 
-    def generate_video_summary(self, frame_data):
+    def generate_video_summary(self, frame_data, language):
         """
-        Generates a summary of the video based on frame analysis.
-        :param frame_data: JSON containing frame descriptions.
-        :return: A text summary of the entire video.
+        Dato un array di descrizioni frame_data, chiede a Claude di generare
+        un discorso finale che descriva l'intero video.
         """
-        descriptions = "\n".join(
-            [f"Frame {d['frame_number']} at {d['timestamp']}: {d['description']}" for d in frame_data])
+        # Creiamo un testo di input con info su ogni frame
+        # Esempio: "Frame 0 (02:00): Descrizione..."
+        frames_info = []
+        for fd in frame_data:
+            frames_info.append(
+                f"Frame {fd['frame_number']} ({fd['timestamp']}): {fd['description']}"
+            )
+        joined_info = "\n".join(frames_info)
+
+        messages = [{"role": "user", "content": []}]
+        messages[0]["content"].append({
+            "type": "text",
+            "text": f"""
+Genera un testo discorsivo in {language} che descriva l'intero video.
+Ecco le informazioni estratte dai frame:
+
+{joined_info}
+
+Fornisci una narrazione finale coesa, come se presentassi il video
+dall'inizio alla fine, utilizzando i dettagli dei frame. 
+            """
+        })
 
         try:
             response = self.client.messages.create(
                 model="claude-3-5-sonnet-20241022",
                 max_tokens=2048,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": f"Based on these frame descriptions, summarize the video's content:\n{descriptions}"}
-                        ]
-                    }
-                ]
+                messages=messages
             )
-            return response.content[0].text
+            return response.content[0].text.strip()
 
         except Exception as e:
-            print(f"Error generating video summary: {e}")
+            print(f"Error generating final summary: {e}")
             return None
 
     def process_video(self, output_json="video_analysis.json"):
