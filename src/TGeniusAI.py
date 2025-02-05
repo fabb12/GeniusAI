@@ -57,7 +57,6 @@ from services.ShareVideo import VideoSharingManager
 from managers.StreamToLogger import setup_logging
 
 import os
-from dotenv import load_dotenv
 
 FFMPEG_PATH = 'ffmpeg/bin/ffmpeg.exe'
 AudioSegment.converter = FFMPEG_PATH
