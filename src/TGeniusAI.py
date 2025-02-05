@@ -55,6 +55,8 @@ from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
 from managers.StreamToLogger import setup_logging
+from services.FrameExtractor import FrameExtractor  # Assicurati che sia il percorso corretto
+
 
 import os
 
@@ -79,6 +81,7 @@ class VideoAudioManager(QMainWindow):
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
 
         self.api_key = os.getenv("ELEVENLABS_API_KEY")
+        self.api_llm = os.getenv("ANTHROPIC_API_KEY")
 
         #self.setGeometry(500, 500, 1200, 800)
         self.player = QMediaPlayer()
@@ -429,6 +432,21 @@ class VideoAudioManager(QMainWindow):
         innerLayout = QVBoxLayout()
         buttonsLayout = QHBoxLayout()
 
+        # (CREIAMO SPINBOX PER I FRAME)
+        self.frameCountSpin = QSpinBox()
+        self.frameCountSpin.setMinimum(1)
+        self.frameCountSpin.setMaximum(30)  # imposta un limite ragionevole
+        self.frameCountSpin.setValue(5)
+        self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
+
+        self.extractFramesButton = QPushButton("Estrai testo dai frame")
+        self.extractFramesButton.setToolTip(
+            "Estrae i frame e ne analizza il contenuto per aggiungerlo alla trascrizione")
+        self.extractFramesButton.clicked.connect(self.onExtractFramesClicked)
+
+        buttonsLayout.addWidget(self.frameCountSpin)
+        buttonsLayout.addWidget(self.extractFramesButton)
+
         self.transcriptionLanguageLabel = QLabel("Lingua rilevata: Nessuna")
         self.transcriptionLanguageLabel.setToolTip("Mostra la lingua rilevata nel video")
         self.transcriptionLanguageLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
@@ -616,6 +634,64 @@ class VideoAudioManager(QMainWindow):
 
         self.applyStyleToAllDocks()
 
+    def onExtractFramesClicked(self):
+        """
+        Quando l'utente clicca su 'Estrai testo dai frame':
+        1) Verifica che sia caricato un video (self.videoPathLineEdit).
+        2) Prende il numero di frame (self.frameCountSpin.value()).
+        3) Usa FrameExtractor per estrarre i frame e ottenere un discorso completo da Anthropic.
+        4) Inserisce il testo ottenuto nella transcriptionTextArea.
+        """
+        # Verifica che sia caricato un video
+        if not self.videoPathLineEdit:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato. Carica un video prima di estrarre i frame.")
+            return
+
+        # Recupera il numero di frame selezionato dalla UI
+        num_frames = self.frameCountSpin.value()
+
+        # Assicuriamoci di avere una API Key disponibile
+        api_key = self.api_llm  # La variabile che memorizza la chiave di Anthropic
+        if not api_key:
+            QMessageBox.warning(self, "API Key mancante", "Imposta la chiave API prima di estrarre i frame.")
+            return
+
+        try:
+            # 1) Istanzia FrameExtractor
+            extractor = FrameExtractor(
+                video_path=self.videoPathLineEdit,  # oppure self.videoPathLineEdit.text() se usi QLineEdit
+                num_frames=num_frames,
+                anthropic_api_key=api_key
+            )
+
+            # 2) Estrae i frame
+            frames = extractor.extract_frames()
+
+            # 3) Analizza i frame (in batch) per ottenere un testo discorsivo completo
+            #    (assumendo che la funzione "analyze_frames_batch" ora restituisca una singola stringa)
+            discourse_text = extractor.analyze_frames_batch(
+                frames,
+                self.languageInput.currentText()  # Lingua selezionata nel comboBox, es. "Italian"
+            )
+
+            # 4) Aggiunge il testo finale all’area di trascrizione
+            current_text = self.transcriptionTextArea.toPlainText()
+            self.transcriptionTextArea.setPlainText(
+                current_text + "\n\n[TESTO ESTRATTO DAI FRAME]\n" + discourse_text
+            )
+
+            QMessageBox.information(
+                self,
+                "Estrazione completata",
+                "Il testo dei frame è stato aggiunto alla trascrizione come discorso unico."
+            )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Errore",
+                f"Si è verificato un errore durante l'estrazione dei frame:\n{str(e)}"
+            )
 
     def onShareButtonClicked(self):
         # Usa il percorso del video nel dock Video Player Output
