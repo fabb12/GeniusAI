@@ -43,51 +43,72 @@ class FrameExtractor:
         cap.release()
         return frame_list
 
-    def analyze_frames_batch(self, frame_list):
+    def analyze_frames_batch(self, frame_list, language):
         """
-        Sends frames in batches to Claude Vision API for analysis.
-        :param frame_list: List of extracted frames (base64 encoded).
-        :return: JSON with metadata and descriptions.
+        Elabora i frame in batch e produce un UNICO discorso nella lingua desiderata,
+        dove Claude descrive i frame in modo sequenziale.
+
+        :param frame_list: Lista di frame estratti (base64) e relativo timestamp in secondi.
+        :param language: Lingua in cui Claude dovrà generare la descrizione (es. 'Italian', 'Spanish', 'English').
+        :return: stringa contenente l'intero discorso che descrive tutti i frame.
         """
-        frame_data = []
+        full_discourse_parts = []
         total_batches = len(frame_list) // self.batch_size + (1 if len(frame_list) % self.batch_size != 0 else 0)
 
         for batch_idx in tqdm(range(total_batches), desc="Processing Batches"):
-            batch = frame_list[batch_idx * self.batch_size : (batch_idx + 1) * self.batch_size]
+            # Prendiamo i frame di questo batch
+            batch = frame_list[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
+
             messages = [{"role": "user", "content": []}]
 
+            # Prepara un breve elenco di info di base su ciascun frame:
+            #  "Frame X (mm:ss)" per passarlo a Claude in un testo riassuntivo
+            frames_info_text = []
             for idx, frame in enumerate(batch):
-                messages[0]["content"].append({"type": "text", "text": f"Frame {batch_idx * self.batch_size + idx}:"})
-                messages[0]["content"].append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": "image/jpeg",
-                        "data": frame["data"],
-                    },
-                })
+                # Calcoliamo l'indice globale e formattiamo il timestamp
+                global_index = batch_idx * self.batch_size + idx
+                timestamp_seconds = frame["timestamp"]
+                minutes = int(timestamp_seconds // 60)
+                seconds = int(timestamp_seconds % 60)
+                frames_info_text.append(
+                    f"Frame {global_index} ({minutes:02d}:{seconds:02d})"
+                )
 
-            messages[0]["content"].append({"type": "text", "text": "Describe each frame separately."})
+            # Creiamo un prompt in cui chiediamo a Claude di generare un discorso unico
+            # in {language} che descriva i frame elencati (riferendosi al 'global_index')
+            text_prompt = (
+                f"Please produce a cohesive explanation in {language} describing the following frames:\n"
+                f"{', '.join(frames_info_text)}.\n"
+                "Pretend you are narrating a video; mention key visual elements in each frame "
+                "and how they connect to each other. Provide a single, continuous paragraph. "
+                "Avoid extra disclaimers or code fences."
+            )
+
+            # Aggiungiamo il blocco di testo (prompt)
+            messages[0]["content"].append({"type": "text", "text": text_prompt})
 
             try:
+                # Chiamiamo l'API di Anthropic
                 response = self.client.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=2048,
                     messages=messages
                 )
 
-                descriptions = response.content[0].text.split("\n")  # Split responses for multiple images
-                for i, desc in enumerate(descriptions):
-                    frame_data.append({
-                        "frame_number": batch_idx * self.batch_size + i,
-                        "description": desc.strip(),
-                        "timestamp": f"{batch[i]['timestamp']:.2f} sec",
-                    })
+                # Claude restituisce il discorso (testo) per questo batch
+                batch_discourse = response.content[0].text.strip()
+
+                # Lo aggiungiamo alla lista di "pezzi" di discorso
+                full_discourse_parts.append(batch_discourse)
 
             except Exception as e:
                 print(f"Error analyzing batch {batch_idx}: {e}")
+                # In caso di errore, possiamo aggiungere un placeholder
+                full_discourse_parts.append(f"[Errore batch {batch_idx}]")
 
-        return frame_data
+        # Al termine, uniamo i vari “pezzi” in un singolo testo discorsivo
+        final_discourse = "\n\n".join(full_discourse_parts)
+        return final_discourse
 
     def generate_video_summary(self, frame_data):
         """
