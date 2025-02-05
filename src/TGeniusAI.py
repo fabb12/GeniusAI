@@ -636,7 +636,7 @@ class VideoAudioManager(QMainWindow):
 
     def onExtractFramesClicked(self):
         """
-        Quando l'utente clicca su 'Estrai testo dai frame':
+        Quando l'utente clicca su 'Es trai testo dai frame':
         1) Verifica che sia caricato un video (self.videoPathLineEdit).
         2) Prende il numero di frame (self.frameCountSpin.value()).
         3) Usa FrameExtractor per estrarre i frame e ottenere un discorso completo da Anthropic.
