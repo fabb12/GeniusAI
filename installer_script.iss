@@ -1,10 +1,10 @@
 ; Script di Inno Setup per installare GeniusAI senza richiedere privilegi di amministratore
 ; Salvare questo file con estensione .iss
 
-#define MyAppVersion "1.5.4"  ; Definisci qui la versione del programma
+#define MyAppVersion "1.5.6"  ; Definisci qui la versione del programma
 
 [Setup]
-; Nome del programma che verrï¿½ visualizzato nel pannello di controllo
+; Nome del programma che verrà visualizzato nel pannello di controllo
 AppName=GeniusAI
 ; Versione del programma
 AppVersion={#MyAppVersion}
@@ -27,7 +27,6 @@ CloseApplications=yes
 ; Abilita il logging del setup per la risoluzione dei problemi
 SetupLogging=yes
 
-
 [Files]
 ; File principale dell'applicazione
 Source: "dist\TGeniusAI\TGeniusAI.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -45,6 +44,9 @@ Source: "dist\TGeniusAI\_internal\*"; DestDir: "{app}\_internal"; Flags: ignorev
 ; Aggiungi il file version_info.txt e scrivi la versione del programma all'interno
 Source: "dist\TGeniusAI\version_info.txt"; DestDir: "{app}"; Flags: ignoreversion
 
+; Aggiungi il file .env nella root
+Source: "dist\TGeniusAI\.env"; DestDir: "{app}"; Flags: ignoreversion
+
 [Icons]
 ; Crea un'icona sul desktop per l'eseguibile principale
 Name: "{userdesktop}\GeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\res\eye.ico"
@@ -54,4 +56,3 @@ Name: "{group}\GeniusAI"; Filename: "{app}\TGeniusAI.exe"; IconFilename: "{app}\
 [Run]
 ; Avvia l'applicazione al termine dell'installazione
 Filename: "{app}\TGeniusAI.exe"; Description: "Avvia GeniusAI"; Flags: nowait postinstall skipifsilent
-

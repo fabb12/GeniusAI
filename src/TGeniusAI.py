@@ -683,10 +683,7 @@ class VideoAudioManager(QMainWindow):
 
             # 6) Creiamo un testo conclusivo
             #    [DETTAGLI FRAME] + [DISCORSO FINALE]
-            final_text = (
-                    "[DETTAGLI FRAME]\n" + details_text +
-                    "\n\n[DISCORSO FINALE]\n" + (final_discourse or "N/A")
-            )
+            final_text = (final_discourse or "N/A")
 
             # Aggiunta all'area di trascrizione
             current_text = self.transcriptionTextArea.toPlainText()
