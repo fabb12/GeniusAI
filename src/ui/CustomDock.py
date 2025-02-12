@@ -6,31 +6,20 @@ from pyqtgraph.dockarea.Dock import Dock, DockLabel
 class CustomDockLabel(DockLabel):
     """
     CustomDockLabel è una sottoclasse di DockLabel che imposta uno style sheet
-    per rendere la label con sfondo ciano (#00FFFF) e testo blu (#0000FF),
-    ignorando la logica di stile predefinita.
-    Sovrascrive updateStyle() e closeEvent() in modo da applicare i colori personalizzati
-    e nascondersi anziché essere chiusa.
+    personalizzato mantenendo il comportamento del pulsante di chiusura della classe base.
     """
 
     def __init__(self, text, closable=False, fontSize="12px", *args, **kwargs):
-        # Inizializza la DockLabel di base (che estende VerticalLabel)
-        super().__init__(text, closable=closable, *args, **kwargs)
-        # Imposta alcuni attributi di base
+        # Chiamiamo il costruttore della classe base con gli stessi parametri
+        super().__init__(text, closable=closable, fontSize=fontSize)
+
+        # Imposta attributi aggiuntivi ma mantieni il pulsante di chiusura della classe base
         self.dim = False
         self.fixedWidth = False
-        self.fontSize = fontSize
         self.setAlignment(QtCore.Qt.AlignmentFlag.AlignTop | QtCore.Qt.AlignmentFlag.AlignHCenter)
         self.dock = None
         self.setAutoFillBackground(False)
         self.mouseMoved = False
-
-        if closable:
-            self.closeButton = QtWidgets.QToolButton(self)
-            self.closeButton.clicked.connect(self.sigCloseClicked)
-            self.closeButton.setIcon(QtWidgets.QApplication.style().standardIcon(
-                QtWidgets.QStyle.StandardPixmap.SP_TitleBarCloseButton))
-        else:
-            self.closeButton = None
 
         # Forza l'uso dello sfondo stilizzato
         self.setAttribute(QtCore.Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -38,14 +27,11 @@ class CustomDockLabel(DockLabel):
         self.updateStyle()
 
     def updateStyle(self):
-        # Usa la stessa struttura di formattazione dell'originale,
-        # ma forza i colori: sfondo ciano (#00FFFF) e testo blu (#0000FF)
         r = '3px'
-        fg = "#0000FF"  # testo blu
-        bg = "#00FFFF"  # sfondo ciano
-        # Puoi lasciare il bordo uguale a quello originale oppure modificarlo
-        border = "#353c66"
-        close_button_style = "QToolButton { color: black;  background-color : #b5bbc9; }"
+        fg = "#E8E9ED"  # Testo grigio chiaro
+        bg = "#1E222A"  # Sfondo grigio scuro
+        border = "#2F323B"  # Bordo grigio medio
+        close_button_style = "QToolButton { color: black; background-color : #b5bbc9; }"
 
         if self.orientation == 'vertical':
             style = """DockLabel {
@@ -80,11 +66,8 @@ class CustomDockLabel(DockLabel):
         self.setStyleSheet(style)
 
     def closeEvent(self, event):
-        # Invece di chiudere la label, la nascondiamo
         self.hide()
         event.ignore()
-
-
 class CustomDock(Dock):
     """
     CustomDock utilizza CustomDockLabel per il titolo e modifica il comportamento
