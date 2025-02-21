@@ -119,7 +119,6 @@ class VideoAudioManager(QMainWindow):
         impostando i dock principali (video input, video output, trascrizione, editing AI, ecc.)
         e definendo la sezione di trascrizione con QTabWidget e area di testo sempre visibile.
         """
-
         # Impostazione dell'icona della finestra
         self.setWindowIcon(QIcon('./res/eye.png'))
 
@@ -230,7 +229,7 @@ class VideoAudioManager(QMainWindow):
         self.generazioneAIDock.addWidget(generazioneAIDockWidget)
 
         # ---------------------
-        # PLAYER INPUT (invariato)
+        # PLAYER INPUT
         # ---------------------
         self.videoCropWidget = CropVideoWidget()
         self.videoCropWidget.setAcceptDrops(True)
@@ -301,7 +300,7 @@ class VideoAudioManager(QMainWindow):
         timecodeLayout.addWidget(self.totalTimeLabel)
 
         # ---------------------
-        # PLAYER OUTPUT (invariato)
+        # PLAYER OUTPUT
         # ---------------------
         self.videoOutputWidget = CropVideoWidget()
         self.videoOutputWidget.setAcceptDrops(True)
@@ -433,143 +432,106 @@ class VideoAudioManager(QMainWindow):
         # Creiamo un QTabWidget
         tabWidget = QTabWidget()
 
-        # --- TAB 1: Strumenti Base ---
+        # --- TAB 1: Strumenti Base (usando QGridLayout) ---
         tabBase = QWidget()
-        baseLayout = QVBoxLayout()
-
-        # Layout orizzontale per i pulsanti base
-        buttonsLayoutBase = QHBoxLayout()
-
-        # SpinBox frame e pulsante estrai
-        self.frameCountSpin = QSpinBox()
-        self.frameCountSpin.setMinimum(1)
-        self.frameCountSpin.setMaximum(30)
-        self.frameCountSpin.setValue(5)
-        self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
-
-        self.extractFramesButton = QPushButton("Estrai testo dai frame")
-        self.extractFramesButton.setToolTip(
-            "Estrae i frame e ne analizza il contenuto per aggiungerlo alla trascrizione")
-        self.extractFramesButton.clicked.connect(self.onExtractFramesClicked)
-
-        buttonsLayoutBase.addWidget(self.frameCountSpin)
-        buttonsLayoutBase.addWidget(self.extractFramesButton)
-
-        # Lingua rilevata e combo lingua
-        self.transcriptionLanguageLabel = QLabel("Lingua rilevata: Nessuna")
-        self.transcriptionLanguageLabel.setToolTip("Mostra la lingua rilevata nel video")
-
-        langLayout = QHBoxLayout()
+        gridLayoutBase = QGridLayout()
+        # Posizioniamo la label e la combo per la lingua
         langLabel = QLabel("Seleziona lingua video:")
         langLabel.setToolTip("Seleziona la lingua del video per la trascrizione")
         self.languageComboBox = QComboBox()
-        self.languageComboBox.addItem("Italiano", "it")
-        self.languageComboBox.addItem("Inglese", "en")
-        self.languageComboBox.addItem("Francese", "fr")
-        self.languageComboBox.addItem("Spagnolo", "es")
-        self.languageComboBox.addItem("Tedesco", "de")
-
-        langLayout.addWidget(langLabel)
-        langLayout.addWidget(self.languageComboBox)
-        langLayout.addStretch(1)
-
-        # Pulsanti: reset, incolla, salva, carica, trascrivi
+        self.languageComboBox.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        gridLayoutBase.addWidget(langLabel, 0, 0)
+        gridLayoutBase.addWidget(self.languageComboBox, 0, 1)
+        # Aggiungiamo la label della lingua rilevata
+        self.transcriptionLanguageLabel = QLabel("Lingua rilevata: Nessuna")
+        gridLayoutBase.addWidget(self.transcriptionLanguageLabel, 0, 2, 1, 2)
+        # Per i pulsanti base, usiamo un QHBoxLayout e lo inseriamo in una cella della griglia
         buttonsLayoutBase2 = QHBoxLayout()
         self.resetButton = QPushButton()
         self.resetButton.setIcon(QIcon("./res/reset.png"))
         self.resetButton.setFixedSize(24, 24)
         self.resetButton.setToolTip("Ripulisce la trascrizione")
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
-
         self.pasteButton = QPushButton()
         self.pasteButton.setIcon(QIcon("./res/paste.png"))
         self.pasteButton.setFixedSize(24, 24)
         self.pasteButton.setToolTip("Incolla il testo dagli appunti")
         self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
-
         self.saveButton = QPushButton()
         self.saveButton.setIcon(QIcon("./res/save.png"))
         self.saveButton.setFixedSize(24, 24)
         self.saveButton.setToolTip("Salva la trascrizione su file")
         self.saveButton.clicked.connect(self.saveText)
-
         self.loadButton = QPushButton()
         self.loadButton.setIcon(QIcon("./res/load.png"))
         self.loadButton.setFixedSize(24, 24)
         self.loadButton.setToolTip("Carica una trascrizione da file")
         self.loadButton.clicked.connect(self.loadText)
-
         self.transcribeButton = QPushButton('Trascrivi Video')
         self.transcribeButton.setToolTip("Avvia la trascrizione del video attualmente caricato")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
-
         buttonsLayoutBase2.addWidget(self.resetButton)
         buttonsLayoutBase2.addWidget(self.pasteButton)
         buttonsLayoutBase2.addWidget(self.loadButton)
         buttonsLayoutBase2.addWidget(self.saveButton)
         buttonsLayoutBase2.addWidget(self.transcribeButton)
-
-        # Assembliamo il tab base
-        baseLayout.addLayout(buttonsLayoutBase)
-        baseLayout.addLayout(langLayout)
-        baseLayout.addWidget(self.transcriptionLanguageLabel)
-        baseLayout.addLayout(buttonsLayoutBase2)
-
-        tabBase.setLayout(baseLayout)
+        gridLayoutBase.addLayout(buttonsLayoutBase2, 2, 0, 1, 2)
+        tabBase.setLayout(gridLayoutBase)
         tabWidget.addTab(tabBase, "Strumenti Base")
 
-        # --- TAB 2: Strumenti Avanzati ---
+        # --- TAB 2: Strumenti Avanzati (usando QGridLayout) ---
         tabAdvanced = QWidget()
-        advLayout = QVBoxLayout()
-
-        # Pulsanti Avanzati: timecode, sync, AI, fix AI, pause, ...
-        buttonsLayoutAdv = QHBoxLayout()
-
+        gridLayoutAdv = QGridLayout()
+        # Row 0: frameCountSpin ed extractFramesButton
+        self.frameCountSpin = QSpinBox()
+        self.frameCountSpin.setMinimum(1)
+        self.frameCountSpin.setMaximum(30)
+        self.frameCountSpin.setValue(5)
+        self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
+        self.extractFramesButton = QPushButton("Estrai testo dai frame")
+        self.extractFramesButton.setToolTip(
+            "Estrae i frame e ne analizza il contenuto per aggiungerlo alla trascrizione")
+        self.extractFramesButton.clicked.connect(self.onExtractFramesClicked)
+        gridLayoutAdv.addWidget(self.frameCountSpin, 0, 0)
+        gridLayoutAdv.addWidget(self.extractFramesButton, 0, 1)
+        # Row 1: timecodeCheckbox ed syncButton
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
         self.timecodeCheckbox.setChecked(False)
         self.timecodeCheckbox.setToolTip("Aggiunge i timecode all'audio durante la trascrizione")
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
-
         self.syncButton = QPushButton('Sincronizza Video')
         self.syncButton.setToolTip("Sincronizza la posizione del video con la trascrizione")
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
-
+        gridLayoutAdv.addWidget(self.timecodeCheckbox, 1, 0)
+        gridLayoutAdv.addWidget(self.syncButton, 1, 1)
+        # Row 2: processTextButton ed fixTextButton
         self.processTextButton = QPushButton('Riassunto AI')
         self.processTextButton.setToolTip("Genera un riassunto del testo tramite AI")
         self.processTextButton.clicked.connect(self.processTextWithAI)
-
         self.fixTextButton = QPushButton('Sistema Testo AI')
         self.fixTextButton.setToolTip("Sistema e migliora il testo tramite AI")
         self.fixTextButton.clicked.connect(self.fixTextWithAI)
-
+        gridLayoutAdv.addWidget(self.processTextButton, 2, 0)
+        gridLayoutAdv.addWidget(self.fixTextButton, 2, 1)
+        # Row 3: pauseTimeEdit ed insertPauseButton
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
         self.pauseTimeEdit.setToolTip("Specifica la durata di una pausa in secondi")
-
         self.insertPauseButton = QPushButton('Inserisci Pausa')
         self.insertPauseButton.setToolTip("Inserisci una pausa nel testo")
         self.insertPauseButton.clicked.connect(self.insertPause)
-
-        buttonsLayoutAdv.addWidget(self.timecodeCheckbox)
-        buttonsLayoutAdv.addWidget(self.syncButton)
-        buttonsLayoutAdv.addWidget(self.processTextButton)
-        buttonsLayoutAdv.addWidget(self.fixTextButton)
-        buttonsLayoutAdv.addWidget(self.pauseTimeEdit)
-        buttonsLayoutAdv.addWidget(self.insertPauseButton)
-        buttonsLayoutAdv.setAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        advLayout.addLayout(buttonsLayoutAdv)
-        tabAdvanced.setLayout(advLayout)
+        gridLayoutAdv.addWidget(self.pauseTimeEdit, 3, 0)
+        gridLayoutAdv.addWidget(self.insertPauseButton, 3, 1)
+        tabAdvanced.setLayout(gridLayoutAdv)
+        tabAdvanced.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         tabWidget.addTab(tabAdvanced, "Strumenti Avanzati")
 
-        # Layout finale nella sezione di trascrizione:
-        # tabWidget in alto e sotto la transcriptionTextArea
-        # (così l'area di testo è sempre visibile anche quando si cambia tab)
+        # Layout finale nella sezione di trascrizione: il QTabWidget in alto e la text area sotto
         finalTransLayout = QVBoxLayout()
-
-        finalTransLayout.addWidget(tabWidget)
-
+        tabWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        finalTransLayout.addWidget(tabWidget, 0)
         self.transcriptionTextArea = CustomTextEdit(self)
+        self.transcriptionTextArea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.transcriptionTextArea.setReadOnly(False)
         self.transcriptionTextArea.setUndoRedoEnabled(True)
         self.transcriptionTextArea.setStyleSheet("""
@@ -583,16 +545,13 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
+        finalTransLayout.addWidget(self.transcriptionTextArea, 1)
 
-        finalTransLayout.addWidget(self.transcriptionTextArea)
-
-        transGroupBox = QGroupBox("Gestione Trascrizione")
-        transGroupBox.setToolTip("Strumenti per trascrizione, incolla, salva e modifica testo")
         transGroupBox.setLayout(finalTransLayout)
-
         widgetTranscription = QWidget()
-        widgetTranscription.setLayout(QVBoxLayout())
-        widgetTranscription.layout().addWidget(transGroupBox)
+        widgetLayout = QVBoxLayout()
+        widgetLayout.addWidget(transGroupBox)
+        widgetTranscription.setLayout(widgetLayout)
         self.transcriptionDock.addWidget(widgetTranscription)
 
         # Impostazioni voce per l'editing audio AI
@@ -620,7 +579,6 @@ class VideoAudioManager(QMainWindow):
             'videoMergeDock': self.videoMergeDock,
             'generazioneAIDock': self.generazioneAIDock
         }
-
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
         # Creazione e configurazione della toolbar principale

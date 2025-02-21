@@ -1,12 +1,14 @@
 # Known Issues
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
-## [1.4.0] - ?? 
+## [1.6.0] - ?? 
+- [ ] aggiungere lo scopo durante l'estrazione dell info dal video 
+- [ ] aggiungere selezione range temporale per trascrizione testo
 - [ ] aggiungere ctrl-f nel text edit 
 - [ ] sistemare i dock quando vengono sganciati
 - [ ] aggiungere dock per inserire copertina iniziale
 - [ ] sistemare inserimento pausa nel audio 
-- [ ] implementare un sistema di auto apprendimento della dinamica del video 
+- [x] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
 - [ ] aggiungere registrazione solo audio
 - [x] aggiungere tasto condividi via what app , teams ecc...
