@@ -6,7 +6,7 @@ import numpy as np
 import sys
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm
-
+import os
 
 class FrameExtractor:
     def __init__(self, video_path, num_frames, anthropic_api_key, batch_size=5):
@@ -120,6 +120,8 @@ class FrameExtractor:
         video = VideoFileClip(self.video_path)
         return video.duration
 
+    import os
+
     def generate_video_summary(self, frame_data, language):
         """
         Genera un discorso finale narrativo che descriva l'intero video tutorial.
@@ -128,29 +130,33 @@ class FrameExtractor:
         nel formato <break time="Xs" />, dove il valore di X può variare in base al ritmo del discorso.
         La lunghezza del discorso deve essere approssimativamente pari al minutaggio del video.
         """
-        video_duration = self.get_video_duration()
+        import os
+
+        # Assicurati che get_video_duration() ritorni un valore numerico (float o int)
+        video_duration = float(self.get_video_duration())
         video_duration_minutes = video_duration / 60
 
         # Utilizzo solo le descrizioni estratte, senza riferimenti tecnici
         descriptions = [fd['description'] for fd in frame_data]
         joined_descriptions = "\n".join(descriptions)
 
+        # Leggi il prompt dal file
+        file_path = os.path.join(os.path.dirname(__file__), "prompt_frames_for_agent.txt")
+        with open(file_path, "r", encoding="utf-8") as f:
+            prompt_template = f.read()
+
+        # Qui passo video_duration_minutes come float,
+        # così il placeholder {video_duration_minutes:.2f} nel file potrà formattarlo correttamente.
+        prompt_text = prompt_template.format(
+            language=language,
+            joined_descriptions=joined_descriptions,
+            video_duration_minutes=video_duration_minutes
+        )
+
         messages = [{"role": "user", "content": []}]
         messages[0]["content"].append({
             "type": "text",
-            "text": f"""
-            Genera un discorso narrativo in {language} che descriva l'intero video tutorial. 
-            Immagina di essere un presentatore che introduce il video: il discorso deve essere fluido, chiaro e coinvolgente.
-            Inserisci delle pause nel discorso utilizzando il formato <break time="Xs" />, dove il valore di X può variare 
-            in base al ritmo naturale e alle esigenze di enfasi del discorso.
-            Il testo finale NON deve includere riferimenti a timestamp, numeri di frame o dettagli tecnici, 
-            ma deve essere basato sulle seguenti informazioni:
-
-            {joined_descriptions}
-
-            Il discorso finale deve avere una lunghezza approssimativamente pari a {video_duration_minutes:.2f} minuti,
-            in modo da riflettere il minutaggio complessivo del video.
-            """
+            "text": prompt_text
         })
 
         try:
