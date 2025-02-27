@@ -482,18 +482,15 @@ class VideoAudioManager(QMainWindow):
         # --- TAB 2: Strumenti Avanzati (usando QGridLayout) ---
         tabAdvanced = QWidget()
         gridLayoutAdv = QGridLayout()
-        # Row 0: frameCountSpin ed extractFramesButton
+        # Row 0: frameCountSpin
         self.frameCountSpin = QSpinBox()
         self.frameCountSpin.setMinimum(1)
         self.frameCountSpin.setMaximum(30)
         self.frameCountSpin.setValue(5)
         self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
-        self.extractFramesButton = QPushButton("Estrai testo dai frame")
-        self.extractFramesButton.setToolTip(
-            "Estrae i frame e ne analizza il contenuto per aggiungerlo alla trascrizione")
-        self.extractFramesButton.clicked.connect(self.onExtractFramesClicked)
-        gridLayoutAdv.addWidget(self.frameCountSpin, 0, 0)
-        gridLayoutAdv.addWidget(self.extractFramesButton, 0, 1)
+        # Nota: il bottone extractFramesButton è stato spostato nel menu Workflows
+        gridLayoutAdv.addWidget(QLabel("Numero frame:"), 0, 0)
+        gridLayoutAdv.addWidget(self.frameCountSpin, 0, 1)
         # Row 1: timecodeCheckbox ed syncButton
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
         self.timecodeCheckbox.setChecked(False)
@@ -504,15 +501,12 @@ class VideoAudioManager(QMainWindow):
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
         gridLayoutAdv.addWidget(self.timecodeCheckbox, 1, 0)
         gridLayoutAdv.addWidget(self.syncButton, 1, 1)
-        # Row 2: processTextButton ed fixTextButton
-        self.processTextButton = QPushButton('Riassunto AI')
-        self.processTextButton.setToolTip("Genera un riassunto del testo tramite AI")
-        self.processTextButton.clicked.connect(self.processTextWithAI)
-        self.fixTextButton = QPushButton('Sistema Testo AI')
-        self.fixTextButton.setToolTip("Sistema e migliora il testo tramite AI")
-        self.fixTextButton.clicked.connect(self.fixTextWithAI)
-        gridLayoutAdv.addWidget(self.processTextButton, 2, 0)
-        gridLayoutAdv.addWidget(self.fixTextButton, 2, 1)
+        # Row 2: Nota: processTextButton e fixTextButton sono stati spostati nel menu Workflows
+        # Inseriamo altri controlli al loro posto
+        self.mediaInfoButton = QPushButton('Info Media')
+        self.mediaInfoButton.setToolTip("Mostra informazioni sul file multimediale")
+        self.mediaInfoButton.clicked.connect(self.showMediaInfo)  # Dovrai implementare questo metodo
+        gridLayoutAdv.addWidget(self.mediaInfoButton, 2, 0, 1, 2)
         # Row 3: pauseTimeEdit ed insertPauseButton
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
@@ -618,6 +612,30 @@ class VideoAudioManager(QMainWindow):
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
 
+    def createWorkflow(self):
+        # Implementazione per creare un nuovo workflow
+        print("Funzione createWorkflow da implementare")
+        # Qui puoi mostrare un dialogo per creare un nuovo workflow
+
+    def loadWorkflow(self):
+        # Implementazione per caricare un workflow esistente
+        print("Funzione loadWorkflow da implementare")
+        # Qui puoi mostrare un dialogo per selezionare e caricare un workflow esistente
+
+    def configureAgent(self):
+        # Implementazione per configurare Agent AI
+        print("Funzione configureAgent da implementare")
+        # Qui puoi mostrare un dialogo di configurazione per gli agenti AI
+
+    def runAgent(self):
+        # Implementazione per eseguire un Agent AI
+        print("Funzione runAgent da implementare")
+        # Qui puoi eseguire l'agent sul media corrente
+
+    def showMediaInfo(self):
+        # Implementazione per mostrare informazioni sul media
+        print("Funzione showMediaInfo da implementare")
+        # Qui puoi mostrare un dialog con le informazioni sul media corrente
     def onExtractFramesClicked(self):
         """
         Passi:
@@ -2308,12 +2326,10 @@ class VideoAudioManager(QMainWindow):
     def setupMenuBar(self):
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('&File')
-
         openAction = QAction('&Open Video/Audio', self)
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video')
         openAction.triggered.connect(self.browseVideo)
-
 
         openActionOutput = QAction('&Open as Output Video', self)
         openAction.setShortcut('Ctrl+I')
@@ -2330,7 +2346,6 @@ class VideoAudioManager(QMainWindow):
         saveAsAction.triggered.connect(self.saveVideoAs)
         fileMenu.addAction(saveAsAction)
 
-
         # Action to open root folder
         openRootFolderAction = QAction('&Open Root Folder', self)
         openRootFolderAction.setShortcut('Ctrl+R')
@@ -2343,14 +2358,61 @@ class VideoAudioManager(QMainWindow):
         exitAction.setStatusTip('Exit application')
         exitAction.triggered.connect(self.close)
         fileMenu.addAction(exitAction)
-        fileMenu.addSeparator()
 
+        fileMenu.addSeparator()
         self.recentMenu = fileMenu.addMenu("Recenti")  # Aggiunge il menu dei file recenti
         self.updateRecentFilesMenu()
+
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
-        videoMenu = menuBar.addMenu('&Video')
 
+        # Aggiunta del menu Workflows
+        workflowsMenu = menuBar.addMenu('&Workflows')
+
+        # Funzionalità spostate da Strumenti Avanzati
+        summarizeAction = QAction('&Riassumi Testo', self)
+        summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
+        summarizeAction.triggered.connect(self.processTextWithAI)
+        workflowsMenu.addAction(summarizeAction)
+
+        fixTextAction = QAction('&Correggi Testo', self)
+        fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
+        fixTextAction.triggered.connect(self.fixTextWithAI)
+        workflowsMenu.addAction(fixTextAction)
+
+        extractTextAction = QAction('&Estrai Testo da Frame', self)
+        extractTextAction.setStatusTip('Estrae testo dai frame del video')
+        extractTextAction.triggered.connect(self.onExtractFramesClicked)
+        workflowsMenu.addAction(extractTextAction)
+
+        # Separatore
+        workflowsMenu.addSeparator()
+
+        # Altre funzionalità Workflows
+        createWorkflowAction = QAction('&Nuovo Workflow', self)
+        createWorkflowAction.setStatusTip('Crea un nuovo workflow personalizzato')
+        createWorkflowAction.triggered.connect(self.createWorkflow)  # Dovrai implementare questo metodo
+        workflowsMenu.addAction(createWorkflowAction)
+
+        loadWorkflowAction = QAction('&Carica Workflow', self)
+        loadWorkflowAction.setStatusTip('Carica un workflow esistente')
+        loadWorkflowAction.triggered.connect(self.loadWorkflow)  # Dovrai implementare questo metodo
+        workflowsMenu.addAction(loadWorkflowAction)
+
+        # Aggiunta del menu Agent AIs
+        agentAIsMenu = menuBar.addMenu('&Agent AIs')
+        # Qui puoi aggiungere le azioni per il menu Agent AIs
+        configureAgentAction = QAction('&Configura Agent', self)
+        configureAgentAction.setStatusTip('Configura impostazioni agent AI')
+        configureAgentAction.triggered.connect(self.configureAgent)  # Dovrai implementare questo metodo
+        agentAIsMenu.addAction(configureAgentAction)
+
+        runAgentAction = QAction('&Esegui Agent', self)
+        runAgentAction.setStatusTip('Esegui agent AI sul media corrente')
+        runAgentAction.triggered.connect(self.runAgent)  # Dovrai implementare questo metodo
+        agentAIsMenu.addAction(runAgentAction)
+
+        videoMenu = menuBar.addMenu('&Video')
         releaseSourceAction = QAction(QIcon("./res/reset.png"), "Unload Video Source", self)
         releaseSourceAction.triggered.connect(self.releaseSourceVideo)
         videoMenu.addAction(releaseSourceAction)
@@ -2361,6 +2423,7 @@ class VideoAudioManager(QMainWindow):
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
+
         # Creazione del menu About
         aboutMenu = menuBar.addMenu('&About')
         # Aggiunta di azioni al menu About
@@ -2368,7 +2431,6 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
-
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel Video Player Output.")
