@@ -439,7 +439,14 @@ class VideoAudioManager(QMainWindow):
         langLabel = QLabel("Seleziona lingua video:")
         langLabel.setToolTip("Seleziona la lingua del video per la trascrizione")
         self.languageComboBox = QComboBox()
-        self.languageComboBox.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        self.languageComboBox.addItem("Italiano", "it")
+        self.languageComboBox.addItem("Inglese", "en")
+        self.languageComboBox.addItem("Francese", "fr")
+        self.languageComboBox.addItem("Spagnolo", "es")
+        self.languageComboBox.addItem("Tedesco", "de")
+        self.languageComboBox.setToolTip("Seleziona la lingua corretta per il video")
+        self.video_download_language = None
+
         gridLayoutBase.addWidget(langLabel, 0, 0)
         gridLayoutBase.addWidget(self.languageComboBox, 0, 1)
         # Aggiungiamo la label della lingua rilevata
