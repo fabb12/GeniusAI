@@ -18,3 +18,4 @@ langdetect
 python-dotenv
 pyinstaller
 opencv-python
+browser-use

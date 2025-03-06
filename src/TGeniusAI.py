@@ -508,12 +508,6 @@ class VideoAudioManager(QMainWindow):
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
         gridLayoutAdv.addWidget(self.timecodeCheckbox, 1, 0)
         gridLayoutAdv.addWidget(self.syncButton, 1, 1)
-        # Row 2: Nota: processTextButton e fixTextButton sono stati spostati nel menu Workflows
-        # Inseriamo altri controlli al loro posto
-        self.mediaInfoButton = QPushButton('Info Media')
-        self.mediaInfoButton.setToolTip("Mostra informazioni sul file multimediale")
-        self.mediaInfoButton.clicked.connect(self.showMediaInfo)  # Dovrai implementare questo metodo
-        gridLayoutAdv.addWidget(self.mediaInfoButton, 2, 0, 1, 2)
         # Row 3: pauseTimeEdit ed insertPauseButton
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
@@ -630,14 +624,24 @@ class VideoAudioManager(QMainWindow):
         # Qui puoi mostrare un dialogo per selezionare e caricare un workflow esistente
 
     def configureAgent(self):
-        # Implementazione per configurare Agent AI
-        print("Funzione configureAgent da implementare")
-        # Qui puoi mostrare un dialogo di configurazione per gli agenti AI
+        """
+        Configura l'agent AI mostrando il dialogo di configurazione
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.showConfigDialog()
 
     def runAgent(self):
-        # Implementazione per eseguire un Agent AI
-        print("Funzione runAgent da implementare")
-        # Qui puoi eseguire l'agent sul media corrente
+        """
+        Esegue l'agent AI con la configurazione corrente
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.runAgent()
 
     def showMediaInfo(self):
         # Implementazione per mostrare informazioni sul media
@@ -745,10 +749,6 @@ class VideoAudioManager(QMainWindow):
             self.player.play()
             self.playButton.setIcon(QIcon("./res/pausa.png"))  # Cambia l'icona in Pausa
 
-    def updateSpeedFromSpinBox(self, value):
-        # Convert the spinbox value to a playback rate
-        playbackRate = value
-        self.player.setPlaybackRate(playbackRate)
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
         self.playerOutput.setPosition(source_position)
@@ -1130,13 +1130,6 @@ class VideoAudioManager(QMainWindow):
                 self.is_panning = False
                 return True
         return super().eventFilter(source, event)
-
-    def updateSpeed(self, value):
-        # Convert the slider value to a playback rate
-        playbackRate = value / 100.0
-        self.player.setPlaybackRate(playbackRate)
-        # Update the speed label to reflect the current speed
-        self.speedLabel.setText(f"{value}%")
 
     def handleWheelEvent(self, event):
         mouse_pos = event.position().toPoint()
@@ -1714,28 +1707,10 @@ class VideoAudioManager(QMainWindow):
         folder_path = self.folderPathLineEdit.text() or "screenrecorder"
         QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
 
-    def openFolderInFileSystem(self):
-        if hasattr(self, 'selected_directory') and os.path.isdir(self.selected_directory):
-            # Aprire la cartella nel file system
-            if os.name == 'nt':  # Windows
-                os.startfile(self.selected_directory)
-            elif os.name == 'posix':  # MacOS, Linux
-                subprocess.Popen(['open', self.selected_directory])
-            else:
-                logging.debug("Sistema operativo non supportato.")
-        else:
-            logging.debug("Nessuna cartella selezionata o cartella non esistente.")
-
     def setDefaultAudioDevice(self):
         """Imposta il primo dispositivo audio come predefinito se disponibile."""
         if self.audio_buttons:
             self.audio_buttons[0].setChecked(True)
-
-    def browseFileLocation(self):
-        """Apre un dialogo di selezione file per scegliere il percorso di salvataggio del video."""
-        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video", "", "Video Files (*.avi)")
-        if fileName:
-            self.filePathLineEdit.setText(fileName)
 
     def applyBackgroundAudioToVideo(self):
         video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
@@ -2164,10 +2139,6 @@ class VideoAudioManager(QMainWindow):
                                     f"Il video è stato salvato correttamente:\nVideo: {output_path}")
             self.loadVideoOutput(output_path)
 
-    def updateTimecodeRec(self):
-        self.recordingTime = self.recordingTime.addSecs(1)
-        self.timecodeLabel.setText(self.recordingTime.toString('hh:mm:ss'))
-
     def showError(self, message):
         logging.error("Error recording thread:",message)
         #QMessageBox.critical(self, "Errore", message)
@@ -2406,18 +2377,25 @@ class VideoAudioManager(QMainWindow):
         loadWorkflowAction.triggered.connect(self.loadWorkflow)  # Dovrai implementare questo metodo
         workflowsMenu.addAction(loadWorkflowAction)
 
-        # Aggiunta del menu Agent AIs
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
-        # Qui puoi aggiungere le azioni per il menu Agent AIs
+
+        # Opzioni esistenti
         configureAgentAction = QAction('&Configura Agent', self)
         configureAgentAction.setStatusTip('Configura impostazioni agent AI')
-        configureAgentAction.triggered.connect(self.configureAgent)  # Dovrai implementare questo metodo
+        configureAgentAction.triggered.connect(self.configureAgent)
         agentAIsMenu.addAction(configureAgentAction)
 
         runAgentAction = QAction('&Esegui Agent', self)
         runAgentAction.setStatusTip('Esegui agent AI sul media corrente')
-        runAgentAction.triggered.connect(self.runAgent)  # Dovrai implementare questo metodo
+        runAgentAction.triggered.connect(self.runAgent)
         agentAIsMenu.addAction(runAgentAction)
+
+        # Nuova opzione per la creazione della guida e lancio dell'agente
+        agentAIsMenu.addSeparator()  # Aggiungi un separatore per chiarezza
+        createGuideAction = QAction('&Crea Guida Operativa e Esegui Agent', self)
+        createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti e esegui l\'agent')
+        createGuideAction.triggered.connect(self.createGuideAndRunAgent)
+        agentAIsMenu.addAction(createGuideAction)
 
         videoMenu = menuBar.addMenu('&Video')
         releaseSourceAction = QAction(QIcon("./res/reset.png"), "Unload Video Source", self)
@@ -2798,6 +2776,15 @@ class VideoAudioManager(QMainWindow):
         if result.returncode != 0:
             raise Exception(f"Errore nell'esecuzione di Wav2Lip: {result.stderr}")
 
+    def createGuideAndRunAgent(self):
+        """
+        Crea una guida operativa dai frame estratti e esegue l'agent browser
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.create_guide_and_run_agent()
     def onAudioGenerationCompleted(self, audio_path):
         timecode = self.timecodePauseLineEdit.text()
         pause_duration = float(self.pauseAudioDurationLineEdit.text() or 0)
