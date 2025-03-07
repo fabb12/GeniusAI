@@ -1,0 +1,9 @@
+Istruzione per l'addestramento dell'agente AI: Utilizzando le informazioni estratte dai frame: {joined_descriptions}
+
+Obiettivo: Crea una guida operativa in {language} che riproduca esattamente le operazioni mostrate nel video tutorial.
+La guida deve consentire a un utente di replicare con precisione il processo illustrato, seguendo un ordine sequenziale e dettagliato.
+
+Requisiti:
+Guida Operativa Dettagliata: Fornisci istruzioni passo-passo che descrivano in maniera chiara ogni azione da eseguire per ottenere lo stesso risultato del video.
+Sequenza Cronologica: Le operazioni devono essere presentate nell'ordine in cui appaiono nel video, garantendo che ogni passaggio sia logicamente collegato al successivo.
+Chiarezza e Precisione: Le istruzioni devono essere formulate in modo diretto, evitando ambiguità e riferimenti tecnici come timestamp o numeri di frame.

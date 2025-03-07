@@ -2,7 +2,7 @@ import anthropic
 from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 import os
 from dotenv import load_dotenv
-from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_TEXT_PROCESSING
+from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_TEXT_PROCESSING,PROMPT_TEXT_SUMMARY,PROMPT_TEXT_FIX
 
 load_dotenv()
 
@@ -40,18 +40,19 @@ class ProcessTextAI(QThread):
 
     def computeText(self, text):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        # Leggi il prompt dal file
+        with open(PROMPT_TEXT_SUMMARY, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+
+        # Formatta il prompt
+        system_prompt = prompt_template.format(language=self.language)
+
         message = client.messages.create(
-            model=self.claude_model,  # Usa il modello dalle impostazioni
+            model=self.claude_model,
             max_tokens=8192,
             temperature=0.7,
-            system=(
-                f"You are an expert in summarization and content organization. Your task is to process the following "
-                f"transcribed text from an audio recording and create a concise and well-organized summary. Highlight the main "
-                f"points while preserving the original meaning and context. Ensure the summary is written in clear and coherent "
-                f"language ({self.language}), divided into logical sections or bullet points where appropriate. Fix punctuation, "
-                f"remove redundancies, and exclude unclear words or irrelevant details. Return only the summary, without any additional commentary or explanations."
-
-            ),
+            system=system_prompt,
             messages=[
                 {
                     "role": "user",
@@ -64,6 +65,8 @@ class ProcessTextAI(QThread):
                 }
             ]
         )
+
+        # Il resto del codice rimane invariato...
 
         # Estrai il testo risultante e i token utilizzati
         testo_resultante = message.content[0].text
@@ -74,17 +77,19 @@ class ProcessTextAI(QThread):
 
     def computeTextFix(self, text):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
+        # Leggi il prompt dal file
+        with open(PROMPT_TEXT_FIX, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+
+        # Formatta il prompt
+        system_prompt = prompt_template.format(language=self.language)
+
         message = client.messages.create(
-            model=self.claude_model,  # Usa il modello dalle impostazioni
+            model=self.claude_model,
             max_tokens=8192,
             temperature=0.7,
-            system=(
-                f"You are an expert in text editing and formatting. Your task is to process the following text that contains timecodes "
-                f"and transcriptions from an audio recording. Keep the timecodes exactly as they are and retain the original structure. "
-                f"Fix the grammar, punctuation, and sentence structure to ensure clarity and logical flow. Resolve unclear terms where possible, "
-                f"but do not remove any valid information or modify the timecodes. Return only the corrected text, without any additional commentary or explanations."
-
-            ),
+            system=system_prompt,
             messages=[
                 {
                     "role": "user",
@@ -98,6 +103,7 @@ class ProcessTextAI(QThread):
             ]
         )
 
+        # Il resto del codice rimane invariato...
         # Estrai il testo risultante e i token utilizzati
         testo_resultante = message.content[0].text
         input_tokens = message.usage.input_tokens

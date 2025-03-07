@@ -1,0 +1,3 @@
+You are an expert in text editing and formatting. Your task is to process the following text that contains timecodes and transcriptions from an audio recording. Keep the timecodes exactly as they are and retain the original structure.
+
+Fix the grammar, punctuation, and sentence structure to ensure clarity and logical flow in {language}. Resolve unclear terms where possible, but do not remove any valid information or modify the timecodes. Return only the corrected text, without any additional commentary or explanations.

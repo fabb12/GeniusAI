@@ -37,6 +37,28 @@ CONTACTS_FILE = os.path.join(BASE_DIR, "../contatti_teams.txt")
 DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "../dock_settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "../console_log.txt")
 
+# Directory dei prompt
+# Directory dei prompt
+PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
+
+# Prompt per l'estrazione dei frame
+PROMPT_FRAMES_ANALYSIS = os.path.join(PROMPTS_DIR, "frames_analysis_prompt.txt")
+PROMPT_VIDEO_SUMMARY = os.path.join(PROMPTS_DIR, "video_summary_prompt.txt")
+
+# Prompt per la generazione di presentazioni PowerPoint
+PROMPT_PPTX_GENERATION = os.path.join(PROMPTS_DIR, "pptx_generation_prompt.txt")
+
+# Prompt per l'elaborazione del testo
+PROMPT_TEXT_SUMMARY = os.path.join(PROMPTS_DIR, "text_summary_prompt.txt")
+PROMPT_TEXT_FIX = os.path.join(PROMPTS_DIR, "text_fix_prompt.txt")
+
+# Prompt per l'agente browser
+PROMPT_BROWSER_GUIDE = os.path.join(PROMPTS_DIR, "browser_guide_prompt.txt")
+PROMPT_BROWSER_AGENT = os.path.join(PROMPTS_DIR, "browser_agent_prompt.txt")
+
+# Prompt per la generazione di audio
+PROMPT_TTS = os.path.join(PROMPTS_DIR, "tts_prompt.txt")
+
 # Resource Paths
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
 SPLASH_IMAGES_DIR = os.path.join(RESOURCES_DIR, "splash_images")
@@ -66,3 +88,4 @@ DEFAULT_VOICES = {
     "Matilda": "atq1BFi5ZHt88WgSOJRB",
     "Mika": "B2j2knC2POvVW0XJE6Hi"
 }
+

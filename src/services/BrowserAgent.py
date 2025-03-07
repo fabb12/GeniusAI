@@ -1,10 +1,6 @@
 # services/BrowserAgent.py
-import os
 import asyncio
 import logging
-import json
-from typing import Optional, Dict, List
-import webbrowser
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
     QLabel, QPushButton, QTextEdit, QProgressDialog,
@@ -22,11 +18,8 @@ from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 # Importa la classe FrameExtractor
 from src.services.FrameExtractor import FrameExtractor
-from src.config import CLAUDE_MODEL_BROWSER_AGENT
-from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
+from src.config import CLAUDE_MODEL_BROWSER_AGENT,PROMPT_BROWSER_GUIDE
 
-
-# Modifica della classe AgentConfig nella parte superiore del file BrowserAgent.py
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
@@ -501,18 +494,15 @@ class BrowserAgent:
             descriptions = [fd['description'] for fd in frame_data]
             joined_descriptions = "\n".join(descriptions)
 
-            # 4. Crea il prompt per la guida operativa
-            prompt = f"""
-                Istruzione per l'addestramento dell'agente AI: Utilizzando le informazioni estratte dai frame: {joined_descriptions}
+            # 4. Leggi il prompt per la guida operativa dal file
+            with open(PROMPT_BROWSER_GUIDE, 'r', encoding='utf-8') as f:
+                prompt_template = f.read()
 
-                Obiettivo: Crea una guida operativa in {language} che riproduca esattamente le operazioni mostrate nel video tutorial.
-                La guida deve consentire a un utente di replicare con precisione il processo illustrato, seguendo un ordine sequenziale e dettagliato.
-
-                Requisiti:
-                Guida Operativa Dettagliata: Fornisci istruzioni passo-passo che descrivano in maniera chiara ogni azione da eseguire per ottenere lo stesso risultato del video.
-                Sequenza Cronologica: Le operazioni devono essere presentate nell'ordine in cui appaiono nel video, garantendo che ogni passaggio sia logicamente collegato al successivo.
-                Chiarezza e Precisione: Le istruzioni devono essere formulate in modo diretto, evitando ambiguità e riferimenti tecnici come timestamp o numeri di frame.
-                """
+            # Formatta il prompt
+            prompt = prompt_template.format(
+                joined_descriptions=joined_descriptions,
+                language=language
+            )
 
             # 5. Genera la guida operativa usando Anthropic
             progress_dialog.setLabelText("Generazione della guida operativa in corso...")

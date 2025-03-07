@@ -7,7 +7,7 @@ import sys
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm
 from PyQt6.QtCore import QSettings
-from src.config import CLAUDE_MODEL_FRAME_EXTRACTOR
+from src.config import CLAUDE_MODEL_FRAME_EXTRACTOR, PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY
 
 
 class FrameExtractor:
@@ -44,12 +44,14 @@ class FrameExtractor:
 
     def analyze_frames_batch(self, frame_list, language):
         """
-        Invia i frame a Claude in batch e riceve un JSON per ciascun frame,
-        contenente 'frame' e 'description'. Converte il timestamp in formato mm:ss
-        e ritorna un array di descrizioni dettagliate per ogni frame.
+        Invia i frame a Claude in batch e riceve un JSON per ciascun frame.
         """
         frame_data = []
         total_batches = len(frame_list) // self.batch_size + (1 if len(frame_list) % self.batch_size != 0 else 0)
+
+        # Leggi il prompt dal file
+        with open(PROMPT_FRAMES_ANALYSIS, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
 
         for batch_idx in tqdm(range(total_batches), desc="Processing Batches"):
             batch = frame_list[batch_idx * self.batch_size: (batch_idx + 1) * self.batch_size]
@@ -68,20 +70,14 @@ class FrameExtractor:
                     },
                 })
 
-            # Prompt per richiedere un array JSON con le informazioni per ciascun frame
-            messages[0]["content"].append({
-                "type": "text",
-                "text": f"""
-                Please return a strict JSON array in {language}. 
-                There are {len(batch)} frames here. 
-                Each element must be an object like:
-                {{
-                  "frame": <LOCAL_INDEX>,
-                  "description": "<text describing the frame>"
-                }}
-                Do not include extra text or disclaimers besides the JSON array.
-                """
-            })
+            # Formatta il prompt con le variabili specifiche
+            formatted_prompt = prompt_template.format(
+                language=language,
+                batch_size=len(batch)
+            )
+
+            messages[0]["content"].append({"type": "text", "text": formatted_prompt})
+
 
             try:
                 response = self.client.messages.create(
@@ -129,13 +125,7 @@ class FrameExtractor:
     def generate_video_summary(self, frame_data, language):
         """
         Genera un discorso finale narrativo che descriva l'intero video tutorial.
-        Il testo, da utilizzare come presentazione orale, deve essere fluido e chiaro,
-        senza riferimenti a timestamp o numeri di frame, e deve includere pause
-        nel formato <break time="Xs" />, dove il valore di X può variare in base al ritmo del discorso.
-        La lunghezza del discorso deve essere approssimativamente pari al minutaggio del video.
         """
-        import os
-
         # Assicurati che get_video_duration() ritorni un valore numerico (float o int)
         video_duration = float(self.get_video_duration())
         video_duration_minutes = video_duration / 60
@@ -145,12 +135,10 @@ class FrameExtractor:
         joined_descriptions = "\n".join(descriptions)
 
         # Leggi il prompt dal file
-        file_path = os.path.join(os.path.dirname(__file__), "prompt_frames_for_agent.txt")
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(PROMPT_VIDEO_SUMMARY, 'r', encoding='utf-8') as f:
             prompt_template = f.read()
 
-        # Qui passo video_duration_minutes come float,
-        # così il placeholder {video_duration_minutes:.2f} nel file potrà formattarlo correttamente.
+        # Formatta il prompt
         prompt_text = prompt_template.format(
             language=language,
             joined_descriptions=joined_descriptions,
@@ -163,6 +151,7 @@ class FrameExtractor:
             "text": prompt_text
         })
 
+        # Il resto del codice rimane invariato...
         try:
             response = self.client.messages.create(
                 model=self.claude_model,  # Usa il modello dalle impostazioni

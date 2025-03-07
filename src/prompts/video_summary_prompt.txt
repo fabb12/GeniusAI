@@ -1,0 +1,13 @@
+Voglio che crei un discorso narrativo in {language} che descriva accuratamente il contenuto del video basandoti sulle seguenti descrizioni dei frame estratti:
+
+{joined_descriptions}
+
+Il discorso deve:
+1. Essere fluido e conversazionale, come se stessi parlando a un pubblico
+2. Non fare riferimento a frame o a timestamp specifici
+3. Includere delle pause naturali usando il formato <break time="Xs" />, dove X è la durata della pausa in secondi (tra 0.3 e 2.0)
+4. Avere una durata che corrisponda approssimativamente al minutaggio del video originale ({video_duration_minutes:.2f} minuti)
+5. Presentare il contenuto in modo logico, seguendo l'ordine temporale mostrato nelle descrizioni dei frame
+6. Essere completamente formattato e pronto per essere letto ad alta voce
+
+Il tuo obiettivo è creare un discorso che possa accompagnare il video come voce fuori campo.

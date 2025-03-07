@@ -7,7 +7,7 @@ from pptx.dml.color import RGBColor
 import re
 import os
 from dotenv import load_dotenv
-from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_PPTX_GENERATION
+from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_PPTX_GENERATION,PROMPT_PPTX_GENERATION
 
 load_dotenv()
 
@@ -49,30 +49,31 @@ class PptxGeneration:
         settings = QSettings("ThemaConsulting", "GeniusAI")
         claude_model = settings.value("models/pptx_generation", CLAUDE_MODEL_PPTX_GENERATION)
 
+        # Leggi il prompt dal file
+        with open(PROMPT_PPTX_GENERATION, 'r', encoding='utf-8') as f:
+            prompt_template = f.read()
+
         # Costruisci la parte del messaggio relativa alla compagnia se company_name è fornito
         company_info = (
-            f" The presentation is targeted at the company {company_name}. "
-            f"Gather all relevant information about {company_name}, including its scope, main products, "
-            f"and the market it operates in. Use this information to create a personalized AI-generated presentation "
-            f"for {company_name} based on the topic provided."
+            f" La presentazione è destinata all'azienda {company_name}. "
+            f"Raccoglie tutte le informazioni rilevanti su {company_name}, inclusi il suo ambito, i principali prodotti "
+            f"e il mercato in cui opera. Usa queste informazioni per creare una presentazione personalizzata "
+            f"per {company_name} basata sull'argomento fornito."
             if company_name else ""
         )
 
+        # Formatta il prompt
+        system_prompt = prompt_template.format(
+            num_slide=num_slide,
+            language=language,
+            company_info=company_info
+        )
+
         message = client.messages.create(
-            model=claude_model,  # Usa il modello dalle impostazioni
+            model=claude_model,
             max_tokens=1000,
             temperature=0.7,
-            system=(
-                    "You are a professional slide deck designer. Your task is to transform the following "
-                    "text into a format suitable for PowerPoint slides. Each slide should include a title, "
-                    "subtitle, and content with bullet points. "
-                    f"Please follow this structure for {num_slide} slides:\n\n"
-                    "Titolo: [Title of the slide]\n"
-                    "Sottotitolo: [Subtitle of the slide]\n"
-                    "Contenuto:\n- Bullet point 1\n- Bullet point 2\n\n"
-                    f"Ensure the final presentation is in {language}." +
-                    company_info
-            ),
+            system=system_prompt,
             messages=[
                 {
                     "role": "user",
@@ -85,6 +86,8 @@ class PptxGeneration:
                 }
             ]
         )
+
+        # Il resto del codice rimane invariato...
         # Estrai il testo risultante e i token utilizzati
         testo_resultante = message.content[0].text
         input_tokens = message.usage.input_tokens
