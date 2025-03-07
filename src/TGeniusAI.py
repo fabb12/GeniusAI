@@ -2393,8 +2393,8 @@ class VideoAudioManager(QMainWindow):
 
         # Nuova opzione per la creazione della guida e lancio dell'agente
         agentAIsMenu.addSeparator()  # Aggiungi un separatore per chiarezza
-        createGuideAction = QAction('&Crea Guida Operativa e Esegui Agent', self)
-        createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti e esegui l\'agent')
+        createGuideAction = QAction('&Crea Guida Operativa', self)
+        createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti')
         createGuideAction.triggered.connect(self.createGuideAndRunAgent)
         agentAIsMenu.addAction(createGuideAction)
 
