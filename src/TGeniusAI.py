@@ -2785,7 +2785,7 @@ class VideoAudioManager(QMainWindow):
             from services.BrowserAgent import BrowserAgent
             self.browser_agent = BrowserAgent(self)
 
-        self.browser_agent.create_guide_and_run_agent()
+        self.browser_agent.create_guide_agent()
     def onAudioGenerationCompleted(self, audio_path):
         timecode = self.timecodePauseLineEdit.text()
         pause_duration = float(self.pauseAudioDurationLineEdit.text() or 0)

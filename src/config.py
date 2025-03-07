@@ -13,10 +13,21 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
-# AI Models
+# AI Models - Claude (solo modelli base)
+MODEL_3_7_SONNET = os.getenv("MODEL_3_7_SONNET", "claude-3-7-sonnet-20250219")
+MODEL_3_5_HAIKU = os.getenv("MODEL_3_5_HAIKU", "claude-3-5-haiku-20241022")
+MODEL_3_5_SONNET_V2 = os.getenv("MODEL_3_5_SONNET_V2", "claude-3-5-sonnet-20241022")
 MODEL_3_5_SONNET = os.getenv("MODEL_3_5_SONNET", "claude-3-5-sonnet-20240620")
 MODEL_3_OPUS = os.getenv("MODEL_3_OPUS", "claude-3-opus-20240229")
+MODEL_3_SONNET = os.getenv("MODEL_3_SONNET", "claude-3-sonnet-20240229")
 MODEL_3_HAIKU = os.getenv("MODEL_3_HAIKU", "claude-3-haiku-20240307")
+
+# Modelli per componenti specifici
+CLAUDE_MODEL_FRAME_EXTRACTOR = os.getenv("CLAUDE_MODEL_FRAME_EXTRACTOR", MODEL_3_7_SONNET)
+CLAUDE_MODEL_TEXT_PROCESSING = os.getenv("CLAUDE_MODEL_TEXT_PROCESSING", MODEL_3_5_SONNET)
+CLAUDE_MODEL_PPTX_GENERATION = os.getenv("CLAUDE_MODEL_PPTX_GENERATION", MODEL_3_5_SONNET)
+CLAUDE_MODEL_BROWSER_AGENT = os.getenv("CLAUDE_MODEL_BROWSER_AGENT", MODEL_3_HAIKU)
+CLAUDE_MODEL_SUMMARY = os.getenv("CLAUDE_MODEL_SUMMARY", MODEL_3_5_SONNET)
 
 # File Paths
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg/bin/ffmpeg.exe")

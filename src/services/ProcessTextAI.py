@@ -1,8 +1,8 @@
 import anthropic
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 import os
 from dotenv import load_dotenv
-from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
+from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_TEXT_PROCESSING
 
 load_dotenv()
 
@@ -18,6 +18,10 @@ class ProcessTextAI(QThread):
         self.language = language
         self.result = None
         self.mode = mode  # Aggiunto il parametro mode per scegliere l'operazione
+
+        # Carica il modello dalle impostazioni
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.claude_model = settings.value("models/text_processing", CLAUDE_MODEL_TEXT_PROCESSING)
 
     def run(self):
         try:
@@ -37,7 +41,7 @@ class ProcessTextAI(QThread):
     def computeText(self, text):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
-            model=MODEL_3_5_SONNET,
+            model=self.claude_model,  # Usa il modello dalle impostazioni
             max_tokens=8192,
             temperature=0.7,
             system=(
@@ -71,7 +75,7 @@ class ProcessTextAI(QThread):
     def computeTextFix(self, text):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         message = client.messages.create(
-            model=MODEL_3_5_SONNET,
+            model=self.claude_model,  # Usa il modello dalle impostazioni
             max_tokens=8192,
             temperature=0.7,
             system=(

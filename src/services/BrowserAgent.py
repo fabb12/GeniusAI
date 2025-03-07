@@ -20,25 +20,33 @@ from browser_use.browser.context import BrowserContextConfig
 from browser_use.controller.service import Controller
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
-
+# Importa la classe FrameExtractor
+from src.services.FrameExtractor import FrameExtractor
+from src.config import CLAUDE_MODEL_BROWSER_AGENT
 from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
+
+
+# Modifica della classe AgentConfig nella parte superiore del file BrowserAgent.py
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
     def __init__(self):
+        from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_BROWSER_AGENT
 
-        self.api_key =ANTHROPIC_API_KEY
-        self.model_name = MODEL_3_HAIKU
+        self.api_key = ANTHROPIC_API_KEY
+        self.settings = QSettings("ThemaConsulting", "GeniusAI")
+
+        # Carica il modello dalle impostazioni o usa quello predefinito
+        self.model_name = self.settings.value("models/browser_agent", CLAUDE_MODEL_BROWSER_AGENT)
+
         self.headless = False
         self.use_vision = True
         self.max_steps = 25
-        self.settings = QSettings("ThemaConsulting", "GeniusAI")
         self.load_from_settings()
 
     def load_from_settings(self):
         """Carica la configurazione dalle impostazioni salvate"""
         self.api_key = self.settings.value("agent/api_key", self.api_key)
-        self.model_name = self.settings.value("agent/model_name", self.model_name)
         self.headless = self.settings.value("agent/headless", self.headless, type=bool)
         self.use_vision = self.settings.value("agent/use_vision", self.use_vision, type=bool)
         self.max_steps = self.settings.value("agent/max_steps", self.max_steps, type=int)
@@ -46,7 +54,7 @@ class AgentConfig:
     def save_to_settings(self):
         """Salva la configurazione nelle impostazioni"""
         self.settings.setValue("agent/api_key", self.api_key)
-        self.settings.setValue("agent/model_name", self.model_name)
+        self.settings.setValue("models/browser_agent", self.model_name)
         self.settings.setValue("agent/headless", self.headless)
         self.settings.setValue("agent/use_vision", self.use_vision)
         self.settings.setValue("agent/max_steps", self.max_steps)
@@ -73,8 +81,6 @@ class AgentConfig:
             self.use_vision = config_dict["use_vision"]
         if "max_steps" in config_dict:
             self.max_steps = config_dict["max_steps"]
-
-
 class BrowserAgentWorker(QObject):
     """Worker class per eseguire l'agente browser in un thread separato"""
 
@@ -469,8 +475,11 @@ class BrowserAgent:
             progress_dialog.setLabelText("Estrazione dei frame dal video...")
             progress_dialog.setValue(10)
 
-            # Importa la classe FrameExtractor
-            from services.FrameExtractor import FrameExtractor
+
+
+            # Carica il modello dalle impostazioni
+            settings = QSettings("ThemaConsulting", "GeniusAI")
+            claude_model = settings.value("models/browser_agent", CLAUDE_MODEL_BROWSER_AGENT)
 
             # Crea un'istanza di FrameExtractor
             extractor = FrameExtractor(
@@ -494,16 +503,16 @@ class BrowserAgent:
 
             # 4. Crea il prompt per la guida operativa
             prompt = f"""
-            Istruzione per l'addestramento dell'agente AI: Utilizzando le informazioni estratte dai frame: {joined_descriptions}
+                Istruzione per l'addestramento dell'agente AI: Utilizzando le informazioni estratte dai frame: {joined_descriptions}
 
-            Obiettivo: Crea una guida operativa in {language} che riproduca esattamente le operazioni mostrate nel video tutorial.
-            La guida deve consentire a un utente di replicare con precisione il processo illustrato, seguendo un ordine sequenziale e dettagliato.
+                Obiettivo: Crea una guida operativa in {language} che riproduca esattamente le operazioni mostrate nel video tutorial.
+                La guida deve consentire a un utente di replicare con precisione il processo illustrato, seguendo un ordine sequenziale e dettagliato.
 
-            Requisiti:
-            Guida Operativa Dettagliata: Fornisci istruzioni passo-passo che descrivano in maniera chiara ogni azione da eseguire per ottenere lo stesso risultato del video.
-            Sequenza Cronologica: Le operazioni devono essere presentate nell'ordine in cui appaiono nel video, garantendo che ogni passaggio sia logicamente collegato al successivo.
-            Chiarezza e Precisione: Le istruzioni devono essere formulate in modo diretto, evitando ambiguità e riferimenti tecnici come timestamp o numeri di frame.
-            """
+                Requisiti:
+                Guida Operativa Dettagliata: Fornisci istruzioni passo-passo che descrivano in maniera chiara ogni azione da eseguire per ottenere lo stesso risultato del video.
+                Sequenza Cronologica: Le operazioni devono essere presentate nell'ordine in cui appaiono nel video, garantendo che ogni passaggio sia logicamente collegato al successivo.
+                Chiarezza e Precisione: Le istruzioni devono essere formulate in modo diretto, evitando ambiguità e riferimenti tecnici come timestamp o numeri di frame.
+                """
 
             # 5. Genera la guida operativa usando Anthropic
             progress_dialog.setLabelText("Generazione della guida operativa in corso...")
@@ -515,7 +524,7 @@ class BrowserAgent:
 
             # Chiama l'API
             response = client.messages.create(
-                model=self.agent_config.model_name,
+                model=claude_model,  # Usa il modello dalle impostazioni
                 max_tokens=4000,
                 messages=[
                     {"role": "user", "content": prompt}
@@ -553,8 +562,7 @@ class BrowserAgent:
                                  f"Si è verificato un errore durante la generazione della guida: {str(e)}")
             logging.error(f"Errore nella generazione della guida operativa: {e}", exc_info=True)
             return False
-
-    def create_guide_and_run_agent(self):
+    def create_guide_agent(self):
         """
         Metodo completo che:
         1. Estrai i frame dal video
@@ -581,20 +589,7 @@ class BrowserAgent:
             language = self.parent.languageComboBox.currentText()
 
         # Genera la guida operativa
-        success = self.generate_operational_guide(video_path, num_frames, language)
-
-        # Se la generazione è riuscita, chiedi all'utente se vuole eseguire l'agente
-        if success:
-            response = QMessageBox.question(
-                self.parent,
-                "Eseguire Agent Browser",
-                "La guida operativa è stata generata con successo. Vuoi eseguire l'agente browser per ottenere informazioni correlate?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-            )
-
-            if response == QMessageBox.StandardButton.Yes:
-                # Esegui l'agente browser
-                self.runAgent()
+        self.generate_operational_guide(video_path, num_frames, language)
 
     def runAgent(self):
         """Esegue l'agente browser con la configurazione corrente"""

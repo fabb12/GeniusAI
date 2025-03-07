@@ -1,13 +1,16 @@
 import anthropic
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from PyQt6.QtCore import QSettings
 from pptx import Presentation
 from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 import re
 import os
 from dotenv import load_dotenv
-from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
+from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_PPTX_GENERATION
+
 load_dotenv()
+
 
 class PptxGeneration:
     @staticmethod
@@ -42,6 +45,10 @@ class PptxGeneration:
     def generaTestoPerSlide(testo, num_slide, company_name, language):
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
+        # Carica il modello dalle impostazioni
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        claude_model = settings.value("models/pptx_generation", CLAUDE_MODEL_PPTX_GENERATION)
+
         # Costruisci la parte del messaggio relativa alla compagnia se company_name è fornito
         company_info = (
             f" The presentation is targeted at the company {company_name}. "
@@ -52,7 +59,7 @@ class PptxGeneration:
         )
 
         message = client.messages.create(
-            model=MODEL_3_5_SONNET,
+            model=claude_model,  # Usa il modello dalle impostazioni
             max_tokens=1000,
             temperature=0.7,
             system=(
@@ -180,8 +187,11 @@ class PptxGeneration:
                                     "Presentazione PowerPoint generata con successo e salvata in: " + output_file)
             PptxGeneration.visualizzaPresentazione(parent, output_file)
 
-        else:               QMessageBox.warning(None, "Attenzione",
+        else:
+            QMessageBox.warning(None, "Attenzione",
                                 "Non sono state generate slides a causa di dati di input non validi o mancanti.")
+
+    @staticmethod
     def visualizzaPresentazione(parent, file_path):
         prs = Presentation(file_path)
         dialog = QDialog(parent)
@@ -189,7 +199,7 @@ class PptxGeneration:
         layout = QVBoxLayout()
 
         for i, slide in enumerate(prs.slides):
-            slide_label = QLabel(f"Slide {i+1}: {slide.shapes.title.text if slide.shapes.title else 'Senza titolo'}")
+            slide_label = QLabel(f"Slide {i + 1}: {slide.shapes.title.text if slide.shapes.title else 'Senza titolo'}")
             layout.addWidget(slide_label)
 
         buttonLayout = QHBoxLayout()

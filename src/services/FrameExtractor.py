@@ -6,6 +6,9 @@ import numpy as np
 import sys
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm
+from PyQt6.QtCore import QSettings
+from src.config import CLAUDE_MODEL_FRAME_EXTRACTOR
+
 
 class FrameExtractor:
     def __init__(self, video_path, num_frames, anthropic_api_key, batch_size=5):
@@ -13,6 +16,10 @@ class FrameExtractor:
         self.num_frames = num_frames
         self.batch_size = batch_size
         self.client = anthropic.Anthropic(api_key=anthropic_api_key)
+
+        # Carica il modello dalle impostazioni
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.claude_model = settings.value("models/frame_extractor", CLAUDE_MODEL_FRAME_EXTRACTOR)
 
     def extract_frames(self):
         """
@@ -78,7 +85,7 @@ class FrameExtractor:
 
             try:
                 response = self.client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+                    model=self.claude_model,  # Usa il modello dalle impostazioni
                     max_tokens=2048,
                     messages=messages
                 )
@@ -119,8 +126,6 @@ class FrameExtractor:
         video = VideoFileClip(self.video_path)
         return video.duration
 
-    import os
-
     def generate_video_summary(self, frame_data, language):
         """
         Genera un discorso finale narrativo che descriva l'intero video tutorial.
@@ -160,7 +165,7 @@ class FrameExtractor:
 
         try:
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model=self.claude_model,  # Usa il modello dalle impostazioni
                 max_tokens=2048,
                 messages=messages
             )
@@ -199,7 +204,7 @@ class FrameExtractor:
 
 if __name__ == "__main__":
     if len(sys.argv) < 4 or len(sys.argv) > 5:
-        print("Usage: python  frameextractor.py <video_path> <num_frames> <anthropic_api_key> [language]")
+        print("Usage: python frameextractor.py <video_path> <num_frames> <anthropic_api_key> [language]")
         sys.exit(1)
 
     video_path = sys.argv[1]
