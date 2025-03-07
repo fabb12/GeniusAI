@@ -89,23 +89,16 @@ class BrowserAgentWorker(QObject):
 
     async def run_agent_async(self):
         try:
-            # Initialize browser config
+            # Configurazione browser simile all'esempio
             browser_config = BrowserConfig(
-                headless=self.config.headless,
+                headless=False,  # Modifica per vedere il browser
                 disable_security=True
             )
 
-            # Initialize browser context config
-            context_config = BrowserContextConfig(
-                browser_window_size={'width': 1280, 'height': 900},
-                minimum_wait_page_load_time=0.5,
-                highlight_elements=True
-            )
-
-            # Initialize browser and context
+            # Inizializza il browser
             browser = Browser(config=browser_config)
 
-            # Create LLM based on selected model
+            # Crea LLM basato sul modello selezionato
             if "claude" in self.config.model_name.lower():
                 llm = ChatAnthropic(
                     model_name=self.config.model_name,
@@ -119,20 +112,21 @@ class BrowserAgentWorker(QObject):
                     temperature=0.0
                 )
 
-            # Initialize controller
+            # Inizializza controller
             controller = Controller()
 
-            # Initialize agent with progress tracking
+            # Inizializza l'agente con configurazioni simili allo script di esempio
             agent = Agent(
                 task=self.task,
                 llm=llm,
                 browser=browser,
                 controller=controller,
                 use_vision=self.config.use_vision,
+                max_actions_per_step=1,  # Limitato come nell'esempio
                 override_system_message=None
             )
 
-            # Register callback for reporting progress
+            # Registra callback per il reporting dei progressi
             async def progress_callback(state, model_output, step_num):
                 if not self.running:
                     return
@@ -142,20 +136,18 @@ class BrowserAgentWorker(QObject):
 
             agent.register_new_step_callback = progress_callback
 
-            # Run the agent
+            # Esegui l'agente con max_steps
             self.running = True
             history = await agent.run(max_steps=self.config.max_steps)
 
             if not self.running:
                 return
 
-            # Get the final result
+            # Non chiudere il browser automaticamente, come nell'esempio
+            # Lascia che l'utente decida quando chiuderlo
             final_result = history.final_result() or "Task completato senza risultato esplicito."
 
-            # Close the browser
-            await browser.close()
-
-            # Emit the result
+            # Emetti il risultato senza chiudere il browser
             self.progress.emit(100, "Task completato!")
             self.finished.emit(final_result)
 
