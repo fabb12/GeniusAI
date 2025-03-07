@@ -6,7 +6,6 @@ import numpy as np
 import sys
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm
-import os
 
 class FrameExtractor:
     def __init__(self, video_path, num_frames, anthropic_api_key, batch_size=5):

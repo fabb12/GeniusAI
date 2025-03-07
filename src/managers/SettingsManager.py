@@ -1,13 +1,14 @@
 import json
 from PyQt6.QtCore import QPoint, QSize
 import logging
-
+from src.config import DOCK_SETTINGS_FILE
+from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
         self.parent = parent
         self.main_window = main_window
         self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
-        self.settings_file = '../dock_settings.json'  # File per il salvataggio delle impostazioni
+        self.settings_file = DOCK_SETTINGS_FILE
 
     def save_settings(self):
         settings = {'main_window': {
@@ -41,7 +42,8 @@ class DockSettingsManager:
             # Carica le impostazioni della finestra principale
             main_window_settings = settings.get('main_window', {})
             self.main_window.resize(
-                QSize(main_window_settings.get('width', 800), main_window_settings.get('height', 600)))
+                QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
+                      main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
             # Carica le impostazioni per ciascun dock

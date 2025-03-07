@@ -21,13 +21,14 @@ from browser_use.controller.service import Controller
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 
-
+from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
     def __init__(self):
-        self.api_key = os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or ""
-        self.model_name = "claude-3-5-sonnet-20240620"
+
+        self.api_key =ANTHROPIC_API_KEY
+        self.model_name = MODEL_3_HAIKU
         self.headless = False
         self.use_vision = True
         self.max_steps = 25

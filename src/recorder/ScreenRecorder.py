@@ -2,13 +2,16 @@ import subprocess
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
 import os
+from src.config import WATERMARK_IMAGE
+from src.config import DEFAULT_AUDIO_CHANNELS, DEFAULT_FRAME_RATE
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
 
-    def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_input=None, audio_channels=2, frames=25, record_audio=True):
+    def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_input=None,
+                 audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -18,7 +21,7 @@ class ScreenRecorder(QThread):
         self.frame_rate = frames
         self.record_audio = record_audio
         self.is_running = True
-        self.watermark_image = './res/watermark.png'  # Path to the watermark image
+        self.watermark_image = WATERMARK_IMAGE
 
         # Check if ffmpeg.exe exists
         if not os.path.isfile(self.ffmpeg_path):

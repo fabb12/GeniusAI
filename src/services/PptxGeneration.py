@@ -6,13 +6,8 @@ from pptx.dml.color import RGBColor
 import re
 import os
 from dotenv import load_dotenv
-
+from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU
 load_dotenv()
-
-# Recupera le variabili d'ambiente
-anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-model_3_5_sonnet = os.getenv("MODEL_3_5_SONNET")
-model_3_haiku = os.getenv("MODEL_3_HAIKU")
 
 class PptxGeneration:
     @staticmethod
@@ -45,7 +40,7 @@ class PptxGeneration:
 
     @staticmethod
     def generaTestoPerSlide(testo, num_slide, company_name, language):
-        client = anthropic.Anthropic(api_key=anthropic_key)
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         # Costruisci la parte del messaggio relativa alla compagnia se company_name è fornito
         company_info = (
@@ -57,7 +52,7 @@ class PptxGeneration:
         )
 
         message = client.messages.create(
-            model=model_3_5_sonnet,
+            model=MODEL_3_5_SONNET,
             max_tokens=1000,
             temperature=0.7,
             system=(

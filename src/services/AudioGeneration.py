@@ -3,14 +3,10 @@ import tempfile
 import time
 import os
 from dotenv import load_dotenv
-from elevenlabs.client import ElevenLabs, Voice, VoiceSettings
+from elevenlabs import ElevenLabs, Voice, VoiceSettings
+from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU, ELEVENLABS_API_KEY
 
 load_dotenv()
-
-anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-model_3_5_sonnet = os.getenv("MODEL_3_5_SONNET")
-model_3_haiku = os.getenv("MODEL_3_HAIKU")
-elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
 
 class AudioGenerationThread(QThread):
     completed = pyqtSignal(str)
@@ -21,7 +17,7 @@ class AudioGenerationThread(QThread):
         super().__init__(parent)
         self.text = text
         self.voice_settings = voice_settings
-        self.client = ElevenLabs(api_key=elevenlabs_api_key)
+        self.client = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
     def run(self):
         try:

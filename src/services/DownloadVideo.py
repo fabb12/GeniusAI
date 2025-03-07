@@ -3,7 +3,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import tempfile
 import os
 from yt_dlp.postprocessor import FFmpegPostProcessor
-
+from src.config import FFMPEG_PATH
 class DownloadThread(QThread):
     finished = pyqtSignal(str, str, str)  # Emits path of file, video title, and language
     error = pyqtSignal(str)
@@ -13,7 +13,7 @@ class DownloadThread(QThread):
         super().__init__()
         self.url = url
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
-        FFmpegPostProcessor._ffmpeg_location.set(ffmpeg_path)
+        FFmpegPostProcessor._ffmpeg_location.set(FFMPEG_PATH)
         self.download_video = download_video
         self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
 

@@ -1,6 +1,7 @@
 import logging
 import sys
 
+from src.config import LOG_FILE
 class StreamToLogger(object):
     def __init__(self, logger, log_level):
         self.logger = logger
@@ -16,7 +17,7 @@ class StreamToLogger(object):
 
 def setup_logging():
     logging.basicConfig(
-        filename='../console_log.txt',
+        filename=LOG_FILE,
         level=logging.DEBUG,
         format='[%(asctime)s - %(levelname)s] - %(message)s'
     )

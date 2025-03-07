@@ -1,7 +1,7 @@
 import os
 import subprocess
 from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QListWidget, QDialogButtonBox
-
+from src.config import CONTACTS_FILE
 
 class VideoSharingManager:
     def __init__(self, parent):
@@ -63,11 +63,11 @@ class VideoSharingManager:
         except Exception as e:
             QMessageBox.critical(self.parent, "Errore", f"Errore durante la condivisione su WhatsApp: {str(e)}")
 
-    def get_contacts_from_txt(self, file_path):
+    def get_contacts_from_txt(self, file_path=None):
         """Funzione per caricare i contatti da un file .txt"""
         contacts = []
         try:
-            with open(file_path, mode='r', encoding='utf-8') as file:
+            with open(file_path or CONTACTS_FILE, mode='r', encoding='utf-8') as file:
                 for line in file:
                     name, email = line.strip().split(',')
                     contacts.append({

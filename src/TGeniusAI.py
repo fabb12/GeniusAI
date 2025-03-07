@@ -57,12 +57,14 @@ from services.ShareVideo import VideoSharingManager
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor  # Assicurati che sia il percorso corretto
 
-
+from config import (ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
+from config import MUSIC_DIR
+from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
+    DEFAULT_SIMILARITY, DEFAULT_STYLE, DEFAULT_FRAME_RATE,DEFAULT_VOICES
 import os
-
-FFMPEG_PATH = 'ffmpeg/bin/ffmpeg.exe'
+from config import SPLASH_IMAGES_DIR
+from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
-FFMPEG_PATH_DOWNLOAD = 'ffmpeg/bin'
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -72,7 +74,7 @@ class VideoAudioManager(QMainWindow):
         setup_logging()
 
         # File di versione
-        self.version_file = "./version_info.txt"
+        self.version_file = VERSION_FILE
 
         # Carica le informazioni di versione dal file esterno
         self.version, self.build_date = self.load_version_info()
@@ -80,10 +82,10 @@ class VideoAudioManager(QMainWindow):
         # Imposta il titolo della finestra con la versione e la data di build
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
 
-        self.api_key = os.getenv("ELEVENLABS_API_KEY")
-        self.api_llm = os.getenv("ANTHROPIC_API_KEY")
+        self.api_key = ELEVENLABS_API_KEY
+        self.api_llm = ANTHROPIC_API_KEY
 
-        #self.setGeometry(500, 500, 1200, 800)
+        self.setGeometry(500, 500, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()
         self.playerOutput = QMediaPlayer()
@@ -493,7 +495,7 @@ class VideoAudioManager(QMainWindow):
         self.frameCountSpin = QSpinBox()
         self.frameCountSpin.setMinimum(1)
         self.frameCountSpin.setMaximum(30)
-        self.frameCountSpin.setValue(5)
+        self.frameCountSpin.setValue(DEFAULT_FRAME_COUNT)
         self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
         # Nota: il bottone extractFramesButton è stato spostato nel menu Workflows
         gridLayoutAdv.addWidget(QLabel("Numero frame:"), 0, 0)
@@ -1263,10 +1265,9 @@ class VideoAudioManager(QMainWindow):
         # QComboBox per la selezione della voce con opzione per inserire custom ID
         self.voiceSelectionComboBox = QComboBox()
         self.voiceSelectionComboBox.setEditable(True)
-        self.voiceSelectionComboBox.addItem("Alessio", "BTpQARcEj1XqVxdZjTI7")
-        self.voiceSelectionComboBox.addItem("Marco", "GcAgjAjkhWsmUd4GlPiv")
-        self.voiceSelectionComboBox.addItem("Matilda", "atq1BFi5ZHt88WgSOJRB")
-        self.voiceSelectionComboBox.addItem("Mika", "B2j2knC2POvVW0XJE6Hi")
+        for name, voice_id in DEFAULT_VOICES.items():
+            self.voiceSelectionComboBox.addItem(name, voice_id)
+
         layout.addWidget(self.voiceSelectionComboBox)
 
         # Campo di input per ID voce
@@ -1286,7 +1287,7 @@ class VideoAudioManager(QMainWindow):
         self.stabilitySlider = QSlider(Qt.Orientation.Horizontal)
         self.stabilitySlider.setMinimum(0)
         self.stabilitySlider.setMaximum(100)
-        self.stabilitySlider.setValue(50)  # Valore predefinito
+        self.stabilitySlider.setValue(DEFAULT_STABILITY)
         self.stabilitySlider.setToolTip(
             "Regola l'emozione e la coerenza. Minore per più emozione, maggiore per coerenza.")
         self.stabilityValueLabel = QLabel("50%")  # Visualizza il valore corrente
@@ -1300,7 +1301,7 @@ class VideoAudioManager(QMainWindow):
         self.similaritySlider = QSlider(Qt.Orientation.Horizontal)
         self.similaritySlider.setMinimum(0)
         self.similaritySlider.setMaximum(100)
-        self.similaritySlider.setValue(80)  # Valore predefinito
+        self.similaritySlider.setValue(DEFAULT_SIMILARITY)
         self.similaritySlider.setToolTip(
             "Determina quanto la voce AI si avvicina all'originale. Alti valori possono includere artefatti.")
         self.similarityValueLabel = QLabel("80%")  # Visualizza il valore corrente
@@ -1314,7 +1315,7 @@ class VideoAudioManager(QMainWindow):
         self.styleSlider = QSlider(Qt.Orientation.Horizontal)
         self.styleSlider.setMinimum(0)
         self.styleSlider.setMaximum(10)
-        self.styleSlider.setValue(0)  # Valore predefinito
+        self.styleSlider.setValue(DEFAULT_STYLE)
         self.styleSlider.setToolTip("Amplifica lo stile del parlante originale. Impostare a 0 per maggiore stabilità.")
         self.styleValueLabel = QLabel("0")  # Visualizza il valore corrente
         self.styleSlider.valueChanged.connect(lambda value: self.styleValueLabel.setText(f"{value}"))
@@ -1655,7 +1656,7 @@ class VideoAudioManager(QMainWindow):
         # Imposta il percorso di default per l'apertura della finestra di dialogo
         current_dir = os.path.dirname(os.path.abspath(__file__))
         parent_dir = os.path.dirname(current_dir)
-        default_dir = os.path.join(parent_dir, 'res', 'music')
+        default_dir = MUSIC_DIR
 
         # Verifica se la cartella di default esiste
         if not os.path.exists(default_dir):
@@ -2065,8 +2066,8 @@ class VideoAudioManager(QMainWindow):
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
             audio_input=selected_audio if not save_video_only else None,
-            audio_channels=2 if not save_video_only else 0,
-            frames=25
+            audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
+            frames=DEFAULT_FRAME_RATE
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
@@ -3071,7 +3072,9 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Specifica la cartella delle immagini
-    image_folder = './res/splash_images'
+
+
+    image_folder = SPLASH_IMAGES_DIR
 
     # Crea la splash screen con un'immagine casuale dalla cartella
     splash = SplashScreen(image_folder)
