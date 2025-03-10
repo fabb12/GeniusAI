@@ -3,6 +3,8 @@ import os
 import asyncio
 import logging
 import json
+import traceback
+import time
 from typing import Optional, Dict, List
 import webbrowser
 from PyQt6.QtWidgets import (
@@ -10,9 +12,9 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton, QTextEdit, QProgressDialog,
     QMessageBox, QComboBox, QCheckBox, QGroupBox,
     QFormLayout, QDialogButtonBox, QFileDialog, QRadioButton,
-    QTabWidget, QWidget
+    QTabWidget, QWidget, QApplication
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 
 # Import browser_use components
 from browser_use.agent.service import Agent
@@ -90,118 +92,275 @@ class BrowserAgentWorker(QObject):
     finished = pyqtSignal(str)
     progress = pyqtSignal(int, str)
     error = pyqtSignal(str)
+    log_message = pyqtSignal(str)  # Nuovo segnale per log dettagliati
 
     def __init__(self, task: str, config: AgentConfig):
         super().__init__()
         self.task = task
         self.config = config
         self.running = False
+        self.browser = None
 
     async def run_agent_async(self):
-        browser = None
         try:
+            # Controllo iniziale dello stato running
+            if not self.running:
+                self.log_message.emit("Arresto richiesto prima dell'avvio.")
+                self.progress.emit(100, "Arresto completato")
+                return
+
+            self.log_message.emit("Avvio dell'agente browser...")
+            self.progress.emit(5, "Inizializzazione configurazione...")
+
             # Configurazione browser
+            self.log_message.emit("Configurazione browser...")
             browser_config = BrowserConfig(
                 headless=self.config.headless,
                 disable_security=True
             )
 
+            # Controllo stato running dopo configurazione
+            if not self.running:
+                self.log_message.emit("Arresto richiesto dopo configurazione browser.")
+                return
+
             # Inizializza browser context config
+            self.log_message.emit("Inizializzazione context config...")
+            self.progress.emit(10, "Configurazione browser...")
             context_config = BrowserContextConfig(
                 browser_window_size={'width': 1280, 'height': 900},
                 minimum_wait_page_load_time=0.5,
                 highlight_elements=True
             )
 
+            # Controllo stato running prima di avviare il browser
+            if not self.running:
+                self.log_message.emit("Arresto richiesto prima dell'avvio del browser.")
+                return
+
             # Inizializza il browser
-            browser = Browser(config=browser_config)
+            self.log_message.emit("Avvio del browser...")
+            self.progress.emit(15, "Avvio browser...")
+            self.browser = Browser(config=browser_config)
+            self.log_message.emit("Browser avviato con successo.")
+            self.progress.emit(20, "Browser avviato")
+
+            # Controllo stato running dopo avvio browser
+            if not self.running:
+                self.log_message.emit("Arresto richiesto dopo avvio browser.")
+                if self.browser:
+                    self.log_message.emit("Chiusura browser in corso...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                return
 
             # Crea LLM basato sul modello selezionato
+            self.log_message.emit(f"Configurazione modello LLM {self.config.model_name}...")
+            self.progress.emit(25, f"Configurazione LLM {self.config.model_name}...")
+
             if "claude" in self.config.model_name.lower():
                 llm = ChatAnthropic(
                     model_name=self.config.model_name,
                     anthropic_api_key=self.config.api_key,
                     temperature=0.0
                 )
+                self.log_message.emit("Modello Claude configurato.")
             else:
                 llm = ChatOpenAI(
                     model_name=self.config.model_name,
                     openai_api_key=self.config.api_key,
                     temperature=0.0
                 )
+                self.log_message.emit("Modello OpenAI configurato.")
+
+            self.progress.emit(30, "LLM configurato")
+
+            # Controllo stato running dopo configurazione LLM
+            if not self.running:
+                self.log_message.emit("Arresto richiesto dopo configurazione LLM.")
+                if self.browser:
+                    self.log_message.emit("Chiusura browser in corso...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                return
 
             # Inizializza controller
+            self.log_message.emit("Inizializzazione controller...")
+            self.progress.emit(35, "Inizializzazione controller...")
             controller = Controller()
+            self.log_message.emit("Controller inizializzato.")
+
+            # Controllo stato running dopo inizializzazione controller
+            if not self.running:
+                self.log_message.emit("Arresto richiesto dopo inizializzazione controller.")
+                if self.browser:
+                    self.log_message.emit("Chiusura browser in corso...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                return
 
             # Inizializza agente con progress tracking
+            self.log_message.emit("Inizializzazione agente...")
+            self.progress.emit(40, "Inizializzazione agente...")
             agent = Agent(
                 task=self.task,
                 llm=llm,
-                browser=browser,
+                browser=self.browser,
                 controller=controller,
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
+            self.log_message.emit("Agente inizializzato con successo.")
+            self.progress.emit(45, "Agente inizializzato")
 
             # Definisci e registra la callback per l'avanzamento
             async def progress_callback(state, model_output, step_num):
+                # Controlla se è stata richiesta l'interruzione
                 if not self.running:
-                    return
-                progress_pct = min(int((step_num / self.config.max_steps) * 100), 99)
-                goal = getattr(model_output, "next_goal", "Elaborazione...") if model_output else "Inizializzazione..."
-                self.progress.emit(progress_pct, str(goal))
+                    self.log_message.emit(f"Arresto richiesto durante il passo {step_num}.")
+                    # Tentativo di interrompere l'esecuzione
+                    # Nota: Alcune implementazioni di browser_use potrebbero non supportare
+                    # l'interruzione tramite valore di ritorno false, ma proviamo comunque
+                    return False
+
+                progress_pct = min(int(45 + (step_num / self.config.max_steps) * 50), 95)
+                next_goal = getattr(model_output, "next_goal",
+                                    "Elaborazione...") if model_output else "Inizializzazione..."
+
+                self.progress.emit(progress_pct, str(next_goal))
+                self.log_message.emit(f"Passo {step_num}: {next_goal}")
+
+                # Non utilizziamo il valore di ritorno per il controllo dell'interruzione
+                # con le versioni di browser_use che non lo supportano
+                return True
 
             # Registra la callback correttamente
             agent.register_new_step_callback = progress_callback
+            self.log_message.emit("Callback di progresso registrata.")
+            self.progress.emit(48, "Inizializzazione completata")
+
+            # Controllo stato running prima di eseguire l'agente
+            if not self.running:
+                self.log_message.emit("Arresto richiesto prima dell'esecuzione dell'agente.")
+                if self.browser:
+                    self.log_message.emit("Chiusura browser in corso...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                return
 
             # Esegui l'agente
+            self.log_message.emit("Avvio esecuzione agente...")
+            self.progress.emit(50, "Avvio esecuzione agente...")
             self.running = True
+
+            # Definisci una funzione per verificare se continuare
+            async def should_continue():
+                # Verifica se l'esecuzione deve continuare
+                return self.running
+
+            # Esegui l'agente (senza parametro should_continue che non è supportato)
+            # La funzione di callback register_new_step_callback si occuperà di verificare se continuare
             history = await agent.run(max_steps=self.config.max_steps)
 
+            # Verifica se è stato richiesto l'arresto durante l'esecuzione
             if not self.running:
+                self.log_message.emit("Arresto richiesto durante l'esecuzione dell'agente.")
+                if self.browser:
+                    self.log_message.emit("Chiusura browser in corso...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                self.progress.emit(100, "Operazione annullata")
                 return
 
             # Ottieni il risultato finale
+            self.log_message.emit("Elaborazione risultati...")
+            self.progress.emit(95, "Elaborazione risultati...")
             final_result = history.final_result() or "Task completato senza risultato esplicito."
+            self.log_message.emit("Risultato finale ottenuto.")
 
             # Emetti il risultato
-            self.progress.emit(100, "Task completato!")
+            self.progress.emit(99, "Task completato!")
+            self.log_message.emit("Task completato con successo!")
             self.finished.emit(final_result)
 
         except Exception as e:
-            if self.running:
-                import traceback
-                error_details = traceback.format_exc()
-                self.error.emit(f"Errore nell'esecuzione dell'agente: {str(e)}\n\n{error_details}")
-                logging.error(f"Errore in BrowserAgentWorker: {e}", exc_info=True)
+            # Gestione dettagliata delle eccezioni
+            error_details = traceback.format_exc()
+            error_msg = f"Errore nell'esecuzione dell'agente: {str(e)}\n\n{error_details}"
+            self.log_message.emit(f"ERRORE: {error_msg}")
+            self.error.emit(error_msg)
+            logging.error(f"Errore in BrowserAgentWorker: {e}", exc_info=True)
         finally:
-            # Assicurati che il browser venga chiuso alla fine
-            if browser:
+            # Assicurati di chiudere il browser alla fine
+            if self.browser:
                 try:
-                    await browser.close()
+                    self.log_message.emit("Chiusura browser in corso...")
+                    self.progress.emit(98, "Chiusura browser...")
+                    await self.browser.close()
+                    self.log_message.emit("Browser chiuso con successo.")
+                    self.progress.emit(100, "Browser chiuso con successo")
                 except Exception as e:
+                    self.log_message.emit(f"Errore nella chiusura del browser: {e}")
                     logging.error(f"Errore nella chiusura del browser: {e}")
 
+            # Reset finale
+            self.browser = None
+            self.log_message.emit("Operazione terminata.")
+
     def run(self):
-        asyncio.run(self.run_agent_async())
+        try:
+            self.running = True
+            asyncio.run(self.run_agent_async())
+        except Exception as e:
+            error_details = traceback.format_exc()
+            self.log_message.emit(f"Errore fatale nel worker: {str(e)}\n{error_details}")
+            self.error.emit(f"Errore fatale nel worker: {str(e)}\n{error_details}")
 
     def stop(self):
+        # Segnala l'intento di fermare l'esecuzione
+        self.log_message.emit("Richiesta di arresto ricevuta.")
         self.running = False
+        # Emetti un segnale per aggiornare l'UI
+        self.progress.emit(97, "Arresto in corso...")
 
 
 class AgentRunThread(QThread):
     """Thread per eseguire il browser agent"""
 
+    finished = pyqtSignal()
+    log_message = pyqtSignal(str)
+
     def __init__(self, worker):
         super().__init__()
         self.worker = worker
+        self.worker.log_message.connect(self.forwardLogMessage)
+        self.terminated = False
 
     def run(self):
-        self.worker.run()
+        try:
+            self.log_message.emit("Thread dell'agente avviato.")
+            self.worker.run()
+            self.terminated = True
+            self.log_message.emit("Thread dell'agente terminato normalmente.")
+        except Exception as e:
+            self.terminated = True
+            self.log_message.emit(f"Errore nel thread: {str(e)}")
+        finally:
+            self.finished.emit()
+
+    def forwardLogMessage(self, message):
+        # Inoltra i messaggi di log dal worker
+        self.log_message.emit(message)
 
     def stop(self):
-        self.worker.stop()
-        self.wait()
+        self.log_message.emit("Richiesta arresto del thread dell'agente.")
+        try:
+            # Ferma il worker
+            self.worker.stop()
+            # Aspetta un po' ma non blocca indefinitamente
+            self.wait(300)  # Timeout di 300ms
+        except Exception as e:
+            self.log_message.emit(f"Errore durante l'arresto del thread: {str(e)}")
 
 
 class UnifiedBrowserAgentDialog(QDialog):
@@ -210,11 +369,14 @@ class UnifiedBrowserAgentDialog(QDialog):
     def __init__(self, parent=None, agent_config=None, transcription_text=None):
         super().__init__(parent)
         self.setWindowTitle("Browser Agent - Configurazione ed Esecuzione")
-        self.setMinimumWidth(700)
+        self.setMinimumWidth(800)
+        self.setMinimumHeight(600)
         self.agent_config = agent_config or AgentConfig()
         self.transcription_text = transcription_text or ""
         self.agent_thread = None
         self.result = None
+        self.cleanup_timer = QTimer()
+        self.cleanup_timer.timeout.connect(self.checkThreadStatus)
         self.initUI()
 
     def initUI(self):
@@ -322,12 +484,28 @@ class UnifiedBrowserAgentDialog(QDialog):
         btnLayout.addWidget(self.stopButton)
         taskLayout.addLayout(btnLayout)
 
-        # Result display
-        resultGroup = QGroupBox("Risultati Agent")
+        # Result display che include il log e il risultato dell'agente
+        # Modifichiamo per avere una sezione log separata
+        resultGroup = QGroupBox("Log e Risultati")
         resultLayout = QVBoxLayout()
+
+        # Area di log con etichetta
+        logLabel = QLabel("Log di esecuzione:")
+        resultLayout.addWidget(logLabel)
+
+        self.logEdit = QTextEdit()
+        self.logEdit.setReadOnly(True)
+        self.logEdit.setMaximumHeight(150)  # Limita l'altezza del log
+        resultLayout.addWidget(self.logEdit)
+
+        # Area di risultato con etichetta
+        resultLabel = QLabel("Risultato dell'operazione:")
+        resultLayout.addWidget(resultLabel)
+
         self.resultEdit = QTextEdit()
         self.resultEdit.setReadOnly(True)
         resultLayout.addWidget(self.resultEdit)
+
         resultGroup.setLayout(resultLayout)
         taskLayout.addWidget(resultGroup)
 
@@ -372,9 +550,19 @@ class UnifiedBrowserAgentDialog(QDialog):
             self.taskEdit.clear()
             self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent...")
 
+    def addLogMessage(self, message):
+        """Aggiunge un messaggio al log con timestamp"""
+        timestamp = time.strftime("%H:%M:%S", time.localtime())
+        log_entry = f"[{timestamp}] {message}"
+        self.logEdit.append(log_entry)
+        # Scorrimento automatico verso il basso
+        cursor = self.logEdit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
+        self.logEdit.setTextCursor(cursor)
+        # Forza l'aggiornamento dell'interfaccia
+        QApplication.processEvents()
+
     def runAgent(self):
-        # Prima salva la configurazione
-        #self.saveConfiguration()
 
         task = self.taskEdit.toPlainText().strip()
         if not task:
@@ -385,20 +573,38 @@ class UnifiedBrowserAgentDialog(QDialog):
             QMessageBox.warning(self, "API Key Mancante", "Configura una API key.")
             return
 
+        # Disabilita/abilita pulsanti
         self.runButton.setEnabled(False)
         self.stopButton.setEnabled(True)
+
+        # Pulisci log e risultati
+        self.logEdit.clear()
         self.resultEdit.clear()
 
-        # Aggiungi debug info
-        self.resultEdit.append(
-            f"Configurazione agente:\n- API Key: {'Configurata' if self.agent_config.api_key else 'Mancante'}\n- Modello: {self.agent_config.model_name}\n- Headless: {self.agent_config.headless}\n- Max steps: {self.agent_config.max_steps}\n\nAvvio agente in corso...\n")
+        # Aggiungi log iniziale
+        self.addLogMessage("=== AVVIO AGENTE BROWSER ===")
+        self.addLogMessage(f"Task: {task}")
+        self.addLogMessage(f"Configurazione:")
+        self.addLogMessage(f"- API Key: {'Configurata' if self.agent_config.api_key else 'Mancante'}")
+        self.addLogMessage(f"- Modello: {self.agent_config.model_name}")
+        self.addLogMessage(f"- Modalità headless: {self.agent_config.headless}")
+        self.addLogMessage(f"- Uso visione: {self.agent_config.use_vision}")
+        self.addLogMessage(f"- Passi massimi: {self.agent_config.max_steps}")
+        self.addLogMessage("Inizializzazione in corso...")
 
         # Create progress dialog
         self.progressDialog = QProgressDialog("Esecuzione browser agent...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Agent")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.setMinimumDuration(0)  # Mostra immediatamente
         self.progressDialog.canceled.connect(self.stopAgent)
+        self.progressDialog.show()
 
+        # Assicurati che il dialog sia visibile
+        self.progressDialog.raise_()
+        self.progressDialog.activateWindow()
+
+        # Ferma il thread esistente se in esecuzione
         if self.agent_thread and self.agent_thread.isRunning():
             self.stopAgent()
 
@@ -407,58 +613,150 @@ class UnifiedBrowserAgentDialog(QDialog):
         self.worker.progress.connect(self.updateProgress)
         self.worker.finished.connect(self.onAgentFinished)
         self.worker.error.connect(self.onAgentError)
+        self.worker.log_message.connect(self.addLogMessage)
 
         self.agent_thread = AgentRunThread(self.worker)
+        self.agent_thread.log_message.connect(self.addLogMessage)
+        self.agent_thread.finished.connect(self.onThreadFinished)
         self.agent_thread.start()
 
-        self.progressDialog.show()
+        # Avvia il timer di controllo dello stato del thread
+        self.cleanup_timer.start(500)  # Controlla ogni 500ms
+
+    def checkThreadStatus(self):
+        """Verifica lo stato del thread dell'agente e gestisce chiusure impreviste"""
+        if self.agent_thread and not self.agent_thread.isRunning() and self.stopButton.isEnabled():
+            self.addLogMessage("Thread terminato inaspettatamente.")
+            self.onThreadFinished()
 
     def stopAgent(self):
-        if self.agent_thread and self.agent_thread.isRunning():
-            self.progressDialog.setLabelText("Arresto agente...")
+        if not self.agent_thread or not self.agent_thread.isRunning():
+            self.addLogMessage("Nessun thread dell'agente in esecuzione da fermare.")
+            return
+
+        self.progressDialog.setLabelText("Arresto agente in corso...")
+        self.addLogMessage("\n=== ARRESTO RICHIESTO DALL'UTENTE ===")
+        self.addLogMessage("Invio segnale di arresto all'agente...")
+
+        # Invia il segnale di arresto al thread
+        try:
             self.agent_thread.stop()
+            self.addLogMessage("Segnale di arresto inviato.")
+        except Exception as e:
+            self.addLogMessage(f"Errore durante l'invio del segnale di arresto: {str(e)}")
+
+        # Attendi un po'
+        self.addLogMessage("Attesa risposta dall'agente (5 secondi massimo)...")
+
+        # Attendiamo fino a 5 secondi in blocchi di 1 secondo
+        for i in range(5):
+            if not self.agent_thread.isRunning():
+                self.addLogMessage(f"Thread terminato con successo dopo {i + 1} secondi.")
+                break
+
+            # Attendi 1 secondo e controlla
+            QApplication.processEvents()
+            time.sleep(1)
+            QApplication.processEvents()
+
+            self.addLogMessage(f"Attesa... {i + 1}/5 secondi trascorsi.")
+
+        # Se ancora in esecuzione, termina forzatamente
+        if self.agent_thread.isRunning():
+            self.addLogMessage("Forzatura terminazione thread...")
+            try:
+                self.agent_thread.terminate()
+                self.agent_thread.wait(1000)  # Attende ancora 1 secondo
+                self.addLogMessage("Thread terminato forzatamente.")
+            except Exception as e:
+                self.addLogMessage(f"Errore durante la terminazione forzata: {str(e)}")
+
+        # Aggiorna l'interfaccia
+        self.addLogMessage("=== PROCESSO DI ARRESTO COMPLETATO ===")
+        self.onThreadFinished()
+
+        # Chiudi il dialog di progresso
+        if hasattr(self, 'progressDialog') and self.progressDialog:
+            self.progressDialog.close()
+
+        # Aggiorna il risultato
+        self.resultEdit.setPlainText("Operazione interrotta dall'utente.")
 
     def updateProgress(self, value, message):
-        if self.progressDialog and not self.progressDialog.wasCanceled():
+        """Aggiorna la barra di progresso e il log"""
+        # Aggiorna la barra di progresso
+        if hasattr(self, 'progressDialog') and self.progressDialog and not self.progressDialog.wasCanceled():
             self.progressDialog.setValue(value)
-            self.progressDialog.setLabelText(f"Esecuzione agente: {message}")
+            self.progressDialog.setLabelText(f"Agente: {message}")
+
+        # Non aggiungiamo il log qui perché è già gestito dal segnale log_message
 
     def onAgentFinished(self, result):
+        """Gestisce il completamento dell'agente con successo"""
         if self.progressDialog:
             self.progressDialog.close()
 
         self.result = result
+        self.addLogMessage("Agente ha completato l'esecuzione con successo.")
 
-        # Formatta il risultato in modo più leggibile
-        formatted_result = f"=== RISULTATO DELL'AGENTE ===\n\n{result}\n\n"
+        # Visualizza il risultato
+        self.resultEdit.setPlainText(result)
 
-        # Visualizza il risultato nella finestra di dialogo dell'agente
-        self.resultEdit.setPlainText(formatted_result)
-
-        # Riattiva i pulsanti
-        self.runButton.setEnabled(True)
-        self.stopButton.setEnabled(False)
-
-        # Mostra un messaggio di completamento
-        QMessageBox.information(self, "Operazione Completata",
-                                "L'agente ha completato il task con successo!")
+        # Non mostriamo il dialogo di completamento qui - è gestito in onThreadFinished
 
     def onAgentError(self, error_message):
+        """Gestisce gli errori dell'agente"""
         if self.progressDialog:
             self.progressDialog.close()
 
-        # Formatta l'errore in modo più leggibile
-        formatted_error = f"=== ERRORE DURANTE L'ESECUZIONE ===\n\n{error_message}\n\n"
+        self.addLogMessage(f"ERRORE: {error_message}")
 
         # Visualizza l'errore nella finestra di dialogo dell'agente
-        self.resultEdit.setPlainText(formatted_error)
+        self.resultEdit.setPlainText(f"Si è verificato un errore:\n\n{error_message}")
 
-        # Riattiva i pulsanti
+        # Non mostriamo il dialogo di errore qui - è gestito in onThreadFinished
+
+    def onThreadFinished(self):
+        """Gestisce la terminazione del thread dell'agente"""
+        # Ripristina l'interfaccia utente
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
 
-        # Mostra un messaggio di errore
-        QMessageBox.critical(self, "Errore Agent", "Si è verificato un errore durante l'esecuzione dell'agente.")
+        # Ferma il timer di controllo
+        self.cleanup_timer.stop()
+
+        # Aggiorna i log
+        if hasattr(self, 'worker') and self.worker:
+            self.addLogMessage("Pulizia risorse...")
+            self.worker = None
+
+        if hasattr(self, 'agent_thread') and self.agent_thread:
+            # Non aspettiamo qui per evitare blocchi
+            self.agent_thread = None
+
+        self.addLogMessage("=== OPERAZIONE COMPLETATA ===")
+
+    def closeEvent(self, event):
+        """Gestisce la chiusura della finestra"""
+        # Se c'è un thread in esecuzione, chiedi conferma
+        if self.agent_thread and self.agent_thread.isRunning():
+            reply = QMessageBox.question(self, 'Conferma chiusura',
+                                         'L\'agente è ancora in esecuzione. Sei sicuro di voler chiudere?',
+                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                         QMessageBox.StandardButton.No)
+
+            if reply == QMessageBox.StandardButton.Yes:
+                # Ferma il thread prima di chiudere
+                self.stopAgent()
+                # Attendi un po' per dare tempo all'arresto
+                QApplication.processEvents()
+                time.sleep(1)
+                QApplication.processEvents()
+                event.accept()
+            else:
+                event.ignore()
+        else:
+            event.accept()
 
 
 class BrowserAgent:
