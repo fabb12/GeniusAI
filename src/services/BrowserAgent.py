@@ -535,8 +535,8 @@ class UnifiedBrowserAgentDialog(QDialog):
         }
         self.agent_config.from_dict(config_dict)
         self.agent_config.save_to_settings()
-        QMessageBox.information(self, "Configurazione Salvata",
-                                "La configurazione dell'agente è stata salvata con successo.")
+        #QMessageBox.information(self, "Configurazione Salvata",
+         #                       "La configurazione dell'agente è stata salvata con successo.")
 
     def updateTaskSource(self):
         """Aggiorna il contenuto del campo task in base alla fonte selezionata"""
@@ -563,6 +563,7 @@ class UnifiedBrowserAgentDialog(QDialog):
         QApplication.processEvents()
 
     def runAgent(self):
+        self.saveConfiguration()
 
         task = self.taskEdit.toPlainText().strip()
         if not task:
