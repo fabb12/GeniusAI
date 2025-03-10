@@ -2381,11 +2381,6 @@ class VideoAudioManager(QMainWindow):
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
         # Opzioni esistenti
-        configureAgentAction = QAction('&Configura Agent', self)
-        configureAgentAction.setStatusTip('Configura impostazioni agent AI')
-        configureAgentAction.triggered.connect(self.configureAgent)
-        agentAIsMenu.addAction(configureAgentAction)
-
         runAgentAction = QAction('&Esegui Agent', self)
         runAgentAction.setStatusTip('Esegui agent AI sul media corrente')
         runAgentAction.triggered.connect(self.runAgent)

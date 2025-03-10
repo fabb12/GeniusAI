@@ -1,11 +1,16 @@
 # services/BrowserAgent.py
+import os
 import asyncio
 import logging
+import json
+from typing import Optional, Dict, List
+import webbrowser
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
     QLabel, QPushButton, QTextEdit, QProgressDialog,
     QMessageBox, QComboBox, QCheckBox, QGroupBox,
-    QFormLayout, QDialogButtonBox, QFileDialog, QRadioButton
+    QFormLayout, QDialogButtonBox, QFileDialog, QRadioButton,
+    QTabWidget, QWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings
 
@@ -18,8 +23,11 @@ from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 # Importa la classe FrameExtractor
 from src.services.FrameExtractor import FrameExtractor
-from src.config import CLAUDE_MODEL_BROWSER_AGENT,PROMPT_BROWSER_GUIDE
+from src.config import CLAUDE_MODEL_BROWSER_AGENT
+from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU, PROMPT_BROWSER_GUIDE
 
+
+# Modifica della classe AgentConfig nella parte superiore del file BrowserAgent.py
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
@@ -74,6 +82,8 @@ class AgentConfig:
             self.use_vision = config_dict["use_vision"]
         if "max_steps" in config_dict:
             self.max_steps = config_dict["max_steps"]
+
+
 class BrowserAgentWorker(QObject):
     """Worker class per eseguire l'agente browser in un thread separato"""
 
@@ -88,11 +98,19 @@ class BrowserAgentWorker(QObject):
         self.running = False
 
     async def run_agent_async(self):
+        browser = None
         try:
-            # Configurazione browser simile all'esempio
+            # Configurazione browser
             browser_config = BrowserConfig(
-                headless=False,  # Modifica per vedere il browser
+                headless=self.config.headless,
                 disable_security=True
+            )
+
+            # Inizializza browser context config
+            context_config = BrowserContextConfig(
+                browser_window_size={'width': 1280, 'height': 900},
+                minimum_wait_page_load_time=0.5,
+                highlight_elements=True
             )
 
             # Inizializza il browser
@@ -115,46 +133,54 @@ class BrowserAgentWorker(QObject):
             # Inizializza controller
             controller = Controller()
 
-            # Inizializza l'agente con configurazioni simili allo script di esempio
+            # Inizializza agente con progress tracking
             agent = Agent(
                 task=self.task,
                 llm=llm,
                 browser=browser,
                 controller=controller,
                 use_vision=self.config.use_vision,
-                max_actions_per_step=1,  # Limitato come nell'esempio
-                override_system_message=None
+                max_actions_per_step=1
             )
 
-            # Registra callback per il reporting dei progressi
+            # Definisci e registra la callback per l'avanzamento
             async def progress_callback(state, model_output, step_num):
                 if not self.running:
                     return
                 progress_pct = min(int((step_num / self.config.max_steps) * 100), 99)
-                goal = model_output.current_state.next_goal if model_output else "Inizializzazione..."
-                self.progress.emit(progress_pct, goal)
+                goal = getattr(model_output, "next_goal", "Elaborazione...") if model_output else "Inizializzazione..."
+                self.progress.emit(progress_pct, str(goal))
 
+            # Registra la callback correttamente
             agent.register_new_step_callback = progress_callback
 
-            # Esegui l'agente con max_steps
+            # Esegui l'agente
             self.running = True
             history = await agent.run(max_steps=self.config.max_steps)
 
             if not self.running:
                 return
 
-            # Non chiudere il browser automaticamente, come nell'esempio
-            # Lascia che l'utente decida quando chiuderlo
+            # Ottieni il risultato finale
             final_result = history.final_result() or "Task completato senza risultato esplicito."
 
-            # Emetti il risultato senza chiudere il browser
+            # Emetti il risultato
             self.progress.emit(100, "Task completato!")
             self.finished.emit(final_result)
 
         except Exception as e:
             if self.running:
-                self.error.emit(f"Errore nell'esecuzione dell'agente: {str(e)}")
+                import traceback
+                error_details = traceback.format_exc()
+                self.error.emit(f"Errore nell'esecuzione dell'agente: {str(e)}\n\n{error_details}")
                 logging.error(f"Errore in BrowserAgentWorker: {e}", exc_info=True)
+        finally:
+            # Assicurati che il browser venga chiuso alla fine
+            if browser:
+                try:
+                    await browser.close()
+                except Exception as e:
+                    logging.error(f"Errore nella chiusura del browser: {e}")
 
     def run(self):
         asyncio.run(self.run_agent_async())
@@ -178,18 +204,29 @@ class AgentRunThread(QThread):
         self.wait()
 
 
-class BrowserAgentConfigDialog(QDialog):
-    """Dialog per configurare l'agente browser"""
+class UnifiedBrowserAgentDialog(QDialog):
+    """Dialog unificato per configurare ed eseguire l'agente browser"""
 
-    def __init__(self, parent=None, agent_config=None):
+    def __init__(self, parent=None, agent_config=None, transcription_text=None):
         super().__init__(parent)
-        self.setWindowTitle("Configura Browser Agent")
-        self.setMinimumWidth(600)
+        self.setWindowTitle("Browser Agent - Configurazione ed Esecuzione")
+        self.setMinimumWidth(700)
         self.agent_config = agent_config or AgentConfig()
+        self.transcription_text = transcription_text or ""
+        self.agent_thread = None
+        self.result = None
         self.initUI()
 
     def initUI(self):
         layout = QVBoxLayout()
+
+        # Crea un widget con tab per separare configurazione ed esecuzione
+        tabWidget = QTabWidget()
+        configTab = QWidget()
+        taskTab = QWidget()
+
+        # Configurazione UI del tab di configurazione
+        configLayout = QVBoxLayout(configTab)
 
         # API Key section
         apiGroup = QGroupBox("API Key")
@@ -198,17 +235,18 @@ class BrowserAgentConfigDialog(QDialog):
         self.apiKeyEdit.setEchoMode(QLineEdit.EchoMode.Password)
         apiLayout.addRow("API Key:", self.apiKeyEdit)
         apiGroup.setLayout(apiLayout)
-        layout.addWidget(apiGroup)
+        configLayout.addWidget(apiGroup)
 
         # Model selection
         modelGroup = QGroupBox("Selezione Modello")
         modelLayout = QFormLayout()
         self.modelCombo = QComboBox()
         self.modelCombo.addItems([
-            "claude-3-5-sonnet-20240620",
+            "claude-3-7-sonnet-20250219",
+            "claude-3-5-sonnet-20241022",
             "claude-3-opus-20240229",
             "claude-3-haiku-20240307",
-            "gpt-4-turbo-preview",
+            "gpt-4-turbo",
             "gpt-4o"
         ])
         # Trova e seleziona il modello corrente
@@ -217,7 +255,7 @@ class BrowserAgentConfigDialog(QDialog):
             self.modelCombo.setCurrentIndex(index)
         modelLayout.addRow("Modello:", self.modelCombo)
         modelGroup.setLayout(modelLayout)
-        layout.addWidget(modelGroup)
+        configLayout.addWidget(modelGroup)
 
         # Browser options
         browserGroup = QGroupBox("Opzioni Browser")
@@ -231,45 +269,15 @@ class BrowserAgentConfigDialog(QDialog):
         browserLayout.addRow("", self.visionCheck)
         browserLayout.addRow("Passi Massimi:", self.stepsEdit)
         browserGroup.setLayout(browserLayout)
-        layout.addWidget(browserGroup)
+        configLayout.addWidget(browserGroup)
 
-        # Buttons
-        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok |
-                                   QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(self.accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        # Pulsante per salvare configurazione
+        saveConfigButton = QPushButton("Salva Configurazione")
+        saveConfigButton.clicked.connect(self.saveConfiguration)
+        configLayout.addWidget(saveConfigButton)
 
-        self.setLayout(layout)
-
-    def getConfiguration(self):
-        """Restituisce la configurazione aggiornata"""
-        config_dict = {
-            "api_key": self.apiKeyEdit.text(),
-            "model_name": self.modelCombo.currentText(),
-            "headless": self.headlessCheck.isChecked(),
-            "use_vision": self.visionCheck.isChecked(),
-            "max_steps": int(self.stepsEdit.text())
-        }
-        self.agent_config.from_dict(config_dict)
-        return self.agent_config
-
-
-class BrowserAgentRunDialog(QDialog):
-    """Dialog per eseguire l'agente browser con un task specifico"""
-
-    def __init__(self, parent=None, agent_config=None, transcription_text=None):
-        super().__init__(parent)
-        self.setWindowTitle("Esegui Browser Agent")
-        self.setMinimumWidth(600)
-        self.agent_config = agent_config or AgentConfig()
-        self.transcription_text = transcription_text or ""
-        self.agent_thread = None
-        self.result = None
-        self.initUI()
-
-    def initUI(self):
-        layout = QVBoxLayout()
+        # Configurazione UI del tab di esecuzione task
+        taskLayout = QVBoxLayout(taskTab)
 
         # Task source selection
         taskSourceGroup = QGroupBox("Fonte del Task")
@@ -288,16 +296,16 @@ class BrowserAgentRunDialog(QDialog):
         taskSourceLayout.addWidget(self.manualTaskRadio)
         taskSourceLayout.addWidget(self.transcriptionTaskRadio)
         taskSourceGroup.setLayout(taskSourceLayout)
-        layout.addWidget(taskSourceGroup)
+        taskLayout.addWidget(taskSourceGroup)
 
         # Task input
         taskGroup = QGroupBox("Descrizione Task")
-        taskLayout = QVBoxLayout()
+        taskLayout2 = QVBoxLayout()
         self.taskEdit = QTextEdit()
         self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent...")
-        taskLayout.addWidget(self.taskEdit)
-        taskGroup.setLayout(taskLayout)
-        layout.addWidget(taskGroup)
+        taskLayout2.addWidget(self.taskEdit)
+        taskGroup.setLayout(taskLayout2)
+        taskLayout.addWidget(taskGroup)
 
         # Connect task source radio buttons
         self.manualTaskRadio.toggled.connect(self.updateTaskSource)
@@ -312,7 +320,7 @@ class BrowserAgentRunDialog(QDialog):
         self.stopButton.setEnabled(False)
         btnLayout.addWidget(self.runButton)
         btnLayout.addWidget(self.stopButton)
-        layout.addLayout(btnLayout)
+        taskLayout.addLayout(btnLayout)
 
         # Result display
         resultGroup = QGroupBox("Risultati Agent")
@@ -321,7 +329,13 @@ class BrowserAgentRunDialog(QDialog):
         self.resultEdit.setReadOnly(True)
         resultLayout.addWidget(self.resultEdit)
         resultGroup.setLayout(resultLayout)
-        layout.addWidget(resultGroup)
+        taskLayout.addWidget(resultGroup)
+
+        # Aggiungi i tab al widget
+        tabWidget.addTab(configTab, "Configurazione")
+        tabWidget.addTab(taskTab, "Esecuzione")
+
+        layout.addWidget(tabWidget)
 
         # Close button
         closeButton = QPushButton("Chiudi")
@@ -332,6 +346,19 @@ class BrowserAgentRunDialog(QDialog):
 
         # Initialize task text
         self.updateTaskSource()
+
+    def saveConfiguration(self):
+        config_dict = {
+            "api_key": self.apiKeyEdit.text(),
+            "model_name": self.modelCombo.currentText(),
+            "headless": self.headlessCheck.isChecked(),
+            "use_vision": self.visionCheck.isChecked(),
+            "max_steps": int(self.stepsEdit.text())
+        }
+        self.agent_config.from_dict(config_dict)
+        self.agent_config.save_to_settings()
+        QMessageBox.information(self, "Configurazione Salvata",
+                                "La configurazione dell'agente è stata salvata con successo.")
 
     def updateTaskSource(self):
         """Aggiorna il contenuto del campo task in base alla fonte selezionata"""
@@ -346,6 +373,9 @@ class BrowserAgentRunDialog(QDialog):
             self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent...")
 
     def runAgent(self):
+        # Prima salva la configurazione
+        #self.saveConfiguration()
+
         task = self.taskEdit.toPlainText().strip()
         if not task:
             QMessageBox.warning(self, "Task Mancante", "Inserisci un task per l'agente.")
@@ -359,15 +389,21 @@ class BrowserAgentRunDialog(QDialog):
         self.stopButton.setEnabled(True)
         self.resultEdit.clear()
 
+        # Aggiungi debug info
+        self.resultEdit.append(
+            f"Configurazione agente:\n- API Key: {'Configurata' if self.agent_config.api_key else 'Mancante'}\n- Modello: {self.agent_config.model_name}\n- Headless: {self.agent_config.headless}\n- Max steps: {self.agent_config.max_steps}\n\nAvvio agente in corso...\n")
+
         # Create progress dialog
         self.progressDialog = QProgressDialog("Esecuzione browser agent...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Agent")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.canceled.connect(self.stopAgent)
 
-        # Create worker and thread
-        self.worker = BrowserAgentWorker(task=task, config=self.agent_config)
+        if self.agent_thread and self.agent_thread.isRunning():
+            self.stopAgent()
 
+        # Crea nuovi worker e thread
+        self.worker = BrowserAgentWorker(task=task, config=self.agent_config)
         self.worker.progress.connect(self.updateProgress)
         self.worker.finished.connect(self.onAgentFinished)
         self.worker.error.connect(self.onAgentError)
@@ -392,18 +428,37 @@ class BrowserAgentRunDialog(QDialog):
             self.progressDialog.close()
 
         self.result = result
-        self.resultEdit.setPlainText(result)
+
+        # Formatta il risultato in modo più leggibile
+        formatted_result = f"=== RISULTATO DELL'AGENTE ===\n\n{result}\n\n"
+
+        # Visualizza il risultato nella finestra di dialogo dell'agente
+        self.resultEdit.setPlainText(formatted_result)
+
+        # Riattiva i pulsanti
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
+
+        # Mostra un messaggio di completamento
+        QMessageBox.information(self, "Operazione Completata",
+                                "L'agente ha completato il task con successo!")
 
     def onAgentError(self, error_message):
         if self.progressDialog:
             self.progressDialog.close()
 
-        self.resultEdit.setPlainText(f"Errore: {error_message}")
+        # Formatta l'errore in modo più leggibile
+        formatted_error = f"=== ERRORE DURANTE L'ESECUZIONE ===\n\n{error_message}\n\n"
+
+        # Visualizza l'errore nella finestra di dialogo dell'agente
+        self.resultEdit.setPlainText(formatted_error)
+
+        # Riattiva i pulsanti
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
-        QMessageBox.critical(self, "Errore Agent", error_message)
+
+        # Mostra un messaggio di errore
+        QMessageBox.critical(self, "Errore Agent", "Si è verificato un errore durante l'esecuzione dell'agente.")
 
 
 class BrowserAgent:
@@ -423,16 +478,19 @@ class BrowserAgent:
             return self.parent.transcriptionTextArea.toPlainText()
         return ""
 
+    def showAgentDialog(self):
+        """Mostra il dialog unificato di configurazione ed esecuzione"""
+        dialog = UnifiedBrowserAgentDialog(self.parent, self.agent_config, self.getTranscriptionText())
+        dialog.exec()
+
+    # Questi metodi sono mantenuti per compatibilità con il codice esistente
     def showConfigDialog(self):
-        """Mostra il dialog di configurazione"""
-        dialog = BrowserAgentConfigDialog(self.parent, self.agent_config)
+        """Reindirizza al nuovo dialog unificato"""
+        return self.showAgentDialog()
 
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            self.agent_config = dialog.getConfiguration()
-            self.agent_config.save_to_settings()
-            return True
-
-        return False
+    def runAgent(self):
+        """Reindirizza al nuovo dialog unificato"""
+        return self.showAgentDialog()
 
     def generate_operational_guide(self, video_path=None, num_frames=5, language="italiano"):
         """
@@ -459,8 +517,6 @@ class BrowserAgent:
             # 1. Estrai i frame dal video utilizzando la funzionalità di FrameExtractor
             progress_dialog.setLabelText("Estrazione dei frame dal video...")
             progress_dialog.setValue(10)
-
-
 
             # Carica il modello dalle impostazioni
             settings = QSettings("ThemaConsulting", "GeniusAI")
@@ -544,6 +600,7 @@ class BrowserAgent:
                                  f"Si è verificato un errore durante la generazione della guida: {str(e)}")
             logging.error(f"Errore nella generazione della guida operativa: {e}", exc_info=True)
             return False
+
     def create_guide_agent(self):
         """
         Metodo completo che:
@@ -572,17 +629,3 @@ class BrowserAgent:
 
         # Genera la guida operativa
         self.generate_operational_guide(video_path, num_frames, language)
-
-    def runAgent(self):
-        """Esegue l'agente browser con la configurazione corrente"""
-        # Make sure we have an API key
-        if not self.agent_config.api_key:
-            if not self.showConfigDialog():
-                return
-
-        # Get transcription text
-        transcription_text = self.getTranscriptionText()
-
-        # Create and show the run dialog
-        dialog = BrowserAgentRunDialog(self.parent, self.agent_config, transcription_text)
-        dialog.exec()
