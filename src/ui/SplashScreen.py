@@ -1,8 +1,24 @@
 import os
 import random
+import sys
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtWidgets import QSplashScreen
 from PyQt6.QtCore import Qt
+
+
+def resource_path(relative_path):
+    """
+    Determina il percorso corretto per le risorse, che funziona sia in modalità sviluppo
+    che quando l'applicazione è eseguita tramite PyInstaller.
+    """
+    try:
+        # Se l'app è in esecuzione come bundle PyInstaller
+        base_path = sys._MEIPASS
+    except Exception:
+        # Altrimenti, durante lo sviluppo
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
 
 
 class SplashScreen(QSplashScreen):
@@ -17,20 +33,49 @@ class SplashScreen(QSplashScreen):
         """
         Seleziona casualmente un'immagine da una cartella.
         """
-        # Ottieni tutti i file nella cartella
-        images = [f for f in os.listdir(folder_path) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
+        try:
+            # Verifica se la cartella esiste
+            if not os.path.exists(folder_path):
+                # Prova a usare resource_path
+                folder_path = resource_path(folder_path)
 
-        if not images:
-            raise FileNotFoundError("Nessuna immagine trovata nella cartella.")
+            # Se la cartella ancora non esiste, utilizzare un'immagine di default
+            if not os.path.exists(folder_path):
+                default_image = resource_path("res/eye.png")
+                if os.path.exists(default_image):
+                    return QPixmap(default_image)
+                raise FileNotFoundError(f"Cartella immagini non trovata: {folder_path}")
 
-        # Seleziona un file casuale
-        random_image = random.choice(images)
+            # Ottieni tutti i file nella cartella
+            all_files = os.listdir(folder_path)
+            images = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.gif'))]
 
-        # Costruisci il percorso completo dell'immagine
-        image_path = os.path.join(folder_path, random_image)
+            if not images:
+                # Se non ci sono immagini, usa un'immagine predefinita
+                default_image = resource_path("res/eye.png")
+                if os.path.exists(default_image):
+                    return QPixmap(default_image)
+                raise FileNotFoundError("Nessuna immagine trovata nella cartella.")
 
-        # Carica l'immagine come QPixmap
-        return QPixmap(image_path)
+            # Seleziona un file casuale
+            random_image = random.choice(images)
+
+            # Costruisci il percorso completo dell'immagine
+            image_path = os.path.join(folder_path, random_image)
+
+            # Carica l'immagine come QPixmap
+            return QPixmap(image_path)
+
+        except Exception as e:
+            print(f"Errore nel caricamento dell'immagine splash: {e}")
+            # Fallback a un'immagine predefinita in caso di errore
+            try:
+                default_image = resource_path("res/eye.png")
+                if os.path.exists(default_image):
+                    return QPixmap(default_image)
+            except:
+                pass
+            return QPixmap()  # Pixmap vuoto come ultima risorsa
 
     def showMessage(self, message):
         """

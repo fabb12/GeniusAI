@@ -55,8 +55,8 @@ from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
 from managers.StreamToLogger import setup_logging
-from services.FrameExtractor import FrameExtractor  # Assicurati che sia il percorso corretto
-
+from services.FrameExtractor import FrameExtractor
+from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from config import (ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
 from config import MUSIC_DIR
 from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
@@ -2219,9 +2219,18 @@ class VideoAudioManager(QMainWindow):
             self.downloadThread = DownloadThread(url, download_video, ffmpeg_path)
             self.downloadThread.finished.connect(self.onDownloadFinished)
             self.downloadThread.error.connect(self.onError)
-            self.downloadThread.progress.connect(self.updateDownloadProgress)  # Connect to the new progress signal
+            self.downloadThread.progress.connect(self.updateDownloadProgress)
+
+            # Collega il nuovo segnale per gli URL di streaming
+            if hasattr(self.downloadThread, 'stream_url_found'):
+                self.downloadThread.stream_url_found.connect(self.onStreamUrlFound)
+
             self.downloadThread.start()
             self.showDownloadProgress()
+
+    def onStreamUrlFound(self, stream_url):
+        """Gestisce l'URL di streaming trovato"""
+        logging.debug(f"URL di streaming trovato: {stream_url}")
 
     def showDownloadProgress(self):
         self.progressDialog = QProgressDialog("Downloading video...", "Abort", 0, 100, self)
@@ -2855,34 +2864,193 @@ class VideoAudioManager(QMainWindow):
 
     def applyNewAudioToVideo(self, video_path_line_edit, new_audio_path, align_audio_video):
         video_path = video_path_line_edit
-        if not video_path or not new_audio_path:
-            QMessageBox.warning(self, "Attenzione", "Seleziona sia un file video che un file audio.")
+
+        # Migliorata la validazione degli input
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Attenzione", "Il file video selezionato non esiste.")
             return
 
-        # Determina il percorso di output
-        output_path = os.path.join(os.path.dirname(video_path), "output_" + os.path.basename(video_path))
+        if not new_audio_path or not os.path.exists(new_audio_path):
+            QMessageBox.warning(self, "Attenzione", "Il file audio selezionato non esiste.")
+            return
 
-        try:
-            if align_audio_video:
-                self.adattaVelocitaVideoAAudio(video_path, new_audio_path, output_path)
-            else:
-                video_clip = VideoFileClip(video_path)
-                new_audio = AudioFileClip(new_audio_path)
+        # Crea un percorso di output unico con timestamp per evitare sovrascritture
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_dir = os.path.dirname(video_path)
+        output_path = os.path.join(output_dir, f"{base_name}_audio_{timestamp}.mp4")
 
-                # Imposta il nuovo audio sul video
-                final_video = video_clip.set_audio(new_audio)
+        # Crea un thread per l'elaborazione in background
+        class AudioVideoThread(QThread):
+            progress = pyqtSignal(int, str)
+            completed = pyqtSignal(str)
+            error = pyqtSignal(str)
 
-                # Scrivi il video finale mantenendo lo stesso frame rate del video originale
-                final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps)
-                logging.debug('Video elaborato con successo senza adattamento velocità.')
+            def __init__(self, video_path, audio_path, output_path, align_speed):
+                super().__init__()
+                self.video_path = video_path
+                self.audio_path = audio_path
+                self.output_path = output_path
+                self.align_speed = align_speed
+                self.running = True
 
-            QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
+            def run(self):
+                try:
+                    if self.align_speed:
+                        self.alignSpeedAndApplyAudio()
+                    else:
+                        self.applyAudioOnly()
 
-            self.loadVideoOutput(output_path)
-        except Exception as e:
-            logging.debug(f"Errore durante l'applicazione del nuovo audio: {e}")
-            QMessageBox.critical(self, "Errore",
-                                 f"Si è verificato un errore durante l'applicazione del nuovo audio:\n{str(e)}")
+                    if self.running:
+                        self.completed.emit(self.output_path)
+                except Exception as e:
+                    if self.running:
+                        self.error.emit(str(e))
+
+            def alignSpeedAndApplyAudio(self):
+                video_clip = None
+                audio_clip = None
+                video_modified = None
+                final_video = None
+
+                try:
+                    # Carica i file
+                    self.progress.emit(10, "Caricamento video...")
+                    video_clip = VideoFileClip(self.video_path)
+
+                    self.progress.emit(20, "Caricamento audio...")
+                    audio_clip = AudioFileClip(self.audio_path)
+
+                    # Calcola il fattore di velocità
+                    self.progress.emit(30, "Calcolo fattore di velocità...")
+                    video_duration = video_clip.duration
+                    audio_duration = audio_clip.duration
+
+                    if video_duration <= 0 or audio_duration <= 0:
+                        raise ValueError("Durata del video o dell'audio non valida")
+
+                    speed_factor = round(video_duration / audio_duration, 2)
+
+                    # Applica il cambio di velocità
+                    self.progress.emit(40, "Applicazione effetto velocità...")
+                    video_modified = video_clip.fx(vfx.speedx, speed_factor)
+
+                    # Applica l'audio
+                    self.progress.emit(60, "Applicazione audio...")
+                    final_video = video_modified.set_audio(audio_clip)
+
+                    # Scrive l'output con impostazioni ottimizzate
+                    self.progress.emit(70, "Salvataggio video finale...")
+                    final_video.write_videofile(
+                        self.output_path,
+                        codec="libx264",
+                        audio_codec="aac",
+                        fps=video_clip.fps,
+                        preset="ultrafast",  # Codifica più veloce
+                        threads=4,  # Usa più thread
+                        logger=None  # Disabilita il logging verboso
+                    )
+
+                    self.progress.emit(100, "Completato")
+
+                except Exception as e:
+                    raise Exception(f"Errore nell'allineamento audio-video: {str(e)}")
+                finally:
+                    # Pulizia risorse indipendentemente dall'esito
+                    if video_clip:
+                        video_clip.close()
+                    if audio_clip:
+                        audio_clip.close()
+                    if video_modified:
+                        video_modified.close()
+                    if final_video:
+                        final_video.close()
+
+            def applyAudioOnly(self):
+                video_clip = None
+                audio_clip = None
+                final_video = None
+
+                try:
+                    # Carica i file
+                    self.progress.emit(10, "Caricamento video...")
+                    video_clip = VideoFileClip(self.video_path)
+
+                    self.progress.emit(30, "Caricamento audio...")
+                    audio_clip = AudioFileClip(self.audio_path)
+
+                    # Verifica e gestisci casi in cui la durata dell'audio è diversa dal video
+                    if audio_clip.duration > video_clip.duration:
+                        self.progress.emit(40, "Taglio audio per adattarlo al video...")
+                        audio_clip = audio_clip.subclip(0, video_clip.duration)
+
+                    # Applica l'audio
+                    self.progress.emit(50, "Applicazione audio...")
+                    final_video = video_clip.set_audio(audio_clip)
+
+                    # Scrive l'output con impostazioni ottimizzate
+                    self.progress.emit(70, "Salvataggio video finale...")
+                    final_video.write_videofile(
+                        self.output_path,
+                        codec="libx264",
+                        audio_codec="aac",
+                        fps=video_clip.fps,
+                        preset="ultrafast",
+                        threads=4,
+                        logger=None
+                    )
+
+                    self.progress.emit(100, "Completato")
+
+                except Exception as e:
+                    raise Exception(f"Errore nella sostituzione dell'audio: {str(e)}")
+                finally:
+                    # Pulizia risorse
+                    if video_clip:
+                        video_clip.close()
+                    if audio_clip:
+                        audio_clip.close()
+                    if final_video:
+                        final_video.close()
+
+            def stop(self):
+                self.running = False
+
+        # Crea dialog di progresso
+        self.progressDialog = QProgressDialog("Preparazione processo...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Processo Audio-Video")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+
+        # Crea thread
+        self.audio_video_thread = AudioVideoThread(video_path, new_audio_path, output_path, align_audio_video)
+
+        # Collega i segnali
+        self.audio_video_thread.progress.connect(self.updateAudioVideoProgress)
+        self.audio_video_thread.completed.connect(self.onAudioVideoCompleted)
+        self.audio_video_thread.error.connect(self.onAudioVideoError)
+        self.progressDialog.canceled.connect(self.audio_video_thread.stop)
+
+        # Avvia thread
+        self.audio_video_thread.start()
+        self.progressDialog.show()
+
+    def updateAudioVideoProgress(self, value, message):
+        """Aggiorna il dialog di progresso con lo stato attuale"""
+        if hasattr(self, 'progressDialog') and self.progressDialog is not None:
+            self.progressDialog.setValue(value)
+            self.progressDialog.setLabelText(message)
+
+    def onAudioVideoCompleted(self, output_path):
+        """Gestisce il completamento dell'elaborazione audio-video"""
+        self.progressDialog.close()
+        QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def onAudioVideoError(self, error_message):
+        """Gestisce gli errori durante l'elaborazione audio-video"""
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore",
+                             f"Si è verificato un errore durante l'elaborazione audio-video:\n{error_message}")
 
     def cutVideo(self):
         media_path = self.videoPathLineEdit
@@ -3063,13 +3231,23 @@ class VideoAudioManager(QMainWindow):
     def stopVideo(self):
         self.player.stop()
 
+
+def resource_path(relative_path):
+    """Ottiene il percorso assoluto delle risorse, funziona sia in development che in produzione"""
+    try:
+        # PyInstaller crea una cartella temporanea e memorizza il percorso in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Specifica la cartella delle immagini
-
-
-    image_folder = SPLASH_IMAGES_DIR
+    image_folder = resource_path(SPLASH_IMAGES_DIR)
 
     # Crea la splash screen con un'immagine casuale dalla cartella
     splash = SplashScreen(image_folder)
