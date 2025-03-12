@@ -6,21 +6,6 @@ from PyQt6.QtWidgets import QSplashScreen
 from PyQt6.QtCore import Qt
 
 
-def resource_path(relative_path):
-    """
-    Determina il percorso corretto per le risorse, che funziona sia in modalità sviluppo
-    che quando l'applicazione è eseguita tramite PyInstaller.
-    """
-    try:
-        # Se l'app è in esecuzione come bundle PyInstaller
-        base_path = sys._MEIPASS
-    except Exception:
-        # Altrimenti, durante lo sviluppo
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
-
 class SplashScreen(QSplashScreen):
     def __init__(self, image_folder):
         super().__init__()
@@ -34,17 +19,26 @@ class SplashScreen(QSplashScreen):
         Seleziona casualmente un'immagine da una cartella.
         """
         try:
-            # Verifica se la cartella esiste
-            if not os.path.exists(folder_path):
-                # Prova a usare resource_path
-                folder_path = resource_path(folder_path)
+            # Prova diverse possibili posizioni della cartella
+            possible_paths = [
+                folder_path,  # Percorso originale
+                os.path.join("res", "splash_images"),  # Percorso relativo alla root dell'applicazione
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "res", "splash_images"),
+                # Percorso relativo al file corrente
+                os.path.join(os.path.dirname(sys.executable), "res", "splash_images")
+                # Percorso relativo all'eseguibile
+            ]
 
-            # Se la cartella ancora non esiste, utilizzare un'immagine di default
-            if not os.path.exists(folder_path):
-                default_image = resource_path("res/eye.png")
+            for path in possible_paths:
+                if os.path.exists(path):
+                    folder_path = path
+                    break
+            else:
+                # Se nessuna delle cartelle esiste, utilizzare un'immagine di default
+                default_image = "res/eye.png"
                 if os.path.exists(default_image):
                     return QPixmap(default_image)
-                raise FileNotFoundError(f"Cartella immagini non trovata: {folder_path}")
+                raise FileNotFoundError(f"Cartella immagini non trovata in nessuna delle posizioni verificate")
 
             # Ottieni tutti i file nella cartella
             all_files = os.listdir(folder_path)
@@ -52,7 +46,7 @@ class SplashScreen(QSplashScreen):
 
             if not images:
                 # Se non ci sono immagini, usa un'immagine predefinita
-                default_image = resource_path("res/eye.png")
+                default_image = "res/eye.png"
                 if os.path.exists(default_image):
                     return QPixmap(default_image)
                 raise FileNotFoundError("Nessuna immagine trovata nella cartella.")
@@ -70,7 +64,7 @@ class SplashScreen(QSplashScreen):
             print(f"Errore nel caricamento dell'immagine splash: {e}")
             # Fallback a un'immagine predefinita in caso di errore
             try:
-                default_image = resource_path("res/eye.png")
+                default_image = "res/eye.png"
                 if os.path.exists(default_image):
                     return QPixmap(default_image)
             except:

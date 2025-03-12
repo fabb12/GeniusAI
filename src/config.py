@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-
+import sys
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
@@ -33,7 +33,7 @@ CLAUDE_MODEL_SUMMARY = os.getenv("CLAUDE_MODEL_SUMMARY", MODEL_3_5_SONNET)
 FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg/bin/ffmpeg.exe")
 FFMPEG_PATH_DOWNLOAD = os.getenv("FFMPEG_PATH_DOWNLOAD", "ffmpeg/bin")
 VERSION_FILE = os.path.join(BASE_DIR, "version_info.txt")
-CONTACTS_FILE = os.path.join(BASE_DIR, "../contatti_teams.txt")
+CONTACTS_FILE = os.path.join(BASE_DIR, "contatti_teams.txt")
 DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "../dock_settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "../console_log.txt")
 
@@ -61,7 +61,18 @@ PROMPT_TTS = os.path.join(PROMPTS_DIR, "tts_prompt.txt")
 
 # Resource Paths
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
-SPLASH_IMAGES_DIR = os.path.join(RESOURCES_DIR, "splash_images")
+def get_splash_images_dir():
+    """Ottiene il percorso della cartella splash_images in modo compatibile con PyInstaller"""
+    if getattr(sys, 'frozen', False):
+        # Se l'app è compilata con PyInstaller
+        base_path = os.path.dirname(sys.executable)
+        return os.path.join(base_path, "res", "splash_images")
+    else:
+        # In modalità di sviluppo
+        return os.path.join(RESOURCES_DIR, "splash_images")
+
+SPLASH_IMAGES_DIR = get_splash_images_dir()
+
 MUSIC_DIR = os.path.join(RESOURCES_DIR, "music")
 WATERMARK_IMAGE = os.path.join(RESOURCES_DIR, "watermark.png")
 

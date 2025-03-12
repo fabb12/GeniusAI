@@ -3,13 +3,14 @@ import os
 import re
 import zipfile
 import datetime
+import sys
 from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 block_cipher = None
 
 current_dir = os.getcwd()
 
-# Collect all submodules and data files of required packages to avoid missing imports
+# Collect all submodules and data files of required packages
 hiddenimports = (
     collect_submodules('cv2') +
     collect_submodules('moviepy') +
@@ -17,8 +18,13 @@ hiddenimports = (
     collect_submodules('pydub') +
     collect_submodules('PyQt6') +
     collect_submodules('pycountry') +
-    collect_submodules('speech_recognition')
+    collect_submodules('speech_recognition') +
+    # Internal project modules
+    ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
+     'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen',
+     'src.services', 'src.managers', 'src.recorder']
 )
+
 datas = (
     collect_data_files('cv2') +
     collect_data_files('moviepy') +
@@ -37,22 +43,57 @@ extra_datas = collect_data_files('PyQt6', subdir='Qt6/plugins')
 
 datas += extra_datas
 
+# Explicitly add project modules
+datas += [
+    (os.path.join(current_dir, 'src', 'ui'), 'src/ui'),
+    (os.path.join(current_dir, 'src', 'services'), 'src/services'),
+    (os.path.join(current_dir, 'src', 'managers'), 'src/managers'),
+    (os.path.join(current_dir, 'src', 'recorder'), 'src/recorder'),
+    (os.path.join(current_dir, 'src', 'prompts'), 'src/prompts')
+]
+
 binaries = []
 for dll_path in extra_dll_paths:
     if os.path.exists(dll_path):
         binaries.append((dll_path, '.'))
 
+# Resource files - explicitly include all resource directories and files
+resource_files = [
+    # Environment file
+    (os.path.join(current_dir, '.env'), '.'),
+
+    # Documentation files
+    (os.path.join(current_dir, 'README.md'), '.'),
+    (os.path.join(current_dir, 'CHANGELOG.md'), '.'),
+    (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),
+
+    # Main resource directories - keep these at the top level
+    (os.path.join(current_dir, 'src', 'res'), 'res'),
+    (os.path.join(current_dir, 'src', 'ffmpeg'), 'ffmpeg'),
+
+    # Explicitly include splash_images directory
+    (os.path.join(current_dir, 'src', 'res', 'splash_images'), 'res/splash_images'),
+
+    # Explicitly include music directory
+    (os.path.join(current_dir, 'src', 'res', 'music'), 'res/music'),
+
+    # Ensure important icons are included
+    (os.path.join(current_dir, 'src', 'res', 'eye.ico'), 'res'),
+    (os.path.join(current_dir, 'src', 'res', 'eye.png'), 'res'),
+
+    # Add contatti_teams.txt
+    (os.path.join(current_dir, 'src', 'contatti_teams.txt'), '.'),
+]
+
 a = Analysis(
     ['src/TGeniusAI.py'],
-    pathex=['.', os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')],
+    pathex=[
+        '.',
+        'src',
+        os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')
+    ],
     binaries=binaries,
-    datas=[
-        (os.path.join(current_dir, '.env'), '.'),  # Add venv
-        (os.path.join(current_dir, 'src', 'res'), 'res'),  # Include resource folder
-        (os.path.join(current_dir, 'README.md'), '.'),  # Add Readme.md
-        (os.path.join(current_dir, 'CHANGELOG.md'), '.'),  # Add CHANGELOG.md
-        (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),  # Add KNOW_ISSUES.md
-    ] + datas,
+    datas=resource_files + datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
@@ -79,8 +120,8 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,  # Set console to False to remove console window
-    icon=os.path.join('src', 'res', 'eye.ico')  # Specify the icon path in the res folder under src
+    console=False,  # Set to False to hide console window
+    icon=os.path.join('src', 'res', 'eye.ico')
 )
 
 coll = COLLECT(
@@ -91,19 +132,23 @@ coll = COLLECT(
     name='TGeniusAI',
     strip=False,
     upx=True,
-    console=False
+    console=False  # Set to False to hide console window
 )
 
-# Custom script to create the version_info.txt file and move files to the correct folder
+# Create version_info.txt file
 def create_version_info():
     # Extract version from the source code
     version_pattern = re.compile(r'self\.version_major = (\d+).*self\.version_minor = (\d+).*self\.version_patch = (\d+)', re.DOTALL)
-    with open('src/TGeniusAI.py', 'r') as f:
-        content = f.read()
-    match = version_pattern.search(content)
-    if match:
-        version = f"v{match.group(1)}.{match.group(2)}.{match.group(3)}"
-    else:
+    try:
+        with open('src/TGeniusAI.py', 'r', encoding='utf-8') as f:
+            content = f.read()
+        match = version_pattern.search(content)
+        if match:
+            version = f"v{match.group(1)}.{match.group(2)}.{match.group(3)}"
+        else:
+            version = "v0.0.0"
+    except Exception as e:
+        print(f"Error extracting version: {e}")
         version = "v0.0.0"
 
     # Get the current date
@@ -119,48 +164,64 @@ def create_version_info():
     return version_info_path, version
 
 
-def move_files_up_and_create_zip():
-    internal_dir = os.path.join(current_dir, 'dist', 'TGeniusAI', '_internal')
-    release_dir = os.path.join(current_dir, 'dist', 'Release')
-    tgeniusai_dir = os.path.join(current_dir, 'dist', 'TGeniusAI')
+def post_build_steps():
+    """Performs all post-build steps to organize the distribution package"""
+    dist_dir = os.path.join(current_dir, 'dist')
+    tgeniusai_dir = os.path.join(dist_dir, 'TGeniusAI')
+    internal_dir = os.path.join(tgeniusai_dir, '_internal')
 
-    # Create the release folder if it doesn't exist
-    os.makedirs(release_dir, exist_ok=True)
+    # Create version info file
+    version_info_path, version = create_version_info()
 
-    # Files to move
-    files_to_move = ['README.md', 'KNOW_ISSUES.md', 'CHANGELOG.md']
-    folders_to_move = ['res']
+    # Move version_info.txt to the root of the distribution
+    if os.path.exists(version_info_path):
+        target_path = os.path.join(tgeniusai_dir, 'version_info.txt')
+        try:
+            shutil.copy2(version_info_path, target_path)
+            print(f"Version info copied to: {target_path}")
+        except Exception as e:
+            print(f"Error copying version info: {e}")
 
-    # Move the files
+    # Make sure resource directories are properly structured
+    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg']
+
+    for dir_path in critical_dirs:
+        internal_source = os.path.join(internal_dir, dir_path)
+        target_path = os.path.join(tgeniusai_dir, dir_path)
+
+        # Create target directory if it doesn't exist
+        os.makedirs(target_path, exist_ok=True)
+
+        # If resources exist in _internal, copy them to the right place
+        if os.path.exists(internal_source):
+            try:
+                for item in os.listdir(internal_source):
+                    s = os.path.join(internal_source, item)
+                    d = os.path.join(target_path, item)
+                    if os.path.isdir(s):
+                        if os.path.exists(d):
+                            shutil.rmtree(d)
+                        shutil.copytree(s, d)
+                    else:
+                        shutil.copy2(s, d)
+                print(f"Copied resources from {internal_source} to {target_path}")
+            except Exception as e:
+                print(f"Error copying {dir_path}: {e}")
+
+    # Move documentation files and contatti_teams.txt up to the root level
+    files_to_move = ['README.md', 'CHANGELOG.md', 'KNOW_ISSUES.md', 'contatti_teams.txt']
     for file_name in files_to_move:
         src_path = os.path.join(internal_dir, file_name)
         dest_path = os.path.join(tgeniusai_dir, file_name)
         if os.path.exists(src_path):
-            shutil.move(src_path, dest_path)
+            try:
+                shutil.copy2(src_path, dest_path)
+                print(f"Copied {file_name} to root directory")
+            except Exception as e:
+                print(f"Error copying {file_name}: {e}")
 
-    # Move the folders
-    for folder_name in folders_to_move:
-        src_path = os.path.join(internal_dir, folder_name)
-        dest_path = os.path.join(tgeniusai_dir, folder_name)
-        if os.path.exists(src_path):
-            if os.path.exists(dest_path):
-                shutil.rmtree(dest_path)
-            shutil.move(src_path, dest_path)
+    print("Post-build steps completed successfully")
 
-    # Create the version_info.txt file
-    version_info_path, version = create_version_info()
 
-    # Move the version_info.txt file to the destination folder
-    shutil.move(version_info_path, os.path.join(tgeniusai_dir, 'version_info.txt'))
-
-    # Create a ZIP file with all files in the TGeniusAI folder
-    zip_file_path = os.path.join(release_dir, f"TGeniusAI_{version}.zip")
-    with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-        for root, dirs, files in os.walk(tgeniusai_dir):
-            for file in files:
-                file_path = os.path.join(root, file)
-                arcname = os.path.relpath(file_path, tgeniusai_dir)
-                zipf.write(file_path, arcname)
-
-# Run the script to move files and create the ZIP
-move_files_up_and_create_zip()
+# Run post-build steps
+post_build_steps()

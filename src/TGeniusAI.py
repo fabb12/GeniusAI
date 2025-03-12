@@ -3231,24 +3231,22 @@ class VideoAudioManager(QMainWindow):
     def stopVideo(self):
         self.player.stop()
 
-
-def resource_path(relative_path):
-    """Ottiene il percorso assoluto delle risorse, funziona sia in development che in produzione"""
-    try:
-        # PyInstaller crea una cartella temporanea e memorizza il percorso in _MEIPASS
-        base_path = sys._MEIPASS
-    except Exception:
-        base_path = os.path.abspath(".")
-
-    return os.path.join(base_path, relative_path)
-
+def get_application_path():
+    """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
+    if getattr(sys, 'frozen', False):
+        # Se l'app è compilata con PyInstaller
+        return os.path.dirname(sys.executable)
+    else:
+        # In modalità di sviluppo
+        return os.path.dirname(os.path.abspath(__file__))
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # Specifica la cartella delle immagini
-    image_folder = resource_path(SPLASH_IMAGES_DIR)
-
+    base_path = get_application_path()
+    image_folder = os.path.join(base_path, "res", "splash_images")
+    print(image_folder)
     # Crea la splash screen con un'immagine casuale dalla cartella
     splash = SplashScreen(image_folder)
     splash.show()
