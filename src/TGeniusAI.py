@@ -65,7 +65,7 @@ import os
 from config import SPLASH_IMAGES_DIR
 from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
-
+from ui.VideoOverlay import VideoOverlay
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -238,6 +238,12 @@ class VideoAudioManager(QMainWindow):
         self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
+
+        self.videoOverlay = VideoOverlay(self.videoCropWidget)
+        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
+        self.videoOverlay.show()
+        self.videoOverlay.raise_()  # Porta l'overlay in primo piano
+        self.videoCropWidget.resizeEvent = self.videoCropWidgetResizeEvent
 
         self.zoom_level = 1.0
         self.videoCropWidget.installEventFilter(self)
@@ -614,6 +620,12 @@ class VideoAudioManager(QMainWindow):
 
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
+
+    def videoCropWidgetResizeEvent(self, event):
+        # Chiama il metodo resizeEvent originale del widget
+        CropVideoWidget.resizeEvent(self.videoCropWidget, event)
+        # Aggiorna la geometria dell'overlay in base alle dimensioni attuali del widget
+        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
 
     def createWorkflow(self):
         # Implementazione per creare un nuovo workflow
@@ -1197,20 +1209,23 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Errore", "Carica un video prima di applicare il ritaglio.")
             return
 
-        cropRect = self.videoCropWidget.getCropRect()
-        logging.debug(cropRect)
+        # Usa il rettangolo disegnato dall'overlay
+        cropRect = self.videoOverlay.crop_rect
         if cropRect.isEmpty():
             QMessageBox.warning(self, "Errore", "Seleziona un'area da ritagliare.")
             return
 
         try:
             video = VideoFileClip(self.videoPathLineEdit)
-            cropped_video = video.crop(x1=cropRect.x(), y1=cropRect.y(), x2=cropRect.x() + cropRect.width(),
-                                       y2=cropRect.y() + cropRect.height())
+            cropped_video = video.crop(
+                x1=cropRect.x(),
+                y1=cropRect.y(),
+                x2=cropRect.x() + cropRect.width(),
+                y2=cropRect.y() + cropRect.height()
+            )
             output_path = tempfile.mktemp(suffix='.mp4')
             cropped_video.write_videofile(output_path, codec='libx264')
             QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
-
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
@@ -2410,6 +2425,11 @@ class VideoAudioManager(QMainWindow):
         releaseOutputAction = QAction(QIcon("./res/reset.png"), "Unload Video Output", self)
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         videoMenu.addAction(releaseOutputAction)
+
+        cutVideoAction = QAction('&Taglia Video', self)
+        cutVideoAction.setStatusTip('Taglia il video utilizzando la selezione overlay')
+        cutVideoAction.triggered.connect(self.applyCrop)
+        videoMenu.addAction(cutVideoAction)
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
