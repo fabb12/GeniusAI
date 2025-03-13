@@ -218,20 +218,39 @@ class BrowserAgentWorker(QObject):
                 # Controlla se è stata richiesta l'interruzione
                 if not self.running:
                     self.log_message.emit(f"Arresto richiesto durante il passo {step_num}.")
-                    # Tentativo di interrompere l'esecuzione
-                    # Nota: Alcune implementazioni di browser_use potrebbero non supportare
-                    # l'interruzione tramite valore di ritorno false, ma proviamo comunque
                     return False
 
                 progress_pct = min(int(45 + (step_num / self.config.max_steps) * 50), 95)
                 next_goal = getattr(model_output, "next_goal",
                                     "Elaborazione...") if model_output else "Inizializzazione..."
 
-                self.progress.emit(progress_pct, str(next_goal))
-                self.log_message.emit(f"Passo {step_num}: {next_goal}")
+                # Estrai informazioni dettagliate dallo stato dell'agente
+                state_info = ""
+                if state:
+                    # URL corrente
+                    current_url = getattr(state, "current_url", None)
+                    if current_url:
+                        state_info += f"\n- URL corrente: {current_url}"
 
-                # Non utilizziamo il valore di ritorno per il controllo dell'interruzione
-                # con le versioni di browser_use che non lo supportano
+                    # Ultima azione eseguita
+                    last_action = getattr(state, "last_action", None)
+                    if last_action:
+                        state_info += f"\n- Ultima azione: {last_action}"
+
+                    # Contenuto osservato (limitato per leggibilità)
+                    observation = getattr(state, "observation", None)
+                    if observation:
+                        obs_text = str(observation)
+                        if len(obs_text) > 100:
+                            obs_text = obs_text[:100] + "..."
+                        state_info += f"\n- Osservazione: {obs_text}"
+
+                self.progress.emit(progress_pct, str(next_goal))
+
+                # Emetti un messaggio di log più dettagliato
+                log_message = f"Passo {step_num}: {next_goal}{state_info}"
+                self.log_message.emit(log_message)
+
                 return True
 
             # Registra la callback correttamente
@@ -615,9 +634,7 @@ class UnifiedBrowserAgentDialog(QDialog):
         self.worker.finished.connect(self.onAgentFinished)
         self.worker.error.connect(self.onAgentError)
         self.worker.log_message.connect(self.addLogMessage)
-
         self.agent_thread = AgentRunThread(self.worker)
-        self.agent_thread.log_message.connect(self.addLogMessage)
         self.agent_thread.finished.connect(self.onThreadFinished)
         self.agent_thread.start()
 
