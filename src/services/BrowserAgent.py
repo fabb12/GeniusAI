@@ -648,7 +648,7 @@ class UnifiedBrowserAgentDialog(QDialog):
             self.onThreadFinished()
 
     def stopAgent(self):
-        if not self.agent_thread or not self.agent_thread.isRunning():
+        if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
             self.addLogMessage("Nessun thread dell'agente in esecuzione da fermare.")
             return
 
@@ -668,7 +668,7 @@ class UnifiedBrowserAgentDialog(QDialog):
 
         # Attendiamo fino a 5 secondi in blocchi di 1 secondo
         for i in range(5):
-            if not self.agent_thread.isRunning():
+            if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
                 self.addLogMessage(f"Thread terminato con successo dopo {i + 1} secondi.")
                 break
 
@@ -680,7 +680,7 @@ class UnifiedBrowserAgentDialog(QDialog):
             self.addLogMessage(f"Attesa... {i + 1}/5 secondi trascorsi.")
 
         # Se ancora in esecuzione, termina forzatamente
-        if self.agent_thread.isRunning():
+        if hasattr(self, 'agent_thread') and self.agent_thread is not None and self.agent_thread.isRunning():
             self.addLogMessage("Forzatura terminazione thread...")
             try:
                 self.agent_thread.terminate()
@@ -699,7 +699,6 @@ class UnifiedBrowserAgentDialog(QDialog):
 
         # Aggiorna il risultato
         self.resultEdit.setPlainText("Operazione interrotta dall'utente.")
-
     def updateProgress(self, value, message):
         """Aggiorna la barra di progresso e il log"""
         # Aggiorna la barra di progresso
@@ -741,15 +740,16 @@ class UnifiedBrowserAgentDialog(QDialog):
         self.stopButton.setEnabled(False)
 
         # Ferma il timer di controllo
-        self.cleanup_timer.stop()
+        if hasattr(self, 'cleanup_timer'):
+            self.cleanup_timer.stop()
 
         # Aggiorna i log
         if hasattr(self, 'worker') and self.worker:
-            self.addLogMessage("Pulizia risorse...")
+            self.addLogMessage("Pulizia risorse worker...")
             self.worker = None
 
-        if hasattr(self, 'agent_thread') and self.agent_thread:
-            # Non aspettiamo qui per evitare blocchi
+        if hasattr(self, 'agent_thread'):
+            self.addLogMessage("Pulizia risorse thread...")
             self.agent_thread = None
 
         self.addLogMessage("=== OPERAZIONE COMPLETATA ===")
