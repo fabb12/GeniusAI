@@ -66,6 +66,11 @@ from config import SPLASH_IMAGES_DIR
 from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
 from ui.VideoOverlay import VideoOverlay
+
+# Importa la classe MeetingSummarizer
+from services.MeetingSummarizer import MeetingSummarizer
+
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -783,8 +788,6 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
 
-        # Importa la classe MeetingSummarizer
-        from services.MeetingSummarizer import MeetingSummarizer
 
         # Esegui il thread per il processo AI
         self.meeting_summarizer_thread = MeetingSummarizer(
