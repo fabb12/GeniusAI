@@ -769,6 +769,33 @@ class VideoAudioManager(QMainWindow):
         self.playVideo()
         self.playerOutput.play()
 
+    def summarizeMeeting(self):
+        # Ottieni il testo corrente dal transcriptionTextArea
+        current_text = self.transcriptionTextArea.toPlainText()
+
+        if not current_text.strip():
+            QMessageBox.warning(self, "Attenzione", "Inserisci la trascrizione della riunione da riassumere.")
+            return
+
+        # Mostra un dialogo di progresso
+        self.progressDialog = QProgressDialog("Riassunto riunione in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Riassunto Riunione")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        # Importa la classe MeetingSummarizer
+        from services.MeetingSummarizer import MeetingSummarizer
+
+        # Esegui il thread per il processo AI
+        self.meeting_summarizer_thread = MeetingSummarizer(
+            current_text,
+            self.languageComboBox.currentText()
+        )
+        self.meeting_summarizer_thread.update_progress.connect(self.updateProgressDialog)
+        self.meeting_summarizer_thread.process_complete.connect(self.onProcessComplete)
+        self.meeting_summarizer_thread.process_error.connect(self.onProcessError)
+        self.meeting_summarizer_thread.start()
+
     def generateTextForPresentation(self):
         try:
             num_slide = int(self.numSlidesInput.text().strip())
@@ -2371,6 +2398,11 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiunta del menu Workflows
         workflowsMenu = menuBar.addMenu('&Workflows')
+
+        summarizeMeetingAction = QAction('&Riassumi Riunione', self)
+        summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
+        summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
+        workflowsMenu.addAction(summarizeMeetingAction)
 
         # Funzionalità spostate da Strumenti Avanzati
         summarizeAction = QAction('&Riassumi Testo', self)

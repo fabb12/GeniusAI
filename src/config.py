@@ -55,7 +55,8 @@ PROMPT_TEXT_FIX = os.path.join(PROMPTS_DIR, "text_fix_prompt.txt")
 # Prompt per l'agente browser
 PROMPT_BROWSER_GUIDE = os.path.join(PROMPTS_DIR, "browser_guide_prompt.txt")
 PROMPT_BROWSER_AGENT = os.path.join(PROMPTS_DIR, "browser_agent_prompt.txt")
-
+# Prompt per il riassunto delle riunioni
+PROMPT_MEETING_SUMMARY = os.path.join(PROMPTS_DIR, "meeting_summary_prompt.txt")
 # Prompt per la generazione di audio
 PROMPT_TTS = os.path.join(PROMPTS_DIR, "tts_prompt.txt")
 
