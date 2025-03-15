@@ -15,7 +15,8 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
-    QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider, QTabWidget
+    QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
+    QProgressBar, QTabWidget, QDialog,QTextEdit
 )
 
 # PyQtGraph (docking)
@@ -2929,27 +2930,157 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Il file audio selezionato non esiste.")
             return
 
+        # Verifica la dimensione dei file
+        video_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+        audio_size_mb = os.path.getsize(new_audio_path) / (1024 * 1024)
+
+        # Avvisa l'utente se i file sono molto grandi
+        if video_size_mb > 500 or audio_size_mb > 100:
+            reply = QMessageBox.question(
+                self, "File di grandi dimensioni",
+                f"Stai elaborando file di grandi dimensioni (Video: {video_size_mb:.1f} MB, Audio: {audio_size_mb:.1f} MB).\n"
+                "L'elaborazione potrebbe richiedere molto tempo. Continuare?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
         # Crea un percorso di output unico con timestamp per evitare sovrascritture
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         base_name = os.path.splitext(os.path.basename(video_path))[0]
         output_dir = os.path.dirname(video_path)
         output_path = os.path.join(output_dir, f"{base_name}_audio_{timestamp}.mp4")
 
+        # Creiamo un dialog personalizzato che sostituisce QProgressDialog
+        class CustomProgressDialog(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("Processo Audio-Video")
+                self.setModal(True)
+                self.setMinimumWidth(400)
+
+                layout = QVBoxLayout(self)
+
+                # Label per il messaggio di stato
+                self.statusLabel = QLabel("Preparazione processo...")
+                layout.addWidget(self.statusLabel)
+
+                # Barra di progresso
+                self.progressBar = QProgressBar()
+                self.progressBar.setRange(0, 100)
+                self.progressBar.setValue(0)
+                layout.addWidget(self.progressBar)
+
+                # Log dettagliato
+                self.logDialog = QDialog(self)
+                self.logDialog.setWindowTitle("Log Dettagliato")
+                self.logDialog.setMinimumSize(600, 400)
+                logLayout = QVBoxLayout(self.logDialog)
+                self.logTextEdit = QTextEdit()
+                self.logTextEdit.setReadOnly(True)
+                logLayout.addWidget(self.logTextEdit)
+
+                # Pulsanti
+                buttonLayout = QHBoxLayout()
+
+                # Pulsante per mostrare log
+                self.logButton = QPushButton("Mostra Log")
+                self.logButton.clicked.connect(self.logDialog.show)
+                buttonLayout.addWidget(self.logButton)
+
+                # Pulsante per annullare
+                self.cancelButton = QPushButton("Annulla")
+                self.cancelButton.clicked.connect(self.reject)
+                buttonLayout.addWidget(self.cancelButton)
+
+                layout.addLayout(buttonLayout)
+
+            def setValue(self, value):
+                self.progressBar.setValue(value)
+
+            def setLabelText(self, text):
+                self.statusLabel.setText(text)
+
+            def addLogMessage(self, message):
+                timestamp = time.strftime("%H:%M:%S", time.localtime())
+                self.logTextEdit.append(f"[{timestamp}] {message}")
+
+                # Auto-scroll al fondo
+                cursor = self.logTextEdit.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                self.logTextEdit.setTextCursor(cursor)
+
+            def wasCanceled(self):
+                return self.result() == QDialog.DialogCode.Rejected
+
         # Crea un thread per l'elaborazione in background
         class AudioVideoThread(QThread):
             progress = pyqtSignal(int, str)
             completed = pyqtSignal(str)
             error = pyqtSignal(str)
+            detailed_log = pyqtSignal(str)
 
-            def __init__(self, video_path, audio_path, output_path, align_speed):
+            def __init__(self, video_path, audio_path, output_path, align_speed, chunk_size=10):
                 super().__init__()
                 self.video_path = video_path
                 self.audio_path = audio_path
                 self.output_path = output_path
                 self.align_speed = align_speed
                 self.running = True
+                self.chunk_size = chunk_size  # In secondi, per elaborazione a pezzi
+
+                # Per statistiche
+                self.start_time = None
+                self.video_info = None
+                self.audio_info = None
+
+            def log(self, message):
+                self.detailed_log.emit(message)
+                logging.debug(message)
+
+            def get_media_info(self, file_path):
+                """Ottiene informazioni dettagliate sul file media"""
+                try:
+                    import json
+                    # Usa ffprobe per ottenere informazioni sul file
+                    ffprobe_cmd = [
+                        'ffmpeg/bin/ffprobe',
+                        '-v', 'error',
+                        '-show_format',
+                        '-show_streams',
+                        '-print_format', 'json',
+                        file_path
+                    ]
+                    result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+
+                    if result.returncode == 0:
+                        return json.loads(result.stdout)
+                    return None
+                except Exception as e:
+                    self.log(f"Errore nell'ottenere informazioni sul file: {e}")
+                    return None
 
             def run(self):
+                self.start_time = time.time()
+                self.log(f"Inizio elaborazione - {time.strftime('%H:%M:%S')}")
+
+                # Raccogli informazioni sui file
+                self.video_info = self.get_media_info(self.video_path)
+                self.audio_info = self.get_media_info(self.audio_path)
+
+                if self.video_info:
+                    self.log(f"Formato video: {self.video_info.get('format', {}).get('format_name', 'sconosciuto')}")
+                    self.log(
+                        f"Durata video: {self.video_info.get('format', {}).get('duration', 'sconosciuta')} secondi")
+                    self.log(f"Bitrate video: {self.video_info.get('format', {}).get('bit_rate', 'sconosciuto')} bit/s")
+
+                if self.audio_info:
+                    self.log(f"Formato audio: {self.audio_info.get('format', {}).get('format_name', 'sconosciuto')}")
+                    self.log(
+                        f"Durata audio: {self.audio_info.get('format', {}).get('duration', 'sconosciuta')} secondi")
+                    self.log(f"Bitrate audio: {self.audio_info.get('format', {}).get('bit_rate', 'sconosciuto')} bit/s")
+
                 try:
                     if self.align_speed:
                         self.alignSpeedAndApplyAudio()
@@ -2957,155 +3088,426 @@ class VideoAudioManager(QMainWindow):
                         self.applyAudioOnly()
 
                     if self.running:
+                        elapsed_time = time.time() - self.start_time
+                        self.log(f"Elaborazione completata in {elapsed_time:.1f} secondi")
                         self.completed.emit(self.output_path)
                 except Exception as e:
                     if self.running:
-                        self.error.emit(str(e))
+                        import traceback
+                        error_details = traceback.format_exc()
+                        error_msg = f"Errore: {str(e)}\n\nDettagli: {error_details}"
+                        self.log(error_msg)
+                        self.error.emit(error_msg)
 
             def alignSpeedAndApplyAudio(self):
                 video_clip = None
                 audio_clip = None
-                video_modified = None
-                final_video = None
 
                 try:
-                    # Carica i file
-                    self.progress.emit(10, "Caricamento video...")
-                    video_clip = VideoFileClip(self.video_path)
+                    # Primo step: analisi dei file
+                    self.progress.emit(5, "Analisi dei file...")
+                    self.log("Inizio caricamento video...")
 
-                    self.progress.emit(20, "Caricamento audio...")
-                    audio_clip = AudioFileClip(self.audio_path)
+                    # Utilizziamo librerie di basso livello per le informazioni
+                    video_probe = self.get_media_info(self.video_path)
+                    audio_probe = self.get_media_info(self.audio_path)
 
-                    # Calcola il fattore di velocità
-                    self.progress.emit(30, "Calcolo fattore di velocità...")
-                    video_duration = video_clip.duration
-                    audio_duration = audio_clip.duration
+                    video_duration = float(video_probe.get('format', {}).get('duration', 0))
+                    audio_duration = float(audio_probe.get('format', {}).get('duration', 0))
+
+                    self.log(f"Durata video: {video_duration:.2f}s, durata audio: {audio_duration:.2f}s")
 
                     if video_duration <= 0 or audio_duration <= 0:
                         raise ValueError("Durata del video o dell'audio non valida")
 
+                    # Calcola il fattore di velocità
                     speed_factor = round(video_duration / audio_duration, 2)
+                    self.log(f"Fattore di velocità calcolato: {speed_factor}")
+
+                    # Per file molto grandi, utilizziamo direttamente ffmpeg invece di moviepy
+                    if os.path.getsize(self.video_path) > 500 * 1024 * 1024:  # > 500 MB
+                        self.log("File di grandi dimensioni rilevato. Utilizzo elaborazione ottimizzata.")
+                        self.progress.emit(20, "Elaborazione file di grandi dimensioni...")
+                        return self.process_large_files(speed_factor)
+
+                    # Per file più piccoli continua con moviepy
+                    self.progress.emit(15, "Caricamento video...")
+                    video_clip = VideoFileClip(self.video_path)
+                    self.progress.emit(30, "Caricamento audio...")
+                    audio_clip = AudioFileClip(self.audio_path)
+
+                    self.log(f"File caricati con successo. Elaborazione in corso...")
+
+                    # Checkpoint: usiamo la gestione della memoria
+                    import gc
+                    gc.collect()  # Forza la garbage collection
 
                     # Applica il cambio di velocità
-                    self.progress.emit(40, "Applicazione effetto velocità...")
+                    self.progress.emit(40, f"Applicazione fattore velocità: {speed_factor}x...")
                     video_modified = video_clip.fx(vfx.speedx, speed_factor)
 
+                    # Checkpoint
+                    self.log("Fattore di velocità applicato, fase di unione audio...")
+                    self.progress.emit(60, "Unione audio e video...")
+
                     # Applica l'audio
-                    self.progress.emit(60, "Applicazione audio...")
                     final_video = video_modified.set_audio(audio_clip)
 
-                    # Scrive l'output con impostazioni ottimizzate
-                    self.progress.emit(70, "Salvataggio video finale...")
-                    final_video.write_videofile(
-                        self.output_path,
-                        codec="libx264",
-                        audio_codec="aac",
-                        fps=video_clip.fps,
-                        preset="ultrafast",  # Codifica più veloce
-                        threads=4,  # Usa più thread
-                        logger=None  # Disabilita il logging verboso
-                    )
+                    # Checkpoint
+                    self.log("Audio unito, preparazione al salvataggio...")
+                    self.progress.emit(70, "Preparazione salvataggio...")
 
-                    self.progress.emit(100, "Completato")
+                    # Determina il codec audio e video
+                    codec_video = "libx264"
+                    codec_audio = "aac"
+
+                    # Ottieni il framerate originale
+                    fps = video_clip.fps
+
+                    # Configurazioni per ridurre l'uso di memoria
+                    write_options = {
+                        'codec': codec_video,
+                        'audio_codec': codec_audio,
+                        'fps': fps,
+                        'preset': 'ultrafast',
+                        'threads': 4,
+                        'logger': None,  # Disabilita il logging verboso
+                        'ffmpeg_params': ['-crf', '23']  # Comprimi leggermente senza perdere qualità
+                    }
+
+                    # Fase critica: salvataggio
+                    self.log("Inizio salvataggio video finale...")
+                    self.progress.emit(80, "Salvataggio video finale...")
+
+                    try:
+                        # Monitoriamo lo stato durante il salvataggio
+                        start_save = time.time()
+                        final_video.write_videofile(self.output_path, **write_options,
+                                                    progress_bar=False, verbose=False)
+                        save_duration = time.time() - start_save
+                        self.log(f"Salvataggio completato in {save_duration:.1f} secondi")
+                        self.progress.emit(100, "Salvataggio completato")
+                    except Exception as save_error:
+                        self.log(f"Errore durante il salvataggio: {save_error}")
+                        # Tenta un metodo alternativo
+                        self.log("Tentativo alternativo con ffmpeg...")
+                        self.progress.emit(85, "Tentativo alternativo di salvataggio...")
+                        self.save_with_ffmpeg(video_modified, audio_clip)
 
                 except Exception as e:
                     raise Exception(f"Errore nell'allineamento audio-video: {str(e)}")
+
                 finally:
-                    # Pulizia risorse indipendentemente dall'esito
+                    # Pulizia risorse
+                    self.log("Pulizia risorse...")
                     if video_clip:
                         video_clip.close()
                     if audio_clip:
                         audio_clip.close()
-                    if video_modified:
-                        video_modified.close()
-                    if final_video:
-                        final_video.close()
+                    import gc
+                    gc.collect()  # Forza garbage collection
+
+            def process_large_files(self, speed_factor):
+                """Processa file di grandi dimensioni usando direttamente ffmpeg"""
+                try:
+                    self.progress.emit(30, "Elaborazione file grandi con ffmpeg...")
+                    self.log("Utilizzo ffmpeg per file di grandi dimensioni")
+
+                    # Crea un file temporaneo per il video con velocità modificata
+                    temp_video = tempfile.mktemp(suffix='.mp4')
+
+                    # Modifica la velocità del video con ffmpeg
+                    ffmpeg_speed_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', self.video_path,
+                        '-filter_complex', f'[0:v]setpts={1 / speed_factor}*PTS[v]',
+                        '-map', '[v]',
+                        '-c:v', 'libx264',
+                        '-preset', 'ultrafast',
+                        '-crf', '23',
+                        '-y',
+                        temp_video
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg per la velocità...")
+                    self.progress.emit(40, "Modifica velocità video...")
+                    subprocess.run(ffmpeg_speed_cmd, capture_output=True)
+                    self.log("Velocità video modificata")
+
+                    # Aggiungi l'audio al video modificato
+                    ffmpeg_audio_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', temp_video,
+                        '-i', self.audio_path,
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-c:v', 'copy',  # Non ricodificare il video
+                        '-c:a', 'aac',
+                        '-shortest',
+                        '-y',
+                        self.output_path
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg per aggiungere audio...")
+                    self.progress.emit(70, "Aggiunta audio...")
+                    subprocess.run(ffmpeg_audio_cmd, capture_output=True)
+
+                    # Rimuovi il file temporaneo
+                    if os.path.exists(temp_video):
+                        os.remove(temp_video)
+
+                    self.progress.emit(100, "Elaborazione completata")
+                    return True
+
+                except Exception as e:
+                    self.log(f"Errore nell'elaborazione con ffmpeg: {e}")
+                    raise Exception(f"Errore nell'elaborazione di file grandi: {str(e)}")
+
+            def save_with_ffmpeg(self, video_clip, audio_clip):
+                """Salva il video usando ffmpeg direttamente"""
+                try:
+                    # Salva video e audio temporanei
+                    temp_video = tempfile.mktemp(suffix='.mp4')
+                    temp_audio = tempfile.mktemp(suffix='.aac')
+
+                    # Salva solo il video senza audio
+                    video_clip.without_audio().write_videofile(temp_video, codec='libx264',
+                                                               audio=False, fps=video_clip.fps,
+                                                               preset='ultrafast', verbose=False,
+                                                               progress_bar=False)
+
+                    # Salva l'audio separatamente
+                    audio_clip.write_audiofile(temp_audio, codec='aac', verbose=False,
+                                               progress_bar=False)
+
+                    # Unisci video e audio con ffmpeg
+                    ffmpeg_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', temp_video,
+                        '-i', temp_audio,
+                        '-c:v', 'copy',
+                        '-c:a', 'aac',
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-shortest',
+                        '-y',
+                        self.output_path
+                    ]
+
+                    self.log("Unione finale con ffmpeg...")
+                    self.progress.emit(90, "Unione finale...")
+                    subprocess.run(ffmpeg_cmd, capture_output=True)
+
+                    # Pulizia file temporanei
+                    if os.path.exists(temp_video):
+                        os.remove(temp_video)
+                    if os.path.exists(temp_audio):
+                        os.remove(temp_audio)
+
+                    self.progress.emit(100, "Completato con metodo alternativo")
+                    return True
+
+                except Exception as e:
+                    self.log(f"Errore nel salvataggio alternativo: {e}")
+                    raise Exception(f"Fallimento anche con metodo alternativo: {str(e)}")
 
             def applyAudioOnly(self):
-                video_clip = None
-                audio_clip = None
-                final_video = None
-
+                """Applica solo l'audio al video esistente"""
+                # Implementazione simile all'allineamento ma senza modificare la velocità
                 try:
-                    # Carica i file
                     self.progress.emit(10, "Caricamento video...")
+
+                    # Per file molto grandi, utilizziamo direttamente ffmpeg
+                    if os.path.getsize(self.video_path) > 500 * 1024 * 1024:  # > 500 MB
+                        self.log("File video grande rilevato, utilizzo ffmpeg diretto")
+                        return self.apply_audio_with_ffmpeg()
+
                     video_clip = VideoFileClip(self.video_path)
 
                     self.progress.emit(30, "Caricamento audio...")
                     audio_clip = AudioFileClip(self.audio_path)
 
                     # Verifica e gestisci casi in cui la durata dell'audio è diversa dal video
-                    if audio_clip.duration > video_clip.duration:
+                    video_duration = video_clip.duration
+                    audio_duration = audio_clip.duration
+
+                    self.log(f"Durata video: {video_duration:.2f}s, durata audio: {audio_duration:.2f}s")
+
+                    if audio_duration > video_duration:
                         self.progress.emit(40, "Taglio audio per adattarlo al video...")
-                        audio_clip = audio_clip.subclip(0, video_clip.duration)
+                        self.log(f"L'audio è più lungo del video. Taglio l'audio a {video_duration}s")
+                        audio_clip = audio_clip.subclip(0, video_duration)
+                    elif audio_duration < video_duration:
+                        # Avvisiamo che l'audio è più corto
+                        self.log(f"ATTENZIONE: L'audio è più corto del video di {video_duration - audio_duration:.2f}s")
 
                     # Applica l'audio
                     self.progress.emit(50, "Applicazione audio...")
                     final_video = video_clip.set_audio(audio_clip)
 
-                    # Scrive l'output con impostazioni ottimizzate
+                    # Impostazioni di output ottimizzate
                     self.progress.emit(70, "Salvataggio video finale...")
-                    final_video.write_videofile(
-                        self.output_path,
-                        codec="libx264",
-                        audio_codec="aac",
-                        fps=video_clip.fps,
-                        preset="ultrafast",
-                        threads=4,
-                        logger=None
-                    )
 
-                    self.progress.emit(100, "Completato")
+                    try:
+                        final_video.write_videofile(
+                            self.output_path,
+                            codec="libx264",
+                            audio_codec="aac",
+                            fps=video_clip.fps,
+                            preset="ultrafast",
+                            threads=4,
+                            ffmpeg_params=['-crf', '23'],
+                            logger=None,
+                            verbose=False,
+                            progress_bar=False
+                        )
+                        self.progress.emit(100, "Completato")
+                    except Exception as save_error:
+                        self.log(f"Errore durante il salvataggio: {save_error}")
+                        self.progress.emit(85, "Tentativo alternativo...")
+                        return self.save_with_ffmpeg(video_clip, audio_clip)
 
                 except Exception as e:
+                    self.log(f"Errore nell'applicazione dell'audio: {e}")
                     raise Exception(f"Errore nella sostituzione dell'audio: {str(e)}")
                 finally:
                     # Pulizia risorse
-                    if video_clip:
-                        video_clip.close()
-                    if audio_clip:
-                        audio_clip.close()
-                    if final_video:
-                        final_video.close()
+                    import gc
+                    gc.collect()
+
+            def apply_audio_with_ffmpeg(self):
+                """Applica l'audio al video usando direttamente ffmpeg"""
+                try:
+                    self.progress.emit(40, "Sostituzione audio con ffmpeg...")
+                    self.log("Utilizzo ffmpeg per sostituire l'audio")
+
+                    ffmpeg_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', self.video_path,
+                        '-i', self.audio_path,
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-c:v', 'copy',  # Copia il video senza ricodifica
+                        '-c:a', 'aac',  # Codifica l'audio in AAC
+                        '-shortest',  # Termina quando finisce lo stream più corto
+                        '-y',  # Sovrascrivi se esiste
+                        self.output_path
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg...")
+                    self.progress.emit(60, "Elaborazione in corso...")
+
+                    # Esegui il comando ffmpeg
+                    process = subprocess.Popen(
+                        ffmpeg_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True
+                    )
+
+                    # Leggi l'output per tenere traccia dell'avanzamento
+                    while True:
+                        line = process.stderr.readline()
+                        if not line and process.poll() is not None:
+                            break
+                        if 'time=' in line:
+                            try:
+                                # Estrai il timestamp corrente
+                                import re
+                                time_match = re.search(r'time=(\d+:\d+:\d+\.\d+)', line)
+                                if time_match:
+                                    current_time = time_match.group(1)
+                                    h, m, s = current_time.split(':')
+                                    seconds = float(h) * 3600 + float(m) * 60 + float(s)
+
+                                    # Calcola percentuale di completamento (approssimata)
+                                    video_info = self.get_media_info(self.video_path)
+                                    total_duration = float(video_info.get('format', {}).get('duration', 0))
+
+                                    if total_duration > 0:
+                                        progress = min(95, int((seconds / total_duration) * 90) + 60)
+                                        self.progress.emit(progress, f"Elaborazione: {current_time}")
+                            except Exception as ex:
+                                self.log(f"Errore nel parsing dell'output ffmpeg: {ex}")
+
+                    # Verifica il risultato
+                    if process.returncode == 0:
+                        self.log("Processo ffmpeg completato con successo")
+                        self.progress.emit(100, "Elaborazione completata")
+                        return True
+                    else:
+                        stderr = process.stderr.read()
+                        self.log(f"Errore ffmpeg: {stderr}")
+                        raise Exception(f"Errore nell'elaborazione ffmpeg: {stderr}")
+
+                except Exception as e:
+                    self.log(f"Errore nell'applicazione dell'audio con ffmpeg: {e}")
+                    raise Exception(f"Errore nell'applicazione dell'audio: {str(e)}")
 
             def stop(self):
                 self.running = False
+                self.log("Richiesta interruzione processo...")
 
-        # Crea dialog di progresso
-        self.progressDialog = QProgressDialog("Preparazione processo...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Processo Audio-Video")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        # Crea il dialog personalizzato invece di QProgressDialog
+        progress_dialog = CustomProgressDialog(self)
 
-        # Crea thread
+        # Crea thread per l'elaborazione
         self.audio_video_thread = AudioVideoThread(video_path, new_audio_path, output_path, align_audio_video)
 
-        # Collega i segnali
-        self.audio_video_thread.progress.connect(self.updateAudioVideoProgress)
-        self.audio_video_thread.completed.connect(self.onAudioVideoCompleted)
-        self.audio_video_thread.error.connect(self.onAudioVideoError)
-        self.progressDialog.canceled.connect(self.audio_video_thread.stop)
+        # Collega i segnali - versione corretta
+        self.audio_video_thread.progress.connect(
+            lambda value, text: (progress_dialog.setValue(value), progress_dialog.setLabelText(text))
+        )
 
-        # Avvia thread
+        # Passa il dialog come parametro ai metodi di callback
+        self.audio_video_thread.completed.connect(
+            lambda path: self.onAudioVideoCompleted(path, progress_dialog)
+        )
+        self.audio_video_thread.error.connect(
+            lambda message: self.onAudioVideoError(message, progress_dialog)
+        )
+        self.audio_video_thread.detailed_log.connect(progress_dialog.addLogMessage)
+
+        # Avvia il thread
         self.audio_video_thread.start()
-        self.progressDialog.show()
+
+        # Mostra il dialog
+        result = progress_dialog.exec()
+
+        # Se il dialog viene chiuso, interrompi il thread
+        if result == QDialog.DialogCode.Rejected:
+            self.audio_video_thread.stop()
+
+    # Modifica i metodi di callback per accettare il dialog come parametro
+    def onAudioVideoCompleted(self, output_path, dialog=None):
+        """Gestisce il completamento dell'elaborazione audio-video"""
+        if dialog:
+            dialog.accept()
+        QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def onAudioVideoError(self, error_message, dialog=None):
+        """Gestisce gli errori durante l'elaborazione audio-video"""
+        if dialog:
+            dialog.accept()
+        QMessageBox.critical(self, "Errore",
+                             f"Si è verificato un errore durante l'elaborazione audio-video:\n{error_message}")
+    def updateLogInfo(self, message):
+        """Aggiorna il log dettagliato"""
+        if hasattr(self, 'logTextEdit'):
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            self.logTextEdit.append(f"[{timestamp}] {message}")
+
+            # Auto-scroll al fondo
+            cursor = self.logTextEdit.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.logTextEdit.setTextCursor(cursor)
 
     def updateAudioVideoProgress(self, value, message):
         """Aggiorna il dialog di progresso con lo stato attuale"""
         if hasattr(self, 'progressDialog') and self.progressDialog is not None:
             self.progressDialog.setValue(value)
             self.progressDialog.setLabelText(message)
-
-    def onAudioVideoCompleted(self, output_path):
-        """Gestisce il completamento dell'elaborazione audio-video"""
-        self.progressDialog.close()
-        QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
-        self.loadVideoOutput(output_path)
-
-    def onAudioVideoError(self, error_message):
-        """Gestisce gli errori durante l'elaborazione audio-video"""
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore",
-                             f"Si è verificato un errore durante l'elaborazione audio-video:\n{error_message}")
 
     def cutVideo(self):
         media_path = self.videoPathLineEdit
