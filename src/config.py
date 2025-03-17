@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import sys
+import logging
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
@@ -37,7 +38,10 @@ CONTACTS_FILE = os.path.join(BASE_DIR, "contatti_teams.txt")
 DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "../dock_settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "../console_log.txt")
 
-# Directory dei prompt
+# LOG_LEVEL: Imposta il livello di log per l'intera applicazione.
+# Modificando questo valore nel file di configurazione, puoi controllare la verbosità dei messaggi di log (es. logging.INFO, logging.DEBUG, logging.ERROR).
+LOG_LEVEL = logging.INFO
+
 # Directory dei prompt
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 

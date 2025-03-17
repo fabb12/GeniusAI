@@ -101,19 +101,17 @@ class BrowserAgentWorker(QObject):
         self.running = False
         self.browser = None
 
+    # Modifiche alla funzione run_agent_async
     async def run_agent_async(self):
         try:
             # Controllo iniziale dello stato running
             if not self.running:
-                self.log_message.emit("Arresto richiesto prima dell'avvio.")
                 self.progress.emit(100, "Arresto completato")
                 return
 
-            self.log_message.emit("Avvio dell'agente browser...")
             self.progress.emit(5, "Inizializzazione configurazione...")
 
             # Configurazione browser
-            self.log_message.emit("Configurazione browser...")
             browser_config = BrowserConfig(
                 headless=self.config.headless,
                 disable_security=True
@@ -121,11 +119,9 @@ class BrowserAgentWorker(QObject):
 
             # Controllo stato running dopo configurazione
             if not self.running:
-                self.log_message.emit("Arresto richiesto dopo configurazione browser.")
                 return
 
             # Inizializza browser context config
-            self.log_message.emit("Inizializzazione context config...")
             self.progress.emit(10, "Configurazione browser...")
             context_config = BrowserContextConfig(
                 browser_window_size={'width': 1280, 'height': 900},
@@ -135,27 +131,20 @@ class BrowserAgentWorker(QObject):
 
             # Controllo stato running prima di avviare il browser
             if not self.running:
-                self.log_message.emit("Arresto richiesto prima dell'avvio del browser.")
                 return
 
             # Inizializza il browser
-            self.log_message.emit("Avvio del browser...")
             self.progress.emit(15, "Avvio browser...")
             self.browser = Browser(config=browser_config)
-            self.log_message.emit("Browser avviato con successo.")
             self.progress.emit(20, "Browser avviato")
 
             # Controllo stato running dopo avvio browser
             if not self.running:
-                self.log_message.emit("Arresto richiesto dopo avvio browser.")
                 if self.browser:
-                    self.log_message.emit("Chiusura browser in corso...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                 return
 
             # Crea LLM basato sul modello selezionato
-            self.log_message.emit(f"Configurazione modello LLM {self.config.model_name}...")
             self.progress.emit(25, f"Configurazione LLM {self.config.model_name}...")
 
             if "claude" in self.config.model_name.lower():
@@ -164,43 +153,32 @@ class BrowserAgentWorker(QObject):
                     anthropic_api_key=self.config.api_key,
                     temperature=0.0
                 )
-                self.log_message.emit("Modello Claude configurato.")
             else:
                 llm = ChatOpenAI(
                     model_name=self.config.model_name,
                     openai_api_key=self.config.api_key,
                     temperature=0.0
                 )
-                self.log_message.emit("Modello OpenAI configurato.")
 
             self.progress.emit(30, "LLM configurato")
 
             # Controllo stato running dopo configurazione LLM
             if not self.running:
-                self.log_message.emit("Arresto richiesto dopo configurazione LLM.")
                 if self.browser:
-                    self.log_message.emit("Chiusura browser in corso...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                 return
 
             # Inizializza controller
-            self.log_message.emit("Inizializzazione controller...")
             self.progress.emit(35, "Inizializzazione controller...")
             controller = Controller()
-            self.log_message.emit("Controller inizializzato.")
 
             # Controllo stato running dopo inizializzazione controller
             if not self.running:
-                self.log_message.emit("Arresto richiesto dopo inizializzazione controller.")
                 if self.browser:
-                    self.log_message.emit("Chiusura browser in corso...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                 return
 
             # Inizializza agente con progress tracking
-            self.log_message.emit("Inizializzazione agente...")
             self.progress.emit(40, "Inizializzazione agente...")
             agent = Agent(
                 task=self.task,
@@ -210,121 +188,68 @@ class BrowserAgentWorker(QObject):
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
-            self.log_message.emit("Agente inizializzato con successo.")
             self.progress.emit(45, "Agente inizializzato")
 
             # Definisci e registra la callback per l'avanzamento
             async def progress_callback(state, model_output, step_num):
                 # Controlla se è stata richiesta l'interruzione
                 if not self.running:
-                    self.log_message.emit(f"Arresto richiesto durante il passo {step_num}.")
                     return False
 
                 progress_pct = min(int(45 + (step_num / self.config.max_steps) * 50), 95)
                 next_goal = getattr(model_output, "next_goal",
                                     "Elaborazione...") if model_output else "Inizializzazione..."
 
-                # Estrai informazioni dettagliate dallo stato dell'agente
-                state_info = ""
-                if state:
-                    # URL corrente
-                    current_url = getattr(state, "current_url", None)
-                    if current_url:
-                        state_info += f"\n- URL corrente: {current_url}"
-
-                    # Ultima azione eseguita
-                    last_action = getattr(state, "last_action", None)
-                    if last_action:
-                        state_info += f"\n- Ultima azione: {last_action}"
-
-                    # Contenuto osservato (limitato per leggibilità)
-                    observation = getattr(state, "observation", None)
-                    if observation:
-                        obs_text = str(observation)
-                        if len(obs_text) > 100:
-                            obs_text = obs_text[:100] + "..."
-                        state_info += f"\n- Osservazione: {obs_text}"
-
                 self.progress.emit(progress_pct, str(next_goal))
-
-                # Emetti un messaggio di log più dettagliato
-                log_message = f"Passo {step_num}: {next_goal}{state_info}"
-                self.log_message.emit(log_message)
-
                 return True
 
             # Registra la callback correttamente
             agent.register_new_step_callback = progress_callback
-            self.log_message.emit("Callback di progresso registrata.")
             self.progress.emit(48, "Inizializzazione completata")
 
             # Controllo stato running prima di eseguire l'agente
             if not self.running:
-                self.log_message.emit("Arresto richiesto prima dell'esecuzione dell'agente.")
                 if self.browser:
-                    self.log_message.emit("Chiusura browser in corso...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                 return
 
             # Esegui l'agente
-            self.log_message.emit("Avvio esecuzione agente...")
             self.progress.emit(50, "Avvio esecuzione agente...")
             self.running = True
 
-            # Definisci una funzione per verificare se continuare
-            async def should_continue():
-                # Verifica se l'esecuzione deve continuare
-                return self.running
-
-            # Esegui l'agente (senza parametro should_continue che non è supportato)
-            # La funzione di callback register_new_step_callback si occuperà di verificare se continuare
+            # Esegui l'agente
             history = await agent.run(max_steps=self.config.max_steps)
 
             # Verifica se è stato richiesto l'arresto durante l'esecuzione
             if not self.running:
-                self.log_message.emit("Arresto richiesto durante l'esecuzione dell'agente.")
                 if self.browser:
-                    self.log_message.emit("Chiusura browser in corso...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                 self.progress.emit(100, "Operazione annullata")
                 return
 
             # Ottieni il risultato finale
-            self.log_message.emit("Elaborazione risultati...")
             self.progress.emit(95, "Elaborazione risultati...")
             final_result = history.final_result() or "Task completato senza risultato esplicito."
-            self.log_message.emit("Risultato finale ottenuto.")
 
             # Emetti il risultato
             self.progress.emit(99, "Task completato!")
-            self.log_message.emit("Task completato con successo!")
             self.finished.emit(final_result)
 
         except Exception as e:
             # Gestione dettagliata delle eccezioni
             error_details = traceback.format_exc()
             error_msg = f"Errore nell'esecuzione dell'agente: {str(e)}\n\n{error_details}"
-            self.log_message.emit(f"ERRORE: {error_msg}")
             self.error.emit(error_msg)
             logging.error(f"Errore in BrowserAgentWorker: {e}", exc_info=True)
         finally:
             # Assicurati di chiudere il browser alla fine
             if self.browser:
                 try:
-                    self.log_message.emit("Chiusura browser in corso...")
                     self.progress.emit(98, "Chiusura browser...")
                     await self.browser.close()
-                    self.log_message.emit("Browser chiuso con successo.")
                     self.progress.emit(100, "Browser chiuso con successo")
                 except Exception as e:
-                    self.log_message.emit(f"Errore nella chiusura del browser: {e}")
                     logging.error(f"Errore nella chiusura del browser: {e}")
-
-            # Reset finale
-            self.browser = None
-            self.log_message.emit("Operazione terminata.")
 
     def run(self):
         try:
@@ -649,27 +574,20 @@ class UnifiedBrowserAgentDialog(QDialog):
 
     def stopAgent(self):
         if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
-            self.addLogMessage("Nessun thread dell'agente in esecuzione da fermare.")
             return
 
         self.progressDialog.setLabelText("Arresto agente in corso...")
         self.addLogMessage("\n=== ARRESTO RICHIESTO DALL'UTENTE ===")
-        self.addLogMessage("Invio segnale di arresto all'agente...")
 
         # Invia il segnale di arresto al thread
         try:
             self.agent_thread.stop()
-            self.addLogMessage("Segnale di arresto inviato.")
         except Exception as e:
-            self.addLogMessage(f"Errore durante l'invio del segnale di arresto: {str(e)}")
-
-        # Attendi un po'
-        self.addLogMessage("Attesa risposta dall'agente (5 secondi massimo)...")
+            pass
 
         # Attendiamo fino a 5 secondi in blocchi di 1 secondo
         for i in range(5):
             if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
-                self.addLogMessage(f"Thread terminato con successo dopo {i + 1} secondi.")
                 break
 
             # Attendi 1 secondo e controlla
@@ -677,20 +595,15 @@ class UnifiedBrowserAgentDialog(QDialog):
             time.sleep(1)
             QApplication.processEvents()
 
-            self.addLogMessage(f"Attesa... {i + 1}/5 secondi trascorsi.")
-
         # Se ancora in esecuzione, termina forzatamente
         if hasattr(self, 'agent_thread') and self.agent_thread is not None and self.agent_thread.isRunning():
-            self.addLogMessage("Forzatura terminazione thread...")
             try:
                 self.agent_thread.terminate()
-                self.agent_thread.wait(1000)  # Attende ancora 1 secondo
-                self.addLogMessage("Thread terminato forzatamente.")
+                self.agent_thread.wait(1000)
             except Exception as e:
-                self.addLogMessage(f"Errore durante la terminazione forzata: {str(e)}")
+                pass
 
         # Aggiorna l'interfaccia
-        self.addLogMessage("=== PROCESSO DI ARRESTO COMPLETATO ===")
         self.onThreadFinished()
 
         # Chiudi il dialog di progresso
@@ -699,6 +612,7 @@ class UnifiedBrowserAgentDialog(QDialog):
 
         # Aggiorna il risultato
         self.resultEdit.setPlainText("Operazione interrotta dall'utente.")
+
     def updateProgress(self, value, message):
         """Aggiorna la barra di progresso e il log"""
         # Aggiorna la barra di progresso
