@@ -2477,20 +2477,50 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
+
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel Video Player Output.")
             return
 
-        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", "Video Files (*.mp4 *.mov *.avi)")
-        if fileName:
-            try:
-                # Copy the currently loaded video to the new location
-                shutil.copy(self.videoPathLineOutputEdit, fileName)
-                QMessageBox.information(self, "Successo", f"Video salvato con successo in: {fileName}")
-            except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Errore durante il salvataggio del video: {str(e)}")
+        # Crea e mostra il dialogo delle opzioni
+        from ui.VideoSaveOptionsDialog import VideoSaveOptionsDialog
+        from services.VideoSaver import VideoSaver
 
+        options_dialog = VideoSaveOptionsDialog(self.videoPathLineOutputEdit, self)
+        if options_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        # Ottieni le opzioni
+        save_options = options_dialog.getOptions()
+
+        # Ottieni il nome del file di output
+        file_filter = "Video Files (*.mp4 *.mov *.avi)"
+        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", file_filter)
+        if not fileName:
+            return
+
+        # Crea un'istanza di VideoSaver
+        video_saver = VideoSaver(self)
+
+        # Salva il video in base alle opzioni selezionate
+        if save_options['use_compression']:
+            success, error_msg = video_saver.save_compressed(
+                self.videoPathLineOutputEdit,
+                fileName,
+                quality=save_options['compression_quality']
+            )
+        else:
+            success, error_msg = video_saver.save_original(
+                self.videoPathLineOutputEdit,
+                fileName
+            )
+
+        # Mostra il messaggio del risultato
+        if success:
+            QMessageBox.information(self, "Successo", f"Video salvato con successo in: {fileName}")
+        else:
+            QMessageBox.critical(self, "Errore", f"Errore durante il salvataggio del video: {error_msg}")
 
     def setupViewMenuActions(self, viewMenu):
         # Azione per il Video Player Dock
