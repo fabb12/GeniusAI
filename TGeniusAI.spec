@@ -49,7 +49,7 @@ datas += [
     (os.path.join(current_dir, 'src', 'services'), 'src/services'),
     (os.path.join(current_dir, 'src', 'managers'), 'src/managers'),
     (os.path.join(current_dir, 'src', 'recorder'), 'src/recorder'),
-    (os.path.join(current_dir, 'src', 'prompts'), 'src/prompts')
+    (os.path.join(current_dir, 'src', 'prompts'), 'prompts')
 ]
 
 binaries = []
@@ -70,6 +70,9 @@ resource_files = [
     # Main resource directories - keep these at the top level
     (os.path.join(current_dir, 'src', 'res'), 'res'),
     (os.path.join(current_dir, 'src', 'ffmpeg'), 'ffmpeg'),
+
+    # Explicitly include prompts directory (at same level as ffmpeg)
+    (os.path.join(current_dir, 'src', 'prompts'), 'prompts'),
 
     # Explicitly include splash_images directory
     (os.path.join(current_dir, 'src', 'res', 'splash_images'), 'res/splash_images'),
@@ -183,7 +186,7 @@ def post_build_steps():
             print(f"Error copying version info: {e}")
 
     # Make sure resource directories are properly structured
-    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg']
+    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg', 'prompts']
 
     for dir_path in critical_dirs:
         internal_source = os.path.join(internal_dir, dir_path)
