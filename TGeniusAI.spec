@@ -49,7 +49,8 @@ datas += [
     (os.path.join(current_dir, 'src', 'services'), 'src/services'),
     (os.path.join(current_dir, 'src', 'managers'), 'src/managers'),
     (os.path.join(current_dir, 'src', 'recorder'), 'src/recorder'),
-    (os.path.join(current_dir, 'src', 'prompts'), 'src/prompts')
+    # Modificato per mettere i prompts nella cartella principale
+    (os.path.join(current_dir, 'src', 'prompts'), 'prompts')
 ]
 
 binaries = []
@@ -183,7 +184,7 @@ def post_build_steps():
             print(f"Error copying version info: {e}")
 
     # Make sure resource directories are properly structured
-    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg']
+    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg', 'prompts']
 
     for dir_path in critical_dirs:
         internal_source = os.path.join(internal_dir, dir_path)
