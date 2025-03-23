@@ -5,6 +5,7 @@ import json
 import shutil
 from PyQt6.QtWidgets import QProgressDialog, QApplication
 from PyQt6.QtCore import Qt
+from src.config import FFMPEG_PATH
 
 
 class VideoSaver:
@@ -52,10 +53,8 @@ class VideoSaver:
             progress_dialog.setValue(0)
             progress_dialog.show()
 
-            # Prepara il comando FFmpeg
-            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'  # Adjust path as needed
             command = [
-                ffmpeg_path,
+                FFMPEG_PATH,
                 '-i', source_path,
                 '-c:v', 'libx264',
                 '-crf', str(crf),
@@ -126,7 +125,7 @@ class VideoSaver:
     def get_video_info(self, video_path):
         """Ottieni informazioni sul file video."""
         try:
-            ffprobe_path = 'ffmpeg/bin/ffprobe.exe'
+            ffprobe_path = FFMPEG_PATH.replace('ffmpeg.exe', 'ffprobe.exe')
             command = [
                 ffprobe_path,
                 '-v', 'error',
