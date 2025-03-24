@@ -70,9 +70,7 @@ from ui.VideoOverlay import VideoOverlay
 
 # Importa la classe MeetingSummarizer
 from services.MeetingSummarizer import MeetingSummarizer
-import cv2
-from ui.VideoFrameLabel import VideoFrameLabel
-from PyQt6.QtGui import QImage, QPixmap
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -241,11 +239,11 @@ class VideoAudioManager(QMainWindow):
         # ---------------------
         # PLAYER INPUT
         # ---------------------
-        self.videoCropWidget = VideoFrameLabel()
+        self.videoCropWidget = CropVideoWidget()
         self.videoCropWidget.setAcceptDrops(True)
         self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
-        self.videoCropWidget.selectionCompleted.connect(self.onSelectionCompleted)
+        self.player.setVideoOutput(self.videoCropWidget)
 
         self.videoOverlay = VideoOverlay(self.videoCropWidget)
         self.videoOverlay.setGeometry(self.videoCropWidget.rect())
@@ -621,8 +619,6 @@ class VideoAudioManager(QMainWindow):
         shareAction.setToolTip("Condividi il video attualmente caricato")
         shareAction.triggered.connect(self.onShareButtonClicked)
         toolbar.addAction(shareAction)
-        self.statusBar().showMessage(
-            "Usa il tasto destro per selezionare un'area, tasto sinistro per annullare la selezione")
 
         # Applica il tema scuro, se disponibile
         if hasattr(self, 'applyDarkMode'):
@@ -631,62 +627,6 @@ class VideoAudioManager(QMainWindow):
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
 
-    def onSelectionCompleted(self, rect):
-        # Mostra le coordinate dell'area selezionata
-        self.statusBar().showMessage(f"Selezione: X={rect.x()}, Y={rect.y()}, W={rect.width()}, H={rect.height()}")
-
-    def applyCropBySelection(self):
-        """Applica il ritaglio in base all'area selezionata dall'utente."""
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare il ritaglio.")
-            return
-
-        crop_rect = self.videoCropWidget.getSelectionRect()
-        if crop_rect.isEmpty():
-            QMessageBox.warning(self, "Errore", "Seleziona un'area da ritagliare con il tasto destro del mouse.")
-            return
-
-        try:
-            # Carica il video con moviepy
-            video = VideoFileClip(self.videoPathLineEdit)
-
-            # Calcola il fattore di scala tra il widget e il video reale
-            video_width, video_height = video.size
-            pixmap = self.videoCropWidget.pixmap()
-            if pixmap:
-                widget_width = pixmap.width()
-                widget_height = pixmap.height()
-            else:
-                widget_width = self.videoCropWidget.width()
-                widget_height = self.videoCropWidget.height()
-
-            # Calcola lo scaling e l'offset per mantenere aspect ratio
-            if widget_width / widget_height > video_width / video_height:
-                # Il widget è più largo del video
-                scale_factor = video_height / widget_height
-                offset_x = (widget_width - (video_width / scale_factor)) / 2
-                offset_y = 0
-            else:
-                # Il widget è più alto del video
-                scale_factor = video_width / widget_width
-                offset_x = 0
-                offset_y = (widget_height - (video_height / scale_factor)) / 2
-
-            # Adatta le coordinate della selezione
-            x1 = max(0, int((crop_rect.x() - offset_x) * scale_factor))
-            y1 = max(0, int((crop_rect.y() - offset_y) * scale_factor))
-            x2 = min(video_width, int((crop_rect.x() + crop_rect.width() - offset_x) * scale_factor))
-            y2 = min(video_height, int((crop_rect.y() + crop_rect.height() - offset_y) * scale_factor))
-
-            # Applica il ritaglio
-            output_path = tempfile.mktemp(suffix='.mp4')
-            cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
-            cropped_video.write_videofile(output_path, codec='libx264')
-
-            QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
-            self.loadVideoOutput(output_path)
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
     def videoCropWidgetResizeEvent(self, event):
         # Chiama il metodo resizeEvent originale del widget
         CropVideoWidget.resizeEvent(self.videoCropWidget, event)
@@ -2154,7 +2094,8 @@ class VideoAudioManager(QMainWindow):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}.mp4")
 
-        if not os.path.exists(FFMPEG_PATH):
+        ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+        if not os.path.exists(ffmpeg_path):
             QMessageBox.critical(self, "Errore",
                                  "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")
             self.startRecordingButton.setEnabled(True)
@@ -2168,7 +2109,7 @@ class VideoAudioManager(QMainWindow):
 
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
-            ffmpeg_path=FFMPEG_PATH,
+            ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
             audio_input=selected_audio if not save_video_only else None,
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
@@ -2226,13 +2167,14 @@ class VideoAudioManager(QMainWindow):
         if len(self.recording_segments) > 1:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             output_path = self.recording_segments[0].rsplit('_', 1)[0] + f'_final_{timestamp}.mp4'
+            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
 
             segments_file = "segments.txt"
             with open(segments_file, "w") as file:
                 for segment in self.recording_segments:
                     file.write(f"file '{segment}'\n")
 
-            merge_command = [FFMPEG_PATH, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
+            merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
             subprocess.run(merge_command)
 
             QMessageBox.information(self, "File Salvato",
@@ -2520,10 +2462,10 @@ class VideoAudioManager(QMainWindow):
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         videoMenu.addAction(releaseOutputAction)
 
-        cropBySelectionAction = QAction('&Ritaglia Area Selezionata', self)
-        cropBySelectionAction.setStatusTip('Ritaglia il video in base all\'area selezionata')
-        cropBySelectionAction.triggered.connect(self.applyCropBySelection)
-        videoMenu.addAction(cropBySelectionAction)
+        cutVideoAction = QAction('&Taglia Video', self)
+        cutVideoAction.setStatusTip('Taglia il video utilizzando la selezione overlay')
+        cutVideoAction.triggered.connect(self.applyCrop)
+        videoMenu.addAction(cutVideoAction)
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
@@ -3306,7 +3248,7 @@ class VideoAudioManager(QMainWindow):
 
                     # Modifica la velocità del video con ffmpeg
                     ffmpeg_speed_cmd = [
-                        FFMPEG_PATH,
+                        'ffmpeg/bin/ffmpeg',
                         '-i', self.video_path,
                         '-filter_complex', f'[0:v]setpts={1 / speed_factor}*PTS[v]',
                         '-map', '[v]',
@@ -3324,7 +3266,7 @@ class VideoAudioManager(QMainWindow):
 
                     # Aggiungi l'audio al video modificato
                     ffmpeg_audio_cmd = [
-                        FFMPEG_PATH,
+                        'ffmpeg/bin/ffmpeg',
                         '-i', temp_video,
                         '-i', self.audio_path,
                         '-map', '0:v',
@@ -3370,7 +3312,7 @@ class VideoAudioManager(QMainWindow):
 
                     # Unisci video e audio con ffmpeg
                     ffmpeg_cmd = [
-                        FFMPEG_PATH,
+                        'ffmpeg/bin/ffmpeg',
                         '-i', temp_video,
                         '-i', temp_audio,
                         '-c:v', 'copy',
@@ -3470,7 +3412,7 @@ class VideoAudioManager(QMainWindow):
                     self.log("Utilizzo ffmpeg per sostituire l'audio")
 
                     ffmpeg_cmd = [
-                        FFMPEG_PATH,
+                        'ffmpeg/bin/ffmpeg',
                         '-i', self.video_path,
                         '-i', self.audio_path,
                         '-map', '0:v',
