@@ -57,7 +57,7 @@ for dll_path in extra_dll_paths:
     if os.path.exists(dll_path):
         binaries.append((dll_path, '.'))
 
-# Resource files - posizionamento corretto di ffmpeg e prompts a livello root
+# Resource files - lista ridotta senza ffmpeg per evitare duplicazioni
 resource_files = [
     # Environment file
     (os.path.join(current_dir, '.env'), '.'),
@@ -69,9 +69,6 @@ resource_files = [
 
     # Cartella prompts - posizionata a livello root
     (os.path.join(current_dir, 'src', 'prompts'), 'prompts'),
-
-    # Cartella ffmpeg - posizionata a livello root
-    (os.path.join(current_dir, 'src', 'ffmpeg'), 'ffmpeg'),
 
     # Main resource directories - keep these at the top level
     (os.path.join(current_dir, 'src', 'res'), 'res'),
@@ -127,7 +124,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,  # Impostato a True per visualizzare il console output durante debug
+    console=False,  # Impostato a False per nascondere la console nell'app finale
     icon=os.path.join('src', 'res', 'eye.ico')
 )
 
@@ -139,7 +136,7 @@ coll = COLLECT(
     name='TGeniusAI',
     strip=False,
     upx=True,
-    console=False  # Impostato a True per visualizzare il console output durante debug
+    console=False  # Impostato a False per nascondere la console nell'app finale
 )
 
 # Create version_info.txt file
@@ -189,31 +186,30 @@ def post_build_steps():
         except Exception as e:
             print(f"Error copying version info: {e}")
 
+    # Copiamo esplicitamente la cartella ffmpeg
+    src_ffmpeg_path = os.path.join(current_dir, 'src', 'ffmpeg')
+    dest_ffmpeg_path = os.path.join(tgeniusai_dir, 'ffmpeg')
+
+    if os.path.exists(src_ffmpeg_path):
+        print(f"Copying ffmpeg directory from {src_ffmpeg_path} to {dest_ffmpeg_path}")
+
+        # Rimuovi la destinazione se esiste già
+        if os.path.exists(dest_ffmpeg_path):
+            shutil.rmtree(dest_ffmpeg_path)
+
+        # Copia l'intera cartella ffmpeg con tutti i binari
+        shutil.copytree(src_ffmpeg_path, dest_ffmpeg_path)
+        print(f"Successfully copied ffmpeg directory")
+    else:
+        print(f"WARNING: Source ffmpeg directory not found at {src_ffmpeg_path}")
+
     # Make sure resource directories are properly structured
     critical_dirs = [
         'res',
         'res/splash_images',
         'res/music',
-        'ffmpeg',
-        'ffmpeg/bin',
         'prompts'
     ]
-
-    # Verifica esistenza di tutti i file binari ffmpeg
-    ffmpeg_binaries = ['ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe']
-    ffmpeg_bin_dir = os.path.join(tgeniusai_dir, 'ffmpeg', 'bin')
-    os.makedirs(ffmpeg_bin_dir, exist_ok=True)
-
-    for binary in ffmpeg_binaries:
-        source_path = os.path.join(internal_dir, 'ffmpeg', 'bin', binary)
-        target_path = os.path.join(ffmpeg_bin_dir, binary)
-
-        if os.path.exists(source_path):
-            try:
-                shutil.copy2(source_path, target_path)
-                print(f"Copied {binary} to {target_path}")
-            except Exception as e:
-                print(f"Error copying {binary}: {e}")
 
     for dir_path in critical_dirs:
         internal_source = os.path.join(internal_dir, dir_path)
@@ -254,7 +250,8 @@ def post_build_steps():
 
     # Verifica integrità dell'installazione
     print("\n===== INSTALLATION INTEGRITY CHECK =====")
-    for dir_path in critical_dirs:
+    all_critical_dirs = critical_dirs + ['ffmpeg', 'ffmpeg/bin']
+    for dir_path in all_critical_dirs:
         check_path = os.path.join(tgeniusai_dir, dir_path)
         if os.path.exists(check_path):
             print(f"✓ {dir_path} exists")
@@ -265,6 +262,9 @@ def post_build_steps():
             print(f"✗ {dir_path} MISSING")
 
     # Verifica ffmpeg binaries
+    ffmpeg_binaries = ['ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe']
+    ffmpeg_bin_dir = os.path.join(tgeniusai_dir, 'ffmpeg', 'bin')
+
     for binary in ffmpeg_binaries:
         binary_path = os.path.join(ffmpeg_bin_dir, binary)
         if os.path.exists(binary_path):
