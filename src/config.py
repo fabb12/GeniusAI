@@ -1,13 +1,24 @@
 import os
-from pathlib import Path
-from dotenv import load_dotenv
 import sys
 import logging
+from dotenv import load_dotenv
+
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
+
+def get_app_path():
+    """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
+    if getattr(sys, 'frozen', False):
+        # Se l'app è compilata con PyInstaller
+        return os.path.dirname(sys.executable)
+    else:
+        # In modalità di sviluppo
+        return os.path.dirname(os.path.abspath(__file__))
+
+
 # Directory base dell'applicazione
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = get_app_path()
 
 # API Keys
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
@@ -30,19 +41,18 @@ CLAUDE_MODEL_PPTX_GENERATION = os.getenv("CLAUDE_MODEL_PPTX_GENERATION", MODEL_3
 CLAUDE_MODEL_BROWSER_AGENT = os.getenv("CLAUDE_MODEL_BROWSER_AGENT", MODEL_3_HAIKU)
 CLAUDE_MODEL_SUMMARY = os.getenv("CLAUDE_MODEL_SUMMARY", MODEL_3_5_SONNET)
 
-# File Paths
-FFMPEG_PATH = os.getenv("FFMPEG_PATH", "ffmpeg/bin/ffmpeg.exe")
-FFMPEG_PATH_DOWNLOAD = os.getenv("FFMPEG_PATH_DOWNLOAD", "ffmpeg/bin")
+# File Paths - Usa percorsi assoluti costruiti da BASE_DIR
+FFMPEG_PATH = os.path.join(BASE_DIR, "ffmpeg", "bin", "ffmpeg.exe")
+FFMPEG_PATH_DOWNLOAD = os.path.join(BASE_DIR, "ffmpeg", "bin")
 VERSION_FILE = os.path.join(BASE_DIR, "version_info.txt")
 CONTACTS_FILE = os.path.join(BASE_DIR, "contatti_teams.txt")
-DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "../dock_settings.json")
-LOG_FILE = os.path.join(BASE_DIR, "../console_log.txt")
+DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "dock_settings.json")
+LOG_FILE = os.path.join(BASE_DIR, "console_log.txt")
 
 # LOG_LEVEL: Imposta il livello di log per l'intera applicazione.
-# Modificando questo valore nel file di configurazione, puoi controllare la verbosità dei messaggi di log (es. logging.INFO, logging.DEBUG, logging.ERROR).
 LOG_LEVEL = logging.INFO
 
-# Directory dei prompt
+# Directory dei prompt - Usa percorsi assoluti costruiti da BASE_DIR
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 
 # Prompt per l'estrazione dei frame
@@ -59,25 +69,23 @@ PROMPT_TEXT_FIX = os.path.join(PROMPTS_DIR, "text_fix_prompt.txt")
 # Prompt per l'agente browser
 PROMPT_BROWSER_GUIDE = os.path.join(PROMPTS_DIR, "browser_guide_prompt.txt")
 PROMPT_BROWSER_AGENT = os.path.join(PROMPTS_DIR, "browser_agent_prompt.txt")
+
 # Prompt per il riassunto delle riunioni
 PROMPT_MEETING_SUMMARY = os.path.join(PROMPTS_DIR, "meeting_summary_prompt.txt")
+
 # Prompt per la generazione di audio
 PROMPT_TTS = os.path.join(PROMPTS_DIR, "tts_prompt.txt")
 
 # Resource Paths
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
+
+
 def get_splash_images_dir():
     """Ottiene il percorso della cartella splash_images in modo compatibile con PyInstaller"""
-    if getattr(sys, 'frozen', False):
-        # Se l'app è compilata con PyInstaller
-        base_path = os.path.dirname(sys.executable)
-        return os.path.join(base_path, "res", "splash_images")
-    else:
-        # In modalità di sviluppo
-        return os.path.join(RESOURCES_DIR, "splash_images")
+    return os.path.join(RESOURCES_DIR, "splash_images")
+
 
 SPLASH_IMAGES_DIR = get_splash_images_dir()
-
 MUSIC_DIR = os.path.join(RESOURCES_DIR, "music")
 WATERMARK_IMAGE = os.path.join(RESOURCES_DIR, "watermark.png")
 
@@ -93,10 +101,6 @@ DEFAULT_AUDIO_CHANNELS = 2
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 
-# Prompt Files
-PROMPT_FRAMES_EXTRACTION = os.path.join(BASE_DIR, "services", "prompt_frames_extraction.txt")
-PROMPT_FRAMES_FOR_AGENT = os.path.join(BASE_DIR, "services", "prompt_frames_for_agent.txt")
-
 # Voice Settings
 DEFAULT_VOICES = {
     "Alessio": "BTpQARcEj1XqVxdZjTI7",
@@ -105,3 +109,21 @@ DEFAULT_VOICES = {
     "Mika": "B2j2knC2POvVW0XJE6Hi"
 }
 
+
+# Funzione di diagnostica per debug di percorsi (utile per verificare percorsi nell'eseguibile)
+def debug_paths():
+    """Stampa i percorsi principali per diagnosi"""
+    paths = {
+        "BASE_DIR": BASE_DIR,
+        "FFMPEG_PATH": FFMPEG_PATH,
+        "PROMPTS_DIR": PROMPTS_DIR,
+        "RESOURCES_DIR": RESOURCES_DIR,
+        "SPLASH_IMAGES_DIR": SPLASH_IMAGES_DIR,
+        "VERSION_FILE": VERSION_FILE
+    }
+
+    for name, path in paths.items():
+        exists = os.path.exists(path)
+        print(f"{name}: {path} - {'ESISTE' if exists else 'MANCANTE'}")
+
+    return paths

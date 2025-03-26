@@ -21,8 +21,8 @@ hiddenimports = (
     collect_submodules('speech_recognition') +
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
-     'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen',
-     'src.services', 'src.managers', 'src.recorder']
+     'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
+     'src.services', 'src.managers', 'src.recorder', 'src.config']
 )
 
 datas = (
@@ -49,8 +49,7 @@ datas += [
     (os.path.join(current_dir, 'src', 'services'), 'src/services'),
     (os.path.join(current_dir, 'src', 'managers'), 'src/managers'),
     (os.path.join(current_dir, 'src', 'recorder'), 'src/recorder'),
-    # Modificato per mettere i prompts nella cartella principale
-    (os.path.join(current_dir, 'src', 'prompts'), 'prompts')
+    (os.path.join(current_dir, 'src', 'config.py'), 'src')
 ]
 
 binaries = []
@@ -58,7 +57,7 @@ for dll_path in extra_dll_paths:
     if os.path.exists(dll_path):
         binaries.append((dll_path, '.'))
 
-# Resource files - explicitly include all resource directories and files
+# Resource files - posizionamento corretto di ffmpeg e prompts a livello root
 resource_files = [
     # Environment file
     (os.path.join(current_dir, '.env'), '.'),
@@ -68,19 +67,26 @@ resource_files = [
     (os.path.join(current_dir, 'CHANGELOG.md'), '.'),
     (os.path.join(current_dir, 'KNOW_ISSUES.md'), '.'),
 
-    # Main resource directories - keep these at the top level
-    (os.path.join(current_dir, 'src', 'res'), 'res'),
+    # Cartella prompts - posizionata a livello root
+    (os.path.join(current_dir, 'src', 'prompts'), 'prompts'),
+
+    # Cartella ffmpeg - posizionata a livello root
     (os.path.join(current_dir, 'src', 'ffmpeg'), 'ffmpeg'),
 
-    # Explicitly include splash_images directory
-    (os.path.join(current_dir, 'src', 'res', 'splash_images'), 'res/splash_images'),
+    # Main resource directories - keep these at the top level
+    (os.path.join(current_dir, 'src', 'res'), 'res'),
 
-    # Explicitly include music directory
+    # Explicitly include subdirectories
+    (os.path.join(current_dir, 'src', 'res', 'splash_images'), 'res/splash_images'),
     (os.path.join(current_dir, 'src', 'res', 'music'), 'res/music'),
 
     # Ensure important icons are included
     (os.path.join(current_dir, 'src', 'res', 'eye.ico'), 'res'),
     (os.path.join(current_dir, 'src', 'res', 'eye.png'), 'res'),
+    (os.path.join(current_dir, 'src', 'res', 'watermark.png'), 'res'),
+
+    # Assicurarsi che tutti i file .png nella cartella res vengano inclusi
+    (os.path.join(current_dir, 'src', 'res', '*.png'), 'res'),
 
     # Add contatti_teams.txt
     (os.path.join(current_dir, 'src', 'contatti_teams.txt'), '.'),
@@ -121,7 +127,7 @@ exe = EXE(
     debug=False,
     strip=False,
     upx=True,
-    console=False,  # Set to False to hide console window
+    console=False,  # Impostato a True per visualizzare il console output durante debug
     icon=os.path.join('src', 'res', 'eye.ico')
 )
 
@@ -133,7 +139,7 @@ coll = COLLECT(
     name='TGeniusAI',
     strip=False,
     upx=True,
-    console=False  # Set to False to hide console window
+    console=False  # Impostato a True per visualizzare il console output durante debug
 )
 
 # Create version_info.txt file
@@ -184,7 +190,30 @@ def post_build_steps():
             print(f"Error copying version info: {e}")
 
     # Make sure resource directories are properly structured
-    critical_dirs = ['res', 'res/splash_images', 'res/music', 'ffmpeg', 'prompts']
+    critical_dirs = [
+        'res',
+        'res/splash_images',
+        'res/music',
+        'ffmpeg',
+        'ffmpeg/bin',
+        'prompts'
+    ]
+
+    # Verifica esistenza di tutti i file binari ffmpeg
+    ffmpeg_binaries = ['ffmpeg.exe', 'ffprobe.exe', 'ffplay.exe']
+    ffmpeg_bin_dir = os.path.join(tgeniusai_dir, 'ffmpeg', 'bin')
+    os.makedirs(ffmpeg_bin_dir, exist_ok=True)
+
+    for binary in ffmpeg_binaries:
+        source_path = os.path.join(internal_dir, 'ffmpeg', 'bin', binary)
+        target_path = os.path.join(ffmpeg_bin_dir, binary)
+
+        if os.path.exists(source_path):
+            try:
+                shutil.copy2(source_path, target_path)
+                print(f"Copied {binary} to {target_path}")
+            except Exception as e:
+                print(f"Error copying {binary}: {e}")
 
     for dir_path in critical_dirs:
         internal_source = os.path.join(internal_dir, dir_path)
@@ -222,6 +251,26 @@ def post_build_steps():
                 print(f"Error copying {file_name}: {e}")
 
     print("Post-build steps completed successfully")
+
+    # Verifica integrità dell'installazione
+    print("\n===== INSTALLATION INTEGRITY CHECK =====")
+    for dir_path in critical_dirs:
+        check_path = os.path.join(tgeniusai_dir, dir_path)
+        if os.path.exists(check_path):
+            print(f"✓ {dir_path} exists")
+            if os.path.isdir(check_path):
+                items = os.listdir(check_path)
+                print(f"  - Contains {len(items)} items")
+        else:
+            print(f"✗ {dir_path} MISSING")
+
+    # Verifica ffmpeg binaries
+    for binary in ffmpeg_binaries:
+        binary_path = os.path.join(ffmpeg_bin_dir, binary)
+        if os.path.exists(binary_path):
+            print(f"✓ {binary} exists - {os.path.getsize(binary_path)/1024/1024:.2f} MB")
+        else:
+            print(f"✗ {binary} MISSING")
 
 
 # Run post-build steps
