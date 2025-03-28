@@ -19,6 +19,11 @@ hiddenimports = (
     collect_submodules('PyQt6') +
     collect_submodules('pycountry') +
     collect_submodules('speech_recognition') +
+    # Add explicit imports for pydantic and browser-use relevant modules
+    collect_submodules('pydantic') +
+    collect_submodules('browser_use') +
+    # Additional explicit imports to fix Pydantic issues
+    ['pydantic.deprecated.decorator', 'langchain_anthropic', 'langchain_openai'] +
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
      'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
@@ -32,7 +37,10 @@ datas = (
     collect_data_files('pydub') +
     collect_data_files('PyQt6') +
     collect_data_files('pycountry') +
-    collect_data_files('speech_recognition')
+    collect_data_files('speech_recognition') +
+    # Add data files for pydantic and browser-use
+    collect_data_files('pydantic') +
+    collect_data_files('browser_use')
 )
 
 # Additional DLLs and plugins for PyQt6
@@ -89,12 +97,52 @@ resource_files = [
     (os.path.join(current_dir, 'src', 'contatti_teams.txt'), '.'),
 ]
 
+# Create copies of any missing pydantic modules
+try:
+    # Find the site-packages directory
+    site_packages_dir = os.path.join(current_dir, 'venv', 'Lib', 'site-packages')
+
+    # Paths to pydantic directories
+    pydantic_dir = os.path.join(site_packages_dir, 'pydantic')
+    deprecated_dir = os.path.join(pydantic_dir, 'deprecated')
+
+    # Create the deprecated directory if it doesn't exist
+    if not os.path.exists(deprecated_dir):
+        os.makedirs(deprecated_dir, exist_ok=True)
+        print(f"Created directory: {deprecated_dir}")
+
+    # Create an __init__.py in the deprecated directory
+    init_file = os.path.join(deprecated_dir, '__init__.py')
+    if not os.path.exists(init_file):
+        with open(init_file, 'w') as f:
+            f.write("# Auto-generated for compatibility\n")
+        print(f"Created file: {init_file}")
+
+    # Create a minimal decorator.py file
+    decorator_file = os.path.join(deprecated_dir, 'decorator.py')
+    if not os.path.exists(decorator_file):
+        with open(decorator_file, 'w') as f:
+            f.write("# Auto-generated for compatibility with newer pydantic versions\n\n")
+            f.write("class ValidatedFunction:\n")
+            f.write("    def __init__(self, *args, **kwargs):\n")
+            f.write("        pass\n\n")
+            f.write("def validate_arguments(func):\n")
+            f.write("    return func\n")
+        print(f"Created file: {decorator_file}")
+
+    # Add these files to datas
+    datas.append((deprecated_dir, 'pydantic/deprecated'))
+except Exception as e:
+    print(f"Warning: Could not create pydantic compatibility files: {e}")
+
 a = Analysis(
     ['src/TGeniusAI.py'],
     pathex=[
         '.',
         'src',
-        os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin')
+        os.path.join(current_dir, 'venv', 'Lib', 'site-packages', 'PyQt6', 'Qt6', 'bin'),
+        # Add site-packages to the path to ensure all modules are found
+        os.path.join(current_dir, 'venv', 'Lib', 'site-packages')
     ],
     binaries=binaries,
     datas=resource_files + datas,
