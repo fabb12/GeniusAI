@@ -19,6 +19,7 @@ hiddenimports = (
     collect_submodules('PyQt6') +
     collect_submodules('pycountry') +
     collect_submodules('speech_recognition') +
+    collect_submodules('pydantic') +  # <--- AGGIUNGI QUESTA RIGA
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
      'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
