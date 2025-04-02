@@ -17,6 +17,30 @@ def get_app_path():
         return os.path.dirname(os.path.abspath(__file__))
 
 
+# Funzione per ottenere il percorso dell'applicazione (dovresti già averla)
+def get_application_path():
+    if getattr(sys, 'frozen', False):
+        # Percorso dell'eseguibile compilato
+        return os.path.dirname(sys.executable)
+    else:
+        # Percorso dello script in sviluppo
+        # Assumendo che TGeniusAI.py sia in src/
+        return os.path.dirname(os.path.abspath(__file__))
+
+# Imposta la variabile d'ambiente per Playwright SOLO quando eseguito come bundle
+if getattr(sys, 'frozen', False):
+    application_path = get_application_path()
+    # Il percorso dove PyInstaller ha messo i browser (come specificato in datas)
+    bundled_browser_path = os.path.join(application_path, 'ms-playwright')
+
+    print(f"App bundled. Setting PLAYWRIGHT_BROWSERS_PATH to: {bundled_browser_path}") # Log per debug
+    os.environ['PLAYWRIGHT_BROWSERS_PATH'] = bundled_browser_path
+
+    # Verifica se il percorso esiste (per debug)
+    if not os.path.exists(bundled_browser_path):
+         print(f"WARNING: Bundled browser path does not exist: {bundled_browser_path}")
+    else:
+         print(f"Bundled browser path verified.")
 # Directory base dell'applicazione
 BASE_DIR = get_app_path()
 
