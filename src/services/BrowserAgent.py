@@ -1,4 +1,6 @@
-# services/BrowserAgent.py
+# File: src/services/BrowserAgent.py
+# Updated to support dynamic LLM selection including Google Gemini
+
 import os
 import asyncio
 import logging
@@ -6,7 +8,8 @@ import json
 import traceback
 import time
 from typing import Optional, Dict, List
-import webbrowser
+import webbrowser # Keep webbrowser for potential future use if needed outside the agent
+
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
     QLabel, QPushButton, QTextEdit, QProgressDialog,
@@ -16,66 +19,118 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 
-# Import browser_use components
-from browser_use.agent.service import Agent
-from browser_use.browser.browser import Browser, BrowserConfig
-from browser_use.browser.context import BrowserContextConfig
-from browser_use.controller.service import Controller
+# --- Langchain Imports ---
+# Import browser_use components (assuming these are correctly installed/located)
+try:
+    from browser_use.agent.service import Agent
+    from browser_use.browser.browser import Browser, BrowserConfig
+    from browser_use.browser.context import BrowserContextConfig
+    from browser_use.controller.service import Controller
+except ImportError as e:
+    logging.error(f"Failed to import browser_use components: {e}. Please ensure the library is installed.")
+    # Define dummy classes to prevent NameErrors if import fails, allowing UI to load
+    class Agent: pass
+    class Browser: pass
+    class BrowserConfig: pass
+    class BrowserContextConfig: pass
+    class Controller: pass
+
+# Import LLM clients
 from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
-# Importa la classe FrameExtractor
-from src.services.FrameExtractor import FrameExtractor
-from src.config import CLAUDE_MODEL_BROWSER_AGENT
-from src.config import ANTHROPIC_API_KEY, MODEL_3_5_SONNET, MODEL_3_HAIKU, PROMPT_BROWSER_GUIDE
+from langchain_openai import ChatOpenAI # Keep for potential OpenAI integration
+from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
+# Note: Ollama integration with langchain might require langchain_community
+
+# --- Local Imports ---
+from src.services.FrameExtractor import FrameExtractor # Used for guide generation
+# Import configuration constants and structures
+from src.config import (
+    ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, OLLAMA_ENDPOINT, # API Keys/Endpoints
+    ACTION_MODELS_CONFIG, # Dictionary defining models per action
+    PROMPT_BROWSER_GUIDE # Prompt for guide generation
+)
+
+# Configure Google GenAI (can be done once, potentially at app startup or here)
+# FrameExtractor might also call this. It's generally safe to call multiple times.
+if GOOGLE_API_KEY:
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=GOOGLE_API_KEY)
+        logging.info("Google Generative AI SDK configured successfully.")
+    except ImportError:
+        logging.warning("google.generativeai library not found. Gemini models will not be available.")
+    except Exception as e:
+        logging.error(f"Failed to configure Google Generative AI SDK: {e}")
+else:
+    logging.warning("GOOGLE_API_KEY not found in environment. Gemini models may not work.")
 
 
-# Modifica della classe AgentConfig nella parte superiore del file BrowserAgent.py
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
     def __init__(self):
-        from src.config import ANTHROPIC_API_KEY, CLAUDE_MODEL_BROWSER_AGENT
-
-        self.api_key = ANTHROPIC_API_KEY
         self.settings = QSettings("ThemaConsulting", "GeniusAI")
 
-        # Carica il modello dalle impostazioni o usa quello predefinito
-        self.model_name = self.settings.value("models/browser_agent", CLAUDE_MODEL_BROWSER_AGENT)
+        # --- Load API Keys from config.py (which loads from .env) ---
+        self.anthropic_api_key = ANTHROPIC_API_KEY
+        self.google_api_key = GOOGLE_API_KEY
+        self.openai_api_key = OPENAI_API_KEY
+        # Note: Ollama doesn't typically use an API key, but an endpoint
 
+        # --- Load Browser Agent specific settings ---
+        agent_config_details = ACTION_MODELS_CONFIG.get('browser_agent', {})
+        self.setting_key_model = agent_config_details.get('setting_key', 'models/browser_agent')
+        self.default_model = agent_config_details.get('default', '') # Get default model for browser agent
+
+        # Load the actual model name from QSettings, fallback to config default
+        self.model_name = self.settings.value(self.setting_key_model, self.default_model)
+
+        # Other agent settings with defaults
         self.headless = False
-        self.use_vision = True
+        self.use_vision = True # Vision capability often needed for browser agents
         self.max_steps = 25
+
+        # Load saved values for these settings
         self.load_from_settings()
 
     def load_from_settings(self):
         """Carica la configurazione dalle impostazioni salvate"""
-        self.api_key = self.settings.value("agent/api_key", self.api_key)
+        # API Keys are loaded from environment by config.py, no need to load from QSettings usually
+        # self.anthropic_api_key = self.settings.value("api_keys/anthropic", self.anthropic_api_key) # Example if storing keys
+        self.model_name = self.settings.value(self.setting_key_model, self.default_model)
         self.headless = self.settings.value("agent/headless", self.headless, type=bool)
         self.use_vision = self.settings.value("agent/use_vision", self.use_vision, type=bool)
         self.max_steps = self.settings.value("agent/max_steps", self.max_steps, type=int)
+        logging.debug(f"AgentConfig loaded: model={self.model_name}, headless={self.headless}, vision={self.use_vision}, steps={self.max_steps}")
+
 
     def save_to_settings(self):
         """Salva la configurazione nelle impostazioni"""
-        self.settings.setValue("agent/api_key", self.api_key)
-        self.settings.setValue("models/browser_agent", self.model_name)
+        # API Keys are typically not saved in QSettings due to security risks
+        # self.settings.setValue("api_keys/anthropic", self.anthropic_api_key) # Example if storing keys
+        self.settings.setValue(self.setting_key_model, self.model_name)
         self.settings.setValue("agent/headless", self.headless)
         self.settings.setValue("agent/use_vision", self.use_vision)
         self.settings.setValue("agent/max_steps", self.max_steps)
+        logging.debug(f"AgentConfig saved: model={self.model_name}, headless={self.headless}, vision={self.use_vision}, steps={self.max_steps}")
+
 
     def to_dict(self):
         """Restituisce un dizionario con la configurazione"""
         return {
-            "api_key": self.api_key,
             "model_name": self.model_name,
             "headless": self.headless,
             "use_vision": self.use_vision,
-            "max_steps": self.max_steps
+            "max_steps": self.max_steps,
+            # Include API keys if needed downstream, but be cautious
+            # "anthropic_api_key": self.anthropic_api_key,
+            # "google_api_key": self.google_api_key,
+            # "openai_api_key": self.openai_api_key,
         }
 
     def from_dict(self, config_dict):
         """Aggiorna la configurazione da un dizionario"""
-        if "api_key" in config_dict:
-            self.api_key = config_dict["api_key"]
+        # API keys usually come from environment, not dict typically
         if "model_name" in config_dict:
             self.model_name = config_dict["model_name"]
         if "headless" in config_dict:
@@ -92,95 +147,114 @@ class BrowserAgentWorker(QObject):
     finished = pyqtSignal(str)
     progress = pyqtSignal(int, str)
     error = pyqtSignal(str)
-    log_message = pyqtSignal(str)  # Nuovo segnale per log dettagliati
+    log_message = pyqtSignal(str)
 
     def __init__(self, task: str, config: AgentConfig):
         super().__init__()
         self.task = task
-        self.config = config
+        self.config = config # Use the passed AgentConfig instance
         self.running = False
         self.browser = None
+        self.agent = None # Hold agent instance for potential interruption
 
-    # Modifiche alla funzione run_agent_async
     async def run_agent_async(self):
+        """Core asynchronous logic to run the browser agent."""
         try:
-            # Controllo iniziale dello stato running
             if not self.running:
-                self.progress.emit(100, "Arresto completato")
+                self.log_message.emit("Agent worker started but running flag is false. Aborting.")
                 return
 
             self.progress.emit(5, "Inizializzazione configurazione...")
+            self.log_message.emit(f"Using model: {self.config.model_name}")
 
-            # Configurazione browser
+            # --- LLM Initialization based on selected model ---
+            llm = None
+            model_id = self.config.model_name
+            model_lower = model_id.lower()
+
+            if model_lower.startswith("claude"):
+                if not self.config.anthropic_api_key:
+                    raise ValueError("Anthropic API Key non configurata.")
+                llm = ChatAnthropic(
+                    model_name=model_id,
+                    anthropic_api_key=self.config.anthropic_api_key,
+                    temperature=0.0,
+                    max_tokens=4096 # Ensure sufficient tokens
+                )
+                self.log_message.emit(f"Inizializzato LLM: Anthropic ({model_id})")
+            elif model_lower.startswith("gemini"):
+                if not self.config.google_api_key:
+                    raise ValueError("Google API Key non configurata.")
+                # Ensure genai is configured (might have happened globally)
+                try:
+                    import google.generativeai as genai
+                    genai.configure(api_key=self.config.google_api_key)
+                except Exception as e:
+                    logging.warning(f"Re-configuring genai failed (might be ok): {e}")
+
+                llm = ChatGoogleGenerativeAI(
+                    model=model_id, # Use the full model name from config
+                    google_api_key=self.config.google_api_key, # Pass key explicitly if needed
+                    temperature=0.1, # Lower temp for reliability
+                    convert_system_message_to_human=True # Often helpful for agents
+                )
+                self.log_message.emit(f"Inizializzato LLM: Google Gemini ({model_id})")
+
+            elif model_lower.startswith("gpt"):
+                 if not self.config.openai_api_key:
+                     raise ValueError("OpenAI API Key non configurata.")
+                 llm = ChatOpenAI(
+                     model_name=model_id,
+                     openai_api_key=self.config.openai_api_key,
+                     temperature=0.0
+                 )
+                 self.log_message.emit(f"Inizializzato LLM: OpenAI ({model_id})")
+
+            # Add Ollama support here if needed, potentially using langchain_community.ChatOllama
+            # elif model_lower.startswith("ollama"):
+            #     try:
+            #         from langchain_community.chat_models import ChatOllama
+            #         ollama_model_name = model_id.split(':', 1)[-1] # Extract model name after 'ollama:'
+            #         llm = ChatOllama(model=ollama_model_name, base_url=OLLAMA_ENDPOINT, temperature=0.0)
+            #         self.log_message.emit(f"Inizializzato LLM: Ollama ({ollama_model_name})")
+            #     except ImportError:
+            #         raise ImportError("Ollama support requires 'langchain-community'. Please install it.")
+            #     except Exception as e:
+            #         raise ValueError(f"Failed to initialize Ollama: {e}")
+
+            else:
+                raise ValueError(f"Modello LLM non supportato: {model_id}")
+
+            if not self.running: return # Check running status after LLM init
+
+            # --- Browser Setup ---
+            self.progress.emit(10, "Configurazione browser...")
             browser_config = BrowserConfig(
                 headless=self.config.headless,
-                disable_security=True
+                disable_security=True # Often needed for agent control
             )
-
-            # Controllo stato running dopo configurazione
-            if not self.running:
-                return
-
-            # Inizializza browser context config
-            self.progress.emit(10, "Configurazione browser...")
             context_config = BrowserContextConfig(
                 browser_window_size={'width': 1280, 'height': 900},
                 minimum_wait_page_load_time=0.5,
                 highlight_elements=True
             )
 
-            # Controllo stato running prima di avviare il browser
-            if not self.running:
-                return
+            if not self.running: return
 
-            # Inizializza il browser
             self.progress.emit(15, "Avvio browser...")
             self.browser = Browser(config=browser_config)
+            self.log_message.emit("Browser inizializzato.")
             self.progress.emit(20, "Browser avviato")
 
-            # Controllo stato running dopo avvio browser
-            if not self.running:
-                if self.browser:
-                    await self.browser.close()
-                return
+            if not self.running: return
 
-            # Crea LLM basato sul modello selezionato
-            self.progress.emit(25, f"Configurazione LLM {self.config.model_name}...")
-
-            if "claude" in self.config.model_name.lower():
-                llm = ChatAnthropic(
-                    model_name=self.config.model_name,
-                    anthropic_api_key=self.config.api_key,
-                    temperature=0.0
-                )
-            else:
-                llm = ChatOpenAI(
-                    model_name=self.config.model_name,
-                    openai_api_key=self.config.api_key,
-                    temperature=0.0
-                )
-
-            self.progress.emit(30, "LLM configurato")
-
-            # Controllo stato running dopo configurazione LLM
-            if not self.running:
-                if self.browser:
-                    await self.browser.close()
-                return
-
-            # Inizializza controller
+            # --- Controller and Agent Setup ---
             self.progress.emit(35, "Inizializzazione controller...")
             controller = Controller()
+            if not self.running: return
 
-            # Controllo stato running dopo inizializzazione controller
-            if not self.running:
-                if self.browser:
-                    await self.browser.close()
-                return
-
-            # Inizializza agente con progress tracking
             self.progress.emit(40, "Inizializzazione agente...")
-            agent = Agent(
+            self.agent = Agent(
                 task=self.task,
                 llm=llm,
                 browser=self.browser,
@@ -188,123 +262,150 @@ class BrowserAgentWorker(QObject):
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
-            self.progress.emit(45, "Agente inizializzato")
+            self.log_message.emit("Agente inizializzato.")
+            self.progress.emit(45, "Agente pronto")
 
-            # Definisci e registra la callback per l'avanzamento
+            # --- Progress Callback Setup ---
             async def progress_callback(state, model_output, step_num):
-                # Controlla se è stata richiesta l'interruzione
                 if not self.running:
-                    return False
+                    self.log_message.emit(f"Progress callback: stop requested at step {step_num}.")
+                    return False # Signal to stop the agent run
 
                 progress_pct = min(int(45 + (step_num / self.config.max_steps) * 50), 95)
-                next_goal = getattr(model_output, "next_goal",
-                                    "Elaborazione...") if model_output else "Inizializzazione..."
+                next_goal = getattr(model_output, "next_goal", "Elaborazione...") if model_output else "Inizializzazione..."
+
+                # Log detailed state/output if needed for debugging
+                self.log_message.emit(f"Step {step_num}/{self.config.max_steps}: {next_goal}")
+                # Optionally log state or model_output details here
 
                 self.progress.emit(progress_pct, str(next_goal))
-                return True
+                return True # Continue running
 
-            # Registra la callback correttamente
-            agent.register_new_step_callback = progress_callback
+            self.agent.register_new_step_callback = progress_callback
             self.progress.emit(48, "Inizializzazione completata")
 
-            # Controllo stato running prima di eseguire l'agente
-            if not self.running:
-                if self.browser:
-                    await self.browser.close()
-                return
+            if not self.running: return
 
-            # Esegui l'agente
+            # --- Run Agent ---
             self.progress.emit(50, "Avvio esecuzione agente...")
-            self.running = True
+            self.log_message.emit("Agent run loop starting.")
 
-            # Esegui l'agente
-            history = await agent.run(max_steps=self.config.max_steps)
+            history = await self.agent.run(max_steps=self.config.max_steps)
 
-            # Verifica se è stato richiesto l'arresto durante l'esecuzione
+            # Check running flag immediately after run completes or is interrupted
             if not self.running:
-                if self.browser:
-                    await self.browser.close()
+                self.log_message.emit("Agent run loop interrupted by stop request.")
                 self.progress.emit(100, "Operazione annullata")
-                return
+                return # Exit early if stopped
 
-            # Ottieni il risultato finale
+            self.log_message.emit("Agent run loop finished.")
             self.progress.emit(95, "Elaborazione risultati...")
-            final_result = history.final_result() or "Task completato senza risultato esplicito."
+            final_result = history.final_result() if hasattr(history, 'final_result') else "Task completato (nessun risultato esplicito)."
+            final_result = final_result or "Task completato senza risultato esplicito."
 
-            # Emetti il risultato
             self.progress.emit(99, "Task completato!")
-            self.finished.emit(final_result)
+            self.finished.emit(str(final_result)) # Ensure result is a string
 
+        except ImportError as ie:
+             error_msg = f"Errore di importazione: {str(ie)}. Assicurati che tutte le librerie necessarie (browser_use, langchain, etc.) siano installate."
+             self.error.emit(error_msg)
+             logging.error(error_msg, exc_info=True)
+        except ValueError as ve: # Catch configuration errors (like missing keys)
+             error_msg = f"Errore di configurazione: {str(ve)}"
+             self.error.emit(error_msg)
+             logging.error(error_msg, exc_info=False) # Don't need full traceback for config error
         except Exception as e:
-            # Gestione dettagliata delle eccezioni
+            # Catch-all for other runtime errors
             error_details = traceback.format_exc()
-            error_msg = f"Errore nell'esecuzione dell'agente: {str(e)}\n\n{error_details}"
-            self.error.emit(error_msg)
+            error_msg = f"Errore nell'esecuzione dell'agente: {type(e).__name__}: {str(e)}"
+            self.error.emit(error_msg + f"\n\nDettagli:\n{error_details}")
             logging.error(f"Errore in BrowserAgentWorker: {e}", exc_info=True)
         finally:
-            # Assicurati di chiudere il browser alla fine
+            # --- Cleanup ---
+            self.log_message.emit("Inizio pulizia risorse worker...")
             if self.browser:
                 try:
                     self.progress.emit(98, "Chiusura browser...")
                     await self.browser.close()
                     self.progress.emit(100, "Browser chiuso con successo")
-                except Exception as e:
-                    logging.error(f"Errore nella chiusura del browser: {e}")
+                    self.log_message.emit("Browser chiuso.")
+                except Exception as browser_close_err:
+                    self.log_message.emit(f"Errore durante chiusura browser: {browser_close_err}")
+                    logging.error(f"Errore nella chiusura del browser: {browser_close_err}")
+            self.browser = None
+            self.agent = None # Clear agent reference
+            self.log_message.emit("Pulizia risorse worker completata.")
+            # Ensure running is false if we exit due to error or completion
+            self.running = False
+
 
     def run(self):
+        """Starts the asynchronous agent execution."""
         try:
             self.running = True
-            asyncio.run(self.run_agent_async())
+            self.log_message.emit("Worker run() started.")
+            # Get or create an event loop for this thread
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            loop.run_until_complete(self.run_agent_async())
+            self.log_message.emit("Worker run() finished.")
+
         except Exception as e:
+            # Catch errors occurring during asyncio setup/run
             error_details = traceback.format_exc()
-            self.log_message.emit(f"Errore fatale nel worker: {str(e)}\n{error_details}")
+            self.log_message.emit(f"Errore fatale nel worker run(): {str(e)}\n{error_details}")
             self.error.emit(f"Errore fatale nel worker: {str(e)}\n{error_details}")
+        finally:
+            self.running = False # Ensure flag is reset
 
     def stop(self):
-        # Segnala l'intento di fermare l'esecuzione
-        self.log_message.emit("Richiesta di arresto ricevuta.")
-        self.running = False
-        # Emetti un segnale per aggiornare l'UI
-        self.progress.emit(97, "Arresto in corso...")
+        """Requests the agent to stop processing."""
+        self.log_message.emit("Richiesta di arresto ricevuta nel worker.")
+        self.running = False # Set flag to false, checked within run_agent_async and callback
+        # The agent loop should check self.running or the callback should return False
+        # We don't forcefully kill the thread here, we signal it to stop gracefully.
 
 
 class AgentRunThread(QThread):
-    """Thread per eseguire il browser agent"""
+    """Thread wrapper for executing the BrowserAgentWorker"""
 
-    finished = pyqtSignal()
-    log_message = pyqtSignal(str)
+    finished = pyqtSignal() # Signals when the thread itself has finished execution
+    log_message = pyqtSignal(str) # Forwards log messages
 
-    def __init__(self, worker):
+    def __init__(self, worker: BrowserAgentWorker):
         super().__init__()
         self.worker = worker
-        self.worker.log_message.connect(self.forwardLogMessage)
-        self.terminated = False
+        # Forward log messages from worker to the main thread via this thread's signal
+        self.worker.log_message.connect(self.log_message)
+        self.terminated_cleanly = False
 
     def run(self):
+        """Executes the worker's run method."""
         try:
             self.log_message.emit("Thread dell'agente avviato.")
-            self.worker.run()
-            self.terminated = True
-            self.log_message.emit("Thread dell'agente terminato normalmente.")
+            self.worker.run() # This blocks until the worker's run method completes
+            self.terminated_cleanly = True # Mark clean termination if worker.run() finishes
+            self.log_message.emit("Thread dell'agente: worker.run() completato.")
         except Exception as e:
-            self.terminated = True
-            self.log_message.emit(f"Errore nel thread: {str(e)}")
+            # Catch unexpected errors *within the thread's execution*
+            self.terminated_cleanly = False
+            error_details = traceback.format_exc()
+            self.log_message.emit(f"Errore critico nel thread dell'agente: {str(e)}\n{error_details}")
+            # Optionally emit an error signal from the thread itself if needed
+            # self.error.emit(f"Errore thread: {str(e)}")
         finally:
-            self.finished.emit()
-
-    def forwardLogMessage(self, message):
-        # Inoltra i messaggi di log dal worker
-        self.log_message.emit(message)
+            self.log_message.emit(f"Thread dell'agente terminato (pulito: {self.terminated_cleanly}).")
+            self.finished.emit() # Signal that the thread object has finished
 
     def stop(self):
-        self.log_message.emit("Richiesta arresto del thread dell'agente.")
-        try:
-            # Ferma il worker
-            self.worker.stop()
-            # Aspetta un po' ma non blocca indefinitamente
-            self.wait(300)  # Timeout di 300ms
-        except Exception as e:
-            self.log_message.emit(f"Errore durante l'arresto del thread: {str(e)}")
+        """Initiates the graceful stop process."""
+        self.log_message.emit("Richiesta di arresto inoltrata al worker.")
+        if self.worker:
+            self.worker.stop() # Signal the worker to stop its async task
 
 
 class UnifiedBrowserAgentDialog(QDialog):
@@ -315,50 +416,63 @@ class UnifiedBrowserAgentDialog(QDialog):
         self.setWindowTitle("Browser Agent - Configurazione ed Esecuzione")
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
-        self.agent_config = agent_config or AgentConfig()
+        # Use provided config or create a new one
+        self.agent_config = agent_config if agent_config else AgentConfig()
         self.transcription_text = transcription_text or ""
         self.agent_thread = None
+        self.worker = None # Hold reference to worker for stopping
         self.result = None
-        self.cleanup_timer = QTimer()
+        self.progressDialog = None # Hold reference to progress dialog
+
+        # Timer to check if the thread finished unexpectedly
+        self.cleanup_timer = QTimer(self)
         self.cleanup_timer.timeout.connect(self.checkThreadStatus)
+
         self.initUI()
 
     def initUI(self):
-        layout = QVBoxLayout()
+        layout = QVBoxLayout(self)
 
-        # Crea un widget con tab per separare configurazione ed esecuzione
         tabWidget = QTabWidget()
         configTab = QWidget()
         taskTab = QWidget()
 
-        # Configurazione UI del tab di configurazione
+        # --- Configurazione Tab ---
         configLayout = QVBoxLayout(configTab)
 
-        # API Key section
-        apiGroup = QGroupBox("API Key")
+        # API Key section (Simplified - relies on environment loading)
+        apiGroup = QGroupBox("API Keys (Caricate da .env)")
         apiLayout = QFormLayout()
-        self.apiKeyEdit = QLineEdit(self.agent_config.api_key)
-        self.apiKeyEdit.setEchoMode(QLineEdit.EchoMode.Password)
-        apiLayout.addRow("API Key:", self.apiKeyEdit)
+        apiLayout.addRow("Anthropic Key:", QLabel("Caricata" if self.agent_config.anthropic_api_key else "Non Trovata"))
+        apiLayout.addRow("Google Key:", QLabel("Caricata" if self.agent_config.google_api_key else "Non Trovata"))
+        apiLayout.addRow("OpenAI Key:", QLabel("Caricata" if self.agent_config.openai_api_key else "Non Trovata"))
+        # Optional: Add field to override, but generally discouraged
+        # self.apiKeyOverrideEdit = QLineEdit()
+        # self.apiKeyOverrideEdit.setPlaceholderText("Incolla qui per sovrascrivere (opzionale)")
+        # apiLayout.addRow("Override Key:", self.apiKeyOverrideEdit)
         apiGroup.setLayout(apiLayout)
         configLayout.addWidget(apiGroup)
 
         # Model selection
-        modelGroup = QGroupBox("Selezione Modello")
+        modelGroup = QGroupBox("Selezione Modello AI per Browser Agent")
         modelLayout = QFormLayout()
         self.modelCombo = QComboBox()
-        self.modelCombo.addItems([
-            "claude-3-7-sonnet-20250219",
-            "claude-3-5-sonnet-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-haiku-20240307",
-            "gpt-4-turbo",
-            "gpt-4o"
-        ])
-        # Trova e seleziona il modello corrente
-        index = self.modelCombo.findText(self.agent_config.model_name)
-        if index >= 0:
-            self.modelCombo.setCurrentIndex(index)
+
+        # Populate ComboBox from config.py
+        browser_agent_config = ACTION_MODELS_CONFIG.get('browser_agent', {})
+        allowed_models = browser_agent_config.get('allowed', [])
+        if not allowed_models:
+            self.modelCombo.addItem("Nessun modello configurato")
+            self.modelCombo.setEnabled(False)
+        else:
+            self.modelCombo.addItems(allowed_models)
+            # Select the currently configured model
+            index = self.modelCombo.findText(self.agent_config.model_name)
+            if index >= 0:
+                self.modelCombo.setCurrentIndex(index)
+            elif self.modelCombo.count() > 0:
+                 self.modelCombo.setCurrentIndex(0) # Fallback to first if saved one not found
+
         modelLayout.addRow("Modello:", self.modelCombo)
         modelGroup.setLayout(modelLayout)
         configLayout.addWidget(modelGroup)
@@ -366,58 +480,58 @@ class UnifiedBrowserAgentDialog(QDialog):
         # Browser options
         browserGroup = QGroupBox("Opzioni Browser")
         browserLayout = QFormLayout()
-        self.headlessCheck = QCheckBox("Esegui browser in modalità headless")
+        self.headlessCheck = QCheckBox("Esegui browser in modalità headless (senza interfaccia grafica)")
         self.headlessCheck.setChecked(self.agent_config.headless)
-        self.visionCheck = QCheckBox("Usa capacità visione")
+        self.visionCheck = QCheckBox("Usa capacità di visione del modello (se supportate)")
         self.visionCheck.setChecked(self.agent_config.use_vision)
         self.stepsEdit = QLineEdit(str(self.agent_config.max_steps))
         browserLayout.addRow("", self.headlessCheck)
         browserLayout.addRow("", self.visionCheck)
-        browserLayout.addRow("Passi Massimi:", self.stepsEdit)
+        browserLayout.addRow("Numero Massimo Passi:", self.stepsEdit)
         browserGroup.setLayout(browserLayout)
         configLayout.addWidget(browserGroup)
 
-        # Pulsante per salvare configurazione
-        saveConfigButton = QPushButton("Salva Configurazione")
+        # Save button
+        saveConfigButton = QPushButton("Salva Configurazione Corrente")
         saveConfigButton.clicked.connect(self.saveConfiguration)
         configLayout.addWidget(saveConfigButton)
+        configLayout.addStretch() # Push content to top
 
-        # Configurazione UI del tab di esecuzione task
+
+        # --- Esecuzione Tab ---
         taskLayout = QVBoxLayout(taskTab)
 
         # Task source selection
         taskSourceGroup = QGroupBox("Fonte del Task")
         taskSourceLayout = QVBoxLayout()
-
-        self.manualTaskRadio = QRadioButton("Inserire manualmente il task")
-        self.transcriptionTaskRadio = QRadioButton("Usa il testo dalla trascrizione come contesto")
-
-        # Set default based on whether transcription is available
-        if self.transcription_text:
-            self.transcriptionTaskRadio.setChecked(True)
-        else:
-            self.manualTaskRadio.setChecked(True)
-            self.transcriptionTaskRadio.setEnabled(False)
-
+        self.manualTaskRadio = QRadioButton("Inserisci manualmente il task")
+        self.transcriptionTaskRadio = QRadioButton("Usa il testo della trascrizione come contesto")
         taskSourceLayout.addWidget(self.manualTaskRadio)
         taskSourceLayout.addWidget(self.transcriptionTaskRadio)
         taskSourceGroup.setLayout(taskSourceLayout)
         taskLayout.addWidget(taskSourceGroup)
 
+        # Set default task source
+        if self.transcription_text:
+            self.transcriptionTaskRadio.setChecked(True)
+        else:
+            self.manualTaskRadio.setChecked(True)
+            self.transcriptionTaskRadio.setEnabled(False) # Disable if no transcription
+
         # Task input
         taskGroup = QGroupBox("Descrizione Task")
         taskLayout2 = QVBoxLayout()
         self.taskEdit = QTextEdit()
-        self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent...")
+        self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent o verrà usato il contesto della trascrizione...")
         taskLayout2.addWidget(self.taskEdit)
         taskGroup.setLayout(taskLayout2)
         taskLayout.addWidget(taskGroup)
 
-        # Connect task source radio buttons
+        # Connect radios to update task text
         self.manualTaskRadio.toggled.connect(self.updateTaskSource)
-        self.transcriptionTaskRadio.toggled.connect(self.updateTaskSource)
+        # transcriptionTaskRadio toggle is implicitly handled by updateTaskSource
 
-        # Buttons for running and stopping
+        # Run/Stop Buttons
         btnLayout = QHBoxLayout()
         self.runButton = QPushButton("Esegui Agent")
         self.runButton.clicked.connect(self.runAgent)
@@ -428,434 +542,480 @@ class UnifiedBrowserAgentDialog(QDialog):
         btnLayout.addWidget(self.stopButton)
         taskLayout.addLayout(btnLayout)
 
-        # Result display che include il log e il risultato dell'agente
-        # Modifichiamo per avere una sezione log separata
+        # Log and Result Display
         resultGroup = QGroupBox("Log e Risultati")
         resultLayout = QVBoxLayout()
-
-        # Area di log con etichetta
         logLabel = QLabel("Log di esecuzione:")
         resultLayout.addWidget(logLabel)
-
         self.logEdit = QTextEdit()
         self.logEdit.setReadOnly(True)
-        self.logEdit.setMaximumHeight(150)  # Limita l'altezza del log
+        self.logEdit.setMaximumHeight(200) # Adjust height as needed
         resultLayout.addWidget(self.logEdit)
-
-        # Area di risultato con etichetta
         resultLabel = QLabel("Risultato dell'operazione:")
         resultLayout.addWidget(resultLabel)
-
         self.resultEdit = QTextEdit()
         self.resultEdit.setReadOnly(True)
         resultLayout.addWidget(self.resultEdit)
-
         resultGroup.setLayout(resultLayout)
         taskLayout.addWidget(resultGroup)
 
-        # Aggiungi i tab al widget
+        # --- Final Setup ---
         tabWidget.addTab(configTab, "Configurazione")
         tabWidget.addTab(taskTab, "Esecuzione")
-
         layout.addWidget(tabWidget)
 
-        # Close button
-        closeButton = QPushButton("Chiudi")
-        closeButton.clicked.connect(self.close)
+        closeButton = QPushButton("Chiudi Finestra")
+        closeButton.clicked.connect(self.accept) # Use accept to close dialog
         layout.addWidget(closeButton)
 
         self.setLayout(layout)
+        self.updateTaskSource() # Initial population of task field
 
-        # Initialize task text
-        self.updateTaskSource()
 
     def saveConfiguration(self):
-        config_dict = {
-            "api_key": self.apiKeyEdit.text(),
-            "model_name": self.modelCombo.currentText(),
-            "headless": self.headlessCheck.isChecked(),
-            "use_vision": self.visionCheck.isChecked(),
-            "max_steps": int(self.stepsEdit.text())
-        }
-        self.agent_config.from_dict(config_dict)
+        """Salva le impostazioni correnti nel QSettings."""
+        try:
+            max_steps = int(self.stepsEdit.text())
+        except ValueError:
+            QMessageBox.warning(self, "Errore Input", "Il numero massimo di passi deve essere un numero intero.")
+            return
+
+        # Update config object from UI elements
+        self.agent_config.model_name = self.modelCombo.currentText()
+        self.agent_config.headless = self.headlessCheck.isChecked()
+        self.agent_config.use_vision = self.visionCheck.isChecked()
+        self.agent_config.max_steps = max_steps
+        # API Keys are not saved from UI here, rely on environment
+
+        # Save the updated config object to QSettings
         self.agent_config.save_to_settings()
-        #QMessageBox.information(self, "Configurazione Salvata",
-         #                       "La configurazione dell'agente è stata salvata con successo.")
+        self.addLogMessage("Configurazione salvata.")
+        # QMessageBox.information(self, "Configurazione Salvata", "La configurazione dell'agente è stata salvata.")
+
 
     def updateTaskSource(self):
-        """Aggiorna il contenuto del campo task in base alla fonte selezionata"""
+        """Aggiorna il campo task basato sulla selezione radio e sulla trascrizione disponibile."""
         if self.transcriptionTaskRadio.isChecked() and self.transcription_text:
+            # Use a more direct prompt if using transcription as context
             self.taskEdit.setPlainText(
-                f"Basato sul seguente contesto, esegui una ricerca completa sul web:\n\n"
-                f"{self.transcription_text}\n\n"
-                f"Esegui una ricerca approfondita per trovare le informazioni più rilevanti riguardo a questo argomento."
+                f"Utilizzando il seguente testo come contesto principale, esegui le operazioni richieste o rispondi alla domanda implicita nel testo:\n\n"
+                f"---\nCONTEXT START\n---\n"
+                f"{self.transcription_text}\n"
+                f"---\nCONTEXT END\n---\n\n"
+                f"Obiettivo: Svolgi il compito descritto o implicito nel contesto fornito."
             )
+            self.taskEdit.setReadOnly(True) # Prevent editing when using transcription
         elif self.manualTaskRadio.isChecked():
-            self.taskEdit.clear()
-            self.taskEdit.setPlaceholderText("Inserisci il task per il browser agent...")
+            self.taskEdit.setReadOnly(False)
+            # Clear only if it was previously set by transcription
+            if self.taskEdit.toPlainText().startswith("Utilizzando il seguente testo"):
+                 self.taskEdit.clear()
+            self.taskEdit.setPlaceholderText("Inserisci qui il task specifico per l'agente browser...")
+
 
     def addLogMessage(self, message):
-        """Aggiunge un messaggio al log con timestamp"""
-        timestamp = time.strftime("%H:%M:%S", time.localtime())
-        log_entry = f"[{timestamp}] {message}"
-        self.logEdit.append(log_entry)
-        # Scorrimento automatico verso il basso
-        cursor = self.logEdit.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        self.logEdit.setTextCursor(cursor)
-        # Forza l'aggiornamento dell'interfaccia
-        QApplication.processEvents()
+        """Aggiunge un messaggio al log con timestamp e forza l'aggiornamento UI."""
+        if not hasattr(self, 'logEdit'): return # Guard against calls after UI destroyed
+        try:
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            log_entry = f"[{timestamp}] {message}"
+            self.logEdit.append(log_entry)
+            # Scroll to bottom
+            cursor = self.logEdit.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.logEdit.setTextCursor(cursor)
+            QApplication.processEvents() # Ensure UI updates
+        except RuntimeError:
+            # Handle cases where the widget might be deleted
+            logging.warning("Tried to log message but logEdit might be deleted.")
+
 
     def runAgent(self):
-        self.saveConfiguration()
+        """Prepara e avvia l'esecuzione dell'agente."""
+        self.saveConfiguration() # Save current settings before running
 
         task = self.taskEdit.toPlainText().strip()
         if not task:
-            QMessageBox.warning(self, "Task Mancante", "Inserisci un task per l'agente.")
+            QMessageBox.warning(self, "Task Mancante", "Inserisci un task o seleziona l'opzione per usare la trascrizione.")
             return
 
-        if not self.agent_config.api_key:
-            QMessageBox.warning(self, "API Key Mancante", "Configura una API key.")
-            return
+        # Basic check if the selected model likely requires a key that isn't set
+        model_lower = self.agent_config.model_name.lower()
+        key_missing = False
+        if model_lower.startswith("claude") and not self.agent_config.anthropic_api_key:
+            key_missing = True
+            provider = "Anthropic"
+        elif model_lower.startswith("gemini") and not self.agent_config.google_api_key:
+            key_missing = True
+            provider = "Google"
+        elif model_lower.startswith("gpt") and not self.agent_config.openai_api_key:
+            key_missing = True
+            provider = "OpenAI"
 
-        # Disabilita/abilita pulsanti
+        if key_missing:
+             QMessageBox.warning(self, "API Key Mancante", f"La API key per {provider} non sembra essere configurata nell'ambiente (.env). L'agente potrebbe non funzionare.")
+             # Allow proceeding, but warn the user.
+
+        # --- UI State Update ---
         self.runButton.setEnabled(False)
         self.stopButton.setEnabled(True)
-
-        # Pulisci log e risultati
         self.logEdit.clear()
         self.resultEdit.clear()
 
-        # Aggiungi log iniziale
+        # --- Logging Start ---
         self.addLogMessage("=== AVVIO AGENTE BROWSER ===")
-        self.addLogMessage(f"Task: {task}")
-        self.addLogMessage(f"Configurazione:")
-        self.addLogMessage(f"- API Key: {'Configurata' if self.agent_config.api_key else 'Mancante'}")
-        self.addLogMessage(f"- Modello: {self.agent_config.model_name}")
-        self.addLogMessage(f"- Modalità headless: {self.agent_config.headless}")
-        self.addLogMessage(f"- Uso visione: {self.agent_config.use_vision}")
-        self.addLogMessage(f"- Passi massimi: {self.agent_config.max_steps}")
+        self.addLogMessage(f"Task: {task[:100]}...") # Log truncated task
+        self.addLogMessage(f"Configurazione: {self.agent_config.to_dict()}")
         self.addLogMessage("Inizializzazione in corso...")
 
-        # Create progress dialog
+        # --- Progress Dialog ---
+        if self.progressDialog: # Close previous if exists
+             self.progressDialog.close()
         self.progressDialog = QProgressDialog("Esecuzione browser agent...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Agent")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.setMinimumDuration(0)  # Mostra immediatamente
+        self.progressDialog.setMinimumDuration(0)
         self.progressDialog.canceled.connect(self.stopAgent)
         self.progressDialog.show()
-
-        # Assicurati che il dialog sia visibile
         self.progressDialog.raise_()
         self.progressDialog.activateWindow()
 
-        # Ferma il thread esistente se in esecuzione
+        # --- Stop Existing Thread ---
         if self.agent_thread and self.agent_thread.isRunning():
-            self.stopAgent()
+            self.addLogMessage("Tentativo di fermare un thread agente precedente...")
+            self.stopAgent() # Gracefully stop previous run
 
-        # Crea nuovi worker e thread
-        self.worker = BrowserAgentWorker(task=task, config=self.agent_config)
-        self.worker.progress.connect(self.updateProgress)
-        self.worker.finished.connect(self.onAgentFinished)
-        self.worker.error.connect(self.onAgentError)
-        self.worker.log_message.connect(self.addLogMessage)
-        self.agent_thread = AgentRunThread(self.worker)
-        self.agent_thread.finished.connect(self.onThreadFinished)
-        self.agent_thread.start()
+        # --- Create Worker and Thread ---
+        try:
+            self.worker = BrowserAgentWorker(task=task, config=self.agent_config)
+            # Connect signals from worker
+            self.worker.progress.connect(self.updateProgress)
+            self.worker.finished.connect(self.onAgentFinished)
+            self.worker.error.connect(self.onAgentError)
+            # log_message signal is connected within AgentRunThread constructor
 
-        # Avvia il timer di controllo dello stato del thread
-        self.cleanup_timer.start(500)  # Controlla ogni 500ms
+            self.agent_thread = AgentRunThread(self.worker)
+            # Connect signals from thread
+            self.agent_thread.finished.connect(self.onThreadFinished) # Handles UI reset
+            self.agent_thread.log_message.connect(self.addLogMessage) # Forward logs
+
+            self.agent_thread.start() # Start the thread
+            self.cleanup_timer.start(500) # Start checking thread status
+            self.addLogMessage("Thread agente avviato.")
+
+        except Exception as init_error:
+            self.addLogMessage(f"Errore durante l'inizializzazione del worker/thread: {init_error}")
+            QMessageBox.critical(self, "Errore Inizializzazione", f"Impossibile avviare l'agente: {init_error}")
+            self.onThreadFinished() # Reset UI
+
 
     def checkThreadStatus(self):
-        """Verifica lo stato del thread dell'agente e gestisce chiusure impreviste"""
+        """Verifica se il thread è terminato inaspettatamente."""
         if self.agent_thread and not self.agent_thread.isRunning() and self.stopButton.isEnabled():
-            self.addLogMessage("Thread terminato inaspettatamente.")
-            self.onThreadFinished()
+            # Thread finished, but stop button is still enabled (meaning it wasn't a clean stop triggered by UI)
+            self.addLogMessage("ATTENZIONE: Thread terminato inaspettatamente o completato senza disabilitare il pulsante stop.")
+            self.onThreadFinished() # Reset UI state
+
 
     def stopAgent(self):
-        if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
+        """Inizia il processo di arresto dell'agente."""
+        self.addLogMessage("\n=== ARRESTO RICHIESTO DALL'UTENTE ===")
+        if not self.agent_thread or not self.agent_thread.isRunning():
+            self.addLogMessage("Nessun agente in esecuzione da fermare.")
+            self.onThreadFinished() # Ensure UI is reset even if nothing was running
             return
 
-        self.progressDialog.setLabelText("Arresto agente in corso...")
-        self.addLogMessage("\n=== ARRESTO RICHIESTO DALL'UTENTE ===")
+        if self.progressDialog:
+            self.progressDialog.setLabelText("Arresto agente in corso...")
+            self.progressDialog.setEnabled(False) # Disable cancel button during stop process
 
-        # Invia il segnale di arresto al thread
+        # Signal the thread/worker to stop
         try:
-            self.agent_thread.stop()
+            self.agent_thread.stop() # This signals the worker via its stop() method
+            self.addLogMessage("Segnale di stop inviato al worker.")
         except Exception as e:
-            pass
+            self.addLogMessage(f"Errore durante l'invio del segnale di stop: {e}")
 
-        # Attendiamo fino a 5 secondi in blocchi di 1 secondo
-        for i in range(5):
-            if not hasattr(self, 'agent_thread') or self.agent_thread is None or not self.agent_thread.isRunning():
-                break
+        # Non bloccare l'UI qui aspettando. onThreadFinished gestirà il reset.
+        # Il worker.stop() imposta self.running = False, che dovrebbe interrompere il ciclo async.
 
-            # Attendi 1 secondo e controlla
-            QApplication.processEvents()
-            time.sleep(1)
-            QApplication.processEvents()
-
-        # Se ancora in esecuzione, termina forzatamente
-        if hasattr(self, 'agent_thread') and self.agent_thread is not None and self.agent_thread.isRunning():
-            try:
-                self.agent_thread.terminate()
-                self.agent_thread.wait(1000)
-            except Exception as e:
-                pass
-
-        # Aggiorna l'interfaccia
-        self.onThreadFinished()
-
-        # Chiudi il dialog di progresso
-        if hasattr(self, 'progressDialog') and self.progressDialog:
-            self.progressDialog.close()
-
-        # Aggiorna il risultato
-        self.resultEdit.setPlainText("Operazione interrotta dall'utente.")
 
     def updateProgress(self, value, message):
-        """Aggiorna la barra di progresso e il log"""
-        # Aggiorna la barra di progresso
-        if hasattr(self, 'progressDialog') and self.progressDialog and not self.progressDialog.wasCanceled():
+        """Aggiorna il dialog di progresso."""
+        if self.progressDialog and not self.progressDialog.wasCanceled():
             self.progressDialog.setValue(value)
             self.progressDialog.setLabelText(f"Agente: {message}")
+        # Log message is handled separately by addLogMessage
 
-        # Non aggiungiamo il log qui perché è già gestito dal segnale log_message
 
     def onAgentFinished(self, result):
-        """Gestisce il completamento dell'agente con successo"""
-        if self.progressDialog:
-            self.progressDialog.close()
-
+        """Chiamato quando il worker emette il segnale 'finished'."""
+        # Questo viene chiamato dal worker thread, prima che AgentRunThread finisca.
+        self.addLogMessage(f"Agente ha completato l'esecuzione con successo.")
         self.result = result
-        self.addLogMessage("Agente ha completato l'esecuzione con successo.")
+        if hasattr(self, 'resultEdit'):
+            self.resultEdit.setPlainText(str(result))
+        # Non chiudere il progress dialog qui, onThreadFinished lo farà.
 
-        # Visualizza il risultato
-        self.resultEdit.setPlainText(result)
-
-        # Non mostriamo il dialogo di completamento qui - è gestito in onThreadFinished
 
     def onAgentError(self, error_message):
-        """Gestisce gli errori dell'agente"""
-        if self.progressDialog:
-            self.progressDialog.close()
+        """Chiamato quando il worker emette il segnale 'error'."""
+        self.addLogMessage(f"ERRORE dall'agente: {error_message}")
+        if hasattr(self, 'resultEdit'):
+            self.resultEdit.setPlainText(f"Si è verificato un errore:\n\n{error_message}")
+        # Non chiudere il progress dialog qui, onThreadFinished lo farà.
 
-        self.addLogMessage(f"ERRORE: {error_message}")
-
-        # Visualizza l'errore nella finestra di dialogo dell'agente
-        self.resultEdit.setPlainText(f"Si è verificato un errore:\n\n{error_message}")
-
-        # Non mostriamo il dialogo di errore qui - è gestito in onThreadFinished
 
     def onThreadFinished(self):
-        """Gestisce la terminazione del thread dell'agente"""
-        # Ripristina l'interfaccia utente
+        """Chiamato quando AgentRunThread emette il segnale 'finished'."""
+        self.addLogMessage("Thread agente terminato. Pulizia UI...")
+        # Reset UI state regardless of success/failure/cancel
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
 
-        # Ferma il timer di controllo
-        if hasattr(self, 'cleanup_timer'):
-            self.cleanup_timer.stop()
+        if self.progressDialog:
+            self.progressDialog.close()
+            self.progressDialog = None
 
-        # Aggiorna i log
-        if hasattr(self, 'worker') and self.worker:
-            self.addLogMessage("Pulizia risorse worker...")
-            self.worker = None
+        # Stop the cleanup timer
+        self.cleanup_timer.stop()
 
-        if hasattr(self, 'agent_thread'):
-            self.addLogMessage("Pulizia risorse thread...")
-            self.agent_thread = None
+        # Clean up references
+        self.worker = None
+        self.agent_thread = None
 
-        self.addLogMessage("=== OPERAZIONE COMPLETATA ===")
+        self.addLogMessage("=== OPERAZIONE TERMINATA ===")
+
 
     def closeEvent(self, event):
-        """Gestisce la chiusura della finestra"""
-        # Se c'è un thread in esecuzione, chiedi conferma
+        """Gestisce la chiusura della finestra di dialogo."""
+        self.addLogMessage("Tentativo di chiusura del dialogo.")
         if self.agent_thread and self.agent_thread.isRunning():
-            reply = QMessageBox.question(self, 'Conferma chiusura',
-                                         'L\'agente è ancora in esecuzione. Sei sicuro di voler chiudere?',
+            reply = QMessageBox.question(self, 'Conferma Chiusura',
+                                         'L\'agente è ancora in esecuzione. Fermarlo e chiudere?',
                                          QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                          QMessageBox.StandardButton.No)
 
             if reply == QMessageBox.StandardButton.Yes:
-                # Ferma il thread prima di chiudere
+                self.addLogMessage("Chiusura confermata, arresto agente...")
                 self.stopAgent()
-                # Attendi un po' per dare tempo all'arresto
-                QApplication.processEvents()
-                time.sleep(1)
-                QApplication.processEvents()
-                event.accept()
+                # Give it a moment to process stop signal before accepting close
+                QTimer.singleShot(500, event.accept) # Accept after a short delay
             else:
-                event.ignore()
+                self.addLogMessage("Chiusura annullata dall'utente.")
+                event.ignore() # Don't close
         else:
-            event.accept()
+            self.addLogMessage("Nessun agente in esecuzione, chiusura immediata.")
+            event.accept() # Close immediately
 
 
 class BrowserAgent:
     """
-    Classe principale per l'integrazione della funzionalità dell'agente browser
-    con l'applicazione di elaborazione video
+    Classe principale per integrare la funzionalità dell'agente browser
+    nell'applicazione principale.
     """
-
     def __init__(self, parent=None):
-        self.parent = parent
-        self.agent_config = AgentConfig()
-        self.frame_data = None
+        self.parent = parent # Reference to the main application window (TGeniusAI instance)
+        self.agent_config = AgentConfig() # Manages agent settings
+        self.frame_data = None # Stores data from frame extraction if used for guide generation
+        self.current_dialog = None # Keep track of the currently open dialog
 
     def getTranscriptionText(self):
-        """Ottiene il testo dalla transcriptionTextArea del parent"""
+        """Ottiene il testo dalla transcriptionTextArea del parent."""
         if self.parent and hasattr(self.parent, 'transcriptionTextArea'):
-            return self.parent.transcriptionTextArea.toPlainText()
+            return self.parent.transcriptionTextArea.toPlainText().strip()
         return ""
 
     def showAgentDialog(self):
-        """Mostra il dialog unificato di configurazione ed esecuzione"""
-        dialog = UnifiedBrowserAgentDialog(self.parent, self.agent_config, self.getTranscriptionText())
-        dialog.exec()
+        """Mostra il dialog unificato di configurazione ed esecuzione."""
+        # Close existing dialog if open
+        if self.current_dialog:
+             try:
+                 self.current_dialog.close()
+             except RuntimeError: # Handle case where it might already be deleted
+                 pass
+             self.current_dialog = None
 
-    # Questi metodi sono mantenuti per compatibilità con il codice esistente
+        # Pass current transcription text to the dialog
+        transcription = self.getTranscriptionText()
+        self.current_dialog = UnifiedBrowserAgentDialog(self.parent, self.agent_config, transcription)
+        self.current_dialog.show() # Use show() instead of exec() for non-blocking
+
+
+    # --- Methods called from TGeniusAI ---
     def showConfigDialog(self):
-        """Reindirizza al nuovo dialog unificato"""
-        return self.showAgentDialog()
+        """Alias per mostrare il dialog (azione da menu/toolbar)."""
+        self.showAgentDialog()
 
     def runAgent(self):
-        """Reindirizza al nuovo dialog unificato"""
-        return self.showAgentDialog()
+        """Alias per mostrare il dialog (azione da menu/toolbar)."""
+        self.showAgentDialog()
+
 
     def generate_operational_guide(self, video_path=None, num_frames=5, language="italiano"):
         """
-        Estrae i frame dal video, genera una guida operativa basata
-        sulle descrizioni dei frame e la inserisce nella transcriptionTextArea
+        Estrae frame, li analizza con il modello VISION configurato, genera una
+        guida testuale usando il modello BROWSER AGENT configurato, e la
+        inserisce nella transcriptionTextArea.
         """
+        # Get the currently selected vision model from settings
+        vision_model_config = ACTION_MODELS_CONFIG.get('frame_extractor', {})
+        vision_model_key = vision_model_config.get('setting_key', 'models/frame_extractor')
+        vision_default = vision_model_config.get('default', '')
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        vision_model_name = settings.value(vision_model_key, vision_default)
+
+        logging.info(f"Inizio generazione guida operativa (Vision model: {vision_model_name})")
+
+        if not vision_model_name:
+             QMessageBox.critical(self.parent, "Errore Configurazione", "Nessun modello AI configurato per l'estrazione frame (visione).")
+             return False
+
+        # Use the main window's video path if not provided
+        if not video_path:
+            if hasattr(self.parent, 'videoPathLineEdit') and self.parent.videoPathLineEdit:
+                video_path = self.parent.videoPathLineEdit
+            else:
+                QMessageBox.warning(self.parent, "Video Mancante", "Carica un video prima di generare la guida.")
+                return False
+
+        # --- Progress Dialog ---
+        progress_dialog = QProgressDialog("Generazione Guida Operativa...", "Annulla", 0, 100, self.parent)
+        progress_dialog.setWindowTitle("Progresso Guida")
+        progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dialog.setValue(0)
+        progress_dialog.show()
+
         try:
-            # Se non viene fornito un percorso del video, usa quello attualmente caricato nell'applicazione
-            if not video_path:
-                if hasattr(self.parent, 'videoPathLineEdit') and self.parent.videoPathLineEdit:
-                    video_path = self.parent.videoPathLineEdit
-                else:
-                    QMessageBox.warning(self.parent, "Video mancante",
-                                        "Nessun video caricato. Carica prima un video.")
-                    return False
-
-            # Mostra un dialog di progresso
-            progress_dialog = QProgressDialog("Estrazione e analisi dei frame in corso...", "Annulla", 0, 100,
-                                              self.parent)
-            progress_dialog.setWindowTitle("Generazione Guida Operativa")
-            progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-            progress_dialog.setValue(0)
-
-            # 1. Estrai i frame dal video utilizzando la funzionalità di FrameExtractor
-            progress_dialog.setLabelText("Estrazione dei frame dal video...")
+            # --- 1. Extract Frames using FrameExtractor ---
+            progress_dialog.setLabelText("Estrazione frame...")
             progress_dialog.setValue(10)
+            QApplication.processEvents() # Update UI
 
-            # Carica il modello dalle impostazioni
-            settings = QSettings("ThemaConsulting", "GeniusAI")
-            claude_model = settings.value("models/browser_agent", CLAUDE_MODEL_BROWSER_AGENT)
-
-            # Crea un'istanza di FrameExtractor
+            # FrameExtractor uses the model set in its own settings key
             extractor = FrameExtractor(
                 video_path=video_path,
                 num_frames=num_frames,
-                anthropic_api_key=self.agent_config.api_key
+                # API keys are read within FrameExtractor based on its selected model
             )
-
-            # Estrai i frame
-            progress_dialog.setLabelText("Estraendo i frame dal video...")
             frames = extractor.extract_frames()
+            if not frames: raise ValueError("Estrazione frame fallita.")
+            progress_dialog.setValue(25)
+            QApplication.processEvents()
 
-            # 2. Analizza i frame con il modello di visione
-            progress_dialog.setLabelText("Analizzando i frame con AI Vision...")
-            progress_dialog.setValue(30)
+            # --- 2. Analyze Frames (using the *vision* model) ---
+            progress_dialog.setLabelText(f"Analisi frame con {extractor.selected_model}...")
             frame_data = extractor.analyze_frames_batch(frames, language)
+            if not frame_data: raise ValueError("Analisi frame fallita o nessun risultato.")
+            self.frame_data = frame_data # Store for potential later use
+            progress_dialog.setValue(50)
+            QApplication.processEvents()
 
-            # 3. Prepara il testo unito delle descrizioni
+            # --- 3. Prepare prompt for Guide Generation ---
+            progress_dialog.setLabelText("Preparazione prompt guida...")
             descriptions = [fd['description'] for fd in frame_data]
-            joined_descriptions = "\n".join(descriptions)
+            joined_descriptions = "\n".join(f"- {desc}" for desc in descriptions if desc)
+            if not joined_descriptions: raise ValueError("Nessuna descrizione valida dai frame.")
 
-            # 4. Leggi il prompt per la guida operativa dal file
+            if not os.path.exists(PROMPT_BROWSER_GUIDE):
+                 raise FileNotFoundError(f"File prompt guida non trovato: {PROMPT_BROWSER_GUIDE}")
             with open(PROMPT_BROWSER_GUIDE, 'r', encoding='utf-8') as f:
                 prompt_template = f.read()
-
-            # Formatta il prompt
             prompt = prompt_template.format(
                 joined_descriptions=joined_descriptions,
                 language=language
             )
-
-            # 5. Genera la guida operativa usando Anthropic
-            progress_dialog.setLabelText("Generazione della guida operativa in corso...")
             progress_dialog.setValue(60)
+            QApplication.processEvents()
 
-            # Importa Anthropic se non è già stato importato
-            from anthropic import Anthropic
-            client = Anthropic(api_key=self.agent_config.api_key)
+            # --- 4. Generate Guide (using the *browser agent's text* model) ---
+            guide_model_name = self.agent_config.model_name # Model selected for the agent itself
+            progress_dialog.setLabelText(f"Generazione guida con {guide_model_name}...")
+            logging.info(f"Generazione guida testuale con: {guide_model_name}")
 
-            # Chiama l'API
-            response = client.messages.create(
-                model=claude_model,  # Usa il modello dalle impostazioni
-                max_tokens=4000,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
+            guide_text = ""
+            input_tokens, output_tokens = 0, 0 # Placeholder for token counts
 
-            # 6. Estrai il testo della risposta
-            guide_text = response.content[0].text
+            # Select LLM client based on the agent's model
+            model_lower = guide_model_name.lower()
 
-            # 7. Inserisci il testo nella transcriptionTextArea
-            progress_dialog.setLabelText("Aggiornamento interfaccia...")
+            if model_lower.startswith("claude"):
+                 if not self.agent_config.anthropic_api_key: raise ValueError("Anthropic API Key mancante per generare la guida.")
+                 client = anthropic.Anthropic(api_key=self.agent_config.anthropic_api_key)
+                 response = client.messages.create(
+                     model=guide_model_name, max_tokens=4000, messages=[{"role": "user", "content": prompt}]
+                 )
+                 guide_text = response.content[0].text
+                 input_tokens = response.usage.input_tokens
+                 output_tokens = response.usage.output_tokens
+
+            elif model_lower.startswith("gemini"):
+                 if not self.agent_config.google_api_key: raise ValueError("Google API Key mancante per generare la guida.")
+                 # Assumes genai is configured
+                 model = genai.GenerativeModel(guide_model_name)
+                 response = model.generate_content(prompt)
+                 guide_text = response.text
+
+            elif model_lower.startswith("gpt"):
+                 if not self.agent_config.openai_api_key: raise ValueError("OpenAI API Key mancante per generare la guida.")
+                 client = ChatOpenAI(model_name=guide_model_name, openai_api_key=self.agent_config.openai_api_key)
+                 response = client.invoke(prompt) # Langchain style invocation
+                 guide_text = response.content
+
+            # Add Ollama or other models here if needed...
+
+            else:
+                raise ValueError(f"Modello {guide_model_name} non supportato per la generazione della guida.")
+
             progress_dialog.setValue(90)
+            logging.info(f"Guida generata - Input Tokens: {input_tokens}, Output Tokens: {output_tokens}")
+            QApplication.processEvents()
 
+            # --- 5. Update UI ---
             if hasattr(self.parent, 'transcriptionTextArea'):
-                self.parent.transcriptionTextArea.setPlainText(guide_text)
-
-            # 8. Salva i dati dei frame per riferimento futuro
-            self.frame_data = frame_data
-
-            # Chiudi il dialog di progresso
+                self.parent.transcriptionTextArea.setPlainText(guide_text.strip())
             progress_dialog.setValue(100)
             progress_dialog.close()
-
-            # Mostra un messaggio di conferma
             QMessageBox.information(self.parent, "Guida Operativa Generata",
-                                    "La guida operativa è stata generata con successo e inserita nell'area di trascrizione.")
-
+                                    "Guida generata e inserita nell'area di trascrizione.")
             return True
 
-        except Exception as e:
-            # Gestisci gli errori
-            if 'progress_dialog' in locals():
-                progress_dialog.close()
-            QMessageBox.critical(self.parent, "Errore",
-                                 f"Si è verificato un errore durante la generazione della guida: {str(e)}")
-            logging.error(f"Errore nella generazione della guida operativa: {e}", exc_info=True)
+        except (FileNotFoundError, ValueError, Exception) as e:
+            # Handle specific and general errors
+            if progress_dialog: progress_dialog.close()
+            error_msg = f"Errore durante la generazione della guida: {str(e)}"
+            QMessageBox.critical(self.parent, "Errore", error_msg)
+            logging.error(error_msg, exc_info=True)
             return False
+
 
     def create_guide_agent(self):
         """
         Metodo completo che:
-        1. Estrai i frame dal video
-        2. Genera una guida operativa
-        3. Lancia l'agente browser
+        1. Genera la guida operativa (estrae frame, analizza, genera testo guida)
+        2. (Opzionale) Mostra il dialog dell'agente per l'esecuzione successiva
         """
-        # Verifica se è caricato un video
+        # Ottieni parametri dalla UI principale
         video_path = None
         if hasattr(self.parent, 'videoPathLineEdit') and self.parent.videoPathLineEdit:
             video_path = self.parent.videoPathLineEdit
         else:
-            QMessageBox.warning(self.parent, "Video mancante",
-                                "Nessun video caricato. Carica prima un video.")
+            QMessageBox.warning(self.parent, "Video Mancante", "Carica un video prima.")
             return
 
-        # Ottieni il numero di frame da estrarre
-        num_frames = 5  # Valore predefinito
+        num_frames = 5
         if hasattr(self.parent, 'frameCountSpin'):
             num_frames = self.parent.frameCountSpin.value()
 
-        # Ottieni la lingua
-        language = "italiano"  # Default
+        language = "italiano"
         if hasattr(self.parent, 'languageComboBox'):
             language = self.parent.languageComboBox.currentText()
 
-        # Genera la guida operativa
-        self.generate_operational_guide(video_path, num_frames, language)
+        # Genera la guida e inseriscila nella text area
+        success = self.generate_operational_guide(video_path, num_frames, language)
+
+        # Se la guida è stata generata con successo, potresti voler mostrare
+        # automaticamente il dialog dell'agente per il passo successivo.
+        if success:
+             logging.info("Guida generata, mostrando il dialogo dell'agente...")
+             # self.showAgentDialog() # Rimuoviamo l'apertura automatica, l'utente può cliccare "Run Agent"
