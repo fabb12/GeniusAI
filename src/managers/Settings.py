@@ -71,14 +71,14 @@ class SettingsDialog(QDialog):
         layout.addRow("OpenAI (GPT) API Key:", self.api_key_edits['openai'])
 
         # --- Avviso Sicurezza ---
-        warningLabel = QLabel(
+        """warningLabel = QLabel(
             "<font color='orange'><b>Attenzione:</b> Salvare le API keys nelle impostazioni "
             "dell'applicazione potrebbe essere meno sicuro rispetto all'uso di variabili d'ambiente "
             "(.env). Le chiavi qui inserite vengono salvate localmente.</font>"
         )
         warningLabel.setWordWrap(True)
         layout.addRow(warningLabel) # Aggiunge l'avviso al layout
-
+        """
         # Aggiunge uno spaziatore verticale alla fine del QFormLayout
         spacer = QWidget()
         # --- CORREZIONE APPLICATA QUI ---

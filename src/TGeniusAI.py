@@ -47,7 +47,6 @@ from recorder.ScreenRecorder import ScreenRecorder
 from managers.SettingsManager import DockSettingsManager
 from ui.CustVideoWidget import CropVideoWidget
 from ui.CustomSlider import CustomSlider
-from managers.SettingsDialog import ApiKeyDialog
 from managers.Settings import SettingsDialog
 from ui.ScreenButton import ScreenButton
 from ui.CustumTextEdit import CustomTextEdit
@@ -605,11 +604,6 @@ class VideoAudioManager(QMainWindow):
         loadDockSettings2Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser2)
         toolbar.addAction(loadDockSettings2Action)
 
-        apiKeyAction = QAction(QIcon("./res/key.png"), "Imposta API Key", self)
-        apiKeyAction.setToolTip("Imposta la chiave API per le funzionalità AI")
-        apiKeyAction.triggered.connect(self.showApiKeyDialog)
-        toolbar.addAction(apiKeyAction)
-
         settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
         settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
@@ -1018,11 +1012,6 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'eliminazione", str(e))
-    def showApiKeyDialog(self):
-        dialog = ApiKeyDialog(self)
-        if dialog.exec() == dialog.DialogCode.Accepted:
-            self.api_key = dialog.get_api_key()
-            logging.debug(f"API Key impostata: {self.api_key}")
     def insertPause(self):
         cursor = self.transcriptionTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
