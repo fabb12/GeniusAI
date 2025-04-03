@@ -1,3 +1,6 @@
+
+# File: config.py
+
 import os
 import sys
 import logging
@@ -6,7 +9,7 @@ from dotenv import load_dotenv
 # Carica le variabili d'ambiente dal file .env
 load_dotenv()
 
-
+# --- Funzioni Utilità Percorso ---
 def get_app_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
     if getattr(sys, 'frozen', False):
@@ -14,106 +17,181 @@ def get_app_path():
         return os.path.dirname(sys.executable)
     else:
         # In modalità di sviluppo
+        # Assumendo che config.py sia in src/
         return os.path.dirname(os.path.abspath(__file__))
 
-
-# Funzione per ottenere il percorso dell'applicazione (dovresti già averla)
 def get_application_path():
-    if getattr(sys, 'frozen', False):
-        # Percorso dell'eseguibile compilato
-        return os.path.dirname(sys.executable)
-    else:
-        # Percorso dello script in sviluppo
-        # Assumendo che TGeniusAI.py sia in src/
-        return os.path.dirname(os.path.abspath(__file__))
+    """Alias per get_app_path, può essere utile mantenere per compatibilità"""
+    return get_app_path()
 
-# Imposta la variabile d'ambiente per Playwright SOLO quando eseguito come bundle
+# --- Impostazione Variabile Ambiente Playwright (solo per bundle) ---
 if getattr(sys, 'frozen', False):
     application_path = get_application_path()
-    # Il percorso dove PyInstaller ha messo i browser (come specificato in datas)
     bundled_browser_path = os.path.join(application_path, 'ms-playwright')
-
-    print(f"App bundled. Setting PLAYWRIGHT_BROWSERS_PATH to: {bundled_browser_path}") # Log per debug
+    # Log per debug durante l'esecuzione del bundle
+    print(f"[Config Init] App bundled. Setting PLAYWRIGHT_BROWSERS_PATH to: {bundled_browser_path}")
     os.environ['PLAYWRIGHT_BROWSERS_PATH'] = bundled_browser_path
+    # Verifica opzionale (per debug)
+    # if not os.path.exists(bundled_browser_path):
+    #     print(f"[Config Init] WARNING: Bundled browser path does not exist: {bundled_browser_path}")
+    # else:
+    #     print(f"[Config Init] Bundled browser path verified.")
 
-    # Verifica se il percorso esiste (per debug)
-    if not os.path.exists(bundled_browser_path):
-         print(f"WARNING: Bundled browser path does not exist: {bundled_browser_path}")
-    else:
-         print(f"Bundled browser path verified.")
-# Directory base dell'applicazione
+# --- Directory Base ---
 BASE_DIR = get_app_path()
 
-# API Keys
+# --- API Keys ---
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")    # Se usi OpenAI
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")    # Per Gemini Cloud
 
-# AI Models - Claude (solo modelli base)
-MODEL_3_7_SONNET = os.getenv("MODEL_3_7_SONNET", "claude-3-7-sonnet-20250219")
-MODEL_3_5_HAIKU = os.getenv("MODEL_3_5_HAIKU", "claude-3-5-haiku-20241022")
-MODEL_3_5_SONNET_V2 = os.getenv("MODEL_3_5_SONNET_V2", "claude-3-5-sonnet-20241022")
-MODEL_3_5_SONNET = os.getenv("MODEL_3_5_SONNET", "claude-3-5-sonnet-20240620")
-MODEL_3_OPUS = os.getenv("MODEL_3_OPUS", "claude-3-opus-20240229")
-MODEL_3_SONNET = os.getenv("MODEL_3_SONNET", "claude-3-sonnet-20240229")
-MODEL_3_HAIKU = os.getenv("MODEL_3_HAIKU", "claude-3-haiku-20240307")
+# --- Definizione Identificatori Modello ---
+# Claude (Anthropic)
+MODEL_3_7_SONNET = "claude-3.5-sonnet-20240620" # Nota: Rinominato per chiarezza, 3.7 non esiste al momento
+MODEL_3_5_SONNET = "claude-3.5-sonnet-20240620" # Il più recente 3.5
+MODEL_3_OPUS = "claude-3-opus-20240229"
+MODEL_3_SONNET = "claude-3-sonnet-20240229"
+MODEL_3_HAIKU = "claude-3-haiku-20240307"
 
-# Modelli per componenti specifici
-CLAUDE_MODEL_FRAME_EXTRACTOR = os.getenv("CLAUDE_MODEL_FRAME_EXTRACTOR", MODEL_3_5_SONNET)
-CLAUDE_MODEL_TEXT_PROCESSING = os.getenv("CLAUDE_MODEL_TEXT_PROCESSING", MODEL_3_5_SONNET)
-CLAUDE_MODEL_PPTX_GENERATION = os.getenv("CLAUDE_MODEL_PPTX_GENERATION", MODEL_3_5_SONNET)
-CLAUDE_MODEL_BROWSER_AGENT = os.getenv("CLAUDE_MODEL_BROWSER_AGENT", MODEL_3_HAIKU)
-CLAUDE_MODEL_SUMMARY = os.getenv("CLAUDE_MODEL_SUMMARY", MODEL_3_5_SONNET)
+# Gemini (Google Cloud)
+GEMINI_15_PRO = "gemini-1.5-pro-latest"
+GEMINI_15_FLASH = "gemini-1.5-flash-latest"
+GEMINI_25_PRO_EXP = "gemini-2.5-pro-exp-03-25" # Mantenuto come esempio sperimentale
+GEMINI_20_FLASH = "gemini-2.0-flash"
+GEMINI_20_FLASH_LITE = "gemini-2.0-flash-lite"
+GEMINI_15_FLASH_8B = "gemini-1.5-flash-8b" # Nome API specifico
 
-# File Paths - Usa percorsi assoluti costruiti da BASE_DIR
+# OpenAI (Esempi se li integri)
+# GPT_4_TURBO = "gpt-4-turbo"
+# GPT_4O = "gpt-4o"
+# GPT_4O_MINI = "gpt-4o-mini"
+
+# Modelli Locali (via Ollama)
+OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434") # Default Ollama endpoint
+OLLAMA_GEMMA_2B = "ollama:gemma:2b"
+OLLAMA_GEMMA_7B = "ollama:gemma:7b"
+OLLAMA_GEMMA2_9B = "ollama:gemma2:9b"
+OLLAMA_LLAMA3_8B = "ollama:llama3:8b"
+OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
+
+# --- Liste Categoria Modelli ---
+# (Queste liste aiutano a definire quali modelli mostrare per ogni azione)
+
+# Modelli con capacità Vision (per Frame Extractor, Browser Agent con visione)
+MODELS_WITH_VISION = [
+    MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET, MODEL_3_HAIKU, # Claude 3/3.5
+    GEMINI_15_PRO, GEMINI_15_FLASH, GEMINI_25_PRO_EXP, GEMINI_20_FLASH, GEMINI_20_FLASH_LITE, # Gemini Cloud
+    # GPT_4O, GPT_4_TURBO, # Se usi OpenAI Vision
+    # Aggiungere modelli Ollama con capacità vision (es. llava) se configurati e testati
+    # "ollama:llava:7b",
+]
+
+# Modelli testuali veloci (per Browser Agent, Riassunti rapidi, Text Processing base)
+FAST_TEXT_MODELS = [
+    MODEL_3_HAIKU,
+    GEMINI_15_FLASH, GEMINI_20_FLASH, GEMINI_20_FLASH_LITE, GEMINI_15_FLASH_8B,
+    OLLAMA_GEMMA_2B, OLLAMA_GEMMA_7B, OLLAMA_LLAMA3_8B, OLLAMA_MISTRAL_7B, OLLAMA_GEMMA2_9B,
+    # GPT_4O_MINI, # Se usi OpenAI
+]
+
+# Modelli testuali potenti (per PPTX Generation, Text Processing complesso, Riassunti dettagliati)
+POWERFUL_TEXT_MODELS = [
+    MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET,
+    GEMINI_15_PRO, GEMINI_25_PRO_EXP,
+    # GPT_4O, GPT_4_TURBO, # Se usi OpenAI
+    # Modelli Ollama più grandi (es. llama3:70b) se l'utente li ha
+]
+
+# Tutti i modelli Text/Multimodal conosciuti (per fallback o liste complete)
+ALL_KNOWN_MODELS = list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS + MODELS_WITH_VISION)) # Usa set per rimuovere duplicati
+
+# --- Configurazione Modelli per Azione Specifica ---
+ACTION_MODELS_CONFIG = {
+    # Identificatore unico per l'azione
+    'frame_extractor': {
+        'display_name': "Estrazione Frame (Visione)", # Etichetta UI
+        'setting_key': "models/frame_extractor",    # Chiave QSettings
+        'default': os.getenv("DEFAULT_MODEL_FRAME_EXTRACTOR", GEMINI_15_FLASH), # Modello di fallback
+        'allowed': MODELS_WITH_VISION # Lista di modelli permessi
+    },
+    'text_processing': {
+        'display_name': "Elaborazione Testo (Summary/Fix)",
+        'setting_key': "models/text_processing",
+        'default': os.getenv("DEFAULT_MODEL_TEXT_PROCESSING", GEMINI_15_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)) # Permette tutti i modelli testuali
+    },
+    'pptx_generation': {
+        'display_name': "Generazione Presentazioni",
+        'setting_key': "models/pptx_generation",
+        'default': os.getenv("DEFAULT_MODEL_PPTX_GENERATION", MODEL_3_5_SONNET),
+        'allowed': POWERFUL_TEXT_MODELS # Preferibilmente modelli potenti
+    },
+    'browser_agent': {
+        'display_name': "Browser Agent",
+        'setting_key': "models/browser_agent",
+        'default': os.getenv("DEFAULT_MODEL_BROWSER_AGENT", GEMINI_15_FLASH),
+        # Permette modelli veloci o modelli potenti che abbiano anche capacità di visione
+        'allowed': list(set(FAST_TEXT_MODELS + [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION]))
+    },
+    'summary': { # Usato da MeetingSummarizer
+        'display_name': "Riassunto Meeting",
+        'setting_key': "models/summary",
+        'default': os.getenv("DEFAULT_MODEL_SUMMARY", GEMINI_15_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)) # Tutti i modelli testuali vanno bene
+    },
+    # Esempio: Se avessi una generazione specifica per la guida operativa
+    # 'operational_guide': {
+    #     'display_name': "Guida Operativa (da Visione)",
+    #     'setting_key': "models/operational_guide",
+    #     'default': os.getenv("DEFAULT_MODEL_OPERATIONAL_GUIDE", GEMINI_15_PRO),
+    #     'allowed': [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION] # Modelli potenti con visione
+    # }
+}
+
+# --- Percorsi File e Prompt ---
 FFMPEG_PATH = os.path.join(BASE_DIR, "ffmpeg", "bin", "ffmpeg.exe")
-FFMPEG_PATH_DOWNLOAD = os.path.join(BASE_DIR, "ffmpeg", "bin")
+FFMPEG_PATH_DOWNLOAD = os.path.join(BASE_DIR, "ffmpeg", "bin") # Usato da yt-dlp
 VERSION_FILE = os.path.join(BASE_DIR, "version_info.txt")
 CONTACTS_FILE = os.path.join(BASE_DIR, "contatti_teams.txt")
 DOCK_SETTINGS_FILE = os.path.join(BASE_DIR, "dock_settings.json")
 LOG_FILE = os.path.join(BASE_DIR, "console_log.txt")
 
-# LOG_LEVEL: Imposta il livello di log per l'intera applicazione.
+# --- Livello di Log ---
 LOG_LEVEL = logging.INFO
 
-# Directory dei prompt - Usa percorsi assoluti costruiti da BASE_DIR
+# --- Directory e Percorsi Prompt ---
 PROMPTS_DIR = os.path.join(BASE_DIR, "prompts")
 
-# Prompt per l'estrazione dei frame
-PROMPT_FRAMES_ANALYSIS = os.path.join(PROMPTS_DIR, "frames_analysis_prompt.txt")
-PROMPT_VIDEO_SUMMARY = os.path.join(PROMPTS_DIR, "video_summary_prompt.txt")
+def get_prompt_path(filename):
+    """Funzione helper per ottenere il percorso di un prompt e verificare se esiste."""
+    path = os.path.join(PROMPTS_DIR, filename)
+    if not os.path.exists(path):
+        logging.warning(f"File prompt non trovato: {path}")
+    return path
 
-# Prompt per la generazione di presentazioni PowerPoint
-PROMPT_PPTX_GENERATION = os.path.join(PROMPTS_DIR, "pptx_generation_prompt.txt")
+PROMPT_FRAMES_ANALYSIS = get_prompt_path("frames_analysis_prompt.txt")
+PROMPT_VIDEO_SUMMARY = get_prompt_path("video_summary_prompt.txt")
+PROMPT_PPTX_GENERATION = get_prompt_path("pptx_generation_prompt.txt")
+PROMPT_TEXT_SUMMARY = get_prompt_path("text_summary_prompt.txt")
+PROMPT_TEXT_FIX = get_prompt_path("text_fix_prompt.txt")
+PROMPT_BROWSER_GUIDE = get_prompt_path("browser_guide_prompt.txt")
+# PROMPT_BROWSER_AGENT = get_prompt_path("browser_agent_prompt.txt") # Se esiste
+PROMPT_MEETING_SUMMARY = get_prompt_path("meeting_summary_prompt.txt")
+PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
 
-# Prompt per l'elaborazione del testo
-PROMPT_TEXT_SUMMARY = os.path.join(PROMPTS_DIR, "text_summary_prompt.txt")
-PROMPT_TEXT_FIX = os.path.join(PROMPTS_DIR, "text_fix_prompt.txt")
-
-# Prompt per l'agente browser
-PROMPT_BROWSER_GUIDE = os.path.join(PROMPTS_DIR, "browser_guide_prompt.txt")
-PROMPT_BROWSER_AGENT = os.path.join(PROMPTS_DIR, "browser_agent_prompt.txt")
-
-# Prompt per il riassunto delle riunioni
-PROMPT_MEETING_SUMMARY = os.path.join(PROMPTS_DIR, "meeting_summary_prompt.txt")
-
-# Prompt per la generazione di audio
-PROMPT_TTS = os.path.join(PROMPTS_DIR, "tts_prompt.txt")
-
-# Resource Paths
+# --- Percorsi Risorse ---
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
 
-
 def get_splash_images_dir():
-    """Ottiene il percorso della cartella splash_images in modo compatibile con PyInstaller"""
+    """Ottiene il percorso della cartella splash_images in modo compatibile."""
     return os.path.join(RESOURCES_DIR, "splash_images")
-
 
 SPLASH_IMAGES_DIR = get_splash_images_dir()
 MUSIC_DIR = os.path.join(RESOURCES_DIR, "music")
 WATERMARK_IMAGE = os.path.join(RESOURCES_DIR, "watermark.png")
 
-# Default Settings
+# --- Impostazioni Default Generali ---
 DEFAULT_FRAME_COUNT = 5
 DEFAULT_STABILITY = 50
 DEFAULT_SIMILARITY = 80
@@ -121,33 +199,66 @@ DEFAULT_STYLE = 0
 DEFAULT_FRAME_RATE = 25
 DEFAULT_AUDIO_CHANNELS = 2
 
-# UI Settings
+# --- Impostazioni UI ---
 DEFAULT_WINDOW_WIDTH = 1200
 DEFAULT_WINDOW_HEIGHT = 800
 
-# Voice Settings
+# --- Impostazioni Voci (ElevenLabs) ---
 DEFAULT_VOICES = {
     "Alessio": "BTpQARcEj1XqVxdZjTI7",
     "Marco": "GcAgjAjkhWsmUd4GlPiv",
     "Matilda": "atq1BFi5ZHt88WgSOJRB",
     "Mika": "B2j2knC2POvVW0XJE6Hi"
+    # Aggiungere altre voci predefinite se necessario
 }
 
-
-# Funzione di diagnostica per debug di percorsi (utile per verificare percorsi nell'eseguibile)
-def debug_paths():
-    """Stampa i percorsi principali per diagnosi"""
+# --- Funzione di Diagnostica ---
+def debug_config():
+    """Stampa la configurazione corrente per diagnosi."""
+    print("--- [Config Debug] Percorsi Principali ---")
     paths = {
         "BASE_DIR": BASE_DIR,
         "FFMPEG_PATH": FFMPEG_PATH,
         "PROMPTS_DIR": PROMPTS_DIR,
         "RESOURCES_DIR": RESOURCES_DIR,
         "SPLASH_IMAGES_DIR": SPLASH_IMAGES_DIR,
-        "VERSION_FILE": VERSION_FILE
+        "MUSIC_DIR": MUSIC_DIR,
+        "WATERMARK_IMAGE": WATERMARK_IMAGE,
+        "VERSION_FILE": VERSION_FILE,
+        "LOG_FILE": LOG_FILE,
+        "OLLAMA_ENDPOINT": OLLAMA_ENDPOINT,
+        # API Keys Status
+        "ELEVENLABS_API_KEY": "Impostata" if ELEVENLABS_API_KEY else "NON Impostata",
+        "ANTHROPIC_API_KEY": "Impostata" if ANTHROPIC_API_KEY else "NON Impostata",
+        "GOOGLE_API_KEY": "Impostata" if GOOGLE_API_KEY else "NON Impostata",
+        "OPENAI_API_KEY": "Impostata" if OPENAI_API_KEY else "NON Impostata",
     }
+    for name, value in paths.items():
+        # Verifica esistenza per i percorsi file/dir
+        exists_str = ""
+        if name not in ["OLLAMA_ENDPOINT"] and "API_KEY" not in name:
+             if isinstance(value, str) and os.path.exists(value):
+                 exists_str = "- ESISTE"
+             elif isinstance(value, str):
+                 exists_str = "- MANCANTE!"
+        print(f"{name}: {value} {exists_str}")
 
-    for name, path in paths.items():
-        exists = os.path.exists(path)
-        print(f"{name}: {path} - {'ESISTE' if exists else 'MANCANTE'}")
+    print("\n--- [Config Debug] Configurazione Modelli per Azione ---")
+    for action, config in ACTION_MODELS_CONFIG.items():
+        print(f"Azione: '{action}' (UI: '{config.get('display_name', 'N/D')}')")
+        print(f"  Setting Key: '{config['setting_key']}'")
+        print(f"  Default: '{config['default']}'")
+        print(f"  Modelli Permessi ({len(config['allowed'])}): {config['allowed']}")
+        print("-" * 20)
 
-    return paths
+    print("\n--- [Config Debug] Tutti i Modelli Noti ---")
+    print(ALL_KNOWN_MODELS)
+
+    return paths, ACTION_MODELS_CONFIG
+
+# Esempio di come chiamare la funzione di debug alla fine del file,
+# utile durante lo sviluppo per verificare che tutto sia corretto.
+if __name__ == "__main__":
+    print("Esecuzione debug_config() da config.py...")
+    debug_config()
+
