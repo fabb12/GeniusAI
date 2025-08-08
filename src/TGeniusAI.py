@@ -1963,10 +1963,9 @@ class VideoAudioManager(QMainWindow):
         audio_devices = self.print_audio_devices()
         if audio_devices:
             for device in audio_devices:
-                radio_button = QRadioButton(device)
-                radio_button.toggled.connect(self.selectAudioDevice)
-                audioLayout.addWidget(radio_button)
-                self.audio_buttons.append(radio_button)
+                check_box = QCheckBox(device)
+                audioLayout.addWidget(check_box)
+                self.audio_buttons.append(check_box)
         else:
             logging.debug("No input audio devices found.")
         recordingLayout.addWidget(audioGroupBox)
@@ -2038,7 +2037,6 @@ class VideoAudioManager(QMainWindow):
 
         dock.addWidget(widget)
 
-        self.setDefaultAudioDevice()
         self.selectDefaultScreen()
         return dock
 
@@ -2054,11 +2052,10 @@ class VideoAudioManager(QMainWindow):
         self._startRecordingSegment()
 
     def _startRecordingSegment(self):
-        selected_audio = None
+        selected_audio_devices = []
         for button in self.audio_buttons:
             if button.isChecked():
-                selected_audio = button.text()
-                break
+                selected_audio_devices.append(button.text())
 
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
@@ -2090,7 +2087,7 @@ class VideoAudioManager(QMainWindow):
             self.startRecordingButton.setEnabled(True)
             return
 
-        if not save_video_only and not selected_audio:
+        if not save_video_only and not selected_audio_devices:
             QMessageBox.critical(self, "Errore",
                                  "Nessun dispositivo audio selezionato. Seleziona un dispositivo audio o abilita l'opzione 'Salva solo il video'.")
             self.startRecordingButton.setEnabled(True)
@@ -2100,7 +2097,7 @@ class VideoAudioManager(QMainWindow):
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
-            audio_input=selected_audio if not save_video_only else None,
+            audio_inputs=selected_audio_devices if not save_video_only else [],
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
             frames=DEFAULT_FRAME_RATE
         )

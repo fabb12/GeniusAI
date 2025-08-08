@@ -1,0 +1,11 @@
+{
+  "percorso_output": "%USERPROFILE%\\Desktop",
+  "nome_file_output": "registrazione_chiamata.mkv",
+  "parole_chiave_microfono": [
+    "Bluetooth",
+    "Headset",
+    "Cuffie",
+    "Jabra"
+  ],
+  "nome_stereo_mix": "Stereo Mix"
+}

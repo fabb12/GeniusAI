@@ -207,9 +207,10 @@ Per usare questi servizi, **è necessario impostare** le chiavi API corrisponden
 
 ## **Registrazione Schermo e Gestione Audio/Video**
 
-- **ScreenRecorder.py**: Cattura video del desktop (GDI su Windows), con o senza audio.  
-- Possibilità di **scegliere l’audio** (mic, stereo mix, ecc.) e di selezionare **uno specifico schermo** se multipli.
-- **AudioDock**: Dock dedicato alla sostituzione traccia principale, inserimento pause, impostazione audio di sottofondo e freeze frame.  
+- **ScreenRecorder.py**: Cattura video del desktop (GDI su Windows), con o senza audio.
+- **Registrazione Multi-Audio**: È possibile registrare da più fonti audio contemporaneamente (es. microfono + audio di sistema). Per farlo, nella sezione "Seleziona Audio" del dock di registrazione, basta spuntare le caselle di controllo (checkbox) di tutti i dispositivi desiderati. L'applicazione unirà automaticamente le tracce audio.
+- Possibilità di selezionare **uno specifico schermo** se multipli.
+- **AudioDock**: Dock dedicato alla sostituzione traccia principale, inserimento pause, impostazione audio di sottofondo e freeze frame.
 
 ---
 
