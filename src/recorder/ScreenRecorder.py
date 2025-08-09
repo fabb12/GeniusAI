@@ -19,7 +19,8 @@ class ScreenRecorder(QThread):
         self.audio_inputs = audio_inputs if audio_inputs is not None else []
         self.audio_channels = audio_channels
         self.frame_rate = frames
-        self.record_audio = record_audio and self.audio_inputs
+        # Correctly determine if audio should be recorded
+        self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
         self.watermark_image = WATERMARK_IMAGE
         self.ffmpeg_process = None
@@ -95,6 +96,7 @@ class ScreenRecorder(QThread):
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart', # Add faststart flag for robustness
         ])
 
         # Add audio codec options if audio is recorded
@@ -106,18 +108,17 @@ class ScreenRecorder(QThread):
         # Use CREATE_NO_WINDOW to hide the console window
         creationflags = subprocess.CREATE_NO_WINDOW
 
-        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags, text=True, errors='ignore')
+        # Start the ffmpeg process in binary mode (remove text=True)
+        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
+        # Restore stderr reading loop for debugging
         while self.is_running:
-            # Non-blocking read from stderr
             if self.ffmpeg_process.poll() is not None:
                 break
-            try:
-                # This loop is mainly to keep the thread alive.
-                # A more sophisticated implementation might read stderr to report progress.
-                self.msleep(100)
-            except Exception:
-                break
+            # Reading stderr can be useful for debugging ffmpeg issues
+            line = self.ffmpeg_process.stderr.readline()
+            if line:
+                print(line.decode('utf-8', errors='ignore').strip())
 
         # Ensure recording is stopped cleanly
         if self.ffmpeg_process.poll() is None:
@@ -126,7 +127,8 @@ class ScreenRecorder(QThread):
     def stop_recording(self):
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             try:
-                self.ffmpeg_process.stdin.write('q\n')
+                # Write binary 'q' to stdin
+                self.ffmpeg_process.stdin.write(b'q')
                 self.ffmpeg_process.stdin.flush()
                 self.ffmpeg_process.wait(timeout=5)
             except (OSError, ValueError, BrokenPipeError, subprocess.TimeoutExpired) as e:
