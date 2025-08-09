@@ -2028,6 +2028,28 @@ class VideoAudioManager(QMainWindow):
 
         recordingLayout.addLayout(buttonLayout)
 
+        # Troubleshooting GroupBox for audio issues
+        troubleshootingGroup = QGroupBox("Aiuto/Risoluzione Problemi")
+        troubleshootingLayout = QVBoxLayout(troubleshootingGroup)
+
+        help_text = """
+        <p style='color: white;'><b>Audio del PC (es. Teams) non registrato con cuffie USB/Bluetooth?</b></p>
+        <p style='color: #cccccc;'>Questo accade perché "Stereo Mix" spesso registra solo l'audio delle casse principali. La soluzione più robusta è usare un cavo audio virtuale.</p>
+        <ol style='color: #cccccc;'>
+            <li>Scarica e installa <b>VB-CABLE</b> dal sito ufficiale: <a href="https://vb-audio.com/Cable/" style='color: #1a93ec;'>vb-audio.com/Cable</a></li>
+            <li>Nelle impostazioni audio di Windows, imposta l'<b>uscita</b> audio del sistema (o solo di Teams) su <b>CABLE Input</b>.</li>
+            <li>In questa app, seleziona <b>CABLE Output</b> come uno dei dispositivi audio da registrare (insieme al tuo microfono).</li>
+        </ol>
+        """
+
+        helpLabel = QLabel(help_text)
+        helpLabel.setOpenExternalLinks(True)
+        helpLabel.setWordWrap(True)
+        helpLabel.setStyleSheet("QLabel { background-color: #3c3c3c; padding: 10px; border-radius: 5px; }")
+
+        troubleshootingLayout.addWidget(helpLabel)
+        recordingLayout.addWidget(troubleshootingGroup)
+
         mainLayout = QVBoxLayout()
         mainLayout.addWidget(infoGroup)
         mainLayout.addLayout(recordingLayout)
