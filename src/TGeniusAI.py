@@ -113,8 +113,12 @@ class VideoAudioManager(QMainWindow):
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
 
-        # Aggiungi l'istanza di TeamsCallRecorder
-        #self.teams_call_recorder = TeamsCallRecorder(self)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.cursor_overlay = CursorOverlay()
+        self.cursor_overlay.hide()
+        self.load_cursor_settings()
+        self.setDefaultAudioDevice()
+
 
         # Avvia la registrazione automatica delle chiamate
         #self.teams_call_recorder.start()
