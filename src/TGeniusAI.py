@@ -9,7 +9,7 @@ import logging
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
@@ -55,6 +55,7 @@ from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
 from ui.MonitorPreview import MonitorPreview
+from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
@@ -115,9 +116,9 @@ class VideoAudioManager(QMainWindow):
         self.videoSharingManager = VideoSharingManager(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        # self.cursor_overlay = CursorOverlay()
-        # self.cursor_overlay.hide()
-        # self.load_cursor_settings()
+        self.cursor_overlay = CursorOverlay()
+        self.cursor_overlay.hide()
+        self.load_cursor_settings()
         self.setDefaultAudioDevice()
 
 
@@ -125,6 +126,19 @@ class VideoAudioManager(QMainWindow):
         #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.monitor_preview = None
+
+    def load_cursor_settings(self):
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        enable_highlight = settings.value("cursor/enableHighlight", False, type=bool)
+        show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
+        show_yellow_triangle = settings.value("cursor/showYellowTriangle", True, type=bool)
+
+        if enable_highlight:
+            self.cursor_overlay.set_show_red_dot(show_red_dot)
+            self.cursor_overlay.set_show_yellow_triangle(show_yellow_triangle)
+            self.cursor_overlay.show()
+        else:
+            self.cursor_overlay.hide()
 
     def initUI(self):
         """
