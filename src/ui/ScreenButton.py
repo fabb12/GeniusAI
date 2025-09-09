@@ -7,6 +7,7 @@ class ScreenButton(QWidget):
 
     def __init__(self, screen_number, resolution, is_primary, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.screen_number = screen_number
         self.is_selected = False
 
