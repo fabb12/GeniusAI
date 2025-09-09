@@ -1728,11 +1728,8 @@ class VideoAudioManager(QMainWindow):
 
     def selectScreen(self, screen_index):
         self.selected_screen_index = screen_index
-        for button in self.screen_buttons:
-            if button.screen_number == screen_index + 1:
-                button.setStyleSheet("QPushButton { background-color: #1a93ec; color: white; }")
-            else:
-                button.setStyleSheet("QPushButton { background-color: gray; color: white; }")
+        for i, button in enumerate(self.screen_buttons):
+            button.set_selected(i == screen_index)
 
 
     def browseFolderLocation(self):
@@ -1946,9 +1943,15 @@ class VideoAudioManager(QMainWindow):
         screensLayout = QGridLayout(screensGroupBox)
 
         self.screen_buttons = []
-        for i, monitor in enumerate(get_monitors()):
-            screen_button = ScreenButton(f"", i + 1)
-            screen_button.clicked.connect(lambda checked, idx=i: self.selectScreen(idx))
+        monitors = get_monitors()
+        for i, monitor in enumerate(monitors):
+            resolution = f"{monitor.width}x{monitor.height}"
+            screen_button = ScreenButton(
+                screen_number=i + 1,
+                resolution=resolution,
+                is_primary=monitor.is_primary
+            )
+            screen_button.clicked.connect(self.selectScreen)
             screensLayout.addWidget(screen_button, i // 3, i % 3)
             self.screen_buttons.append(screen_button)
 
