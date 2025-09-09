@@ -54,6 +54,7 @@ from services.PptxGeneration import PptxGeneration
 from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
+from ui.MonitorPreview import MonitorPreview
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
@@ -123,6 +124,7 @@ class VideoAudioManager(QMainWindow):
         # Avvia la registrazione automatica delle chiamate
         #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.monitor_preview = None
 
     def initUI(self):
         """
@@ -1734,6 +1736,15 @@ class VideoAudioManager(QMainWindow):
         self.selected_screen_index = screen_index
         for i, button in enumerate(self.screen_buttons):
             button.set_selected(i == screen_index)
+
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+
+        monitors = get_monitors()
+        if screen_index < len(monitors):
+            monitor = monitors[screen_index]
+            self.monitor_preview = MonitorPreview(monitor)
+            self.monitor_preview.show()
 
 
     def browseFolderLocation(self):
