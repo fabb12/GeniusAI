@@ -1,6 +1,5 @@
 import sys
 import re
-import shutil
 import subprocess
 import tempfile
 import datetime
@@ -13,7 +12,7 @@ from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
-    QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
+    QPushButton, QLabel, QCheckBox, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
     QProgressBar, QTabWidget, QDialog,QTextEdit
@@ -108,17 +107,11 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineEdit = ''
         self.videoPathLineOutputEdit = ''
         self.is_recording = False
-        self.video_writer = None
         self.current_video_path = None
         self.current_audio_path = None
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
 
-        # Aggiungi l'istanza di TeamsCallRecorder
-        #self.teams_call_recorder = TeamsCallRecorder(self)
-
-        # Avvia la registrazione automatica delle chiamate
-        #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
@@ -666,10 +659,6 @@ class VideoAudioManager(QMainWindow):
 
         self.browser_agent.runAgent()
 
-    def showMediaInfo(self):
-        # Implementazione per mostrare informazioni sul media
-        print("Funzione showMediaInfo da implementare")
-        # Qui puoi mostrare un dialog con le informazioni sul media corrente
     def onExtractFramesClicked(self):
         """
         Passi:
@@ -2009,10 +1998,6 @@ class VideoAudioManager(QMainWindow):
         saveOptionsLayout.addWidget(self.recordingNameLineEdit)
 
         recordingLayout.addWidget(saveOptionsGroup)
-
-        # Aggiungi la checkbox per abilitare la registrazione automatica delle chiamate di Teams
-        self.autoRecordTeamsCheckBox = QCheckBox("Abilita registrazione automatica per Teams")
-        # recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
 
         self.startRecordingButton = QPushButton("")
         self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
@@ -3564,41 +3549,6 @@ class VideoAudioManager(QMainWindow):
         if hasattr(self, 'progressDialog') and self.progressDialog is not None:
             self.progressDialog.setValue(value)
             self.progressDialog.setLabelText(message)
-
-    def cutVideo(self):
-        media_path = self.videoPathLineEdit
-        if not media_path:
-            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
-            return
-
-        if media_path.lower().endswith(('.mp4', '.mov', '.avi')):
-            is_audio = False
-        elif media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac')):
-            is_audio = True
-        else:
-            QMessageBox.warning(self, "Errore", "Formato file non supportato.")
-            return
-
-        start_time = self.currentPosition / 1000.0  # Converti in secondi
-
-        base_name = os.path.splitext(os.path.basename(media_path))[0]
-        directory = os.path.dirname(media_path)
-        ext = 'mp4' if not is_audio else 'mp3'
-        output_path1 = os.path.join(directory, f"{base_name}_part1.{ext}")
-        output_path2 = os.path.join(directory, f"{base_name}_part2.{ext}")
-
-        self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Taglio")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
-
-        self.cutting_thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
-        self.cutting_thread.progress.connect(self.progressDialog.setValue)
-        self.cutting_thread.completed.connect(self.onCutCompleted)
-        self.cutting_thread.error.connect(self.onCutError)
-
-
-        self.cutting_thread.start()
 
     def onCutCompleted(self, output_path):
         QMessageBox.information(self, "Successo", f"File tagliato salvato in: {output_path}.")
