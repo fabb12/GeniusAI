@@ -35,6 +35,9 @@ class SettingsDialog(QDialog):
         # Tab per il Cursore
         tabs.addTab(self.createCursorSettingsTab(), "Cursore")
 
+        # Tab per la Registrazione
+        tabs.addTab(self.createRecordingSettingsTab(), "Registrazione")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -144,6 +147,17 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createRecordingSettingsTab(self):
+        """Crea il widget per il tab delle impostazioni di registrazione."""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.watermark_enabled_checkbox = QCheckBox("Aggiungi watermark al video")
+        self.watermark_enabled_checkbox.setToolTip("Include il watermark del logo in alto a destra nei video registrati.")
+        layout.addRow(self.watermark_enabled_checkbox)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -162,6 +176,10 @@ class SettingsDialog(QDialog):
         index = self.cursor_style_combo.findData(cursor_style)
         if index != -1:
             self.cursor_style_combo.setCurrentIndex(index)
+
+        # --- Carica Impostazioni Registrazione ---
+        watermark_enabled = self.settings.value("recording/watermark_enabled", True, type=bool)
+        self.watermark_enabled_checkbox.setChecked(watermark_enabled)
 
         # --- Carica Modelli per Azione ---
         for action_key, config in ACTION_MODELS_CONFIG.items():
@@ -197,6 +215,9 @@ class SettingsDialog(QDialog):
         # --- Salva Impostazioni Cursore ---
         self.settings.setValue("cursor/enabled", self.cursor_enabled_checkbox.isChecked())
         self.settings.setValue("cursor/style", self.cursor_style_combo.currentData())
+
+        # --- Salva Impostazioni Registrazione ---
+        self.settings.setValue("recording/watermark_enabled", self.watermark_enabled_checkbox.isChecked())
 
         # --- Salva Modelli per Azione ---
         for action_key, config in ACTION_MODELS_CONFIG.items():

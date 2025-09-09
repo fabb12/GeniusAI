@@ -11,7 +11,7 @@ class ScreenRecorder(QThread):
     recording_stopped_signal = pyqtSignal()
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
-                 audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True):
+                 audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True, use_watermark=True):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -19,6 +19,7 @@ class ScreenRecorder(QThread):
         self.audio_inputs = audio_inputs if audio_inputs is not None else []
         self.audio_channels = audio_channels
         self.frame_rate = frames
+        self.use_watermark = use_watermark
         # Correctly determine if audio should be recorded
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
@@ -30,8 +31,8 @@ class ScreenRecorder(QThread):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
             self.is_running = False
 
-        # Check if watermark image exists
-        if not os.path.isfile(self.watermark_image):
+        # Check if watermark image exists only if we intend to use it
+        if self.use_watermark and not os.path.isfile(self.watermark_image):
             self.error_signal.emit(f"Watermark image not found at {self.watermark_image}")
             self.is_running = False
 
@@ -48,7 +49,7 @@ class ScreenRecorder(QThread):
 
         offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
 
-        # Base command for video and watermark inputs
+        # Base command for video input
         ffmpeg_command = [
             self.ffmpeg_path,
             '-f', 'gdigrab',
@@ -57,8 +58,11 @@ class ScreenRecorder(QThread):
             '-offset_y', str(offset_y),
             '-video_size', f'{screen_width}x{screen_height}',
             '-i', 'desktop',
-            '-i', self.watermark_image,
         ]
+
+        # Add watermark input if enabled
+        if self.use_watermark:
+            ffmpeg_command.extend(['-i', self.watermark_image])
 
         # Add audio inputs if any
         if self.record_audio:
@@ -66,29 +70,38 @@ class ScreenRecorder(QThread):
                 ffmpeg_command.extend(['-f', 'dshow', '-i', f'audio={audio_device}'])
 
         # --- Build the filter_complex string and map arguments ---
-        video_filter = "[0:v][1:v]overlay=W-w-10:H-h-10[v_out]"
-        num_audio_inputs = len(self.audio_inputs)
-
-        filter_parts = [video_filter]
-        map_args = ['-map', '[v_out]']
+        filter_parts = []
+        map_args = []
         audio_codec_args = []
 
+        # Video mapping and filter
+        if self.use_watermark:
+            video_filter = "[0:v][1:v]overlay=W-w-10:10[v_out]"
+            filter_parts.append(video_filter)
+            map_args.extend(['-map', '[v_out]'])
+        else:
+            map_args.extend(['-map', '0:v'])
+
+        # Audio mapping and filter
+        num_audio_inputs = len(self.audio_inputs)
         if self.record_audio:
+            # The index of the first audio stream depends on whether the watermark is present
+            first_audio_index = 2 if self.use_watermark else 1
             if num_audio_inputs == 1:
-                # One audio input, map it directly. Audio is input [2:a]
-                map_args.extend(['-map', '2:a'])
+                map_args.extend(['-map', f'{first_audio_index}:a'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
             elif num_audio_inputs > 1:
-                # Multiple audio inputs, merge them.
-                audio_merge_inputs = "".join([f"[{i+2}:a]" for i in range(num_audio_inputs)])
+                audio_merge_inputs = "".join([f"[{i+first_audio_index}:a]" for i in range(num_audio_inputs)])
                 audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
                 filter_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
 
-        # Combine filter parts
-        combined_filter = ";".join(filter_parts)
-        ffmpeg_command.extend(['-filter_complex', combined_filter])
+        # Combine filter parts and add to command if necessary
+        if filter_parts:
+            combined_filter = ";".join(filter_parts)
+            ffmpeg_command.extend(['-filter_complex', combined_filter])
+
         ffmpeg_command.extend(map_args)
 
         # Add final video output options
