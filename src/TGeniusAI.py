@@ -1723,6 +1723,8 @@ class VideoAudioManager(QMainWindow):
     def closeEvent(self, event):
         self.dockSettingsManager.save_settings()
         #self.teams_call_recorder.stop()
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
         event.accept()
 
     def selectDefaultScreen(self):
@@ -1745,6 +1747,7 @@ class VideoAudioManager(QMainWindow):
             monitor = monitors[screen_index]
             self.monitor_preview = MonitorPreview(monitor)
             self.monitor_preview.show()
+            self.selectedMonitorLabel.setText(f"Monitor: Schermo {screen_index + 1} ({monitor.width}x{monitor.height})")
 
 
     def browseFolderLocation(self):
@@ -1874,10 +1877,13 @@ class VideoAudioManager(QMainWindow):
                 break
         self.audio_input = selected_audio  # Update the audio input name
         if selected_audio:
+            self.selectedAudioLabel.setText(f"Audio: {selected_audio}")
             if device_index is not None and self.test_audio_device(device_index):
                 self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
             else:
                 self.audioTestResultLabel.setText(f"Test Audio: Periferica KO")
+        else:
+            self.selectedAudioLabel.setText("Audio: N/A")
 
     def test_audio_device(self, device_index):
         p = pyaudio.PyAudio()
@@ -1939,7 +1945,18 @@ class VideoAudioManager(QMainWindow):
 
         self.timecodeLabel = QLabel('00:00:00')
         self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
+        self.timecodeLabel.setStyleSheet("""
+            QLabel {
+                font-family: "Courier New", Courier, monospace;
+                font-size: 24pt;
+                font-weight: bold;
+                color: #00FF00;
+                background-color: #000000;
+                border: 2px solid #444444;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
         infoLayout.addWidget(self.timecodeLabel)
 
         self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
@@ -1949,6 +1966,18 @@ class VideoAudioManager(QMainWindow):
         self.audioTestResultLabel = QLabel("Risultato Test Audio: N/A")
         self.audioTestResultLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
         infoLayout.addWidget(self.audioTestResultLabel)
+
+        self.selectedMonitorLabel = QLabel("Monitor: N/A")
+        self.selectedMonitorLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        infoLayout.addWidget(self.selectedMonitorLabel)
+
+        self.selectedAudioLabel = QLabel("Audio: N/A")
+        self.selectedAudioLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        infoLayout.addWidget(self.selectedAudioLabel)
+
+        self.outputFileLabel = QLabel("File: N/A")
+        self.outputFileLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        infoLayout.addWidget(self.outputFileLabel)
 
         # Main Layout for Recording Management
         recordingLayout = QVBoxLayout()
@@ -2099,7 +2128,18 @@ class VideoAudioManager(QMainWindow):
 
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
-        self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; color: red; }")
+        self.timecodeLabel.setStyleSheet("""
+            QLabel {
+                font-family: "Courier New", Courier, monospace;
+                font-size: 24pt;
+                font-weight: bold;
+                color: red;
+                background-color: #000000;
+                border: 2px solid #880000;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
 
         monitor_index = self.selected_screen_index if self.selected_screen_index is not None else 0
 
@@ -2147,6 +2187,7 @@ class VideoAudioManager(QMainWindow):
 
         self.recording_segments.append(segment_file_path)
         self.current_video_path = segment_file_path
+        self.outputFileLabel.setText(f"File: {segment_file_path}")
         self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di Schermo {monitor_index + 1}')
 
     def togglePauseResumeRecording(self):
@@ -2177,15 +2218,31 @@ class VideoAudioManager(QMainWindow):
         self.stopRecordingButton.setEnabled(False)
         self.rec_timer.stop()
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
-            self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
+            self.timecodeLabel.setStyleSheet("""
+                QLabel {
+                    font-family: "Courier New", Courier, monospace;
+                    font-size: 24pt;
+                    font-weight: bold;
+                    color: #00FF00;
+                    background-color: #000000;
+                    border: 2px solid #444444;
+                    border-radius: 5px;
+                    padding: 5px;
+                }
+            """)
             self.recorder_thread.stop()
             self.recorder_thread.wait()  # Ensure the thread has finished
 
         if hasattr(self, 'current_video_path'):
             self._mergeSegments()
 
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+            self.monitor_preview = None
+
         self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
+        self.outputFileLabel.setText("File: N/A")
 
     import datetime
 
