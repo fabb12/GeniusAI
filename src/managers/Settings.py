@@ -4,7 +4,7 @@
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
-    QLineEdit, QFormLayout, QMessageBox,
+    QLineEdit, QFormLayout, QMessageBox, QCheckBox,
     QSizePolicy # Importazione necessaria per lo spaziatore
 )
 from PyQt6.QtCore import QSettings
