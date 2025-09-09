@@ -13,19 +13,20 @@ class VideoOverlay(QWidget):
         self.crop_rect = QRect()
 
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton:
+        if event.button() == Qt.MouseButton.RightButton:
             self.rect_start = event.pos()
             self.rect_end = self.rect_start
             self.crop_rect = QRect()  # Reset
             self.update()
 
     def mouseMoveEvent(self, event):
-        if self.rect_start:
-            self.rect_end = event.pos()
-            self.update()
+        if event.buttons() & Qt.MouseButton.RightButton:
+            if self.rect_start:
+                self.rect_end = event.pos()
+                self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self.rect_start:
+        if event.button() == Qt.MouseButton.RightButton and self.rect_start:
             self.rect_end = event.pos()
             self.crop_rect = QRect(self.rect_start, self.rect_end).normalized()
             self.rect_start = None

@@ -302,6 +302,11 @@ class VideoAudioManager(QMainWindow):
         self.cutButton.setIcon(QIcon("./res/taglia.png"))
         self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
 
+        self.cropButton = QPushButton('')
+        self.cropButton.setIcon(QIcon("./res/crop.png")) # Assuming a crop icon exists
+        self.cropButton.setToolTip("Ritaglia il video con la selezione")
+
+
         self.rewindButton = QPushButton('<< 5s')
         self.rewindButton.setIcon(QIcon("./res/rewind.png"))
         self.rewindButton.setToolTip("Riavvolgi il video di 5 secondi")
@@ -318,6 +323,7 @@ class VideoAudioManager(QMainWindow):
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
+        self.cropButton.clicked.connect(self.applyCrop)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
         self.forwardButton.clicked.connect(self.forward5Seconds)
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
@@ -422,6 +428,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
+        playbackControlLayout.addWidget(self.cropButton)
         playbackControlLayout.addWidget(self.deleteButton)
 
         # Layout principale del Player Input
