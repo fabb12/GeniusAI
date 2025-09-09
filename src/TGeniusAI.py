@@ -9,7 +9,7 @@ import logging
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
@@ -66,6 +66,7 @@ from config import SPLASH_IMAGES_DIR
 from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
 from ui.VideoOverlay import VideoOverlay
+from ui.CursorOverlay import CursorOverlay
 
 # Importa la classe MeetingSummarizer
 from services.MeetingSummarizer import MeetingSummarizer
@@ -119,6 +120,14 @@ class VideoAudioManager(QMainWindow):
         # Avvia la registrazione automatica delle chiamate
         #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.cursor_overlay = CursorOverlay()
+        self.cursor_overlay.hide()
+        self.load_cursor_settings()
+
+    def load_cursor_settings(self):
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        style = settings.value("cursor/style", "red_dot", type=str)
+        self.cursor_overlay.setCursorStyle(style)
 
     def initUI(self):
         """
@@ -935,7 +944,8 @@ class VideoAudioManager(QMainWindow):
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
-        dialog.exec()
+        if dialog.exec():
+            self.load_cursor_settings()
 
     def set_default_dock_layout(self):
 
@@ -2071,6 +2081,9 @@ class VideoAudioManager(QMainWindow):
 
         self.recordingTime = QTime(0, 0, 0)
         self.rec_timer.start(1000)
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        if settings.value("cursor/enabled", False, type=bool):
+            self.cursor_overlay.show()
         self._startRecordingSegment()
 
     def _startRecordingSegment(self):
@@ -2158,6 +2171,7 @@ class VideoAudioManager(QMainWindow):
         self.pauseRecordingButton.setEnabled(False)
         self.stopRecordingButton.setEnabled(False)
         self.rec_timer.stop()
+        self.cursor_overlay.hide()
         if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
             self.timecodeLabel.setStyleSheet("QLabel { font-size: 24pt; }")
             self.recorder_thread.stop()
