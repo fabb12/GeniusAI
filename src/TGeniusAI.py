@@ -2128,13 +2128,17 @@ class VideoAudioManager(QMainWindow):
             self.startRecordingButton.setEnabled(True)
             return
 
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        use_watermark = settings.value("recording/watermark_enabled", True, type=bool)
+
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
             audio_inputs=selected_audio_devices if not save_video_only else [],
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
-            frames=DEFAULT_FRAME_RATE
+            frames=DEFAULT_FRAME_RATE,
+            use_watermark=use_watermark
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
