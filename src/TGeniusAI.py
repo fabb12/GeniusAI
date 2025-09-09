@@ -115,9 +115,9 @@ class VideoAudioManager(QMainWindow):
         self.videoSharingManager = VideoSharingManager(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.cursor_overlay = CursorOverlay()
-        self.cursor_overlay.hide()
-        self.load_cursor_settings()
+        # self.cursor_overlay = CursorOverlay()
+        # self.cursor_overlay.hide()
+        # self.load_cursor_settings()
         self.setDefaultAudioDevice()
 
 
