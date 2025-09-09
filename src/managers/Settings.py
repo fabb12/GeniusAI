@@ -35,6 +35,9 @@ class SettingsDialog(QDialog):
         # Tab per il Cursore
         tabs.addTab(self.createCursorSettingsTab(), "Cursore")
 
+        # Tab per la Registrazione
+        tabs.addTab(self.createRecordingSettingsTab(), "Registrazione")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -142,6 +145,15 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createRecordingSettingsTab(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.enableWatermark = QCheckBox()
+        layout.addRow("Abilita Watermark:", self.enableWatermark)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -168,6 +180,9 @@ class SettingsDialog(QDialog):
         self.enableCursorHighlight.setChecked(self.settings.value("cursor/enableHighlight", False, type=bool))
         self.showRedDot.setChecked(self.settings.value("cursor/showRedDot", True, type=bool))
         self.showYellowTriangle.setChecked(self.settings.value("cursor/showYellowTriangle", True, type=bool))
+
+        # --- Carica Impostazioni Registrazione ---
+        self.enableWatermark.setChecked(self.settings.value("recording/enableWatermark", True, type=bool))
 
     def _setComboBoxValue(self, combo_box, value):
         """Imposta il valore corrente della ComboBox se il valore è presente."""
@@ -201,6 +216,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("cursor/enableHighlight", self.enableCursorHighlight.isChecked())
         self.settings.setValue("cursor/showRedDot", self.showRedDot.isChecked())
         self.settings.setValue("cursor/showYellowTriangle", self.showYellowTriangle.isChecked())
+
+        # --- Salva Impostazioni Registrazione ---
+        self.settings.setValue("recording/enableWatermark", self.enableWatermark.isChecked())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
