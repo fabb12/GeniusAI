@@ -1,67 +1,77 @@
-from PyQt6.QtGui import QPainter, QPen, QFont
-from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PyQt6.QtCore import Qt, pyqtSignal
 
-class ToggleButton(QPushButton):
-    def __init__(self, parent=None):
+class ScreenButton(QWidget):
+    clicked = pyqtSignal(int)
+
+    def __init__(self, screen_number, resolution, is_primary, parent=None):
         super().__init__(parent)
-        self.setCheckable(True)
-        self.setChecked(False)
-        self.setMinimumSize(QSize(80, 40))
-        self.setStyleSheet(self.get_style())
-        self.clicked.connect(self.update_button_style)
-
-    def update_button_style(self):
-        self.setStyleSheet(self.get_style())
-
-    def get_style(self):
-        if self.isChecked():
-            return """
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border-radius: 20px;
-                text-align: left;
-                padding-left: 10px;
-            }
-            QPushButton:checked {
-                background-color: #4CAF50;
-                color: white;
-            }
-            """
-        else:
-            return """
-            QPushButton {
-                background-color: #CCC;
-                color: black;
-                border-radius: 20px;
-                text-align: left;
-                padding-left: 10px;
-            }
-            QPushButton:checked {
-                background-color: #4CAF50;
-                color: white;
-            }
-            """
-
-class ScreenButton(QPushButton):
-    def __init__(self, text, screen_number, parent=None):
-        super().__init__(text, parent)
         self.screen_number = screen_number
-        self.setFixedSize(100, 100)
-        self.setStyleSheet("QPushButton { background-color: gray; color: white; }")
+        self.is_selected = False
 
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        painter = QPainter(self)
-        pen = QPen()
-        pen.setColor(Qt.GlobalColor.white)
-        painter.setPen(pen)
+        self.setFixedSize(150, 100)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(10, 10, 10, 10)
+        self.layout.setSpacing(5)
 
-        # Imposta un font più grande
-        font = QFont()
-        font.setPointSize(20)  # Dimensione del font aumentata
-        painter.setFont(font)
+        self.number_label = QLabel(f"Schermo {self.screen_number}")
+        font = self.number_label.font()
+        font.setPointSize(14)
+        font.setBold(True)
+        self.number_label.setFont(font)
+        self.number_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Disegna il testo al centro del pulsante
-        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, str(self.screen_number))
+        self.resolution_label = QLabel(resolution)
+        font = self.resolution_label.font()
+        font.setPointSize(10)
+        self.resolution_label.setFont(font)
+        self.resolution_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.primary_label = QLabel("Primario" if is_primary else "")
+        font = self.primary_label.font()
+        font.setPointSize(9)
+        font.setItalic(True)
+        self.primary_label.setFont(font)
+        self.primary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.layout.addWidget(self.number_label)
+        self.layout.addWidget(self.resolution_label)
+        self.layout.addWidget(self.primary_label)
+
+        self.update_style()
+
+    def mousePressEvent(self, event):
+        self.clicked.emit(self.screen_number - 1)
+
+    def set_selected(self, selected):
+        self.is_selected = selected
+        self.update_style()
+
+    def update_style(self):
+        if self.is_selected:
+            self.setStyleSheet("""
+                ScreenButton {
+                    background-color: #1a93ec;
+                    color: white;
+                    border: 2px solid #1a93ec;
+                    border-radius: 10px;
+                }
+                QLabel {
+                    color: white;
+                    background-color: transparent;
+                }
+            """)
+        else:
+            self.setStyleSheet("""
+                ScreenButton {
+                    background-color: gray;
+                    color: white;
+                    border: 2px solid gray;
+                    border-radius: 10px;
+                }
+                QLabel {
+                    color: white;
+                    background-color: transparent;
+                }
+            """)
