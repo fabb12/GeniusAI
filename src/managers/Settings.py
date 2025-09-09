@@ -32,6 +32,9 @@ class SettingsDialog(QDialog):
         # Tab per i Modelli AI (Esistente, ora come secondo tab)
         tabs.addTab(self.createModelSettingsWidget(), "Modelli AI per Azione")
 
+        # Tab per il Cursore
+        tabs.addTab(self.createCursorSettingsTab(), "Cursore")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -124,6 +127,21 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createCursorSettingsTab(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.enableCursorHighlight = QCheckBox()
+        layout.addRow("Abilita Evidenziazione Cursore:", self.enableCursorHighlight)
+
+        self.showRedDot = QCheckBox()
+        layout.addRow("Mostra Punto Rosso:", self.showRedDot)
+
+        self.showYellowTriangle = QCheckBox()
+        layout.addRow("Mostra Triangolo Giallo:", self.showYellowTriangle)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -145,6 +163,11 @@ class SettingsDialog(QDialog):
                 self._setComboBoxValue(combo, saved_model)
             elif combo and combo.count() > 0:
                  combo.setCurrentIndex(0)
+
+        # --- Carica Impostazioni Cursore ---
+        self.enableCursorHighlight.setChecked(self.settings.value("cursor/enableHighlight", False, type=bool))
+        self.showRedDot.setChecked(self.settings.value("cursor/showRedDot", True, type=bool))
+        self.showYellowTriangle.setChecked(self.settings.value("cursor/showYellowTriangle", True, type=bool))
 
     def _setComboBoxValue(self, combo_box, value):
         """Imposta il valore corrente della ComboBox se il valore è presente."""
@@ -173,6 +196,11 @@ class SettingsDialog(QDialog):
             if setting_key and combo:
                 current_model = combo.currentText()
                 self.settings.setValue(setting_key, current_model)
+
+        # --- Salva Impostazioni Cursore ---
+        self.settings.setValue("cursor/enableHighlight", self.enableCursorHighlight.isChecked())
+        self.settings.setValue("cursor/showRedDot", self.showRedDot.isChecked())
+        self.settings.setValue("cursor/showYellowTriangle", self.showYellowTriangle.isChecked())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
