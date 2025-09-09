@@ -55,7 +55,7 @@ class ScreenButton(QWidget):
                 ScreenButton {
                     background-color: #1a93ec;
                     color: white;
-                    border: 2px solid #1a93ec;
+                    border: 3px solid red;
                     border-radius: 10px;
                 }
                 QLabel {
