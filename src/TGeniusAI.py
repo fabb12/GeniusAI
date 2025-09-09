@@ -955,7 +955,8 @@ class VideoAudioManager(QMainWindow):
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
-        dialog.exec()
+        if dialog.exec():
+            self.load_cursor_settings()
 
     def set_default_dock_layout(self):
 
