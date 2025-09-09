@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
     QLineEdit, QFormLayout, QMessageBox,
-    QSizePolicy # Importazione necessaria per lo spaziatore
+    QSizePolicy, QCheckBox
 )
 from PyQt6.QtCore import QSettings
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
@@ -31,6 +31,9 @@ class SettingsDialog(QDialog):
 
         # Tab per i Modelli AI (Esistente, ora come secondo tab)
         tabs.addTab(self.createModelSettingsWidget(), "Modelli AI per Azione")
+
+        # Tab per il Cursore
+        tabs.addTab(self.createCursorSettingsTab(), "Cursore")
 
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
@@ -124,6 +127,23 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createCursorSettingsTab(self):
+        """Crea il widget per il tab delle impostazioni del cursore."""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.cursor_enabled_checkbox = QCheckBox("Abilita cursore personalizzato durante la registrazione")
+        self.cursor_enabled_checkbox.setToolTip("Mostra un cursore personalizzato nel video registrato.")
+        layout.addRow(self.cursor_enabled_checkbox)
+
+        self.cursor_style_combo = QComboBox()
+        self.cursor_style_combo.addItem("Pallino rosso", "red_dot")
+        self.cursor_style_combo.addItem("Triangolo giallo", "yellow_triangle")
+        self.cursor_style_combo.setToolTip("Seleziona lo stile del cursore personalizzato.")
+        layout.addRow("Stile del cursore:", self.cursor_style_combo)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -133,6 +153,15 @@ class SettingsDialog(QDialog):
             settings_key = f"api_keys_dialog/{key_name}"
             saved_key = self.settings.value(settings_key, "") # Default a stringa vuota
             line_edit.setText(saved_key)
+
+        # --- Carica Impostazioni Cursore ---
+        cursor_enabled = self.settings.value("cursor/enabled", False, type=bool)
+        self.cursor_enabled_checkbox.setChecked(cursor_enabled)
+
+        cursor_style = self.settings.value("cursor/style", "red_dot", type=str)
+        index = self.cursor_style_combo.findData(cursor_style)
+        if index != -1:
+            self.cursor_style_combo.setCurrentIndex(index)
 
         # --- Carica Modelli per Azione ---
         for action_key, config in ACTION_MODELS_CONFIG.items():
@@ -164,6 +193,10 @@ class SettingsDialog(QDialog):
             # Usa una chiave QSettings specifica per le API keys nel dialogo
             settings_key = f"api_keys_dialog/{key_name}"
             self.settings.setValue(settings_key, line_edit.text())
+
+        # --- Salva Impostazioni Cursore ---
+        self.settings.setValue("cursor/enabled", self.cursor_enabled_checkbox.isChecked())
+        self.settings.setValue("cursor/style", self.cursor_style_combo.currentData())
 
         # --- Salva Modelli per Azione ---
         for action_key, config in ACTION_MODELS_CONFIG.items():
