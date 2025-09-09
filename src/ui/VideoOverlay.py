@@ -34,10 +34,8 @@ class VideoOverlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        # Per debug: disegna un riempimento semi-trasparente per verificare che l'overlay sia visibile
-        painter.fillRect(self.rect(), QColor(255, 0, 0, 50))
-        # Imposta una penna rossa tratteggiata
-        pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.DashLine)
+        # Imposta una penna rossa
+        pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
         # Se stai disegnando il rettangolo attivo
         if self.rect_start and self.rect_end:

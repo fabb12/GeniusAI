@@ -128,17 +128,15 @@ class VideoAudioManager(QMainWindow):
         self.monitor_preview = None
 
     def load_cursor_settings(self):
+        # This method configures the appearance of the cursor overlay.
+        # The visibility of the overlay is controlled by startScreenRecording and stopScreenRecording,
+        # as requested by the user to only show the highlight during recording.
         settings = QSettings("ThemaConsulting", "GeniusAI")
-        enable_highlight = settings.value("cursor/enableHighlight", False, type=bool)
         show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
-        show_yellow_triangle = settings.value("cursor/showYellowTriangle", True, type=bool)
+        show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
 
-        if enable_highlight:
-            self.cursor_overlay.set_show_red_dot(show_red_dot)
-            self.cursor_overlay.set_show_yellow_triangle(show_yellow_triangle)
-            self.cursor_overlay.show()
-        else:
-            self.cursor_overlay.hide()
+        self.cursor_overlay.set_show_red_dot(show_red_dot)
+        self.cursor_overlay.set_show_yellow_triangle(show_yellow_triangle)
 
     def initUI(self):
         """
@@ -2130,6 +2128,8 @@ class VideoAudioManager(QMainWindow):
         self.recording_segments = []  # Initialize the list to store recording segments
         self.is_paused = False
 
+        self.cursor_overlay.show()
+
         self.recordingTime = QTime(0, 0, 0)
         self.rec_timer.start(1000)
         self._startRecordingSegment()
@@ -2258,6 +2258,7 @@ class VideoAudioManager(QMainWindow):
             self.monitor_preview.close()
             self.monitor_preview = None
 
+        self.cursor_overlay.hide()
         self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
         self.outputFileLabel.setText("File: N/A")
