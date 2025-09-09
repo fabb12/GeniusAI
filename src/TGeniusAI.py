@@ -116,6 +116,7 @@ class VideoAudioManager(QMainWindow):
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
         self.load_cursor_settings()
+        self.setDefaultAudioDevice()
 
     def load_cursor_settings(self):
         settings = QSettings("ThemaConsulting", "GeniusAI")
