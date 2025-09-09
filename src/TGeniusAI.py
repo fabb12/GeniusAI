@@ -2121,6 +2121,10 @@ class VideoAudioManager(QMainWindow):
         self._startRecordingSegment()
 
     def _startRecordingSegment(self):
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+            self.monitor_preview = None
+
         selected_audio_devices = []
         for button in self.audio_buttons:
             if button.isChecked():
