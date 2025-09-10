@@ -16,11 +16,13 @@ class VideoOverlay(QWidget):
         self.watermark_path = None
         self.watermark_size = 0
         self.watermark_pixmap = None
+        self.watermark_position = "Bottom Right"
 
-    def setWatermark(self, enabled, path, size):
+    def setWatermark(self, enabled, path, size, position):
         self.watermark_enabled = enabled
         self.watermark_path = path
         self.watermark_size = size
+        self.watermark_position = position
         if self.watermark_enabled and self.watermark_path and os.path.exists(self.watermark_path):
             self.watermark_pixmap = QPixmap(self.watermark_path)
         else:
@@ -70,7 +72,17 @@ class VideoOverlay(QWidget):
 
             # Position at bottom right with a margin
             margin = 10
-            x = parent_width - scaled_pixmap.width() - margin
-            y = parent_height - scaled_pixmap.height() - margin
+            if self.watermark_position == "Top Left":
+                x = margin
+                y = margin
+            elif self.watermark_position == "Top Right":
+                x = parent_width - scaled_pixmap.width() - margin
+                y = margin
+            elif self.watermark_position == "Bottom Left":
+                x = margin
+                y = parent_height - scaled_pixmap.height() - margin
+            else:  # Bottom Right
+                x = parent_width - scaled_pixmap.width() - margin
+                y = parent_height - scaled_pixmap.height() - margin
 
             painter.drawPixmap(x, y, scaled_pixmap)

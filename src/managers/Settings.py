@@ -168,6 +168,11 @@ class SettingsDialog(QDialog):
         self.watermarkSizeSpinBox.setSuffix(" %")
         layout.addRow("Dimensione Watermark:", self.watermarkSizeSpinBox)
 
+        # Add new control for watermark position
+        self.watermarkPositionComboBox = QComboBox()
+        self.watermarkPositionComboBox.addItems(["Top Left", "Top Right", "Bottom Left", "Bottom Right"])
+        layout.addRow("Posizione Watermark:", self.watermarkPositionComboBox)
+
 
         return widget
 
@@ -208,6 +213,7 @@ class SettingsDialog(QDialog):
         self.enableWatermark.setChecked(self.settings.value("recording/enableWatermark", True, type=bool))
         self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", "res/watermark.png"))
         self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
+        self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -247,6 +253,7 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/enableWatermark", self.enableWatermark.isChecked())
         self.settings.setValue("recording/watermarkPath", self.watermarkPathEdit.text())
         self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
+        self.settings.setValue("recording/watermarkPosition", self.watermarkPositionComboBox.currentText())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
