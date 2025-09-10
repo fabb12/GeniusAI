@@ -117,6 +117,8 @@ class VideoAudioManager(QMainWindow):
         self.enableWatermark = False
         self.watermarkPath = ""
         self.watermarkSize = 0
+        self.watermarkPosition = "Bottom Right"
+        self.enableCursorHighlight = False
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
@@ -134,16 +136,18 @@ class VideoAudioManager(QMainWindow):
         settings = QSettings("ThemaConsulting", "GeniusAI")
 
         # Leggi le impostazioni e salvale in variabili "self"
+        self.enableCursorHighlight = settings.value("cursor/enableHighlight", False, type=bool)
         self.show_red_dot = settings.value("cursor/showRedDot", False, type=bool)
         self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
         self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
         self.watermarkPath = settings.value("recording/watermarkPath", "res/watermark.png")
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
+        self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
 
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
         self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
-        self.videoOverlay.setWatermark(self.enableWatermark, self.watermarkPath, self.watermarkSize)
+        self.videoOverlay.setWatermark(self.enableWatermark, self.watermarkPath, self.watermarkSize, self.watermarkPosition)
 
     def initUI(self):
         """
@@ -2143,7 +2147,7 @@ class VideoAudioManager(QMainWindow):
         self.recording_segments = []  # Initialize the list to store recording segments
         self.is_paused = False
 
-        if self.show_red_dot or self.show_yellow_triangle:
+        if self.enableCursorHighlight and (self.show_red_dot or self.show_yellow_triangle):
             self.cursor_overlay.show()
 
         self.recordingTime = QTime(0, 0, 0)
@@ -2216,7 +2220,8 @@ class VideoAudioManager(QMainWindow):
             frames=DEFAULT_FRAME_RATE,
             use_watermark=self.enableWatermark,
             watermark_path=self.watermarkPath,
-            watermark_size=self.watermarkSize
+            watermark_size=self.watermarkSize,
+            watermark_position=self.watermarkPosition
         )
 
         self.recorder_thread.error_signal.connect(self.showError)

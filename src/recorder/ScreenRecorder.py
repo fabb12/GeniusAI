@@ -12,7 +12,7 @@ class ScreenRecorder(QThread):
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
-                 use_watermark=True, watermark_path=None, watermark_size=10):
+                 use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right"):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -26,6 +26,7 @@ class ScreenRecorder(QThread):
         self.use_watermark = use_watermark
         self.watermark_image = watermark_path if watermark_path else WATERMARK_IMAGE
         self.watermark_size = watermark_size
+        self.watermark_position = watermark_position
         self.ffmpeg_process = None
 
         # Check if ffmpeg.exe exists
@@ -81,9 +82,18 @@ class ScreenRecorder(QThread):
             # Scale the watermark to be x% of the video height
             scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
             filter_complex_parts.append(scale_filter)
-            # Overlay the scaled watermark
-            video_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
-            filter_complex_parts.append(video_filter)
+
+            # Position the watermark
+            if self.watermark_position == "Top Left":
+                overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
+            elif self.watermark_position == "Top Right":
+                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
+            elif self.watermark_position == "Bottom Left":
+                overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
+            else:  # Bottom Right
+                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
+
+            filter_complex_parts.append(overlay_filter)
             map_args.extend(['-map', '[v_out]'])
             audio_input_start_index = 2  # Audio inputs start after video and watermark
         else:
