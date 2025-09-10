@@ -132,10 +132,9 @@ class VideoAudioManager(QMainWindow):
         settings = QSettings("", "GeniusAI")
 
         # Leggi le impostazioni e salvale in variabili "self"
-        self.show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
+        self.show_red_dot = settings.value("cursor/showRedDot", False, type=bool)
         self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
         self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
-
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
         self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
