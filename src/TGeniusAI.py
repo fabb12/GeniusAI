@@ -114,11 +114,11 @@ class VideoAudioManager(QMainWindow):
         self.current_audio_path = None
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
-
+        self.enableWatermark = False
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
-        self.load_cursor_settings()
+        self.load_recording_settings()
         self.setDefaultAudioDevice()
 
 
@@ -127,16 +127,18 @@ class VideoAudioManager(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.monitor_preview = None
 
-    def load_cursor_settings(self):
-        # This method configures the appearance of the cursor overlay.
-        # The visibility of the overlay is controlled by startScreenRecording and stopScreenRecording,
-        # as requested by the user to only show the highlight during recording.
-        settings = QSettings("ThemaConsulting", "GeniusAI")
-        show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
-        show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
+    def load_recording_settings(self):
+        """Carica le impostazioni per il cursore e il watermark e le salva come attributi dell'istanza."""
+        settings = QSettings("", "GeniusAI")
 
-        self.cursor_overlay.set_show_red_dot(show_red_dot)
-        self.cursor_overlay.set_show_yellow_triangle(show_yellow_triangle)
+        # Leggi le impostazioni e salvale in variabili "self"
+        self.show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
+        self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
+        self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
+
+        # Configura l'aspetto dell'overlay
+        self.cursor_overlay.set_show_red_dot(self.show_red_dot)
+        self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
 
     def initUI(self):
         """
@@ -961,7 +963,7 @@ class VideoAudioManager(QMainWindow):
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
         if dialog.exec():
-            self.load_cursor_settings()
+            self.load_recording_settings()
 
     def set_default_dock_layout(self):
 
@@ -2136,7 +2138,8 @@ class VideoAudioManager(QMainWindow):
         self.recording_segments = []  # Initialize the list to store recording segments
         self.is_paused = False
 
-        self.cursor_overlay.show()
+        if self.show_red_dot or self.show_yellow_triangle:
+            self.cursor_overlay.show()
 
         self.recordingTime = QTime(0, 0, 0)
         self.rec_timer.start(1000)
@@ -2205,7 +2208,7 @@ class VideoAudioManager(QMainWindow):
             monitor_index=monitor_index,
             audio_inputs=selected_audio_devices if not save_video_only else [],
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
-            frames=DEFAULT_FRAME_RATE
+            frames=DEFAULT_FRAME_RATE, use_watermark=self.enableWatermark
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
