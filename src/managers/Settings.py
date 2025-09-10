@@ -164,7 +164,7 @@ class SettingsDialog(QDialog):
 
         # Add new control for watermark size
         self.watermarkSizeSpinBox = QSpinBox()
-        self.watermarkSizeSpinBox.setRange(1, 100)
+        self.watermarkSizeSpinBox.setRange(1, 200)
         self.watermarkSizeSpinBox.setSuffix(" %")
         layout.addRow("Dimensione Watermark:", self.watermarkSizeSpinBox)
 
