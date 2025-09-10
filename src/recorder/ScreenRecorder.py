@@ -11,7 +11,8 @@ class ScreenRecorder(QThread):
     recording_stopped_signal = pyqtSignal()
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
-                 audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True, use_watermark=True):
+                 audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
+                 use_watermark=True, watermark_path=None, watermark_size=10):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -23,7 +24,8 @@ class ScreenRecorder(QThread):
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
         self.use_watermark = use_watermark
-        self.watermark_image = WATERMARK_IMAGE
+        self.watermark_image = watermark_path if watermark_path else WATERMARK_IMAGE
+        self.watermark_size = watermark_size
         self.ffmpeg_process = None
 
         # Check if ffmpeg.exe exists
@@ -76,7 +78,11 @@ class ScreenRecorder(QThread):
 
         if self.use_watermark:
             # Watermark is input 1, so video is [0:v] and watermark is [1:v]
-            video_filter = "[0:v][1:v]overlay=W-w-10:H-h-10[v_out]"
+            # Scale the watermark to be x% of the video height
+            scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
+            filter_complex_parts.append(scale_filter)
+            # Overlay the scaled watermark
+            video_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
             filter_complex_parts.append(video_filter)
             map_args.extend(['-map', '[v_out]'])
             audio_input_start_index = 2  # Audio inputs start after video and watermark

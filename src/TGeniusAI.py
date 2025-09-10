@@ -115,6 +115,8 @@ class VideoAudioManager(QMainWindow):
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
         self.enableWatermark = False
+        self.watermarkPath = ""
+        self.watermarkSize = 0
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
@@ -129,15 +131,19 @@ class VideoAudioManager(QMainWindow):
 
     def load_recording_settings(self):
         """Carica le impostazioni per il cursore e il watermark e le salva come attributi dell'istanza."""
-        settings = QSettings("", "GeniusAI")
+        settings = QSettings("ThemaConsulting", "GeniusAI")
 
         # Leggi le impostazioni e salvale in variabili "self"
         self.show_red_dot = settings.value("cursor/showRedDot", False, type=bool)
         self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
         self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
+        self.watermarkPath = settings.value("recording/watermarkPath", "res/watermark.png")
+        self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
+
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
         self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
+        self.videoOverlay.setWatermark(self.enableWatermark, self.watermarkPath, self.watermarkSize)
 
     def initUI(self):
         """
@@ -2207,7 +2213,10 @@ class VideoAudioManager(QMainWindow):
             monitor_index=monitor_index,
             audio_inputs=selected_audio_devices if not save_video_only else [],
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
-            frames=DEFAULT_FRAME_RATE, use_watermark=self.enableWatermark
+            frames=DEFAULT_FRAME_RATE,
+            use_watermark=self.enableWatermark,
+            watermark_path=self.watermarkPath,
+            watermark_size=self.watermarkSize
         )
 
         self.recorder_thread.error_signal.connect(self.showError)

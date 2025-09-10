@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
     QLineEdit, QFormLayout, QMessageBox, QCheckBox,
-    QSizePolicy # Importazione necessaria per lo spaziatore
+    QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout
 )
 from PyQt6.QtCore import QSettings
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
@@ -152,7 +152,30 @@ class SettingsDialog(QDialog):
         self.enableWatermark = QCheckBox()
         layout.addRow("Abilita Watermark:", self.enableWatermark)
 
+        # Add new controls for watermark path
+        self.watermarkPathEdit = QLineEdit()
+        self.watermarkPathEdit.setReadOnly(True)
+        browseButton = QPushButton("Sfoglia...")
+        browseButton.clicked.connect(self.browseWatermark)
+        pathLayout = QHBoxLayout()
+        pathLayout.addWidget(self.watermarkPathEdit)
+        pathLayout.addWidget(browseButton)
+        layout.addRow("File Watermark:", pathLayout)
+
+        # Add new control for watermark size
+        self.watermarkSizeSpinBox = QSpinBox()
+        self.watermarkSizeSpinBox.setRange(1, 100)
+        self.watermarkSizeSpinBox.setSuffix(" %")
+        layout.addRow("Dimensione Watermark:", self.watermarkSizeSpinBox)
+
+
         return widget
+
+    def browseWatermark(self):
+        # Open a file dialog to select an image
+        filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona Immagine Watermark", "", "Images (*.png *.jpg *.jpeg)")
+        if filePath:
+            self.watermarkPathEdit.setText(filePath)
 
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
@@ -183,6 +206,9 @@ class SettingsDialog(QDialog):
 
         # --- Carica Impostazioni Registrazione ---
         self.enableWatermark.setChecked(self.settings.value("recording/enableWatermark", True, type=bool))
+        self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", "res/watermark.png"))
+        self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
+
 
     def _setComboBoxValue(self, combo_box, value):
         """Imposta il valore corrente della ComboBox se il valore è presente."""
@@ -219,6 +245,8 @@ class SettingsDialog(QDialog):
 
         # --- Salva Impostazioni Registrazione ---
         self.settings.setValue("recording/enableWatermark", self.enableWatermark.isChecked())
+        self.settings.setValue("recording/watermarkPath", self.watermarkPathEdit.text())
+        self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
