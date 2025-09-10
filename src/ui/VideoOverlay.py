@@ -2,10 +2,12 @@ from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QRect
 from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
 import os
+import logging
 
 class VideoOverlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        logging.debug("VideoOverlay initialized")
         # Make the widget transparent and able to receive mouse events
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
@@ -40,11 +42,13 @@ class VideoOverlay(QWidget):
             self.rect_start = event.pos()
             self.rect_end = self.rect_start
             self.crop_rect = QRect()  # Reset previous selection
+            logging.debug(f"Mouse Press (Right): Start Point {self.rect_start}")
             self.update()
 
     def mouseMoveEvent(self, event):
         if self.is_selecting and event.buttons() & Qt.MouseButton.RightButton:
             self.rect_end = event.pos()
+            logging.debug(f"Mouse Move: End Point {self.rect_end}")
             self.update()
 
     def mouseReleaseEvent(self, event):
@@ -52,10 +56,11 @@ class VideoOverlay(QWidget):
             self.is_selecting = False
             self.rect_end = event.pos()
             self.crop_rect = QRect(self.rect_start, self.rect_end).normalized()
-            # Don't reset rect_start and rect_end here, so the final rect remains visible
+            logging.debug(f"Mouse Release: Final Crop Rect {self.crop_rect}")
             self.update()
 
     def paintEvent(self, event):
+        logging.debug(f"Paint Event triggered. is_selecting: {self.is_selecting}, crop_rect: {self.crop_rect}")
         painter = QPainter(self)
 
         # --- Draw cropping rectangle ---
@@ -72,11 +77,12 @@ class VideoOverlay(QWidget):
             pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.setBrush(QColor(255, 0, 0, 50))
+            logging.debug(f"Painting rect: {current_rect}")
             painter.drawRect(current_rect)
 
         # --- Draw watermark ---
         if self.watermark_enabled and self.watermark_pixmap:
-            # The parent of the overlay is now the container, which has the same size as the video widget
+            # The parent of the overlay will be the container, which has the same size as the video widget
             parent_width = self.width()
             parent_height = self.height()
 

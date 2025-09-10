@@ -1,19 +1,19 @@
-from PyQt6.QtGui import QPainter, QPen, QColor, QWheelEvent
 from PyQt6.QtMultimediaWidgets import QVideoWidget
-from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
+from PyQt6.QtWidgets import QApplication, QWidget, QVBoxLayout
 import sys
-import os
-import logging
 
 class CropVideoWidget(QVideoWidget):
-    """A simple video widget that serves as a display surface for video content."""
+    """
+    A simple video widget that serves as a display surface for video content.
+    All custom drawing and event handling has been moved to the VideoOverlay class.
+    """
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(400)
 
 
 def main():
+    """A simple main function to test the widget."""
     app = QApplication(sys.argv)
     window = QWidget()
     layout = QVBoxLayout(window)
