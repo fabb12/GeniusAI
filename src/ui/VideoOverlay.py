@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QRect
-from PyQt6.QtGui import QPainter, QPen, QColor
+from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
+import os
 
 class VideoOverlay(QWidget):
     def __init__(self, parent=None):
@@ -11,6 +12,20 @@ class VideoOverlay(QWidget):
         self.rect_start = None
         self.rect_end = None
         self.crop_rect = QRect()
+        self.watermark_enabled = False
+        self.watermark_path = None
+        self.watermark_size = 0
+        self.watermark_pixmap = None
+
+    def setWatermark(self, enabled, path, size):
+        self.watermark_enabled = enabled
+        self.watermark_path = path
+        self.watermark_size = size
+        if self.watermark_enabled and self.watermark_path and os.path.exists(self.watermark_path):
+            self.watermark_pixmap = QPixmap(self.watermark_path)
+        else:
+            self.watermark_pixmap = None
+        self.update()
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
@@ -44,3 +59,18 @@ class VideoOverlay(QWidget):
             painter.drawRect(rect)
         elif not self.crop_rect.isNull():
             painter.drawRect(self.crop_rect)
+
+        if self.watermark_enabled and self.watermark_pixmap:
+            parent_width = self.parent().width()
+            parent_height = self.parent().height()
+
+            # Calculate watermark size based on percentage of parent widget's height
+            watermark_height = int(parent_height * (self.watermark_size / 100.0))
+            scaled_pixmap = self.watermark_pixmap.scaledToHeight(watermark_height, Qt.TransformationMode.SmoothTransformation)
+
+            # Position at bottom right with a margin
+            margin = 10
+            x = parent_width - scaled_pixmap.width() - margin
+            y = parent_height - scaled_pixmap.height() - margin
+
+            painter.drawPixmap(x, y, scaled_pixmap)
