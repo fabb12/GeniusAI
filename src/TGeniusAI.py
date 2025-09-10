@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
-    QProgressBar, QTabWidget, QDialog,QTextEdit
+    QProgressBar, QTabWidget, QDialog,QTextEdit, QStackedLayout
 )
 
 # PyQtGraph (docking)
@@ -267,20 +267,25 @@ class VideoAudioManager(QMainWindow):
         # ---------------------
         # PLAYER INPUT
         # ---------------------
+        # Create a container widget and a stacked layout to ensure the overlay is drawn on top of the video
+        self.videoContainer = QWidget()
+        videoStackLayout = QStackedLayout(self.videoContainer)
+        self.videoContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Create the video widget and the overlay
         self.videoCropWidget = CropVideoWidget()
         self.videoCropWidget.setAcceptDrops(True)
-        self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
 
-        self.videoOverlay = VideoOverlay(self.videoCropWidget)
-        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
-        self.videoOverlay.show()
-        self.videoOverlay.raise_()  # Porta l'overlay in primo piano
-        self.videoCropWidget.resizeEvent = self.videoCropWidgetResizeEvent
+        self.videoOverlay = VideoOverlay()
+
+        # Add both to the stacked layout. The overlay will be on top.
+        videoStackLayout.addWidget(self.videoCropWidget)
+        videoStackLayout.addWidget(self.videoOverlay)
 
         self.zoom_level = 1.0
-        self.videoCropWidget.installEventFilter(self)
+        # Install the event filter on the container to handle resizing and panning/zooming of the entire stack
+        self.videoContainer.installEventFilter(self)
         self.is_panning = False
         self.last_mouse_position = QPoint()
 
@@ -445,7 +450,7 @@ class VideoAudioManager(QMainWindow):
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(self.videoCropWidget)
+        videoPlayerLayout.addWidget(self.videoContainer)
         videoPlayerLayout.addLayout(timecodeLayout)
         videoPlayerLayout.addWidget(self.videoSlider)
         videoPlayerLayout.addLayout(playbackControlLayout)
@@ -656,12 +661,6 @@ class VideoAudioManager(QMainWindow):
 
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
-
-    def videoCropWidgetResizeEvent(self, event):
-        # Chiama il metodo resizeEvent originale del widget
-        CropVideoWidget.resizeEvent(self.videoCropWidget, event)
-        # Aggiorna la geometria dell'overlay in base alle dimensioni attuali del widget
-        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
 
     def createWorkflow(self):
         # Implementazione per creare un nuovo workflow
@@ -1186,11 +1185,17 @@ class VideoAudioManager(QMainWindow):
         self.cutting_thread.start()
 
     def eventFilter(self, source, event):
-        if source == self.videoCropWidget:
-            if event.type() == QEvent.Type.Wheel:
+        # Handle events for the video container (resizing, panning, zooming)
+        if source == self.videoContainer:
+            if event.type() == QEvent.Type.Resize:
+                # On resize, ensure the overlay always matches the container's size
+                self.videoOverlay.resize(event.size())
+                return True
+            elif event.type() == QEvent.Type.Wheel:
                 self.handleWheelEvent(event)
                 return True
             elif event.type() == QEvent.Type.MouseButtonPress and event.buttons() & Qt.MouseButton.LeftButton:
+                # Panning starts with a left-click on the container
                 self.is_panning = True
                 self.last_mouse_position = event.position().toPoint()
                 return True
@@ -1204,7 +1209,7 @@ class VideoAudioManager(QMainWindow):
 
     def handleWheelEvent(self, event):
         mouse_pos = event.position().toPoint()
-        widget_pos = self.videoCropWidget.pos()
+        widget_pos = self.videoContainer.pos()
         mouse_x_in_widget = mouse_pos.x() - widget_pos.x()
         mouse_y_in_widget = mouse_pos.y() - widget_pos.y()
 
@@ -1220,18 +1225,18 @@ class VideoAudioManager(QMainWindow):
 
     def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
         # Calcola le nuove dimensioni basate sul livello di zoom attuale
-        original_size = self.videoCropWidget.sizeHint()
+        original_size = self.videoContainer.sizeHint()
         new_width = int(original_size.width() * self.zoom_level)
         new_height = int(original_size.height() * self.zoom_level)
-        self.videoCropWidget.resize(new_width, new_height)
+        self.videoContainer.resize(new_width, new_height)
 
         # Calcola la nuova posizione per centrare lo zoom attorno al mouse
         scale_change = self.zoom_level / old_zoom_level
         new_x = mouse_x * scale_change - mouse_x
         new_y = mouse_y * scale_change - mouse_y
-        current_pos = self.videoCropWidget.pos()
+        current_pos = self.videoContainer.pos()
         new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
-        self.videoCropWidget.move(new_pos)
+        self.videoContainer.move(new_pos)
 
     def handlePanEvent(self, event):
         # Calcola la differenza di movimento
@@ -1240,8 +1245,8 @@ class VideoAudioManager(QMainWindow):
         self.last_mouse_position = current_position
 
         # Sposta il contenuto del widget di video
-        new_pos = self.videoCropWidget.pos() + delta
-        self.videoCropWidget.move(new_pos)
+        new_pos = self.videoContainer.pos() + delta
+        self.videoContainer.move(new_pos)
 
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)

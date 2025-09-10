@@ -6,12 +6,17 @@ import os
 class VideoOverlay(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Assicurati di ricevere gli eventi del mouse
+        # Make the widget transparent and able to receive mouse events
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+
+        # Selection rectangle attributes
+        self.is_selecting = False
         self.rect_start = None
         self.rect_end = None
         self.crop_rect = QRect()
+
+        # Watermark attributes
         self.watermark_enabled = False
         self.watermark_path = None
         self.watermark_size = 0
@@ -31,47 +36,49 @@ class VideoOverlay(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
+            self.is_selecting = True
             self.rect_start = event.pos()
             self.rect_end = self.rect_start
-            self.crop_rect = QRect()  # Reset
+            self.crop_rect = QRect()  # Reset previous selection
             self.update()
 
     def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.MouseButton.RightButton:
-            if self.rect_start:
-                self.rect_end = event.pos()
-                self.update()
+        if self.is_selecting and event.buttons() & Qt.MouseButton.RightButton:
+            self.rect_end = event.pos()
+            self.update()
 
     def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton and self.rect_start:
+        if event.button() == Qt.MouseButton.RightButton and self.is_selecting:
+            self.is_selecting = False
             self.rect_end = event.pos()
             self.crop_rect = QRect(self.rect_start, self.rect_end).normalized()
-            self.rect_start = None
-            self.rect_end = None
+            # Don't reset rect_start and rect_end here, so the final rect remains visible
             self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
 
-        # Draw cropping rectangle
-        if self.rect_start and self.rect_end:
-            rect = QRect(self.rect_start, self.rect_end).normalized()
-            # Use a thicker pen and a semi-transparent brush for visibility
-            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            painter.setBrush(QColor(255, 0, 0, 50))
-            painter.drawRect(rect)
+        # --- Draw cropping rectangle ---
+        current_rect = QRect()
+        if self.is_selecting and self.rect_start and self.rect_end:
+            # While dragging, draw the active selection
+            current_rect = QRect(self.rect_start, self.rect_end).normalized()
         elif not self.crop_rect.isNull():
-            # Draw the final rectangle after selection is done
+            # After releasing, draw the final selection
+            current_rect = self.crop_rect
+
+        if not current_rect.isNull():
+            # Use a thick, visible pen and a semi-transparent brush
             pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
             painter.setPen(pen)
             painter.setBrush(QColor(255, 0, 0, 50))
-            painter.drawRect(self.crop_rect)
+            painter.drawRect(current_rect)
 
-        # Draw watermark
+        # --- Draw watermark ---
         if self.watermark_enabled and self.watermark_pixmap:
-            parent_width = self.parent().width()
-            parent_height = self.parent().height()
+            # The parent of the overlay is now the container, which has the same size as the video widget
+            parent_width = self.width()
+            parent_height = self.height()
 
             # Calculate watermark size based on percentage of parent widget's height
             watermark_height = int(parent_height * (self.watermark_size / 100.0))
