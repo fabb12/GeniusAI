@@ -52,16 +52,23 @@ class VideoOverlay(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        # Imposta una penna rossa
-        pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
-        painter.setPen(pen)
-        # Se stai disegnando il rettangolo attivo
+
+        # Draw cropping rectangle
         if self.rect_start and self.rect_end:
             rect = QRect(self.rect_start, self.rect_end).normalized()
+            # Use a thicker pen and a semi-transparent brush for visibility
+            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.setBrush(QColor(255, 0, 0, 50))
             painter.drawRect(rect)
         elif not self.crop_rect.isNull():
+            # Draw the final rectangle after selection is done
+            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
+            painter.setBrush(QColor(255, 0, 0, 50))
             painter.drawRect(self.crop_rect)
 
+        # Draw watermark
         if self.watermark_enabled and self.watermark_pixmap:
             parent_width = self.parent().width()
             parent_height = self.parent().height()
