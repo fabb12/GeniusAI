@@ -57,8 +57,10 @@ MODEL_3_HAIKU = "claude-3-haiku-20240307"
 # Gemini (Google Cloud)
 GEMINI_15_PRO = "gemini-1.5-pro-latest"
 GEMINI_15_FLASH = "gemini-1.5-flash-latest"
-GEMINI_25_PRO_EXP = "gemini-2.5-pro-exp-03-25" # Mantenuto come esempio sperimentale
+#GEMINI_25_PRO_EXP = "gemini-2.5-pro-exp-03-25" # Mantenuto come esempio sperimentale
+GEMINI_25_PRO = "gemini-2.5-pro"
 GEMINI_20_FLASH = "gemini-2.0-flash"
+GEMINI_25_FLASH = "gemini-2.5-flash"
 GEMINI_20_FLASH_LITE = "gemini-2.0-flash-lite"
 GEMINI_15_FLASH_8B = "gemini-1.5-flash-8b" # Nome API specifico
 
@@ -81,7 +83,7 @@ OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
 # Modelli con capacità Vision (per Frame Extractor, Browser Agent con visione)
 MODELS_WITH_VISION = [
     MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET, MODEL_3_HAIKU, # Claude 3/3.5
-    GEMINI_15_PRO, GEMINI_15_FLASH, GEMINI_25_PRO_EXP, GEMINI_20_FLASH, GEMINI_20_FLASH_LITE, # Gemini Cloud
+    GEMINI_15_PRO, GEMINI_15_FLASH, GEMINI_25_PRO, GEMINI_20_FLASH,GEMINI_25_FLASH, GEMINI_20_FLASH_LITE, # Gemini Cloud
     # GPT_4O, GPT_4_TURBO, # Se usi OpenAI Vision
     # Aggiungere modelli Ollama con capacità vision (es. llava) se configurati e testati
     # "ollama:llava:7b",
@@ -90,7 +92,7 @@ MODELS_WITH_VISION = [
 # Modelli testuali veloci (per Browser Agent, Riassunti rapidi, Text Processing base)
 FAST_TEXT_MODELS = [
     MODEL_3_HAIKU,
-    GEMINI_15_FLASH, GEMINI_20_FLASH, GEMINI_20_FLASH_LITE, GEMINI_15_FLASH_8B,
+    GEMINI_15_FLASH, GEMINI_20_FLASH, GEMINI_25_FLASH, GEMINI_20_FLASH_LITE, GEMINI_15_FLASH_8B,
     OLLAMA_GEMMA_2B, OLLAMA_GEMMA_7B, OLLAMA_LLAMA3_8B, OLLAMA_MISTRAL_7B, OLLAMA_GEMMA2_9B,
     # GPT_4O_MINI, # Se usi OpenAI
 ]
@@ -98,7 +100,7 @@ FAST_TEXT_MODELS = [
 # Modelli testuali potenti (per PPTX Generation, Text Processing complesso, Riassunti dettagliati)
 POWERFUL_TEXT_MODELS = [
     MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET,
-    GEMINI_15_PRO, GEMINI_25_PRO_EXP,
+    GEMINI_15_PRO, GEMINI_25_PRO,
     # GPT_4O, GPT_4_TURBO, # Se usi OpenAI
     # Modelli Ollama più grandi (es. llama3:70b) se l'utente li ha
 ]

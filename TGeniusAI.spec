@@ -100,6 +100,21 @@ for dll_path in extra_dll_paths:
     if os.path.exists(dll_path):
         binaries.append((dll_path, '.'))
 
+# ====================================================================================
+# === INIZIO CORREZIONE PER ERRORE SQLITE3 ===
+# Aggiunge esplicitamente la DLL di SQLite3 dall'ambiente Python in uso
+# per evitare conflitti con versioni di sistema obsolete che causano l'errore
+# "ImportError: DLL load failed while importing _sqlite3".
+sqlite_dll_path = os.path.join(sys.prefix, 'DLLs', 'sqlite3.dll')
+if os.path.exists(sqlite_dll_path):
+    print(f"Inclusione esplicita di: {sqlite_dll_path}")
+    binaries.append((sqlite_dll_path, '.'))
+else:
+    print("ATTENZIONE: Non è stato possibile trovare sqlite3.dll. L'eseguibile potrebbe non funzionare.")
+# === FINE CORREZIONE PER ERRORE SQLITE3 ===
+# ====================================================================================
+
+
 # Resource files
 resource_files = [
     (os.path.join(current_dir, '.env'), '.'),
