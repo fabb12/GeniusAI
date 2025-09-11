@@ -16,7 +16,7 @@ from PyQt6.QtCore import QSettings
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_ENDPOINT,
+    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY # Assicurati che i percorsi siano corretti
 )
 
@@ -42,8 +42,9 @@ class FrameExtractor:
         self.batch_size = min(batch_size, 16) # Gemini ha un limite di 16 immagini per chiamata
 
         # Gestione API Keys
-        self.anthropic_api_key = api_keys.get('anthropic', ANTHROPIC_API_KEY) if api_keys else ANTHROPIC_API_KEY
-        self.google_api_key = api_keys.get('google', GOOGLE_API_KEY) if api_keys else GOOGLE_API_KEY
+        api_keys = api_keys or {}
+        self.anthropic_api_key = api_keys.get('anthropic', get_api_key('anthropic'))
+        self.google_api_key = api_keys.get('google', get_api_key('google'))
         # self.ollama_endpoint = OLLAMA_ENDPOINT # Aggiungi se usi Ollama Vision
 
         # Recupera il modello selezionato per l'estrazione frame dalle impostazioni

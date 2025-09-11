@@ -59,7 +59,7 @@ from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from config import (ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
+from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
 from config import MUSIC_DIR
 from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
     DEFAULT_SIMILARITY, DEFAULT_STYLE, DEFAULT_FRAME_RATE,DEFAULT_VOICES
@@ -88,9 +88,6 @@ class VideoAudioManager(QMainWindow):
 
         # Imposta il titolo della finestra con la versione e la data di build
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
-
-        self.api_key = ELEVENLABS_API_KEY
-        self.api_llm = ANTHROPIC_API_KEY
 
         self.setGeometry(500, 500, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self.player = QMediaPlayer()
@@ -2930,8 +2927,9 @@ class VideoAudioManager(QMainWindow):
         return error
 
     def generateAudioWithElevenLabs(self):
-        if not self.api_key:
-            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key prima di generare l'audio.")
+        api_key = get_api_key('elevenlabs')
+        if not api_key:
+            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key di ElevenLabs nelle impostazioni prima di generare l'audio.")
             return
 
         def convert_numbers_to_words(text):
@@ -2970,7 +2968,7 @@ class VideoAudioManager(QMainWindow):
         audio_save_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_generated.mp3")
 
         # Crea il thread con i nuovi parametri
-        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, self.api_key,
+        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key,
                                                   audio_save_path, self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)

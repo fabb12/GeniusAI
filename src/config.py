@@ -4,6 +4,7 @@
 import os
 import sys
 import logging
+from PyQt6.QtCore import QSettings
 from dotenv import load_dotenv
 
 # Carica le variabili d'ambiente dal file .env
@@ -45,6 +46,38 @@ ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")    # Se usi OpenAI
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")    # Per Gemini Cloud
+
+# --- Funzione Centralizzata per Recupero API Key ---
+def get_api_key(service_name: str) -> str:
+    """
+    Recupera una API key dando priorità a QSettings e fallback a .env.
+
+    Args:
+        service_name (str): Il nome del servizio (es. 'google', 'anthropic', 'elevenlabs').
+
+    Returns:
+        str: La API key trovata.
+    """
+    settings = QSettings("ThemaConsulting", "GeniusAI")
+
+    # 1. Prova a leggere da QSettings
+    settings_key = f"api_keys_dialog/{service_name.lower()}"
+    stored_key = settings.value(settings_key, "")
+
+    if stored_key:
+        logging.debug(f"API key for '{service_name}' found in QSettings.")
+        return stored_key
+
+    # 2. Se non trovata in QSettings, usa il fallback da .env (caricato in config)
+    logging.debug(f"API key for '{service_name}' not found in QSettings, falling back to environment variable.")
+    fallback_keys = {
+        "google": GOOGLE_API_KEY,
+        "anthropic": ANTHROPIC_API_KEY,
+        "elevenlabs": ELEVENLABS_API_KEY,
+        "openai": OPENAI_API_KEY
+    }
+
+    return fallback_keys.get(service_name.lower(), "")
 
 # --- Definizione Identificatori Modello ---
 # Claude (Anthropic)
