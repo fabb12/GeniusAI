@@ -12,7 +12,8 @@ class ScreenRecorder(QThread):
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
-                 use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right"):
+                 use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
+                 bluetooth_mode=False):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -20,6 +21,7 @@ class ScreenRecorder(QThread):
         self.audio_inputs = audio_inputs if audio_inputs is not None else []
         self.audio_channels = audio_channels
         self.frame_rate = frames
+        self.bluetooth_mode = bluetooth_mode
         # Correctly determine if audio should be recorded
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
@@ -113,6 +115,9 @@ class ScreenRecorder(QThread):
                 filter_complex_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
+
+            if self.bluetooth_mode:
+                audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)
