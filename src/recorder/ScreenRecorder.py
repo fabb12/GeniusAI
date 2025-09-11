@@ -72,9 +72,11 @@ class ScreenRecorder(QThread):
         if self.record_audio:
             for audio_device in self.audio_inputs:
                 ffmpeg_command.extend(['-f', 'dshow'])
-                # For Bluetooth, set a specific buffer size to improve compatibility
+                # For Bluetooth, set device options for compatibility
                 if self.bluetooth_mode:
                     ffmpeg_command.extend(['-audio_buffer_size', '100'])
+                    ffmpeg_command.extend(['-sample_rate', '16000'])
+                    ffmpeg_command.extend(['-channels', '1'])
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
         # --- Build the filter_complex string and map arguments ---
@@ -120,8 +122,9 @@ class ScreenRecorder(QThread):
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
 
-            if self.bluetooth_mode:
-                audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
+            # The -ac and -ar options have been moved to the dshow input options for bluetooth mode
+            # if self.bluetooth_mode:
+            #     audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)
