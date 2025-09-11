@@ -99,6 +99,14 @@ class VideoAudioManager(QMainWindow):
         self.player.setAudioOutput(self.audioOutput)
         self.audioOutput.setVolume(1.0)
         self.recentFiles = []
+
+        # Blinking recording indicator
+        self.recording_indicator = QLabel(self)
+        self.recording_indicator.setPixmap(QIcon("./res/rec.png").pixmap(16, 16))
+        self.recording_indicator.setVisible(False)
+        self.indicator_timer = QTimer(self)
+        self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
+
         self.initUI()
         self.setupDockSettingsManager()
         self.bookmarkStart = None
@@ -122,13 +130,6 @@ class VideoAudioManager(QMainWindow):
         self.cursor_overlay.hide()
         self.load_recording_settings()
         self.setDefaultAudioDevice()
-
-        # Blinking recording indicator
-        self.recording_indicator = QLabel(self)
-        self.recording_indicator.setPixmap(QIcon("./res/rec.png").pixmap(16, 16))
-        self.recording_indicator.setVisible(False)
-        self.indicator_timer = QTimer(self)
-        self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
 
 
         # Avvia la registrazione automatica delle chiamate
