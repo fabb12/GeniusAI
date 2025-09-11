@@ -709,17 +709,14 @@ class VideoAudioManager(QMainWindow):
             return
 
         num_frames = self.frameCountSpin.value()
-        api_key = self.api_llm  # Tua variabile con la chiave
-        if not api_key:
-            QMessageBox.warning(self, "API Key mancante", "Imposta la chiave API prima di estrarre i frame.")
-            return
 
         try:
             # 1) Crea l'extractor
+            # The FrameExtractor will automatically get the correct API key
+            # for the selected model from the settings.
             extractor = FrameExtractor(
                 video_path=self.videoPathLineEdit,
-                num_frames=num_frames,
-                anthropic_api_key=api_key
+                num_frames=num_frames
             )
 
             # 2) Estrae i frame
