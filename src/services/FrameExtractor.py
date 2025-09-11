@@ -382,7 +382,7 @@ class FrameExtractor:
             prompt_text = prompt_template.format(
                 language=language,
                 joined_descriptions=joined_descriptions,
-                video_duration_minutes=f"{video_duration_minutes:.1f}" # Formatta durata
+                video_duration_minutes=f"{video_duration_minutes:.2f}" # Formatta durata
             )
         except Exception as e:
             logging.exception("Errore lettura/formattazione prompt riassunto video.")
