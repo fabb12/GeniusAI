@@ -72,6 +72,74 @@ from ui.VideoOverlay import VideoOverlay
 # Importa la classe MeetingSummarizer
 from services.MeetingSummarizer import MeetingSummarizer
 
+class FrameAnalysisThread(QThread):
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, video_path, num_frames, language, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.num_frames = num_frames
+        self.language = language
+
+    def run(self):
+        try:
+            extractor = FrameExtractor(
+                video_path=self.video_path,
+                num_frames=self.num_frames
+            )
+            frames = extractor.extract_frames()
+            frame_data = extractor.analyze_frames_batch(
+                frames,
+                self.language
+            )
+            final_discourse = extractor.generate_video_summary(frame_data, self.language)
+            self.finished.emit(final_discourse or "N/A")
+        except Exception as e:
+            self.error.emit(str(e))
+
+from config import PROMPT_COMBINED_ANALYSIS
+
+class CombinedAnalysisThread(QThread):
+    finished = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, frame_summary, audio_transcript, language, parent=None):
+        super().__init__(parent)
+        self.frame_summary = frame_summary
+        self.audio_transcript = audio_transcript
+        self.language = language
+
+    def run(self):
+        try:
+            with open(PROMPT_COMBINED_ANALYSIS, 'r', encoding='utf-8') as f:
+                prompt_template = f.read()
+
+            prompt = prompt_template.format(
+                language=self.language,
+                frame_summary=self.frame_summary,
+                audio_transcript=self.audio_transcript
+            )
+
+            summary = self.generate_summary(prompt)
+            self.finished.emit(summary)
+
+        except Exception as e:
+            self.error.emit(str(e))
+
+    def generate_summary(self, prompt):
+        import google.generativeai as genai
+        from config import get_api_key
+
+        api_key = get_api_key('google')
+        if not api_key:
+            raise ValueError("Google API Key not found")
+
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        response = model.generate_content(prompt)
+        return response.text.strip()
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -216,6 +284,12 @@ class VideoAudioManager(QMainWindow):
         self.generazioneAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.generazioneAIDock.setToolTip("Dock per la generazione di contenuti con AI")
         area.addDock(self.generazioneAIDock, 'right')
+
+        self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
+        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
+        area.addDock(self.infoExtractionDock, 'right')
+        self.createInfoExtractionDock()
 
         # ---------------------
         # DOCK GENERAZIONE AI (invariato)
@@ -535,15 +609,6 @@ class VideoAudioManager(QMainWindow):
         # --- TAB 2: Strumenti Avanzati (usando QGridLayout) ---
         tabAdvanced = QWidget()
         gridLayoutAdv = QGridLayout()
-        # Row 0: frameCountSpin
-        self.frameCountSpin = QSpinBox()
-        self.frameCountSpin.setMinimum(1)
-        self.frameCountSpin.setMaximum(30)
-        self.frameCountSpin.setValue(DEFAULT_FRAME_COUNT)
-        self.frameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
-        # Nota: il bottone extractFramesButton è stato spostato nel menu Workflows
-        gridLayoutAdv.addWidget(QLabel("Numero frame:"), 0, 0)
-        gridLayoutAdv.addWidget(self.frameCountSpin, 0, 1)
         # Row 1: timecodeCheckbox ed syncButton
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
         self.timecodeCheckbox.setChecked(False)
@@ -618,7 +683,8 @@ class VideoAudioManager(QMainWindow):
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock,
-            'generazioneAIDock': self.generazioneAIDock
+            'generazioneAIDock': self.generazioneAIDock,
+            'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -695,62 +761,90 @@ class VideoAudioManager(QMainWindow):
         print("Funzione showMediaInfo da implementare")
         # Qui puoi mostrare un dialog con le informazioni sul media corrente
     def onExtractFramesClicked(self):
-        """
-        Passi:
-        1) Verifica video caricato
-        2) Istanzia FrameExtractor
-        3) Estrae i frame
-        4) Ottiene frame_data (descrizioni di ogni frame)
-        5) Genera un discorso finale dell'intero video
-        6) Mostra il risultato nella transcriptionTextArea
-        """
         if not self.videoPathLineEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato. Carica un video prima di estrarre i frame.")
             return
 
-        num_frames = self.frameCountSpin.value()
+        if self.combinedAnalysisCheckbox.isChecked():
+            self.runCombinedAnalysis()
+        else:
+            self.runFrameAnalysis()
 
+    def runFrameAnalysis(self):
+        num_frames = self.infoFrameCountSpin.value()
         try:
-            # 1) Crea l'extractor
-            # The FrameExtractor will automatically get the correct API key
-            # for the selected model from the settings.
+            self.infoExtractionResultArea.setPlainText("Analisi dei frame in corso...")
+            QApplication.processEvents()  # Force UI update
+
             extractor = FrameExtractor(
                 video_path=self.videoPathLineEdit,
                 num_frames=num_frames
             )
-
-            # 2) Estrae i frame
             frames = extractor.extract_frames()
-
-            # 3) Analizza i frame => otteniamo un array di { frame_number, description, timestamp }
             frame_data = extractor.analyze_frames_batch(
                 frames,
-                self.languageInput.currentText()  # "Italian", "English", ...
+                self.languageInput.currentText()
             )
-
-            # 4) Opzionale: se vuoi mostrare i dettagli di ogni frame
-            details_list = []
-            for fd in frame_data:
-                # "Frame 0 (03:00): <desc>"
-                details_list.append(f"Frame {fd['frame_number']} ({fd['timestamp']}): {fd['description']}")
-            details_text = "\n".join(details_list)
-
-            # 5) Generiamo un discorso/riassunto finale
             final_discourse = extractor.generate_video_summary(frame_data, self.languageInput.currentText())
-
-            # 6) Creiamo un testo conclusivo
-            #    [DETTAGLI FRAME] + [DISCORSO FINALE]
-            final_text = (final_discourse or "N/A")
-
-            # Aggiunta all'area di trascrizione
-            current_text = self.transcriptionTextArea.toPlainText()
-            self.transcriptionTextArea.setPlainText(current_text + "\n\n" + final_text)
-
-            QMessageBox.information(self, "Estrazione completata",
-                                    "Testo estratto dai frame e riassunto finale completati.")
-
+            self.infoExtractionResultArea.setPlainText(final_discourse or "N/A")
+            QMessageBox.information(self, "Estrazione completata", "Analisi dei frame completata.")
         except Exception as e:
             QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'estrazione dei frame:\n{str(e)}")
+            self.infoExtractionResultArea.setPlainText("Errore durante l'analisi.")
+
+    def runCombinedAnalysis(self):
+        self.infoExtractionResultArea.setPlainText("Analisi combinata in corso...")
+        QApplication.processEvents()
+
+        # 1. Frame Analysis
+        self.frame_analysis_thread = FrameAnalysisThread(self.videoPathLineEdit, self.infoFrameCountSpin.value(), self.languageInput.currentText())
+        self.frame_analysis_thread.finished.connect(self.onFrameAnalysisFinished)
+        self.frame_analysis_thread.error.connect(self.onAnalysisError)
+        self.frame_analysis_thread.start()
+
+        # 2. Audio Transcription
+        self.audio_transcription_thread = TranscriptionThread(self.videoPathLineEdit, self)
+        self.audio_transcription_thread.transcription_complete.connect(self.onTranscriptionFinished)
+        self.audio_transcription_thread.error_occurred.connect(self.onAnalysisError)
+        self.audio_transcription_thread.start()
+
+        self.frame_summary = None
+        self.audio_transcript = None
+
+    def onFrameAnalysisFinished(self, summary):
+        self.frame_summary = summary
+        if self.audio_transcript is not None:
+            self.combineResults()
+
+    def onTranscriptionFinished(self, transcript, temp_files):
+        self.audio_transcript = transcript
+        if self.frame_summary is not None:
+            self.combineResults()
+
+    def onAnalysisError(self, error_message):
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'analisi:\n{error_message}")
+        self.infoExtractionResultArea.setPlainText("Errore durante l'analisi.")
+
+    def combineResults(self):
+        if not self.frame_summary and not self.audio_transcript:
+            self.infoExtractionResultArea.setPlainText("Nessun risultato da combinare.")
+            return
+
+        self.infoExtractionResultArea.setPlainText("Combinazione dei risultati in corso...")
+        QApplication.processEvents()
+
+        self.combined_analysis_thread = CombinedAnalysisThread(
+            self.frame_summary,
+            self.audio_transcript,
+            self.languageInput.currentText()
+        )
+        self.combined_analysis_thread.finished.connect(self.onCombinedAnalysisFinished)
+        self.combined_analysis_thread.error.connect(self.onAnalysisError)
+        self.combined_analysis_thread.start()
+
+    def onCombinedAnalysisFinished(self, summary):
+        self.infoExtractionResultArea.setPlainText(summary)
+        QMessageBox.information(self, "Estrazione completata", "Analisi combinata completata.")
 
     def onShareButtonClicked(self):
         # Usa il percorso del video nel dock Video Player Output
@@ -1663,6 +1757,49 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
+    def createInfoExtractionDock(self):
+        """Crea e restituisce il dock per l'estrazione di informazioni."""
+        dock = self.infoExtractionDock
+        infoExtractionGroup = QGroupBox("Opzioni di Estrazione")
+        infoExtractionLayout = QVBoxLayout()
+
+        # Spinbox per il numero di frame
+        self.infoFrameCountSpin = QSpinBox()
+        self.infoFrameCountSpin.setMinimum(1)
+        self.infoFrameCountSpin.setMaximum(30)
+        self.infoFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
+        self.infoFrameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
+
+        frameCountLayout = QHBoxLayout()
+        frameCountLayout.addWidget(QLabel("Numero frame:"))
+        frameCountLayout.addWidget(self.infoFrameCountSpin)
+        infoExtractionLayout.addLayout(frameCountLayout)
+
+        # Checkbox per l'analisi combinata
+        self.combinedAnalysisCheckbox = QCheckBox("Analisi combinata (Immagini e Audio)")
+        self.combinedAnalysisCheckbox.setToolTip("Include l'analisi dell'audio nella generazione del riassunto")
+        infoExtractionLayout.addWidget(self.combinedAnalysisCheckbox)
+
+        # Pulsante per avviare l'estrazione
+        self.extractInfoButton = QPushButton("Estrai Informazioni")
+        self.extractInfoButton.clicked.connect(self.onExtractFramesClicked)
+        infoExtractionLayout.addWidget(self.extractInfoButton)
+
+        infoExtractionGroup.setLayout(infoExtractionLayout)
+
+        # Area di testo per i risultati
+        self.infoExtractionResultArea = QTextEdit()
+        self.infoExtractionResultArea.setReadOnly(True)
+        self.infoExtractionResultArea.setPlaceholderText("I risultati dell'analisi verranno mostrati qui...")
+
+        mainLayout = QVBoxLayout()
+        mainLayout.addWidget(infoExtractionGroup)
+        mainLayout.addWidget(self.infoExtractionResultArea)
+
+        widget = QWidget()
+        widget.setLayout(mainLayout)
+        dock.addWidget(widget)
+
     def setTimecodeMergeFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
@@ -2539,11 +2676,6 @@ class VideoAudioManager(QMainWindow):
         fixTextAction.triggered.connect(self.fixTextWithAI)
         workflowsMenu.addAction(fixTextAction)
 
-        extractTextAction = QAction('&Estrai Testo da Frame', self)
-        extractTextAction.setStatusTip('Estrae testo dai frame del video')
-        extractTextAction.triggered.connect(self.onExtractFramesClicked)
-        workflowsMenu.addAction(extractTextAction)
-
         # Separatore
         workflowsMenu.addSeparator()
 
@@ -2661,6 +2793,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
         self.actionTogglegGenerazioneAIDock = self.createToggleAction(self.generazioneAIDock, 'Mostra/Nascondi Generazione AI')
+        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -2672,6 +2805,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
         viewMenu.addAction(self.actionTogglegGenerazioneAIDock)
+        viewMenu.addAction(self.actionToggleInfoExtractionDock)
 
 
         # Aggiungi azioni per mostrare/nascondere tutti i docks
@@ -2714,6 +2848,7 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
         self.generazioneAIDock.setVisible(True)
+        self.infoExtractionDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
     def hideAllDocks(self):
@@ -2727,6 +2862,7 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
         self.generazioneAIDock.setVisible(False)
+        self.infoExtractionDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
         action = QAction(menuText, self, checkable=True)
@@ -2753,6 +2889,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
         self.actionTogglegGenerazioneAIDock.setChecked(True)
+        self.actionToggleInfoExtractionDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -2766,6 +2903,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionTogglegGenerazioneAIDock.setChecked(self.generazioneAIDock.isVisible())
+        self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",

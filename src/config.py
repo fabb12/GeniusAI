@@ -207,6 +207,7 @@ def get_prompt_path(filename):
 
 PROMPT_FRAMES_ANALYSIS = get_prompt_path("frames_analysis_prompt.txt")
 PROMPT_VIDEO_SUMMARY = get_prompt_path("video_summary_prompt.txt")
+PROMPT_COMBINED_ANALYSIS = get_prompt_path("combined_analysis_prompt.txt")
 PROMPT_PPTX_GENERATION = get_prompt_path("pptx_generation_prompt.txt")
 PROMPT_TEXT_SUMMARY = get_prompt_path("text_summary_prompt.txt")
 PROMPT_TEXT_FIX = get_prompt_path("text_fix_prompt.txt")
