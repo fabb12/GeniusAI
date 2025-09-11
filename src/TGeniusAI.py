@@ -123,6 +123,13 @@ class VideoAudioManager(QMainWindow):
         self.load_recording_settings()
         self.setDefaultAudioDevice()
 
+        # Blinking recording indicator
+        self.recording_indicator = QLabel(self)
+        self.recording_indicator.setPixmap(QIcon("./res/rec.png").pixmap(16, 16))
+        self.recording_indicator.setVisible(False)
+        self.indicator_timer = QTimer(self)
+        self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
+
 
         # Avvia la registrazione automatica delle chiamate
         #self.teams_call_recorder.start()
@@ -626,6 +633,9 @@ class VideoAudioManager(QMainWindow):
         toolbar.setToolTip("Barra degli strumenti principale")
         self.addToolBar(toolbar)
 
+        # Aggiungi l'indicatore di registrazione lampeggiante
+        toolbar.addWidget(self.recording_indicator)
+
         loadDockSettings1Action = QAction(QIcon("./res/load1.png"), "User1", self)
         loadDockSettings1Action.setToolTip("Carica le impostazioni dei dock per l'utente 1")
         loadDockSettings1Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser1)
@@ -722,6 +732,15 @@ class VideoAudioManager(QMainWindow):
 
     def onAnalysisProgress(self, message):
         self.infoExtractionResultArea.append(message)
+
+    def toggle_recording_indicator(self):
+        """Toggles the visibility of the recording indicator to make it blink."""
+        if self.is_recording:
+            self.recording_indicator.setVisible(not self.recording_indicator.isVisible())
+        else:
+            self.recording_indicator.setVisible(False)
+            if self.indicator_timer.isActive():
+                self.indicator_timer.stop()
 
     def onShareButtonClicked(self):
         # Usa il percorso del video nel dock Video Player Output
@@ -2054,6 +2073,7 @@ class VideoAudioManager(QMainWindow):
         if audio_devices:
             for device in audio_devices:
                 check_box = QCheckBox(device)
+                check_box.toggled.connect(self.update_bluetooth_mode_status)
                 audioLayout.addWidget(check_box)
                 self.audio_buttons.append(check_box)
         else:
@@ -2089,7 +2109,7 @@ class VideoAudioManager(QMainWindow):
         saveOptionsLayout.addWidget(self.recordingNameLineEdit)
 
         self.bluetooth_mode_checkbox = QCheckBox("Bluetooth Headset/Compatibility Mode")
-        self.bluetooth_mode_checkbox.setToolTip("Enable this mode if you are using a Bluetooth headset to record audio.")
+        self.bluetooth_mode_checkbox.setToolTip("Enable this mode if you are using a Bluetooth headset to record audio. This is often detected automatically.")
         saveOptionsLayout.addWidget(self.bluetooth_mode_checkbox)
 
         recordingLayout.addWidget(saveOptionsGroup)
@@ -2135,6 +2155,9 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def startScreenRecording(self):
+        self.is_recording = True
+        self.indicator_timer.start(500)  # Blink every 500ms
+
         self.startRecordingButton.setEnabled(False)
         self.pauseRecordingButton.setEnabled(True)
         self.stopRecordingButton.setEnabled(True)
@@ -2250,6 +2273,10 @@ class VideoAudioManager(QMainWindow):
         self.is_paused = False
 
     def stopScreenRecording(self):
+        self.is_recording = False
+        self.indicator_timer.stop()
+        self.recording_indicator.setVisible(False)
+
         self.pauseRecordingButton.setEnabled(False)
         self.startRecordingButton.setEnabled(True)
         self.pauseRecordingButton.setEnabled(False)
@@ -2307,6 +2334,23 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.information(self, "File Salvato",
                                     f"Il video è stato salvato correttamente:\nVideo: {output_path}")
             self.loadVideoOutput(output_path)
+
+    def update_bluetooth_mode_status(self):
+        """Checks the selected audio devices and updates the Bluetooth mode checkbox."""
+        bluetooth_mode = False
+        bluetooth_keywords = ['headset', 'hands-free', 'cuffie', 'bluetooth']
+
+        selected_audio_devices = []
+        for button in self.audio_buttons:
+            if button.isChecked():
+                selected_audio_devices.append(button.text())
+
+        for device in selected_audio_devices:
+            if any(keyword in device.lower() for keyword in bluetooth_keywords):
+                bluetooth_mode = True
+                break
+
+        self.bluetooth_mode_checkbox.setChecked(bluetooth_mode)
 
     def showError(self, message):
         logging.error("Error recording thread:",message)

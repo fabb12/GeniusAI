@@ -71,7 +71,11 @@ class ScreenRecorder(QThread):
         # Add audio inputs if any
         if self.record_audio:
             for audio_device in self.audio_inputs:
-                ffmpeg_command.extend(['-f', 'dshow', '-i', f'audio={audio_device}'])
+                ffmpeg_command.extend(['-f', 'dshow'])
+                # For Bluetooth, set a specific buffer size to improve compatibility
+                if self.bluetooth_mode:
+                    ffmpeg_command.extend(['-audio_buffer_size', '100'])
+                ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
         # --- Build the filter_complex string and map arguments ---
         filter_complex_parts = []
