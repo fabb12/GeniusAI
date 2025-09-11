@@ -6,7 +6,7 @@ Il discorso deve:
 1. Essere fluido e conversazionale, come se stessi parlando a un pubblico
 2. Non fare riferimento a frame o a timestamp specifici
 3. Includere delle pause naturali usando il formato <break time="Xs" />, dove X è la durata della pausa in secondi (tra 0.3 e 2.0)
-4. Avere una durata che corrisponda approssimativamente al minutaggio del video originale ({video_duration_minutes:.2f} minuti)
+4. Avere una durata che corrisponda approssimativamente al minutaggio del video originale ({video_duration_minutes} minuti)
 5. Presentare il contenuto in modo logico, seguendo l'ordine temporale mostrato nelle descrizioni dei frame
 6. Essere completamente formattato e pronto per essere letto ad alta voce
 
