@@ -133,7 +133,7 @@ class VideoAudioManager(QMainWindow):
 
     def load_recording_settings(self):
         """Carica le impostazioni per il cursore e il watermark e le salva come attributi dell'istanza."""
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
 
         # Leggi le impostazioni e salvale in variabili "self"
         self.enableCursorHighlight = settings.value("cursor/enableHighlight", False, type=bool)
