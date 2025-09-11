@@ -1,5 +1,5 @@
 # File: src/services/FrameExtractor.py
-
+import re
 import anthropic
 import google.generativeai as genai
 import requests # Non strettamente necessario qui se non usi Ollama per vision, ma utile per consistenza
