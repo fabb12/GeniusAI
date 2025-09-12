@@ -37,6 +37,14 @@ class CropLogger:
                 progress = int((elapsed / self.duration) * 100)
                 self.progress_signal.emit(progress)
 
+    def iter_bar(self, **kwargs):
+        """
+        A dummy iter_bar method to comply with the proglog interface.
+        Moviepy expects the logger to have this method.
+        """
+        iterable = kwargs.get("iterable", kwargs.get("iteration", []))
+        return iter(iterable)
+
 class CropThread(QThread):
     """
     A QThread to run the video cropping process in the background.
