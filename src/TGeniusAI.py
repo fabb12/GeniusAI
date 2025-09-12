@@ -460,6 +460,20 @@ class VideoAudioManager(QMainWindow):
         videoPlayerLayout.addWidget(self.fileNameLabel)
         videoPlayerLayout.addWidget(self.videoCropWidget)
         videoPlayerLayout.addLayout(timecodeLayout)
+
+        # Timecode input
+        timecode_input_layout = QHBoxLayout()
+        self.timecodeInput = QLineEdit()
+        self.timecodeInput.setPlaceholderText("HH:MM:SS:ms")
+        self.timecodeInput.setToolTip("Vai al timecode")
+        timecode_input_layout.addWidget(self.timecodeInput)
+
+        go_button = QPushButton("Go")
+        go_button.setToolTip("Vai al timecode specificato")
+        go_button.clicked.connect(self.goToTimecode)
+        timecode_input_layout.addWidget(go_button)
+        videoPlayerLayout.addLayout(timecode_input_layout)
+
         videoPlayerLayout.addWidget(self.videoSlider)
         videoPlayerLayout.addLayout(playbackControlLayout)
 
@@ -1047,6 +1061,23 @@ class VideoAudioManager(QMainWindow):
         new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
 
+    def goToTimecode(self):
+        timecode_text = self.timecodeInput.text()
+        try:
+            parts = timecode_text.split(':')
+            if len(parts) != 4:
+                raise ValueError("Invalid timecode format")
+
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+            milliseconds = int(parts[3])
+
+            total_milliseconds = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
+            self.player.setPosition(total_milliseconds)
+        except ValueError as e:
+            QMessageBox.warning(self, "Errore", f"Formato timecode non valido. Usa HH:MM:SS:ms. Dettagli: {e}")
+
     def releaseSourceVideo(self):
         self.player.stop()
         time.sleep(.01)
@@ -1227,15 +1258,21 @@ class VideoAudioManager(QMainWindow):
 
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
-        hours, remainder = divmod(position // 1000, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        self.currentTimeLabelOutput.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+        total_seconds = position // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = position % 1000
+        self.currentTimeLabelOutput.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
 
     def updateDurationOutput(self, duration):
         # Aggiorna la durata totale del video output
-        hours, remainder = divmod(duration // 1000, 3600)
-        minutes, seconds = divmod(remainder, 60)
-        self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+        total_seconds = duration // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = duration % 1000
+        self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
 
     def open_crop_dialog(self):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
@@ -2565,17 +2602,23 @@ class VideoAudioManager(QMainWindow):
 
     def updateTimeCode(self, position):
         # Calcola ore, minuti e secondi dalla posizione, che è in millisecondi
-        hours, remainder = divmod(position // 1000, 3600)
-        minutes, seconds = divmod(remainder, 60)
+        total_seconds = position // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = position % 1000
         # Aggiorna l'etichetta con il nuovo time code
-        self.currentTimeLabel.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+        self.currentTimeLabel.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
 
     def updateDuration(self, duration):
         # Calcola ore, minuti e secondi dalla durata, che è in millisecondi
-        hours, remainder = divmod(duration // 1000, 3600)
-        minutes, seconds = divmod(remainder, 60)
+        total_seconds = duration // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = duration % 1000
         # Aggiorna l'etichetta con la durata totale
-        self.totalTimeLabel.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
+        self.totalTimeLabel.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
 
     def setupMenuBar(self):
         menuBar = self.menuBar()
