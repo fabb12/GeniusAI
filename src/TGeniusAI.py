@@ -10,7 +10,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -1281,13 +1281,72 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        # Grab the current frame
-        frame_pixmap = self.videoCropWidget.grab()
+        try:
+            position_sec = self.player.position() / 1000.0
+            video_clip = VideoFileClip(self.videoPathLineEdit)
+            frame = video_clip.get_frame(position_sec)
+
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+
+            # La QImage creata da un array numpy deve essere copiata per evitare problemi di memoria
+            frame_pixmap = QPixmap.fromImage(q_image.copy())
+
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Impossibile estrarre il frame dal video: {e}")
+            return
 
         dialog = CropDialog(frame_pixmap, self)
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
+
+    def get_frame_at(self, position_ms):
+        try:
+            position_sec = position_ms / 1000.0
+            video_clip = VideoFileClip(self.videoPathLineEdit)
+
+            # Ensure the position is within the video duration
+            if position_sec < 0 or position_sec > video_clip.duration:
+                return None
+
+            frame = video_clip.get_frame(position_sec)
+
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+
+            return QPixmap.fromImage(q_image.copy())
+
+        except Exception as e:
+            print(f"Error getting frame at {position_ms}ms: {e}")
+            return None
+
+    def get_current_fps(self):
+        try:
+            return VideoFileClip(self.videoPathLineEdit).fps
+        except Exception as e:
+            print(f"Error getting FPS: {e}")
+            return 0
+
+    def get_next_frame(self):
+        fps = self.get_current_fps()
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos + (1000 / fps)
+            self.player.setPosition(int(new_pos))
+            return self.get_frame_at(new_pos)
+        return None
+
+    def get_previous_frame(self):
+        fps = self.get_current_fps()
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos - (1000 / fps)
+            self.player.setPosition(int(new_pos))
+            return self.get_frame_at(new_pos)
+        return None
 
     def perform_crop(self, crop_rect):
         progress_dialog = QProgressDialog("Ritaglio del video in corso...", None, 0, 0, self)

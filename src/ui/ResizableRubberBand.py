@@ -5,8 +5,6 @@ from PyQt6.QtWidgets import QWidget
 class ResizableRubberBand(QWidget):
     def __init__(self, parent=None):
         super(ResizableRubberBand, self).__init__(parent)
-        self.setWindowFlags(Qt.WindowType.SubWindow)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMouseTracking(True)
 
         self.drag_start_position = QPoint()
@@ -14,7 +12,7 @@ class ResizableRubberBand(QWidget):
         self.is_resizing = False
         self.resize_handle = None
         self.handles = []
-        self.handle_size = 8
+        self.handle_size = 10 # Increased handle size
 
         self.setGeometry(QRect(100, 100, 200, 150))
         self.update_handles()
@@ -22,18 +20,21 @@ class ResizableRubberBand(QWidget):
     def update_handles(self):
         self.handles = []
         s = self.handle_size
+        half_s = s // 2
         w = self.width()
         h = self.height()
-        # Top-left, top-right, bottom-left, bottom-right
-        self.handles.append(QRect(0, 0, s, s))
-        self.handles.append(QRect(w - s, 0, s, s))
-        self.handles.append(QRect(0, h - s, s, s))
-        self.handles.append(QRect(w - s, h - s, s, s))
-        # Top, bottom, left, right
-        self.handles.append(QRect(s, 0, w - 2 * s, s))
-        self.handles.append(QRect(s, h - s, w - 2 * s, s))
-        self.handles.append(QRect(0, s, s, h - 2 * s))
-        self.handles.append(QRect(w - s, s, s, h - 2 * s))
+
+        # Corner handles
+        self.handles.append(QRect(0, 0, s, s)) # Top-left
+        self.handles.append(QRect(w - s, 0, s, s)) # Top-right
+        self.handles.append(QRect(0, h - s, s, s)) # Bottom-left
+        self.handles.append(QRect(w - s, h - s, s, s)) # Bottom-right
+
+        # Side handles
+        self.handles.append(QRect(w // 2 - half_s, 0, s, s)) # Top
+        self.handles.append(QRect(w // 2 - half_s, h - s, s, s)) # Bottom
+        self.handles.append(QRect(0, h // 2 - half_s, s, s)) # Left
+        self.handles.append(QRect(w - s, h // 2 - half_s, s, s)) # Right
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -85,15 +86,16 @@ class ResizableRubberBand(QWidget):
 
         self.setGeometry(rect)
         self.update_handles()
+        self.update() # Repaint the widget
 
     def update_cursor(self, pos):
         cursor = Qt.CursorShape.ArrowCursor
         for i, handle in enumerate(self.handles):
             if handle.contains(pos):
-                if i in [0, 3]: cursor = Qt.CursorShape.SizeFDiagCursor
-                elif i in [1, 2]: cursor = Qt.CursorShape.SizeBDiagCursor
-                elif i in [4, 5]: cursor = Qt.CursorShape.SizeVerCursor
-                elif i in [6, 7]: cursor = Qt.CursorShape.SizeHorCursor
+                if i == 0 or i == 3: cursor = Qt.CursorShape.SizeFDiagCursor
+                elif i == 1 or i == 2: cursor = Qt.CursorShape.SizeBDiagCursor
+                elif i == 4 or i == 5: cursor = Qt.CursorShape.SizeVerCursor
+                elif i == 6 or i == 7: cursor = Qt.CursorShape.SizeHorCursor
                 break
         self.setCursor(cursor)
 
@@ -105,13 +107,21 @@ class ResizableRubberBand(QWidget):
         rect_pen = QPen(QColor(255, 0, 0, 200), 2, Qt.PenStyle.SolidLine)
         painter.setPen(rect_pen)
         painter.setBrush(QColor(255, 0, 0, 50))
-        painter.drawRect(self.rect().adjusted(self.handle_size // 2, self.handle_size // 2, -self.handle_size // 2, -self.handle_size // 2))
+
+        # Adjust the rectangle to be drawn inside the handles
+        adjusted_rect = self.rect().adjusted(
+            self.handle_size // 2,
+            self.handle_size // 2,
+            -self.handle_size // 2,
+            -self.handle_size // 2
+        )
+        painter.drawRect(adjusted_rect)
 
         # Draw resize handles
         handle_pen = QPen(QColor(0, 0, 0), 1)
         painter.setPen(handle_pen)
-        painter.setBrush(QColor(255, 255, 255))
-        for handle in self.handles[:4]: # only corner handles
+        painter.setBrush(QColor(255, 0, 0)) # Red handles for visibility
+        for handle in self.handles:
              painter.drawRect(handle)
 
     def get_geometry(self):
