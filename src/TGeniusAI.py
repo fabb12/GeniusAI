@@ -58,6 +58,7 @@ from ui.MonitorPreview import MonitorPreview
 from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
+from services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from ui.CropDialog import CropDialog
 from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
@@ -1339,47 +1340,30 @@ class VideoAudioManager(QMainWindow):
         return None
 
     def perform_crop(self, crop_rect):
-        progress_dialog = QProgressDialog("Ritaglio del video in corso...", None, 0, 0, self)
-        progress_dialog.setWindowTitle("Progresso Ritaglio")
-        progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
-        progress_dialog.setCancelButton(None)
-        progress_dialog.show()
-        QApplication.processEvents() # Ensure the dialog is shown
+        self.progress_dialog = QProgressDialog("Ritaglio del video in corso...", "Annulla", 0, 100, self)
+        self.progress_dialog.setWindowTitle("Progresso Ritaglio")
+        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
 
-        try:
-            video = VideoFileClip(self.videoPathLineEdit)
-            video_width, video_height = video.size
+        self.crop_thread = CropThread(self.videoPathLineEdit, crop_rect, self)
+        self.crop_thread.progress.connect(self.update_progress_dialog)
+        self.crop_thread.completed.connect(self.on_crop_completed)
+        self.crop_thread.error.connect(self.on_crop_error)
 
-            # The crop dialog displays the frame at half size, so we must scale the coordinates up by 2
-            scale_factor = 2
+        self.progress_dialog.canceled.connect(self.crop_thread.terminate)
+        self.crop_thread.start()
+        self.progress_dialog.exec()
 
-            x1 = int(crop_rect.x() * scale_factor)
-            y1 = int(crop_rect.y() * scale_factor)
-            x2 = int((crop_rect.x() + crop_rect.width()) * scale_factor)
-            y2 = int((crop_rect.y() + crop_rect.height()) * scale_factor)
+    def update_progress_dialog(self, value):
+        self.progress_dialog.setValue(value)
 
-            # Ensure coordinates are within video bounds
-            x1 = max(0, x1)
-            y1 = max(0, y1)
-            x2 = min(video_width, x2)
-            y2 = min(video_height, y2)
+    def on_crop_completed(self, output_path):
+        self.progress_dialog.close()
+        QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
+        self.loadVideoOutput(output_path)
 
-            if x1 >= x2 or y1 >= y2:
-                progress_dialog.close()
-                QMessageBox.warning(self, "Errore", "L'area di ritaglio non è valida.")
-                return
-
-            cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
-
-            output_path = tempfile.mktemp(suffix='.mp4')
-            cropped_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            progress_dialog.close()
-            QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
-            self.loadVideoOutput(output_path)
-        except Exception as e:
-            progress_dialog.close()
-            QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
+    def on_crop_error(self, error_message):
+        self.progress_dialog.close()
+        QMessageBox.critical(self, "Errore durante il ritaglio", error_message)
 
     def applyStyleToAllDocks(self):
         style = self.getDarkStyle()
