@@ -30,16 +30,14 @@ class VideoOverlay(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
-            if len(self.crop_points) >= 4:
+            if len(self.crop_points) >= 2:
                 self.crop_points = []
                 self.crop_rect = QRect()
 
             self.crop_points.append(event.pos())
 
-            if len(self.crop_points) == 4:
-                x_coords = [p.x() for p in self.crop_points]
-                y_coords = [p.y() for p in self.crop_points]
-                self.crop_rect = QRect(QPoint(min(x_coords), min(y_coords)), QPoint(max(x_coords), max(y_coords))).normalized()
+            if len(self.crop_points) == 2:
+                self.crop_rect = QRect(self.crop_points[0], self.crop_points[1]).normalized()
 
             self.update()
 
@@ -53,8 +51,8 @@ class VideoOverlay(QWidget):
         for point in self.crop_points:
             painter.drawEllipse(point, 5, 5)
 
-        # Draw cropping rectangle if 4 points are selected
-        if len(self.crop_points) == 4 and not self.crop_rect.isNull():
+        # Draw cropping rectangle if 2 points are selected
+        if len(self.crop_points) == 2 and not self.crop_rect.isNull():
             painter.setBrush(QColor(255, 0, 0, 50))
             painter.drawRect(self.crop_rect)
 
