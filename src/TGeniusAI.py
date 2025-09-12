@@ -1281,20 +1281,9 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        try:
-            position_sec = self.player.position() / 1000.0
-            video_clip = VideoFileClip(self.videoPathLineEdit)
-            frame = video_clip.get_frame(position_sec)
-
-            height, width, channel = frame.shape
-            bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
-
-            # La QImage creata da un array numpy deve essere copiata per evitare problemi di memoria
-            frame_pixmap = QPixmap.fromImage(q_image.copy())
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Impossibile estrarre il frame dal video: {e}")
+        frame_pixmap = self.get_frame_at(self.player.position())
+        if not frame_pixmap:
+            QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
             return
 
         dialog = CropDialog(frame_pixmap, self)
@@ -1307,17 +1296,18 @@ class VideoAudioManager(QMainWindow):
             position_sec = position_ms / 1000.0
             video_clip = VideoFileClip(self.videoPathLineEdit)
 
-            # Ensure the position is within the video duration
-            if position_sec < 0 or position_sec > video_clip.duration:
+            if not (0 <= position_sec <= video_clip.duration):
                 return None
 
             frame = video_clip.get_frame(position_sec)
 
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888)
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
 
-            return QPixmap.fromImage(q_image.copy())
+            pixmap = QPixmap.fromImage(q_image)
+            # Scale pixmap to half size for the dialog
+            return pixmap.scaled(pixmap.width() // 2, pixmap.height() // 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
 
         except Exception as e:
             print(f"Error getting frame at {position_ms}ms: {e}")
@@ -1358,25 +1348,21 @@ class VideoAudioManager(QMainWindow):
 
         try:
             video = VideoFileClip(self.videoPathLineEdit)
+            video_width, video_height = video.size
 
-            # The crop_rect geometry is relative to the widget, we need to scale it
-            # to the actual video dimensions.
-            widget_size = self.videoCropWidget.size()
-            video_size = video.size # (width, height)
+            # The crop dialog displays the frame at half size, so we must scale the coordinates up by 2
+            scale_factor = 2
 
-            scale_x = video_size[0] / widget_size.width()
-            scale_y = video_size[1] / widget_size.height()
-
-            x1 = int(crop_rect.x() * scale_x)
-            y1 = int(crop_rect.y() * scale_y)
-            x2 = int((crop_rect.x() + crop_rect.width()) * scale_x)
-            y2 = int((crop_rect.y() + crop_rect.height()) * scale_y)
+            x1 = int(crop_rect.x() * scale_factor)
+            y1 = int(crop_rect.y() * scale_factor)
+            x2 = int((crop_rect.x() + crop_rect.width()) * scale_factor)
+            y2 = int((crop_rect.y() + crop_rect.height()) * scale_factor)
 
             # Ensure coordinates are within video bounds
             x1 = max(0, x1)
             y1 = max(0, y1)
-            x2 = min(video_size[0], x2)
-            y2 = min(video_size[1], y2)
+            x2 = min(video_width, x2)
+            y2 = min(video_height, y2)
 
             if x1 >= x2 or y1 >= y2:
                 progress_dialog.close()
