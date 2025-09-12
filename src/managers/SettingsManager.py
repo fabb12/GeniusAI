@@ -3,6 +3,7 @@ from PyQt6.QtCore import QPoint, QSize
 import logging
 from src.config import DOCK_SETTINGS_FILE
 from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
         self.parent = parent
@@ -39,14 +40,12 @@ class DockSettingsManager:
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
-            # Carica le impostazioni della finestra principale
             main_window_settings = settings.get('main_window', {})
             self.main_window.resize(
                 QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            # Carica le impostazioni per ciascun dock
             for name, dock in self.docks.items():
                 dock_settings = settings.get(name, {})
                 dock.setVisible(dock_settings.get('visible', True))
@@ -57,44 +56,47 @@ class DockSettingsManager:
 
         except FileNotFoundError:
             logging.debug("Settings file not found. Using default settings.")
+            self.loadDefaultLayout()
 
-    def apply_visibility(self, name, visible):
-        if name in self.docks:
-            self.docks[name].setVisible(visible)
+    def set_workspace(self, workspace_name):
+        """Imposta la visibilità dei dock in base al workspace selezionato."""
 
-    def loadDockSettingsUser1(self):
-        self.docks['videoPlayerOutput'].setVisible(True)
-        self.docks['recordingDock'].setVisible(True)
+        # Nascondi tutti i dock prima di impostare il nuovo layout
+        for dock in self.docks.values():
+            dock.setVisible(False)
 
-        self.docks['videoPlayerDock'].setVisible(False)
-        self.docks['audioDock'].setVisible(False)
-        self.docks['transcriptionDock'].setVisible(False)
-        self.docks['editingDock'].setVisible(False)
-        self.docks['downloadDock'].setVisible(False)
-        self.docks['videoMergeDock'].setVisible(False)
-        self.docks['generazioneAIDock'].setVisible(False)
+        if workspace_name == "Registrazione":
+            self.docks['recordingDock'].setVisible(True)
+            self.docks['videoPlayerOutput'].setVisible(True)
+        elif workspace_name == "Confronto":
+            self.docks['videoPlayerDock'].setVisible(True)
+            self.docks['videoPlayerOutput'].setVisible(True)
+        elif workspace_name == "Trascrizione":
+            self.docks['videoPlayerDock'].setVisible(True)
+            self.docks['transcriptionDock'].setVisible(True)
+        elif workspace_name == "Default":
+            self.docks['videoPlayerDock'].setVisible(True)
+            self.docks['videoPlayerOutput'].setVisible(True)
+            self.docks['transcriptionDock'].setVisible(True)
+            self.docks['editingDock'].setVisible(True)
+            self.docks['downloadDock'].setVisible(True)
+            self.docks['recordingDock'].setVisible(True)
+            self.docks['audioDock'].setVisible(True)
 
-    def resetAll(self):
-        self.docks['recordingDock'].setVisible(False)
-        self.docks['videoPlayerOutput'].setVisible(False)
+        self.main_window.updateViewMenu()
 
-        self.docks['videoPlayerDock'].setVisible(False)
-        self.docks['audioDock'].setVisible(False)
-        self.docks['transcriptionDock'].setVisible(False)
-        self.docks['editingDock'].setVisible(False)
-        self.docks['downloadDock'].setVisible(False)
-        self.docks['videoMergeDock'].setVisible(False)
+    def loadRecordingLayout(self):
+        """Carica il layout per la registrazione video."""
+        self.set_workspace("Registrazione")
 
-    def loadDockSettingsUser2(self):
-        self.resetAll()
+    def loadComparisonLayout(self):
+        """Carica il layout per confrontare due video."""
+        self.set_workspace("Confronto")
 
-        self.docks['videoPlayerDock'].setVisible(True)
-        self.docks['transcriptionDock'].setVisible(True)
+    def loadTranscriptionLayout(self):
+        """Carica il layout per la trascrizione."""
+        self.set_workspace("Trascrizione")
 
-        self.docks['videoPlayerOutput'].setVisible(False)
-        self.docks['audioDock'].setVisible(False)
-        self.docks['editingDock'].setVisible(False)
-        self.docks['downloadDock'].setVisible(False)
-        self.docks['recordingDock'].setVisible(False)
-        self.docks['videoMergeDock'].setVisible(False)
-        self.docks['generazioneAIDock'].setVisible(False)
+    def loadDefaultLayout(self):
+        """Carica il layout di default con i dock principali."""
+        self.set_workspace("Default")
