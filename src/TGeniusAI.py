@@ -637,9 +637,6 @@ class VideoAudioManager(QMainWindow):
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
-        # Configurazione della menu bar
-        self.setupMenuBar()
-
         # Collegamenti dei segnali del player
         self.player.durationChanged.connect(self.durationChanged)
         self.player.positionChanged.connect(self.positionChanged)
@@ -706,6 +703,9 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
         self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
         toolbar.addAction(self.transcriptionLayoutAction)
+
+        # Configurazione della menu bar
+        self.setupMenuBar()
 
         # Applica il tema scuro, se disponibile
         if hasattr(self, 'applyDarkMode'):
