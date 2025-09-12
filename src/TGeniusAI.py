@@ -1994,43 +1994,56 @@ class VideoAudioManager(QMainWindow):
 
         # Group Box for Info
         infoGroup = QGroupBox("Info")
-        infoLayout = QVBoxLayout(infoGroup)
+        infoLayout = QGridLayout(infoGroup) # Changed to QGridLayout
 
         self.timecodeLabel = QLabel('00:00:00')
-        self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.timecodeLabel.setStyleSheet("""
             QLabel {
-                font-family: "Courier New", Courier, monospace;
-                font-size: 24pt;
+                font-family: "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+                font-size: 28pt;
                 font-weight: bold;
                 color: #00FF00;
                 background-color: #000000;
-                border: 2px solid #444444;
+                border: 1px solid #555;
                 border-radius: 5px;
-                padding: 5px;
+                padding: 10px;
             }
         """)
-        infoLayout.addWidget(self.timecodeLabel)
+        infoLayout.addWidget(self.timecodeLabel, 0, 0, 1, 2) # Span 2 columns
 
-        self.recordingStatusLabel = QLabel("Stato: Pronto per la registrazione")
-        self.recordingStatusLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.recordingStatusLabel)
-
-        self.audioTestResultLabel = QLabel("Risultato Test Audio: N/A")
-        self.audioTestResultLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.audioTestResultLabel)
+        # --- Static Info Labels ---
+        self.recordingStatusLabel = QLabel("Stato: Pronto")
+        infoLayout.addWidget(self.recordingStatusLabel, 1, 0, 1, 2)
 
         self.selectedMonitorLabel = QLabel("Monitor: N/A")
-        self.selectedMonitorLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.selectedMonitorLabel)
-
-        self.selectedAudioLabel = QLabel("Audio: N/A")
-        self.selectedAudioLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.selectedAudioLabel)
+        infoLayout.addWidget(self.selectedMonitorLabel, 2, 0, 1, 2)
 
         self.outputFileLabel = QLabel("File: N/A")
-        self.outputFileLabel.setAlignment(Qt.AlignmentFlag.AlignLeft)
-        infoLayout.addWidget(self.outputFileLabel)
+        infoLayout.addWidget(self.outputFileLabel, 3, 0, 1, 2)
+
+        # --- Dynamic Stats Labels (in a new row) ---
+        self.fpsLabel = QLabel("FPS: N/A")
+        infoLayout.addWidget(self.fpsLabel, 4, 0)
+
+        self.fileSizeLabel = QLabel("Dimensione: N/A")
+        infoLayout.addWidget(self.fileSizeLabel, 4, 1)
+
+        self.bitrateLabel = QLabel("Bitrate: N/A")
+        infoLayout.addWidget(self.bitrateLabel, 5, 0)
+
+        self.audioTestResultLabel = QLabel("Test Audio: N/A")
+        infoLayout.addWidget(self.audioTestResultLabel, 5, 1)
+
+        # Apply a consistent style to info labels
+        label_style = "font-size: 9pt; color: #cccccc;"
+        self.recordingStatusLabel.setStyleSheet(label_style)
+        self.selectedMonitorLabel.setStyleSheet(label_style)
+        self.outputFileLabel.setStyleSheet(label_style)
+        self.fpsLabel.setStyleSheet(label_style)
+        self.fileSizeLabel.setStyleSheet(label_style)
+        self.bitrateLabel.setStyleSheet(label_style)
+        self.audioTestResultLabel.setStyleSheet(label_style)
 
         # Main Layout for Recording Management
         recordingLayout = QVBoxLayout()
@@ -2230,6 +2243,7 @@ class VideoAudioManager(QMainWindow):
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
+        self.recorder_thread.stats_updated.connect(self.updateRecordingStats)
         self.recorder_thread.start()
 
         self.recording_segments.append(segment_file_path)
@@ -2295,6 +2309,9 @@ class VideoAudioManager(QMainWindow):
         self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
         self.outputFileLabel.setText("File: N/A")
+        self.fpsLabel.setText("FPS: N/A")
+        self.fileSizeLabel.setText("Dimensione: N/A")
+        self.bitrateLabel.setText("Bitrate: N/A")
 
     import datetime
 
@@ -2339,6 +2356,20 @@ class VideoAudioManager(QMainWindow):
     def showError(self, message):
         logging.error("Error recording thread:",message)
         #QMessageBox.critical(self, "Errore", message)
+
+    def updateRecordingStats(self, stats):
+        """Aggiorna le etichette delle statistiche di registrazione."""
+        self.fpsLabel.setText(f"FPS: {stats.get('fps', 'N/A')}")
+
+        # Format file size
+        size_kb = float(stats.get('size', 0))
+        if size_kb > 1024:
+            size_mb = size_kb / 1024
+            self.fileSizeLabel.setText(f"Dimensione: {size_mb:.2f} MB")
+        else:
+            self.fileSizeLabel.setText(f"Dimensione: {size_kb} KB")
+
+        self.bitrateLabel.setText(f"Bitrate: {stats.get('bitrate', 'N/A')} kbit/s")
 
     def saveText(self):
         # Apri il dialogo di salvataggio file e ottieni il percorso del file e il filtro selezionato dall'utente

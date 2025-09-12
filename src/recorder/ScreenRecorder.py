@@ -1,4 +1,5 @@
 import subprocess
+import re
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
 import os
@@ -9,6 +10,7 @@ class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
+    stats_updated = pyqtSignal(dict)
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
@@ -154,14 +156,28 @@ class ScreenRecorder(QThread):
         # Start the ffmpeg process in binary mode (remove text=True)
         self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
-        # Restore stderr reading loop for debugging
+        # Regex to parse ffmpeg's progress output
+        stats_regex = re.compile(
+            r"frame=\s*(?P<frame>\d+)\s+"
+            r"fps=\s*(?P<fps>[\d.]+)\s+"
+            r"q=(?P<q>[\d.-]+)\s+"
+            r"size=\s*(?P<size>\d+)kB\s+"
+            r"time=(?P<time>[\d:.]+)\s+"
+            r"bitrate=\s*(?P<bitrate>[\d.]+)kbits/s"
+        )
+
         while self.is_running:
             if self.ffmpeg_process.poll() is not None:
                 break
-            # Reading stderr can be useful for debugging ffmpeg issues
+
             line = self.ffmpeg_process.stderr.readline()
             if line:
-                print(line.decode('utf-8', errors='ignore').strip())
+                line_str = line.decode('utf-8', errors='ignore').strip()
+                match = stats_regex.search(line_str)
+                if match:
+                    stats = match.groupdict()
+                    self.stats_updated.emit(stats)
+                print(line_str) # for debugging
 
         # Ensure recording is stopped cleanly
         if self.ffmpeg_process.poll() is None:
