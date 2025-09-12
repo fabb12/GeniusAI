@@ -4,7 +4,7 @@ import time
 import os
 from dotenv import load_dotenv
 from elevenlabs import ElevenLabs, Voice, VoiceSettings
-from src.config import get_api_key
+from ..config import get_api_key
 
 load_dotenv()
 

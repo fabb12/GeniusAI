@@ -16,7 +16,7 @@ import subprocess  # Needed for os.startfile alternative
 from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
-from src.config import (
+from ..config import (
     ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_PPTX_GENERATION # Assicurati che questo percorso sia corretto e il file esista
 )

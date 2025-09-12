@@ -42,9 +42,9 @@ from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 # Note: Ollama integration with langchain might require langchain_community
 
 # --- Local Imports ---
-from src.services.FrameExtractor import FrameExtractor # Used for guide generation
+from .FrameExtractor import FrameExtractor # Used for guide generation
 # Import configuration constants and structures
-from src.config import (
+from ..config import (
     OLLAMA_ENDPOINT, get_api_key, # API Keys/Endpoints
     ACTION_MODELS_CONFIG, # Dictionary defining models per action
     PROMPT_BROWSER_GUIDE # Prompt for guide generation

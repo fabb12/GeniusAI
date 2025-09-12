@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
-from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT
+from ..config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):

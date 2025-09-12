@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from src.config import LOG_FILE, LOG_LEVEL
+from ..config import LOG_FILE, LOG_LEVEL
 class StreamToLogger(object):
     def __init__(self, logger, log_level):
         self.logger = logger

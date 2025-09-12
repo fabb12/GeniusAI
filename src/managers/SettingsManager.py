@@ -1,8 +1,8 @@
 import json
 from PyQt6.QtCore import QPoint, QSize
 import logging
-from src.config import DOCK_SETTINGS_FILE
-from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+from ..config import DOCK_SETTINGS_FILE
+from ..config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):

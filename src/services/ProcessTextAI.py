@@ -10,7 +10,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
-from src.config import (
+from ..config import (
     ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX # Assicurati che questi percorsi siano corretti
 )

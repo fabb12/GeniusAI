@@ -3,8 +3,8 @@ import re
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
 import os
-from src.config import WATERMARK_IMAGE
-from src.config import DEFAULT_AUDIO_CHANNELS, DEFAULT_FRAME_RATE
+from ..config import WATERMARK_IMAGE
+from ..config import DEFAULT_AUDIO_CHANNELS, DEFAULT_FRAME_RATE
 
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)

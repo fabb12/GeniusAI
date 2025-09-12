@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
-from ui.CustomDock import CustomDock
+from .ui.CustomDock import CustomDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
@@ -39,40 +39,40 @@ from langdetect import detect, LangDetectException
 import pycountry
 from difflib import SequenceMatcher
 
-from services.DownloadVideo import DownloadThread
-from services.AudioTranscript import TranscriptionThread
-from services.AudioGenerationREST import AudioGenerationThread
-from services.VideoCutting import VideoCuttingThread
-from recorder.ScreenRecorder import ScreenRecorder
-from managers.SettingsManager import DockSettingsManager
-from ui.CustVideoWidget import CropVideoWidget
-from ui.CustomSlider import CustomSlider
-from managers.Settings import SettingsDialog
-from ui.ScreenButton import ScreenButton
-from ui.CustumTextEdit import CustomTextEdit
-from services.PptxGeneration import PptxGeneration
-from services.ProcessTextAI import ProcessTextAI
-from ui.SplashScreen import SplashScreen
-from services.ShareVideo import VideoSharingManager
-from ui.MonitorPreview import MonitorPreview
-from ui.CursorOverlay import CursorOverlay
-from managers.StreamToLogger import setup_logging
-from services.FrameExtractor import FrameExtractor
+from .services.DownloadVideo import DownloadThread
+from .services.AudioTranscript import TranscriptionThread
+from .services.AudioGenerationREST import AudioGenerationThread
+from .services.VideoCutting import VideoCuttingThread
+from .recorder.ScreenRecorder import ScreenRecorder
+from .managers.SettingsManager import DockSettingsManager
+from .ui.CustVideoWidget import CropVideoWidget
+from .ui.CustomSlider import CustomSlider
+from .managers.Settings import SettingsDialog
+from .ui.ScreenButton import ScreenButton
+from .ui.CustumTextEdit import CustomTextEdit
+from .services.PptxGeneration import PptxGeneration
+from .services.ProcessTextAI import ProcessTextAI
+from .ui.SplashScreen import SplashScreen
+from .services.ShareVideo import VideoSharingManager
+from .ui.MonitorPreview import MonitorPreview
+from .ui.CursorOverlay import CursorOverlay
+from .managers.StreamToLogger import setup_logging
+from .services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from ui.CropDialog import CropDialog
-from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
-from config import MUSIC_DIR
-from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
+from .ui.CropDialog import CropDialog
+from .config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
+from .config import MUSIC_DIR
+from .config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
     DEFAULT_SIMILARITY, DEFAULT_STYLE, DEFAULT_FRAME_RATE,DEFAULT_VOICES
 import os
-from config import SPLASH_IMAGES_DIR
-from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+from .config import SPLASH_IMAGES_DIR
+from .config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
-from ui.VideoOverlay import VideoOverlay
+from .ui.VideoOverlay import VideoOverlay
 
 # Importa la classe MeetingSummarizer
-from services.MeetingSummarizer import MeetingSummarizer
-from services.CombinedAnalyzer import CombinedAnalyzer
+from .services.MeetingSummarizer import MeetingSummarizer
+from .services.CombinedAnalyzer import CombinedAnalyzer
 
 
 class VideoAudioManager(QMainWindow):
@@ -676,7 +676,7 @@ class VideoAudioManager(QMainWindow):
         Configura l'agent AI mostrando il dialogo di configurazione
         """
         if not hasattr(self, 'browser_agent'):
-            from services.BrowserAgent import BrowserAgent
+            from .services.BrowserAgent import BrowserAgent
             self.browser_agent = BrowserAgent(self)
 
         self.browser_agent.showConfigDialog()
@@ -686,7 +686,7 @@ class VideoAudioManager(QMainWindow):
         Esegue l'agent AI con la configurazione corrente
         """
         if not hasattr(self, 'browser_agent'):
-            from services.BrowserAgent import BrowserAgent
+            from .services.BrowserAgent import BrowserAgent
             self.browser_agent = BrowserAgent(self)
 
         self.browser_agent.runAgent()
@@ -1242,10 +1242,15 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Errore", "Carica un video prima di ritagliarlo.")
             return
 
-        self.player.pause()
+        self.player.setPosition(0)
+        QTimer.singleShot(200, self.grab_frame_and_open_crop_dialog)
 
-        # Grab the current frame
+    def grab_frame_and_open_crop_dialog(self):
         frame_pixmap = self.videoCropWidget.grab()
+
+        if frame_pixmap.isNull():
+            QMessageBox.warning(self, "Errore", "Impossibile catturare il fotogramma del video.")
+            return
 
         dialog = CropDialog(frame_pixmap, self)
         if dialog.exec():
@@ -2723,8 +2728,8 @@ class VideoAudioManager(QMainWindow):
             return
 
         # Crea e mostra il dialogo delle opzioni
-        from ui.VideoSaveOptionsDialog import VideoSaveOptionsDialog
-        from services.VideoSaver import VideoSaver
+        from .ui.VideoSaveOptionsDialog import VideoSaveOptionsDialog
+        from .services.VideoSaver import VideoSaver
 
         options_dialog = VideoSaveOptionsDialog(self.videoPathLineOutputEdit, self)
         if options_dialog.exec() != QDialog.DialogCode.Accepted:
@@ -3118,7 +3123,7 @@ class VideoAudioManager(QMainWindow):
         Crea una guida operativa dai frame estratti e esegue l'agent browser
         """
         if not hasattr(self, 'browser_agent'):
-            from services.BrowserAgent import BrowserAgent
+            from .services.BrowserAgent import BrowserAgent
             self.browser_agent = BrowserAgent(self)
 
         self.browser_agent.create_guide_agent()

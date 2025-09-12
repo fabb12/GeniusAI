@@ -6,7 +6,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from yt_dlp.postprocessor import FFmpegPostProcessor
-from src.config import FFMPEG_PATH
+from ..config import FFMPEG_PATH
 
 
 class DownloadThread(QThread):

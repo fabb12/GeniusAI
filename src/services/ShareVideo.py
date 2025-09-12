@@ -1,7 +1,7 @@
 import os
 import subprocess
 from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QListWidget, QDialogButtonBox
-from src.config import CONTACTS_FILE
+from ..config import CONTACTS_FILE
 
 class VideoSharingManager:
     def __init__(self, parent):

@@ -15,7 +15,7 @@ from tqdm import tqdm # Barra di progresso
 from PyQt6.QtCore import QSettings
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
-from src.config import (
+from ..config import (
     ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY # Assicurati che i percorsi siano corretti
 )
