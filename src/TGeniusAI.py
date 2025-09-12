@@ -336,9 +336,15 @@ class VideoAudioManager(QMainWindow):
         self.rewindButton.setIcon(QIcon("./res/rewind.png"))
         self.rewindButton.setToolTip("Riavvolgi il video di 5 secondi")
 
+        self.frameBackwardButton = QPushButton('|<')
+        self.frameBackwardButton.setToolTip("Indietro di un frame")
+
         self.forwardButton = QPushButton('>> 5s')
         self.forwardButton.setIcon(QIcon("./res/forward.png"))
         self.forwardButton.setToolTip("Avanza il video di 5 secondi")
+
+        self.frameForwardButton = QPushButton('>|')
+        self.frameForwardButton.setToolTip("Avanti di un frame")
 
         self.deleteButton = QPushButton('')
         self.deleteButton.setIcon(QIcon("./res/trash-bin.png"))
@@ -351,6 +357,8 @@ class VideoAudioManager(QMainWindow):
         self.cropButton.clicked.connect(self.open_crop_dialog)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
         self.forwardButton.clicked.connect(self.forward5Seconds)
+        self.frameBackwardButton.clicked.connect(self.frameBackward)
+        self.frameForwardButton.clicked.connect(self.frameForward)
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
 
         self.currentTimeLabel = QLabel('00:00')
@@ -447,9 +455,11 @@ class VideoAudioManager(QMainWindow):
         # Layout di playback del Player Input
         playbackControlLayout = QHBoxLayout()
         playbackControlLayout.addWidget(self.rewindButton)
+        playbackControlLayout.addWidget(self.frameBackwardButton)
         playbackControlLayout.addWidget(self.playButton)
         playbackControlLayout.addWidget(self.stopButton)
         playbackControlLayout.addWidget(self.forwardButton)
+        playbackControlLayout.addWidget(self.frameForwardButton)
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
         playbackControlLayout.addWidget(self.cutButton)
@@ -1106,6 +1116,12 @@ class VideoAudioManager(QMainWindow):
         new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
         self.player.setPosition(new_position)
 
+    def frameBackward(self):
+        self.get_previous_frame()
+
+    def frameForward(self):
+        self.get_next_frame()
+
     def goToTimecode(self):
         timecode_text = self.timecodeInput.text()
         try:
@@ -1371,8 +1387,6 @@ class VideoAudioManager(QMainWindow):
             current_pos = self.player.position()
             new_pos = current_pos + (1000 / fps)
             self.player.setPosition(int(new_pos))
-            return self.get_frame_at(new_pos)
-        return None
 
     def get_previous_frame(self):
         fps = self.get_current_fps()
@@ -1380,8 +1394,6 @@ class VideoAudioManager(QMainWindow):
             current_pos = self.player.position()
             new_pos = current_pos - (1000 / fps)
             self.player.setPosition(int(new_pos))
-            return self.get_frame_at(new_pos)
-        return None
 
     def perform_crop(self, crop_rect):
         self.progress_dialog = QProgressDialog("Ritaglio del video in corso...", "Annulla", 0, 100, self)
