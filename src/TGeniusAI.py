@@ -2607,8 +2607,11 @@ class VideoAudioManager(QMainWindow):
         minutes = (total_seconds % 3600) // 60
         seconds = total_seconds % 60
         milliseconds = position % 1000
+        timecode_str = f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}'
         # Aggiorna l'etichetta con il nuovo time code
-        self.currentTimeLabel.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
+        self.currentTimeLabel.setText(timecode_str)
+        if not self.timecodeInput.hasFocus():
+            self.timecodeInput.setText(timecode_str)
 
     def updateDuration(self, duration):
         # Calcola ore, minuti e secondi dalla durata, che è in millisecondi
