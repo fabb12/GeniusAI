@@ -663,6 +663,50 @@ class VideoAudioManager(QMainWindow):
         shareAction.triggered.connect(self.onShareButtonClicked)
         toolbar.addAction(shareAction)
 
+        # Workflow Actions
+        summarizeMeetingAction = QAction(QIcon("./res/share.png"), 'Riassumi Riunione', self)
+        summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
+        summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
+        toolbar.addAction(summarizeMeetingAction)
+
+        summarizeAction = QAction(QIcon("./res/load.png"), 'Riassumi Testo', self)
+        summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
+        summarizeAction.triggered.connect(self.processTextWithAI)
+        toolbar.addAction(summarizeAction)
+
+        fixTextAction = QAction(QIcon("./res/change.png"), 'Correggi Testo', self)
+        fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
+        fixTextAction.triggered.connect(self.fixTextWithAI)
+        toolbar.addAction(fixTextAction)
+
+        extractInfoAction = QAction(QIcon("./res/bookmark_1.png"), 'Estrai Info da Video', self)
+        extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
+        extractInfoAction.triggered.connect(self.showInfoExtractionDock)
+        toolbar.addAction(extractInfoAction)
+
+        toolbar.addSeparator()
+
+        # Workspace Actions
+        defaultLayoutAction = QAction(QIcon("./res/eye.png"), 'Default', self)
+        defaultLayoutAction.setToolTip("Layout di default")
+        defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
+        toolbar.addAction(defaultLayoutAction)
+
+        recordingLayoutAction = QAction(QIcon("./res/rec.png"), 'Registrazione', self)
+        recordingLayoutAction.setToolTip("Layout per la registrazione")
+        recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
+        toolbar.addAction(recordingLayoutAction)
+
+        comparisonLayoutAction = QAction(QIcon("./res/sync.png"), 'Confronto', self)
+        comparisonLayoutAction.setToolTip("Layout per il confronto")
+        comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
+        toolbar.addAction(comparisonLayoutAction)
+
+        transcriptionLayoutAction = QAction(QIcon("./res/paste.png"), 'Trascrizione', self)
+        transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
+        transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
+        toolbar.addAction(transcriptionLayoutAction)
+
         # Applica il tema scuro, se disponibile
         if hasattr(self, 'applyDarkMode'):
             self.applyDarkMode()
@@ -2697,63 +2741,6 @@ class VideoAudioManager(QMainWindow):
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
-        # Creazione del menu Workspace per i layout preimpostati
-        workspaceMenu = menuBar.addMenu('&Workspace')
-
-        defaultLayoutAction = QAction('Default', self)
-        defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
-        workspaceMenu.addAction(defaultLayoutAction)
-
-        recordingLayoutAction = QAction('Registrazione', self)
-        recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
-        workspaceMenu.addAction(recordingLayoutAction)
-
-        comparisonLayoutAction = QAction('Confronto', self)
-        comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
-        workspaceMenu.addAction(comparisonLayoutAction)
-
-        transcriptionLayoutAction = QAction('Trascrizione', self)
-        transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
-        workspaceMenu.addAction(transcriptionLayoutAction)
-
-        # Aggiunta del menu Workflows
-        workflowsMenu = menuBar.addMenu('&Workflows')
-
-        summarizeMeetingAction = QAction('&Riassumi Riunione', self)
-        summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
-        summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
-        workflowsMenu.addAction(summarizeMeetingAction)
-
-        # Funzionalità spostate da Strumenti Avanzati
-        summarizeAction = QAction('&Riassumi Testo', self)
-        summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
-        summarizeAction.triggered.connect(self.processTextWithAI)
-        workflowsMenu.addAction(summarizeAction)
-
-        fixTextAction = QAction('&Correggi Testo', self)
-        fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
-        fixTextAction.triggered.connect(self.fixTextWithAI)
-        workflowsMenu.addAction(fixTextAction)
-
-        extractInfoAction = QAction('&Estrai Info da Video', self)
-        extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
-        extractInfoAction.triggered.connect(self.showInfoExtractionDock)
-        workflowsMenu.addAction(extractInfoAction)
-
-        # Separatore
-        workflowsMenu.addSeparator()
-
-        # Altre funzionalità Workflows
-        createWorkflowAction = QAction('&Nuovo Workflow', self)
-        createWorkflowAction.setStatusTip('Crea un nuovo workflow personalizzato')
-        createWorkflowAction.triggered.connect(self.createWorkflow)  # Dovrai implementare questo metodo
-        workflowsMenu.addAction(createWorkflowAction)
-
-        loadWorkflowAction = QAction('&Carica Workflow', self)
-        loadWorkflowAction.setStatusTip('Carica un workflow esistente')
-        loadWorkflowAction.triggered.connect(self.loadWorkflow)  # Dovrai implementare questo metodo
-        workflowsMenu.addAction(loadWorkflowAction)
-
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
         # Opzioni esistenti
@@ -2777,11 +2764,6 @@ class VideoAudioManager(QMainWindow):
         releaseOutputAction = QAction(QIcon("./res/reset.png"), "Unload Video Output", self)
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         videoMenu.addAction(releaseOutputAction)
-
-        cutVideoAction = QAction('&Ritaglia Video', self)
-        cutVideoAction.setStatusTip('Apre la finestra di dialogo per ritagliare il video')
-        cutVideoAction.triggered.connect(self.open_crop_dialog)
-        videoMenu.addAction(cutVideoAction)
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
