@@ -664,48 +664,48 @@ class VideoAudioManager(QMainWindow):
         toolbar.addAction(shareAction)
 
         # Workflow Actions
-        summarizeMeetingAction = QAction(QIcon("./res/share.png"), 'Riassumi Riunione', self)
-        summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
-        summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
-        toolbar.addAction(summarizeMeetingAction)
+        self.summarizeMeetingAction = QAction(QIcon("./res/share.png"), 'Riassumi Riunione', self)
+        self.summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
+        self.summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
+        toolbar.addAction(self.summarizeMeetingAction)
 
-        summarizeAction = QAction(QIcon("./res/load.png"), 'Riassumi Testo', self)
-        summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
-        summarizeAction.triggered.connect(self.processTextWithAI)
-        toolbar.addAction(summarizeAction)
+        self.summarizeAction = QAction(QIcon("./res/load.png"), 'Riassumi Testo', self)
+        self.summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
+        self.summarizeAction.triggered.connect(self.processTextWithAI)
+        toolbar.addAction(self.summarizeAction)
 
-        fixTextAction = QAction(QIcon("./res/change.png"), 'Correggi Testo', self)
-        fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
-        fixTextAction.triggered.connect(self.fixTextWithAI)
-        toolbar.addAction(fixTextAction)
+        self.fixTextAction = QAction(QIcon("./res/change.png"), 'Correggi Testo', self)
+        self.fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
+        self.fixTextAction.triggered.connect(self.fixTextWithAI)
+        toolbar.addAction(self.fixTextAction)
 
-        extractInfoAction = QAction(QIcon("./res/bookmark_1.png"), 'Estrai Info da Video', self)
-        extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
-        extractInfoAction.triggered.connect(self.showInfoExtractionDock)
-        toolbar.addAction(extractInfoAction)
+        self.extractInfoAction = QAction(QIcon("./res/bookmark_1.png"), 'Estrai Info da Video', self)
+        self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
+        self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
+        toolbar.addAction(self.extractInfoAction)
 
         toolbar.addSeparator()
 
         # Workspace Actions
-        defaultLayoutAction = QAction(QIcon("./res/eye.png"), 'Default', self)
-        defaultLayoutAction.setToolTip("Layout di default")
-        defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
-        toolbar.addAction(defaultLayoutAction)
+        self.defaultLayoutAction = QAction(QIcon("./res/eye.png"), 'Default', self)
+        self.defaultLayoutAction.setToolTip("Layout di default")
+        self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
+        toolbar.addAction(self.defaultLayoutAction)
 
-        recordingLayoutAction = QAction(QIcon("./res/rec.png"), 'Registrazione', self)
-        recordingLayoutAction.setToolTip("Layout per la registrazione")
-        recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
-        toolbar.addAction(recordingLayoutAction)
+        self.recordingLayoutAction = QAction(QIcon("./res/rec.png"), 'Registrazione', self)
+        self.recordingLayoutAction.setToolTip("Layout per la registrazione")
+        self.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
+        toolbar.addAction(self.recordingLayoutAction)
 
-        comparisonLayoutAction = QAction(QIcon("./res/sync.png"), 'Confronto', self)
-        comparisonLayoutAction.setToolTip("Layout per il confronto")
-        comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
-        toolbar.addAction(comparisonLayoutAction)
+        self.comparisonLayoutAction = QAction(QIcon("./res/sync.png"), 'Confronto', self)
+        self.comparisonLayoutAction.setToolTip("Layout per il confronto")
+        self.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
+        toolbar.addAction(self.comparisonLayoutAction)
 
-        transcriptionLayoutAction = QAction(QIcon("./res/paste.png"), 'Trascrizione', self)
-        transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
-        transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
-        toolbar.addAction(transcriptionLayoutAction)
+        self.transcriptionLayoutAction = QAction(QIcon("./res/paste.png"), 'Trascrizione', self)
+        self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
+        self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
+        toolbar.addAction(self.transcriptionLayoutAction)
 
         # Applica il tema scuro, se disponibile
         if hasattr(self, 'applyDarkMode'):
@@ -2740,6 +2740,21 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
+
+        # Creazione del menu Workspace per i layout preimpostati
+        workspaceMenu = menuBar.addMenu('&Workspace')
+        workspaceMenu.addAction(self.defaultLayoutAction)
+        workspaceMenu.addAction(self.recordingLayoutAction)
+        workspaceMenu.addAction(self.comparisonLayoutAction)
+        workspaceMenu.addAction(self.transcriptionLayoutAction)
+
+
+        # Aggiunta del menu Workflows
+        workflowsMenu = menuBar.addMenu('&Workflows')
+        workflowsMenu.addAction(self.summarizeMeetingAction)
+        workflowsMenu.addAction(self.summarizeAction)
+        workflowsMenu.addAction(self.fixTextAction)
+        workflowsMenu.addAction(self.extractInfoAction)
 
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
