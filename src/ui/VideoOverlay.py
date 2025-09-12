@@ -1,21 +1,36 @@
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import Qt, QRect, QPoint
+from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
 import os
 
 class VideoOverlay(QWidget):
+    crop_finalized = pyqtSignal(QRect)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Assicurati di ricevere gli eventi del mouse
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.crop_points = []
-        self.crop_rect = QRect()
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)  # Initially transparent
+        self.setMouseTracking(True)
+
+        self.is_cropping = False
+        self.crop_size = 200
+        self.mouse_pos = QPoint()
+
         self.watermark_enabled = False
         self.watermark_path = None
         self.watermark_size = 0
         self.watermark_pixmap = None
         self.watermark_position = "Bottom Right"
+
+    def start_cropping(self):
+        self.is_cropping = True
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.update()
+
+    def stop_cropping(self):
+        self.is_cropping = False
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        self.update()
 
     def setWatermark(self, enabled, path, size, position):
         self.watermark_enabled = enabled
@@ -28,33 +43,46 @@ class VideoOverlay(QWidget):
             self.watermark_pixmap = None
         self.update()
 
-    def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton:
-            if len(self.crop_points) >= 2:
-                self.crop_points = []
-                self.crop_rect = QRect()
-
-            self.crop_points.append(event.pos())
-
-            if len(self.crop_points) == 2:
-                self.crop_rect = QRect(self.crop_points[0], self.crop_points[1]).normalized()
-
+    def mouseMoveEvent(self, event):
+        if self.is_cropping:
+            self.mouse_pos = event.pos()
             self.update()
+        super().mouseMoveEvent(event)
+
+    def wheelEvent(self, event):
+        if self.is_cropping:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.crop_size += 10
+            else:
+                self.crop_size = max(20, self.crop_size - 10)  # Minimum size of 20
+            self.update()
+        super().wheelEvent(event)
+
+    def mousePressEvent(self, event):
+        if self.is_cropping:
+            if event.button() == Qt.MouseButton.RightButton:
+                half_size = self.crop_size // 2
+                top_left = self.mouse_pos - QPoint(half_size, half_size)
+                crop_rect = QRect(top_left, QPoint(top_left.x() + self.crop_size, top_left.y() + self.crop_size))
+                self.crop_finalized.emit(crop_rect)
+                self.stop_cropping()
+            elif event.button() == Qt.MouseButton.LeftButton:
+                self.stop_cropping()
+        super().mousePressEvent(event)
 
     def paintEvent(self, event):
         painter = QPainter(self)
 
-        pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
-        painter.setPen(pen)
-
-        # Draw points
-        for point in self.crop_points:
-            painter.drawEllipse(point, 5, 5)
-
-        # Draw cropping rectangle if 2 points are selected
-        if len(self.crop_points) == 2 and not self.crop_rect.isNull():
+        if self.is_cropping:
+            pen = QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine)
+            painter.setPen(pen)
             painter.setBrush(QColor(255, 0, 0, 50))
-            painter.drawRect(self.crop_rect)
+
+            half_size = self.crop_size // 2
+            top_left = self.mouse_pos - QPoint(half_size, half_size)
+            crop_rect = QRect(top_left, QPoint(top_left.x() + self.crop_size, top_left.y() + self.crop_size))
+            painter.drawRect(crop_rect)
 
         # Draw watermark
         if self.watermark_enabled and self.watermark_pixmap:
