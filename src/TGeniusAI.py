@@ -10,7 +10,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
