@@ -15,10 +15,14 @@ class CropLogger:
         # Regex to find the current time of the processing
         self.re_time = re.compile(r"time=(\d{2}):(\d{2}):(\d{2})\.\d{2}")
 
-    def __call__(self, line):
+    def __call__(self, **kwargs):
         """
         This method is called by moviepy with each line of ffmpeg's output.
         """
+        line = kwargs.get("message", "") # It seems moviepy now uses a 'message' keyword argument
+        if not line:
+            line = kwargs.get("line", "") # Fallback for older versions
+
         if "Duration" in line:
             match = self.re_duration.search(line)
             if match:
