@@ -2,12 +2,15 @@ import re
 import tempfile
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip
+from proglog import ProgressBarLogger
 
-class CropLogger:
+class CropLogger(ProgressBarLogger):
     """
     This class parses the ffmpeg output to update a progress bar.
+    It subclasses proglog.ProgressBarLogger to be compatible with moviepy.
     """
     def __init__(self, progress_signal):
+        super().__init__()
         self.progress_signal = progress_signal
         self.duration = None
         # Regex to find the duration of the video
@@ -15,14 +18,11 @@ class CropLogger:
         # Regex to find the current time of the processing
         self.re_time = re.compile(r"time=(\d{2}):(\d{2}):(\d{2})\.\d{2}")
 
-    def __call__(self, **kwargs):
+    def callback(self, **kwargs):
         """
-        This method is called by moviepy with each line of ffmpeg's output.
+        This method is called by proglog with each line of ffmpeg's output.
         """
-        line = kwargs.get("message", "") # It seems moviepy now uses a 'message' keyword argument
-        if not line:
-            line = kwargs.get("line", "") # Fallback for older versions
-
+        line = kwargs.get("message", "")
         if "Duration" in line:
             match = self.re_duration.search(line)
             if match:
@@ -37,13 +37,7 @@ class CropLogger:
                 progress = int((elapsed / self.duration) * 100)
                 self.progress_signal.emit(progress)
 
-    def iter_bar(self, **kwargs):
-        """
-        A dummy iter_bar method to comply with the proglog interface.
-        Moviepy expects the logger to have this method.
-        """
-        iterable = kwargs.get("iterable", kwargs.get("iteration", []))
-        return iter(iterable)
+    # The __call__ and iter_bar methods are provided by the parent class ProgressBarLogger.
 
 class CropThread(QThread):
     """
