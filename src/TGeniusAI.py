@@ -59,6 +59,7 @@ from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
+from ui.CropDialog import CropDialog
 from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
 from config import MUSIC_DIR
 from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
@@ -290,7 +291,6 @@ class VideoAudioManager(QMainWindow):
         self.videoOverlay.show()
         self.videoOverlay.raise_()  # Porta l'overlay in primo piano
         self.videoCropWidget.resizeEvent = self.videoCropWidgetResizeEvent
-        self.videoOverlay.crop_finalized.connect(self.handle_crop_finalized)
 
         self.zoom_level = 1.0
         self.videoCropWidget.installEventFilter(self)
@@ -327,8 +327,8 @@ class VideoAudioManager(QMainWindow):
         self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
 
         self.cropButton = QPushButton('')
-        self.cropButton.setIcon(QIcon("./res/crop.png")) # Assuming a crop icon exists
-        self.cropButton.setToolTip("Ritaglia il video con la selezione")
+        self.cropButton.setIcon(QIcon("./res/taglia.png"))
+        self.cropButton.setToolTip("Apre la finestra di dialogo per ritagliare il video")
 
 
         self.rewindButton = QPushButton('<< 5s')
@@ -347,7 +347,7 @@ class VideoAudioManager(QMainWindow):
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
-        self.cropButton.clicked.connect(self.toggle_cropping_mode)
+        self.cropButton.clicked.connect(self.open_crop_dialog)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
         self.forwardButton.clicked.connect(self.forward5Seconds)
         self.deleteButton.clicked.connect(self.deleteVideoSegment)
@@ -1237,37 +1237,52 @@ class VideoAudioManager(QMainWindow):
         minutes, seconds = divmod(remainder, 60)
         self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}')
 
-    def toggle_cropping_mode(self):
-        if self.videoOverlay.is_cropping:
-            self.videoOverlay.stop_cropping()
-        else:
-            self.videoOverlay.start_cropping()
-
-    def handle_crop_finalized(self, cropRect):
+    def open_crop_dialog(self):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare il ritaglio.")
+            QMessageBox.warning(self, "Errore", "Carica un video prima di ritagliarlo.")
             return
 
-        if cropRect.isEmpty():
-            QMessageBox.warning(self, "Errore", "Selezione per il ritaglio non valida.")
-            return
+        self.player.pause()
 
+        # Grab the current frame
+        frame_pixmap = self.videoCropWidget.grab()
+
+        dialog = CropDialog(frame_pixmap, self)
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+            self.perform_crop(crop_rect)
+
+    def perform_crop(self, crop_rect):
         try:
             video = VideoFileClip(self.videoPathLineEdit)
-            # Ensure crop dimensions are within video dimensions
-            x1 = max(0, cropRect.x())
-            y1 = max(0, cropRect.y())
-            x2 = min(video.w, cropRect.x() + cropRect.width())
-            y2 = min(video.h, cropRect.y() + cropRect.height())
+
+            # The crop_rect geometry is relative to the widget, we need to scale it
+            # to the actual video dimensions.
+            widget_size = self.videoCropWidget.size()
+            video_size = video.size # (width, height)
+
+            scale_x = video_size[0] / widget_size.width()
+            scale_y = video_size[1] / widget_size.height()
+
+            x1 = int(crop_rect.x() * scale_x)
+            y1 = int(crop_rect.y() * scale_y)
+            x2 = int((crop_rect.x() + crop_rect.width()) * scale_x)
+            y2 = int((crop_rect.y() + crop_rect.height()) * scale_y)
+
+            # Ensure coordinates are within video bounds
+            x1 = max(0, x1)
+            y1 = max(0, y1)
+            x2 = min(video_size[0], x2)
+            y2 = min(video_size[1], y2)
 
             if x1 >= x2 or y1 >= y2:
-                QMessageBox.warning(self, "Errore", "L'area di ritaglio è fuori dai limiti del video.")
+                QMessageBox.warning(self, "Errore", "L'area di ritaglio non è valida.")
                 return
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
             output_path = tempfile.mktemp(suffix='.mp4')
-            cropped_video.write_videofile(output_path, codec='libx264')
+            cropped_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
             QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
             self.loadVideoOutput(output_path)
         except Exception as e:
@@ -2674,8 +2689,8 @@ class VideoAudioManager(QMainWindow):
         videoMenu.addAction(releaseOutputAction)
 
         cutVideoAction = QAction('&Ritaglia Video', self)
-        cutVideoAction.setStatusTip('Ritaglia il video utilizzando la selezione overlay')
-        cutVideoAction.triggered.connect(self.toggle_cropping_mode)
+        cutVideoAction.setStatusTip('Apre la finestra di dialogo per ritagliare il video')
+        cutVideoAction.triggered.connect(self.open_crop_dialog)
         videoMenu.addAction(cutVideoAction)
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
