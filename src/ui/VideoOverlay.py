@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtCore import Qt, QRect, QPoint
 from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
 import os
 
@@ -9,8 +9,7 @@ class VideoOverlay(QWidget):
         # Assicurati di ricevere gli eventi del mouse
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
-        self.rect_start = None
-        self.rect_end = None
+        self.crop_points = []
         self.crop_rect = QRect()
         self.watermark_enabled = False
         self.watermark_path = None
@@ -31,40 +30,31 @@ class VideoOverlay(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.RightButton:
-            self.rect_start = event.pos()
-            self.rect_end = self.rect_start
-            self.crop_rect = QRect()  # Reset
-            self.update()
+            if len(self.crop_points) >= 4:
+                self.crop_points = []
+                self.crop_rect = QRect()
 
-    def mouseMoveEvent(self, event):
-        if event.buttons() & Qt.MouseButton.RightButton:
-            if self.rect_start:
-                self.rect_end = event.pos()
-                self.update()
+            self.crop_points.append(event.pos())
 
-    def mouseReleaseEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton and self.rect_start:
-            self.rect_end = event.pos()
-            self.crop_rect = QRect(self.rect_start, self.rect_end).normalized()
-            self.rect_start = None
-            self.rect_end = None
+            if len(self.crop_points) == 4:
+                x_coords = [p.x() for p in self.crop_points]
+                y_coords = [p.y() for p in self.crop_points]
+                self.crop_rect = QRect(QPoint(min(x_coords), min(y_coords)), QPoint(max(x_coords), max(y_coords))).normalized()
+
             self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
 
-        # Draw cropping rectangle
-        if self.rect_start and self.rect_end:
-            rect = QRect(self.rect_start, self.rect_end).normalized()
-            # Use a thicker pen and a semi-transparent brush for visibility
-            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
-            painter.setBrush(QColor(255, 0, 0, 50))
-            painter.drawRect(rect)
-        elif not self.crop_rect.isNull():
-            # Draw the final rectangle after selection is done
-            pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
-            painter.setPen(pen)
+        pen = QPen(QColor(255, 0, 0), 4, Qt.PenStyle.SolidLine)
+        painter.setPen(pen)
+
+        # Draw points
+        for point in self.crop_points:
+            painter.drawEllipse(point, 5, 5)
+
+        # Draw cropping rectangle if 4 points are selected
+        if len(self.crop_points) == 4 and not self.crop_rect.isNull():
             painter.setBrush(QColor(255, 0, 0, 50))
             painter.drawRect(self.crop_rect)
 
