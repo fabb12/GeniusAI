@@ -606,14 +606,6 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
         self.editingDock.addWidget(voiceSettingsWidget)
 
-        # Configurazione della menu bar
-        self.setupMenuBar()
-
-        # Collegamenti dei segnali del player
-        self.player.durationChanged.connect(self.durationChanged)
-        self.player.positionChanged.connect(self.positionChanged)
-        self.videoSlider.sliderMoved.connect(self.setPosition)
-
         # Dizionario per la gestione dei dock
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
@@ -628,6 +620,14 @@ class VideoAudioManager(QMainWindow):
             'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
+
+        # Configurazione della menu bar
+        self.setupMenuBar()
+
+        # Collegamenti dei segnali del player
+        self.player.durationChanged.connect(self.durationChanged)
+        self.player.positionChanged.connect(self.positionChanged)
+        self.videoSlider.sliderMoved.connect(self.setPosition)
 
         # Creazione e configurazione della toolbar principale
         toolbar = QToolBar("Main Toolbar")
