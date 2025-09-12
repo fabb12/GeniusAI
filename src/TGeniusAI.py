@@ -327,7 +327,7 @@ class VideoAudioManager(QMainWindow):
         self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
 
         self.cropButton = QPushButton('')
-        self.cropButton.setIcon(QIcon("./res/taglia.png"))
+        self.cropButton.setIcon(QIcon("./res/crop.png"))
         self.cropButton.setToolTip("Apre la finestra di dialogo per ritagliare il video")
 
 
