@@ -15,7 +15,7 @@ class ScreenRecorder(QThread):
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
-                 bluetooth_mode=False):
+                 bluetooth_mode=False, audio_volume=1.0):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -24,6 +24,7 @@ class ScreenRecorder(QThread):
         self.audio_channels = audio_channels
         self.frame_rate = frames
         self.bluetooth_mode = bluetooth_mode
+        self.audio_volume = audio_volume
         # Correctly determine if audio should be recorded
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
@@ -114,14 +115,29 @@ class ScreenRecorder(QThread):
             audio_input_start_index = 1  # Audio inputs start after video
 
         if self.record_audio:
+            # Determine if the volume filter needs to be applied
+            apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
+
             if num_audio_inputs == 1:
-                # Single audio input, map it directly
-                map_args.extend(['-map', f'{audio_input_start_index}:a'])
+                audio_input_stream = f"[{audio_input_start_index}:a]"
+                if apply_volume_filter:
+                    # Apply volume filter to the single audio stream
+                    volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
+                    filter_complex_parts.append(volume_filter)
+                    map_args.extend(['-map', '[a_out]'])
+                else:
+                    # No volume adjustment, map directly
+                    map_args.extend(['-map', audio_input_stream])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
+
             elif num_audio_inputs > 1:
-                # Multiple audio inputs, merge them
-                audio_merge_inputs = "".join([f"[{i+audio_input_start_index}:a]" for i in range(num_audio_inputs)])
-                audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
+                audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
+                if apply_volume_filter:
+                    # Merge audio inputs and then apply the volume filter
+                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged];[a_merged]volume={self.audio_volume}[a_out]"
+                else:
+                    # Just merge the audio inputs
+                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
                 filter_complex_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
