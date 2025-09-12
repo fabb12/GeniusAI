@@ -2155,17 +2155,6 @@ class VideoAudioManager(QMainWindow):
                 self.audio_buttons.append(check_box)
         else:
             logging.debug("No input audio devices found.")
-
-        # Volume control for recording
-        self.recordingVolumeLabel = QLabel("Volume Registrazione: 100%")
-        audioLayout.addWidget(self.recordingVolumeLabel)
-        self.recordingVolumeSlider = QSlider(Qt.Orientation.Horizontal)
-        self.recordingVolumeSlider.setRange(10, 40)  # Represents 1.0x to 4.0x
-        self.recordingVolumeSlider.setValue(10)
-        self.recordingVolumeSlider.setToolTip("Regola il volume dell'audio registrato (da 1.0x a 4.0x)")
-        self.recordingVolumeSlider.valueChanged.connect(self.updateRecordingVolumeLabel)
-        audioLayout.addWidget(self.recordingVolumeSlider)
-
         recordingLayout.addWidget(audioGroupBox)
 
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
@@ -2237,10 +2226,6 @@ class VideoAudioManager(QMainWindow):
 
         self.selectDefaultScreen()
         return dock
-
-    def updateRecordingVolumeLabel(self, value):
-        multiplier = value / 10.0
-        self.recordingVolumeLabel.setText(f"Volume Registrazione: {int(multiplier * 100)}%")
 
     def startScreenRecording(self):
         self.is_recording = True
@@ -2318,8 +2303,6 @@ class VideoAudioManager(QMainWindow):
 
         bluetooth_mode = self._is_bluetooth_mode_active()
 
-        recording_volume = self.recordingVolumeSlider.value() / 10.0
-
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
@@ -2332,7 +2315,7 @@ class VideoAudioManager(QMainWindow):
             watermark_size=self.watermarkSize,
             watermark_position=self.watermarkPosition,
             bluetooth_mode=bluetooth_mode,
-            audio_volume=recording_volume
+            audio_volume=4.0
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
