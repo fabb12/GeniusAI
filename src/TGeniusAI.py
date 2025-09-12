@@ -1253,6 +1253,13 @@ class VideoAudioManager(QMainWindow):
             self.perform_crop(crop_rect)
 
     def perform_crop(self, crop_rect):
+        progress_dialog = QProgressDialog("Ritaglio del video in corso...", None, 0, 0, self)
+        progress_dialog.setWindowTitle("Progresso Ritaglio")
+        progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        progress_dialog.setCancelButton(None)
+        progress_dialog.show()
+        QApplication.processEvents() # Ensure the dialog is shown
+
         try:
             video = VideoFileClip(self.videoPathLineEdit)
 
@@ -1276,6 +1283,7 @@ class VideoAudioManager(QMainWindow):
             y2 = min(video_size[1], y2)
 
             if x1 >= x2 or y1 >= y2:
+                progress_dialog.close()
                 QMessageBox.warning(self, "Errore", "L'area di ritaglio non è valida.")
                 return
 
@@ -1283,9 +1291,12 @@ class VideoAudioManager(QMainWindow):
 
             output_path = tempfile.mktemp(suffix='.mp4')
             cropped_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            progress_dialog.close()
             QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
             self.loadVideoOutput(output_path)
         except Exception as e:
+            progress_dialog.close()
             QMessageBox.critical(self, "Errore durante il ritaglio", str(e))
 
     def applyStyleToAllDocks(self):
@@ -2515,11 +2526,13 @@ class VideoAudioManager(QMainWindow):
 
     def sourceSetter(self, url):
         self.player.setSource(QUrl.fromLocalFile(url))
-        #self.player.play()
+        self.player.play()
+        self.player.pause()
 
     def sourceSetterOutput(self, url):
         self.playerOutput.setSource(QUrl.fromLocalFile(url))
         self.playerOutput.play()
+        self.playerOutput.pause()
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
