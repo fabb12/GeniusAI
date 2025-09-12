@@ -71,6 +71,10 @@ class CropThread(QThread):
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
+            # FIX: Riduci leggermente la durata per evitare l'eco audio alla fine
+            if cropped_video.duration and cropped_video.duration > 0.15:
+                cropped_video = cropped_video.subclip(0, cropped_video.duration - 0.15)
+
             output_path = tempfile.mktemp(suffix='.mp4')
 
             # Use the custom logger to get progress updates
