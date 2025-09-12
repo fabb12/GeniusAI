@@ -25,8 +25,13 @@ class VideoCuttingThread(QThread):
             else:
                 raise ValueError("Formato file non supportato")
 
+            # FIX: Riduci leggermente la durata per evitare l'eco audio alla fine
+            end_time = self.end_time - 0.15
+            if end_time < self.start_time:
+                end_time = self.end_time
+
             # Taglia il media tra start_time e end_time
-            clip = media.subclip(self.start_time, self.end_time)
+            clip = media.subclip(self.start_time, end_time)
 
             if is_video:
                 # Salva il file video tagliato
