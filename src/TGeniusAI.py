@@ -637,16 +637,6 @@ class VideoAudioManager(QMainWindow):
         # Aggiungi l'indicatore di registrazione lampeggiante
         toolbar.addWidget(self.recording_indicator)
 
-        loadDockSettings1Action = QAction(QIcon("./res/load1.png"), "User1", self)
-        loadDockSettings1Action.setToolTip("Carica le impostazioni dei dock per l'utente 1")
-        loadDockSettings1Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser1)
-        toolbar.addAction(loadDockSettings1Action)
-
-        loadDockSettings2Action = QAction(QIcon("./res/load2.png"), "User2", self)
-        loadDockSettings2Action.setToolTip("Carica le impostazioni dei dock per l'utente 2")
-        loadDockSettings2Action.triggered.connect(self.dockSettingsManager.loadDockSettingsUser2)
-        toolbar.addAction(loadDockSettings2Action)
-
         settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
         settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
@@ -2566,6 +2556,25 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
+
+        # Creazione del menu Workspace per i layout preimpostati
+        workspaceMenu = menuBar.addMenu('&Workspace')
+
+        defaultLayoutAction = QAction('Default', self)
+        defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
+        workspaceMenu.addAction(defaultLayoutAction)
+
+        recordingLayoutAction = QAction('Registrazione', self)
+        recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
+        workspaceMenu.addAction(recordingLayoutAction)
+
+        comparisonLayoutAction = QAction('Confronto', self)
+        comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
+        workspaceMenu.addAction(comparisonLayoutAction)
+
+        transcriptionLayoutAction = QAction('Trascrizione', self)
+        transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
+        workspaceMenu.addAction(transcriptionLayoutAction)
 
         # Aggiunta del menu Workflows
         workflowsMenu = menuBar.addMenu('&Workflows')
