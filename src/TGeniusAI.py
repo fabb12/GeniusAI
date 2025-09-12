@@ -2074,7 +2074,6 @@ class VideoAudioManager(QMainWindow):
         if audio_devices:
             for device in audio_devices:
                 check_box = QCheckBox(device)
-                check_box.toggled.connect(self.update_bluetooth_mode_status)
                 audioLayout.addWidget(check_box)
                 self.audio_buttons.append(check_box)
         else:
@@ -2108,10 +2107,6 @@ class VideoAudioManager(QMainWindow):
 
         saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
         saveOptionsLayout.addWidget(self.recordingNameLineEdit)
-
-        self.bluetooth_mode_checkbox = QCheckBox("Bluetooth Headset/Compatibility Mode")
-        self.bluetooth_mode_checkbox.setToolTip("Enable this mode if you are using a Bluetooth headset to record audio. This is often detected automatically.")
-        saveOptionsLayout.addWidget(self.bluetooth_mode_checkbox)
 
         recordingLayout.addWidget(saveOptionsGroup)
 
@@ -2229,7 +2224,7 @@ class VideoAudioManager(QMainWindow):
             self.startRecordingButton.setEnabled(True)
             return
 
-        bluetooth_mode = self.bluetooth_mode_checkbox.isChecked()
+        bluetooth_mode = self._is_bluetooth_mode_active()
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
@@ -2336,9 +2331,8 @@ class VideoAudioManager(QMainWindow):
                                     f"Il video è stato salvato correttamente:\nVideo: {output_path}")
             self.loadVideoOutput(output_path)
 
-    def update_bluetooth_mode_status(self):
-        """Checks the selected audio devices and updates the Bluetooth mode checkbox."""
-        bluetooth_mode = False
+    def _is_bluetooth_mode_active(self):
+        """Checks if any of the selected audio devices is a Bluetooth headset."""
         bluetooth_keywords = ['headset', 'hands-free', 'cuffie', 'bluetooth']
 
         selected_audio_devices = []
@@ -2348,10 +2342,9 @@ class VideoAudioManager(QMainWindow):
 
         for device in selected_audio_devices:
             if any(keyword in device.lower() for keyword in bluetooth_keywords):
-                bluetooth_mode = True
-                break
+                return True
 
-        self.bluetooth_mode_checkbox.setChecked(bluetooth_mode)
+        return False
 
     def showError(self, message):
         logging.error("Error recording thread:",message)
