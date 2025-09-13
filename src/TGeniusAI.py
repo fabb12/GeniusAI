@@ -1375,7 +1375,6 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
         self.videoMergeDock.setStyleSheet(style)
-        self.generazioneAIDock.setStyleSheet(style)
 
     def getDarkStyle(self):
         return """
