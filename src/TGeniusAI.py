@@ -947,16 +947,18 @@ class VideoAudioManager(QMainWindow):
 
             try:
                 # 1. Genera il testo per le slide
-                testo_per_slide, _, _ = PptxGeneration.generaTestoPerSlide(
+                result = PptxGeneration.generaTestoPerSlide(
                     settings["source_text"],
                     settings["num_slides"],
                     settings["company_name"],
                     settings["language"]
                 )
 
-                if "Errore" in testo_per_slide:
-                    QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {testo_per_slide}")
+                if isinstance(result, str):
+                    QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {result}")
                     return
+
+                testo_per_slide, _, _ = result
 
                 # 2. Crea la presentazione dal testo generato
                 PptxGeneration.createPresentationFromText(
