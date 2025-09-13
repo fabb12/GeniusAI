@@ -978,42 +978,20 @@ class VideoAudioManager(QMainWindow):
         if dialog.exec():
             settings = dialog.get_settings()
 
-            # Chiedi dove salvare il file
-            save_path, _ = QFileDialog.getSaveFileName(
+            # Il metodo 'creaPresentazione' gestisce tutto:
+            # - Controllo del testo vuoto
+            # - Richiesta del percorso di salvataggio
+            # - Messaggio di attesa
+            # - Generazione del testo
+            # - Creazione della presentazione dal testo con il template
+            PptxGeneration.creaPresentazione(
                 self,
-                "Salva Presentazione",
-                "",
-                "PowerPoint Presentation (*.pptx)"
+                self.transcriptionTextArea,
+                settings["num_slides"],
+                settings["company_name"],
+                settings["language"],
+                settings["template_path"]
             )
-
-            if not save_path:
-                QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
-                return
-
-            try:
-                # 1. Genera il testo per le slide
-                result = PptxGeneration.generaTestoPerSlide(
-                    settings["source_text"],
-                    settings["num_slides"],
-                    settings["company_name"],
-                    settings["language"]
-                )
-
-                if isinstance(result, str):
-                    QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {result}")
-                    return
-
-                testo_per_slide, _, _ = result
-
-                # 2. Crea la presentazione dal testo generato
-                PptxGeneration.createPresentationFromText(
-                    self,
-                    testo_per_slide,
-                    save_path,
-                    settings["template_path"]
-                )
-            except Exception as e:
-                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)

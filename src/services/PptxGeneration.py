@@ -5,8 +5,8 @@ import google.generativeai as genai
 import requests
 import json
 import logging
-from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-from PyQt6.QtCore import QSettings
+from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QApplication
+from PyQt6.QtCore import QSettings, Qt
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.util import Pt, Inches
@@ -306,7 +306,7 @@ class PptxGeneration:
 
 
     @staticmethod
-    def creaPresentazione(parent, transcriptionTextArea, num_slide, company_name, language):
+    def creaPresentazione(parent, transcriptionTextArea, num_slide, company_name, language, template_path=None):
         """Metodo principale chiamato dall'UI per creare la presentazione."""
         testo_attuale = transcriptionTextArea.toPlainText()
         if not testo_attuale.strip():
@@ -340,7 +340,7 @@ class PptxGeneration:
 
             # Crea la presentazione dal testo generato
             # Questo metodo ora contiene la logica di salvataggio e apertura
-            PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path)
+            PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, template_path)
 
         except Exception as e:
              wait_msg.close() # Assicurati che il messaggio di attesa sia chiuso anche in caso di errore
@@ -368,14 +368,13 @@ class PptxGeneration:
             # --- Parsing del testo generato dall'AI ---
             # Pulizia preliminare
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
-            clean_text = re.sub(r'^\s*-\s*', '', clean_text, flags=re.MULTILINE)
             clean_text = re.sub(r'[•*]\s*', '- ', clean_text) # Normalizza bullet a trattino
 
-            # Pattern robusto
-            pattern = re.compile(r"Titolo:\s*(.*?)\s*(?:Sottotitolo:\s*(.*?)\s*)?Contenuto:\s*(.*?)(?=\n\s*Titolo:|\Z)", re.DOTALL | re.IGNORECASE)
+            # Pattern robusto che rende "Contenuto:" opzionale
+            pattern = re.compile(r"Titolo:\s*(.*?)\s*(?:Sottotitolo:\s*(.*?)\s*)?(?:Contenuto:)?\s*(.*?)(?=\n\s*Titolo:|\Z)", re.DOTALL | re.IGNORECASE)
             slides_data = pattern.findall(clean_text)
 
-            if not slides_data:
+            if not slides_data or all(not t and not s and not c for t, s, c in slides_data):
                  QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo generato dall'AI.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
                  return
 
