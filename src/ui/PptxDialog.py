@@ -97,16 +97,18 @@ class PptxDialog(QDialog):
         settings = self.get_settings()
 
         # Genera prima il testo per le slide
-        testo_per_slide, _, _ = PptxGeneration.generaTestoPerSlide(
+        result = PptxGeneration.generaTestoPerSlide(
             settings["source_text"],
             settings["num_slides"],
             settings["company_name"],
             settings["language"]
         )
 
-        if "Errore" in testo_per_slide:
-            QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {testo_per_slide}")
+        if isinstance(result, str):
+            QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {result}")
             return
+
+        testo_per_slide, _, _ = result
 
         # Genera le immagini di anteprima
         image_paths = PptxGeneration.generate_preview(
