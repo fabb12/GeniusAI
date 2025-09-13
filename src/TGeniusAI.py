@@ -648,6 +648,11 @@ class VideoAudioManager(QMainWindow):
         self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
         mainToolbar.addAction(self.extractInfoAction)
 
+        self.summarizeYouTubeAction = QAction(QIcon("./res/meet_sum.png"), 'Riassumi Riunione', self)
+        self.summarizeYouTubeAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
+        self.summarizeYouTubeAction.triggered.connect(self.summarizeYouTube)
+        mainToolbar.addAction(self.summarizeYouTubeAction)
+
         # --- SECONDA TOOLBAR (Workspace e Impostazioni) ---
         workspaceToolbar = QToolBar("Workspace Toolbar")
         workspaceToolbar.setToolTip("Barra degli strumenti per layout e impostazioni")
