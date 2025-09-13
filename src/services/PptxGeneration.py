@@ -13,6 +13,8 @@ from pptx.dml.color import RGBColor
 import re
 import os
 import subprocess  # Needed for os.startfile alternative
+import sys
+import tempfile
 from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
@@ -338,11 +340,17 @@ class PptxGeneration:
 
 
     @staticmethod
-    def createPresentationFromText(parent, testo, output_file):
+    def createPresentationFromText(parent, testo, output_file, template_path=None):
         """Crea il file .pptx dal testo strutturato generato dall'AI."""
         logging.info(f"Tentativo di creare file PPTX: {output_file}")
         try:
-            prs = Presentation()
+            if template_path and os.path.exists(template_path):
+                logging.info(f"Utilizzo del template: {template_path}")
+                prs = Presentation(template_path)
+            else:
+                logging.info("Nessun template valido fornito, utilizzo un layout di default.")
+                prs = Presentation()
+
             # Layout comuni (potrebbero variare leggermente tra versioni PPTX)
             title_slide_layout = prs.slide_layouts[0] # Slide titolo
             content_slide_layout = prs.slide_layouts[1] # Slide Titolo e Contenuto
@@ -464,3 +472,49 @@ class PptxGeneration:
              logging.exception("Errore durante la creazione del file PPTX")
              QMessageBox.critical(parent, "Errore Creazione PPTX", f"Errore durante la creazione/salvataggio della presentazione: {e}")
 
+    @staticmethod
+    def generate_preview(parent, testo, template_path=None):
+        """Genera un'anteprima della presentazione come immagini."""
+        if sys.platform != "win32":
+            QMessageBox.warning(parent, "Funzionalità non supportata", "La generazione dell'anteprima è supportata solo su Windows.")
+            return None
+
+        try:
+            import win32com.client
+        except ImportError:
+            QMessageBox.critical(parent, "Dipendenza Mancante", "La libreria 'pywin32' è necessaria per l'anteprima. Installala con 'pip install pywin32'.")
+            return None
+
+        temp_pptx_file = None
+        temp_image_dir = tempfile.mkdtemp()
+        image_paths = []
+
+        try:
+            # 1. Crea un file .pptx temporaneo
+            fd, temp_pptx_file = tempfile.mkstemp(suffix=".pptx")
+            os.close(fd)
+
+            PptxGeneration.createPresentationFromText(parent, testo, temp_pptx_file, template_path)
+
+            # 2. Usa COM per esportare le slide come immagini
+            powerpoint = win32com.client.Dispatch("PowerPoint.Application")
+            presentation = powerpoint.Presentations.Open(temp_pptx_file, WithWindow=False)
+
+            for i, slide in enumerate(presentation.Slides):
+                image_path = os.path.join(temp_image_dir, f"slide_{i + 1}.png")
+                slide.Export(image_path, "PNG")
+                image_paths.append(image_path)
+
+            presentation.Close()
+            powerpoint.Quit()
+
+            return image_paths
+
+        except Exception as e:
+            logging.exception("Errore durante la generazione dell'anteprima")
+            QMessageBox.critical(parent, "Errore Anteprima", f"Si è verificato un errore: {e}")
+            return None
+        finally:
+            # Pulizia file temporaneo
+            if temp_pptx_file and os.path.exists(temp_pptx_file):
+                os.remove(temp_pptx_file)
