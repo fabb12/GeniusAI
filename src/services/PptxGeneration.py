@@ -381,7 +381,10 @@ class PptxGeneration:
                 if index == 0: # Prima slide di titolo
                     slide = prs.slides.add_slide(title_slide_layout)
                     title = slide.shapes.title
-                    subtitle = slide.placeholders.get(1)
+                    subtitle = None
+                    if len(slide.placeholders) > 1:
+                        subtitle = slide.placeholders[1]
+
                     if title:
                         PptxGeneration.impostaFont(title, 44, titolo_text).bold = True
                     if subtitle and sottotitolo_text:
@@ -389,7 +392,9 @@ class PptxGeneration:
                 else: # Slide di contenuto
                     slide = prs.slides.add_slide(content_slide_layout)
                     title = slide.shapes.title
-                    content_placeholder = slide.placeholders.get(1)
+                    content_placeholder = None
+                    if len(slide.placeholders) > 1:
+                        content_placeholder = slide.placeholders[1]
 
                     if title:
                         PptxGeneration.impostaFont(title, 36, titolo_text).bold = True
