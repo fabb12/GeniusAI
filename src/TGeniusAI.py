@@ -2863,7 +2863,6 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
-        self.generazioneAIDock.setVisible(True)
         self.infoExtractionDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
@@ -2877,7 +2876,6 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
-        self.generazioneAIDock.setVisible(False)
         self.infoExtractionDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
@@ -2904,7 +2902,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
-        self.actionTogglegGenerazioneAIDock.setChecked(True)
         self.actionToggleInfoExtractionDock.setChecked(True)
 
     def updateViewMenu(self):
@@ -2918,7 +2915,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
-        self.actionTogglegGenerazioneAIDock.setChecked(self.generazioneAIDock.isVisible())
         self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
 
     def about(self):
