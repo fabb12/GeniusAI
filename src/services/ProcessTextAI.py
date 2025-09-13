@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
     ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
-    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX # Assicurati che questi percorsi siano corretti
+    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY
 )
 
 load_dotenv()
@@ -41,8 +41,8 @@ class ProcessTextAI(QThread):
         self.language = language
         self.result = None
         # Valida la modalità
-        if mode not in ["summary", "fix"]:
-            raise ValueError("La modalità deve essere 'summary' o 'fix'")
+        if mode not in ["summary", "fix", "youtube_summary"]:
+            raise ValueError("La modalità deve essere 'summary', 'fix' o 'youtube_summary'")
         self.mode = mode
 
         # Recupera le impostazioni e le chiavi API
@@ -94,7 +94,18 @@ class ProcessTextAI(QThread):
         Restituisce una tupla (testo_risultante, input_tokens, output_tokens) o una stringa di errore.
         """
         # 1. Scegli il file del prompt corretto in base alla modalità
-        prompt_file_path = PROMPT_TEXT_SUMMARY if self.mode == "summary" else PROMPT_TEXT_FIX
+        if self.mode == "summary":
+            prompt_file_path = PROMPT_TEXT_SUMMARY
+        elif self.mode == "fix":
+            prompt_file_path = PROMPT_TEXT_FIX
+        elif self.mode == "youtube_summary":
+            prompt_file_path = PROMPT_YOUTUBE_SUMMARY
+        else:
+            # Questo non dovrebbe accadere grazie alla validazione nel __init__
+            error_msg = f"Modalità non valida: {self.mode}"
+            logging.error(error_msg)
+            return error_msg
+
         if not prompt_file_path or not os.path.exists(prompt_file_path):
              error_msg = f"File prompt non trovato per la modalità '{self.mode}': {prompt_file_path}"
              logging.error(error_msg)
