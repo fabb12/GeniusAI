@@ -212,6 +212,7 @@ PROMPT_PPTX_GENERATION = get_prompt_path("pptx_generation_prompt.txt")
 PROMPT_TEXT_SUMMARY = get_prompt_path("text_summary_prompt.txt")
 PROMPT_TEXT_FIX = get_prompt_path("text_fix_prompt.txt")
 PROMPT_BROWSER_GUIDE = get_prompt_path("browser_guide_prompt.txt")
+PROMPT_YOUTUBE_SUMMARY = get_prompt_path("youtube_summary.txt")
 # PROMPT_BROWSER_AGENT = get_prompt_path("browser_agent_prompt.txt") # Se esiste
 PROMPT_MEETING_SUMMARY = get_prompt_path("meeting_summary_prompt.txt")
 PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste

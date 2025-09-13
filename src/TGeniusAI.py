@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
-    QProgressBar, QTabWidget, QDialog,QTextEdit
+    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog
 )
 
 # PyQtGraph (docking)
@@ -646,6 +646,11 @@ class VideoAudioManager(QMainWindow):
         self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
         toolbar.addAction(self.extractInfoAction)
 
+        self.summarizeYouTubeAction = QAction(QIcon("./res/text_sum.png"), 'Riassumi da YouTube', self)
+        self.summarizeYouTubeAction.setStatusTip('Genera un riassunto da un video di YouTube')
+        self.summarizeYouTubeAction.triggered.connect(self.summarizeYouTube)
+        toolbar.addAction(self.summarizeYouTubeAction)
+
         toolbar.addSeparator()
 
         # Workspace Actions
@@ -885,6 +890,54 @@ class VideoAudioManager(QMainWindow):
         self.text_ai_thread.process_complete.connect(self.onProcessComplete)
         self.text_ai_thread.process_error.connect(self.onProcessError)
         self.text_ai_thread.start()
+
+    def summarizeYouTube(self):
+        url, ok = QInputDialog.getText(self, 'Riassunto YouTube', 'Inserisci l\'URL del video di YouTube:')
+        if ok and url:
+            self.progressDialog = QProgressDialog("Download audio da YouTube...", "Annulla", 0, 100, self)
+            self.progressDialog.setWindowTitle("Progresso Download")
+            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+            self.progressDialog.show()
+
+            self.downloadThread = DownloadThread(url, download_video=False, ffmpeg_path=FFMPEG_PATH_DOWNLOAD)
+            self.downloadThread.finished.connect(self.onYouTubeDownloadFinished)
+            self.downloadThread.error.connect(self.onProcessError)
+            self.downloadThread.progress.connect(self.updateProgressDialog)
+            self.progressDialog.canceled.connect(self.downloadThread.terminate)
+            self.downloadThread.start()
+
+    def onYouTubeDownloadFinished(self, audio_path, video_title, video_language):
+        self.progressDialog.close()
+        self.progressDialog = QProgressDialog("Trascrizione in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Trascrizione")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        self.transcription_thread = TranscriptionThread(audio_path, self)
+        self.transcription_thread.update_progress.connect(self.updateProgressDialog)
+        self.transcription_thread.transcription_complete.connect(self.onYouTubeTranscriptionFinished)
+        self.transcription_thread.error_occurred.connect(self.onProcessError)
+        self.progressDialog.canceled.connect(self.transcription_thread.stop)
+        self.transcription_thread.start()
+
+    def onYouTubeTranscriptionFinished(self, transcript, temp_files):
+        self.progressDialog.close()
+        self.progressDialog = QProgressDialog("Riassunto del testo in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Riassunto")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        self.text_ai_thread = ProcessTextAI(
+            transcript,
+            self.languageComboBox.currentText(),
+            mode="youtube_summary"
+        )
+        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
+        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
+        self.text_ai_thread.process_error.connect(self.onProcessError)
+        self.text_ai_thread.start()
+
+
     def handleTimecodeToggle(self, checked):
         self.transcriptionTextArea.setReadOnly(
             checked)  # Disabilita la modifica del testo quando la checkbox è abilitata
@@ -2711,6 +2764,7 @@ class VideoAudioManager(QMainWindow):
         workflowsMenu.addAction(self.fixTextAction)
         workflowsMenu.addAction(self.generatePptxAction)
         workflowsMenu.addAction(self.extractInfoAction)
+        workflowsMenu.addAction(self.summarizeYouTubeAction)
 
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
