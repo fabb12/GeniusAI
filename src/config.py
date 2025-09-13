@@ -81,11 +81,11 @@ def get_api_key(service_name: str) -> str:
 
 # --- Definizione Identificatori Modello ---
 # Claude (Anthropic)
-MODEL_3_7_SONNET = "claude-3-5-sonnet-20240620" # Nota: Rinominato per chiarezza, 3.7 non esiste al momento
-MODEL_3_5_SONNET = "claude-3-5-sonnet-20240620" # Il più recente 3.5
+MODEL_3_7_SONNET = "claude-3-7-sonnet-20250219" # Nota: Rinominato per chiarezza, 3.7 non esiste al momento
+MODEL_3_5_SONNET = "claude-3-5-haiku-20241022" # Il più recente 3.5
 MODEL_3_OPUS = "claude-3-opus-20240229"
 MODEL_3_SONNET = "claude-3-sonnet-20240229"
-MODEL_3_HAIKU = "claude-3-haiku-20240307"
+MODEL_3_HAIKU = "claude-3-5-haiku-latest"
 
 # Gemini (Google Cloud)
 GEMINI_15_PRO = "gemini-1.5-pro-latest"

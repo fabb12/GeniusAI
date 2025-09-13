@@ -32,6 +32,6 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 
 - [x] aggiungere titolo del file da registrare nel dock di registrazione
 - [x] aggiungere interruzione trascrizione
-- [ ] aggiungere la funzione ritaglio
+- [x] aggiungere la funzione ritaglio
 - [x] aggiugere chiusura dock
 - [x] modificare il processo di registrazione usand

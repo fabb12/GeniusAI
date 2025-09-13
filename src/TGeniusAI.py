@@ -604,76 +604,85 @@ class VideoAudioManager(QMainWindow):
         self.player.positionChanged.connect(self.positionChanged)
         self.videoSlider.sliderMoved.connect(self.setPosition)
 
-        # Creazione e configurazione della toolbar principale
-        toolbar = QToolBar("Main Toolbar")
-        toolbar.setToolTip("Barra degli strumenti principale")
-        self.addToolBar(toolbar)
+
+
+        # --- PRIMA TOOLBAR (Principale) ---
+        mainToolbar = QToolBar("Main Toolbar")
+        mainToolbar.setToolTip("Barra degli strumenti principale per le azioni")
+        self.addToolBar(mainToolbar)
 
         # Aggiungi l'indicatore di registrazione lampeggiante
-        toolbar.addWidget(self.recording_indicator)
+        mainToolbar.addWidget(self.recording_indicator)
 
-
+        # Azione di condivisione
         shareAction = QAction(QIcon("./res/share.png"), "Condividi Video", self)
         shareAction.setToolTip("Condividi il video attualmente caricato")
         shareAction.triggered.connect(self.onShareButtonClicked)
-        toolbar.addAction(shareAction)
+        mainToolbar.addAction(shareAction)
 
-        toolbar.addSeparator()
+        mainToolbar.addSeparator()
 
-        # Workflow Actions
+        # Workflow Actions (Azioni AI)
         self.summarizeMeetingAction = QAction(QIcon("./res/meet_sum.png"), 'Riassumi Riunione', self)
         self.summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
         self.summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
-        toolbar.addAction(self.summarizeMeetingAction)
+        mainToolbar.addAction(self.summarizeMeetingAction)
 
         self.summarizeAction = QAction(QIcon("./res/text_sum.png"), 'Riassumi Testo', self)
         self.summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
         self.summarizeAction.triggered.connect(self.processTextWithAI)
-        toolbar.addAction(self.summarizeAction)
+        mainToolbar.addAction(self.summarizeAction)
 
         self.fixTextAction = QAction(QIcon("./res/text_fix.png"), 'Correggi Testo', self)
         self.fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
         self.fixTextAction.triggered.connect(self.fixTextWithAI)
-        toolbar.addAction(self.fixTextAction)
+        mainToolbar.addAction(self.fixTextAction)
 
         self.generatePptxAction = QAction(QIcon("./res/save.png"), 'Genera Presentazione', self)
         self.generatePptxAction.setStatusTip('Crea una presentazione PowerPoint dal testo')
         self.generatePptxAction.triggered.connect(self.openPptxDialog)
-        toolbar.addAction(self.generatePptxAction)
+        mainToolbar.addAction(self.generatePptxAction)
 
         self.extractInfoAction = QAction(QIcon("./res/frame_get.png"), 'Estrai Info da Video', self)
         self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
         self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
-        toolbar.addAction(self.extractInfoAction)
+        mainToolbar.addAction(self.extractInfoAction)
 
-        toolbar.addSeparator()
+        # --- SECONDA TOOLBAR (Workspace e Impostazioni) ---
+        workspaceToolbar = QToolBar("Workspace Toolbar")
+        workspaceToolbar.setToolTip("Barra degli strumenti per layout e impostazioni")
+        self.addToolBar(workspaceToolbar)
 
-        # Workspace Actions
+        # Workspace Actions (Layouts)
         self.defaultLayoutAction = QAction(QIcon("./res/meet.png"), 'Default', self)
         self.defaultLayoutAction.setToolTip("Layout di default")
         self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
-        toolbar.addAction(self.defaultLayoutAction)
+        workspaceToolbar.addAction(self.defaultLayoutAction)
 
         self.recordingLayoutAction = QAction(QIcon("./res/lay_rec.png"), 'Registrazione', self)
         self.recordingLayoutAction.setToolTip("Layout per la registrazione")
         self.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
-        toolbar.addAction(self.recordingLayoutAction)
+        workspaceToolbar.addAction(self.recordingLayoutAction)
 
         self.comparisonLayoutAction = QAction(QIcon("./res/load1.png"), 'Confronto', self)
         self.comparisonLayoutAction.setToolTip("Layout per il confronto")
         self.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
-        toolbar.addAction(self.comparisonLayoutAction)
+        workspaceToolbar.addAction(self.comparisonLayoutAction)
 
         self.transcriptionLayoutAction = QAction(QIcon("./res/load2.png"), 'Trascrizione', self)
         self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
         self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
-        toolbar.addAction(self.transcriptionLayoutAction)
+        workspaceToolbar.addAction(self.transcriptionLayoutAction)
+
+        workspaceToolbar.addSeparator()
+
+        # Azione Impostazioni
         settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
         settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
-        toolbar.addAction(settingsAction)
+        workspaceToolbar.addAction(settingsAction)
 
-        # Configurazione della menu bar
+        # Configurazione della menu bar (questa parte rimane invariata)
         self.setupMenuBar()
 
         # Applica il tema scuro, se disponibile
