@@ -8,6 +8,7 @@ import logging
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt6.QtCore import QSettings
 from pptx import Presentation
+from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.util import Pt, Inches
 from pptx.dml.color import RGBColor
 import re
@@ -108,6 +109,14 @@ class PptxGeneration:
         except Exception as e:
             logging.warning(f"Impossibile aggiungere footer: {e}")
 
+    @staticmethod
+    def _find_placeholder(slide, placeholder_types):
+        """Trova il primo placeholder che corrisponde a uno dei tipi dati."""
+        for shape in slide.placeholders:
+            for p_type in placeholder_types:
+                if shape.placeholder_format.type == p_type:
+                    return shape
+        return None
 
     @staticmethod
     def createPresentationFromFile(parent, file_path, num_slide, company_name, language):
@@ -381,9 +390,14 @@ class PptxGeneration:
                 if index == 0: # Prima slide di titolo
                     slide = prs.slides.add_slide(title_slide_layout)
                     title = slide.shapes.title
-                    subtitle = None
-                    if len(slide.placeholders) > 1:
-                        subtitle = slide.placeholders[1]
+
+                    # Cerca un placeholder per il sottotitolo in modo robusto
+                    subtitle_placeholder_types = [
+                        PP_PLACEHOLDER.SUBTITLE,
+                        PP_PLACEHOLDER.CENTER_TITLE,
+                        PP_PLACEHOLDER.BODY
+                    ]
+                    subtitle = PptxGeneration._find_placeholder(slide, subtitle_placeholder_types)
 
                     if title:
                         PptxGeneration.impostaFont(title, 44, titolo_text).bold = True
@@ -392,9 +406,9 @@ class PptxGeneration:
                 else: # Slide di contenuto
                     slide = prs.slides.add_slide(content_slide_layout)
                     title = slide.shapes.title
-                    content_placeholder = None
-                    if len(slide.placeholders) > 1:
-                        content_placeholder = slide.placeholders[1]
+
+                    # Cerca un placeholder per il corpo del testo
+                    content_placeholder = PptxGeneration._find_placeholder(slide, [PP_PLACEHOLDER.BODY])
 
                     if title:
                         PptxGeneration.impostaFont(title, 36, titolo_text).bold = True
