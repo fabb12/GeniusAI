@@ -17,7 +17,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere caricamento metadati video e trascrizione
 - [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
 - [ ] aggiungere zoom testo in area trascrizione con rotella + / -
--  
+-   
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
