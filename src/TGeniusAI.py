@@ -224,30 +224,12 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setToolTip("Dock per l'unione di più video")
         area.addDock(self.videoMergeDock, 'top')
 
-        self.generazioneAIDock = CustomDock("Generazione AI", closable=True)
-        self.generazioneAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.generazioneAIDock.setToolTip("Dock per la generazione di contenuti con AI")
-        area.addDock(self.generazioneAIDock, 'right')
 
         self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
         self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
         area.addDock(self.infoExtractionDock, 'right')
         self.createInfoExtractionDock()
-
-        # ---------------------
-        # DOCK GENERAZIONE AI (Refactored)
-        # ---------------------
-        generazioneAIDockWidget = QGroupBox("Generazione PowerPoint")
-        generazioneAILayout = QVBoxLayout()
-
-        self.openPptxDialogButton = QPushButton("Apri Generatore PowerPoint")
-        self.openPptxDialogButton.setToolTip("Apre la finestra di dialogo per creare una nuova presentazione PowerPoint.")
-        self.openPptxDialogButton.clicked.connect(self.openPptxDialog)
-        generazioneAILayout.addWidget(self.openPptxDialogButton)
-
-        generazioneAIDockWidget.setLayout(generazioneAILayout)
-        self.generazioneAIDock.addWidget(generazioneAIDockWidget)
 
         # ---------------------
         # PLAYER INPUT
@@ -613,7 +595,6 @@ class VideoAudioManager(QMainWindow):
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock,
-            'generazioneAIDock': self.generazioneAIDock,
             'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
@@ -637,6 +618,8 @@ class VideoAudioManager(QMainWindow):
         shareAction.triggered.connect(self.onShareButtonClicked)
         toolbar.addAction(shareAction)
 
+        toolbar.addSeparator()
+
         # Workflow Actions
         self.summarizeMeetingAction = QAction(QIcon("./res/meet_sum.png"), 'Riassumi Riunione', self)
         self.summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
@@ -652,6 +635,11 @@ class VideoAudioManager(QMainWindow):
         self.fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
         self.fixTextAction.triggered.connect(self.fixTextWithAI)
         toolbar.addAction(self.fixTextAction)
+
+        self.generatePptxAction = QAction(QIcon("./res/save.png"), 'Genera Presentazione', self)
+        self.generatePptxAction.setStatusTip('Crea una presentazione PowerPoint dal testo')
+        self.generatePptxAction.triggered.connect(self.openPptxDialog)
+        toolbar.addAction(self.generatePptxAction)
 
         self.extractInfoAction = QAction(QIcon("./res/frame_get.png"), 'Estrai Info da Video', self)
         self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
@@ -2722,6 +2710,7 @@ class VideoAudioManager(QMainWindow):
         workflowsMenu.addAction(self.summarizeMeetingAction)
         workflowsMenu.addAction(self.summarizeAction)
         workflowsMenu.addAction(self.fixTextAction)
+        workflowsMenu.addAction(self.generatePptxAction)
         workflowsMenu.addAction(self.extractInfoAction)
 
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
@@ -2821,7 +2810,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
-        self.actionTogglegGenerazioneAIDock = self.createToggleAction(self.generazioneAIDock, 'Mostra/Nascondi Generazione AI')
         self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
@@ -2833,7 +2821,6 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
-        viewMenu.addAction(self.actionTogglegGenerazioneAIDock)
         viewMenu.addAction(self.actionToggleInfoExtractionDock)
 
 
