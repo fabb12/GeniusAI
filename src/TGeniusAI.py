@@ -51,6 +51,7 @@ from managers.Settings import SettingsDialog
 from ui.ScreenButton import ScreenButton
 from ui.CustumTextEdit import CustomTextEdit
 from services.PptxGeneration import PptxGeneration
+from ui.PptxDialog import PptxDialog
 from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
@@ -235,45 +236,15 @@ class VideoAudioManager(QMainWindow):
         self.createInfoExtractionDock()
 
         # ---------------------
-        # DOCK GENERAZIONE AI (invariato)
+        # DOCK GENERAZIONE AI (Refactored)
         # ---------------------
-        generazioneAIDockWidget = QGroupBox("Impostazioni Generazione AI")
-        generazioneAIDockWidget.setToolTip("Impostazioni per generare testo e presentazioni con AI")
+        generazioneAIDockWidget = QGroupBox("Generazione PowerPoint")
         generazioneAILayout = QVBoxLayout()
 
-        self.numSlidesLabel = QLabel("Numero di Slide:")
-        self.numSlidesLabel.setToolTip("Specifica il numero di slide da generare")
-        self.numSlidesInput = QLineEdit()
-        self.numSlidesInput.setPlaceholderText("Inserisci numero di slide")
-        self.numSlidesInput.setToolTip("Inserisci il numero di diapositive che vuoi generare")
-        generazioneAILayout.addWidget(self.numSlidesLabel)
-        generazioneAILayout.addWidget(self.numSlidesInput)
-
-        self.companyNameLabel = QLabel("Nome della Compagnia:")
-        self.companyNameLabel.setToolTip("Nome della compagnia per cui generare la presentazione")
-        self.companyNameInput = QLineEdit()
-        self.companyNameInput.setPlaceholderText("Inserisci nome della compagnia")
-        self.companyNameInput.setToolTip("Inserisci il nome della compagnia per personalizzare la presentazione")
-        generazioneAILayout.addWidget(self.companyNameLabel)
-        generazioneAILayout.addWidget(self.companyNameInput)
-
-        self.languageLabel = QLabel("Lingua:")
-        self.languageLabel.setToolTip("Lingua in cui generare la presentazione")
-        self.languageInput = QComboBox()
-        self.languageInput.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
-        self.languageInput.setToolTip("Seleziona la lingua desiderata per la presentazione generata")
-        generazioneAILayout.addWidget(self.languageLabel)
-        generazioneAILayout.addWidget(self.languageInput)
-
-        self.generateTextButton = QPushButton('Genera Testo per Presentazione con AI ')
-        self.generateTextButton.setToolTip("Clicca per generare il testo per la presentazione tramite AI")
-        self.generateTextButton.clicked.connect(self.generateTextForPresentation)
-        generazioneAILayout.addWidget(self.generateTextButton)
-
-        self.generatePresentationButton = QPushButton('Genera Presentazione')
-        self.generatePresentationButton.setToolTip("Clicca per generare la presentazione completa con AI")
-        self.generatePresentationButton.clicked.connect(self.generateAIPresentation)
-        generazioneAILayout.addWidget(self.generatePresentationButton)
+        self.openPptxDialogButton = QPushButton("Apri Generatore PowerPoint")
+        self.openPptxDialogButton.setToolTip("Apre la finestra di dialogo per creare una nuova presentazione PowerPoint.")
+        self.openPptxDialogButton.clicked.connect(self.openPptxDialog)
+        generazioneAILayout.addWidget(self.openPptxDialogButton)
 
         generazioneAIDockWidget.setLayout(generazioneAILayout)
         self.generazioneAIDock.addWidget(generazioneAIDockWidget)
@@ -875,33 +846,6 @@ class VideoAudioManager(QMainWindow):
         self.meeting_summarizer_thread.process_error.connect(self.onProcessError)
         self.meeting_summarizer_thread.start()
 
-    def generateTextForPresentation(self):
-        try:
-            num_slide = int(self.numSlidesInput.text().strip())
-        except ValueError:
-            QMessageBox.warning(self, "Errore", "Per favore, inserisci un numero valido per le slide.")
-            return
-
-        company = self.companyNameInput.text().strip()
-        language = self.languageInput.currentText()
-
-        if not language:
-            QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
-            return
-
-        testo_attuale = self.transcriptionTextArea.toPlainText()
-        if testo_attuale.strip() == "":
-            QMessageBox.warning(self, "Attenzione", "Inserisci del testo o seleziona un file di testo.")
-            return
-
-        testo_per_slide, input_tokens, output_tokens = PptxGeneration.generaTestoPerSlide(testo_attuale,
-                                                                                          num_slide,
-                                                                                          company,
-                                                                                          language)
-        print(f"Token di input utilizzati: {input_tokens}")
-        print(f"Token di output utilizzati: {output_tokens}")
-        self.transcriptionTextArea.setPlainText(testo_per_slide)
-
     def processTextWithAI(self):
         # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
@@ -981,38 +925,48 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.close()
         QMessageBox.critical(self, "Errore", error_message)
 
-    def generateAIPresentation(self):
-        try:
-            num_slide = int(self.numSlidesInput.text().strip())
-        except ValueError:
-            QMessageBox.warning(self, "Errore", "Per favore, inserisci un numero valido per le slide.")
-            return
+    def openPptxDialog(self):
+        """Apre il dialogo per la generazione della presentazione PowerPoint."""
+        current_text = self.transcriptionTextArea.toPlainText()
+        dialog = PptxDialog(self, transcription_text=current_text)
 
-        company = self.companyNameInput.text().strip()
-        language = self.languageInput.currentText()
+        if dialog.exec():
+            settings = dialog.get_settings()
 
-        #if not company:
-        #    QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
-        #    return
+            # Chiedi dove salvare il file
+            save_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Salva Presentazione",
+                "",
+                "PowerPoint Presentation (*.pptx)"
+            )
 
-        if not language:
-            QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
-            return
-
-        testo_attuale = self.transcriptionTextArea.toPlainText()
-        if testo_attuale.strip() == "":
-            file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")
-            if file_path:
-                PptxGeneration.createPresentationFromFile(self, file_path, num_slide, company, language)
-            else:
-                QMessageBox.warning(self, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
-        else:
-            save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
-                                                       "PowerPoint Presentation (*.pptx)")
-            if save_path:
-                PptxGeneration.createPresentationFromText(self, testo_attuale, save_path)
-            else:
+            if not save_path:
                 QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+                return
+
+            try:
+                # 1. Genera il testo per le slide
+                testo_per_slide, _, _ = PptxGeneration.generaTestoPerSlide(
+                    settings["source_text"],
+                    settings["num_slides"],
+                    settings["company_name"],
+                    settings["language"]
+                )
+
+                if "Errore" in testo_per_slide:
+                    QMessageBox.critical(self, "Errore API", f"Errore durante la generazione del testo: {testo_per_slide}")
+                    return
+
+                # 2. Crea la presentazione dal testo generato
+                PptxGeneration.createPresentationFromText(
+                    self,
+                    testo_per_slide,
+                    save_path,
+                    settings["template_path"]
+                )
+            except Exception as e:
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore: {e}")
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
