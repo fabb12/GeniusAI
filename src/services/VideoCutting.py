@@ -29,10 +29,12 @@ class VideoCuttingThread(QThread):
             clip = media.subclip(self.start_time, self.end_time)
 
             if is_video:
+                # FIX: Sincronizza la durata dell'audio con quella del video per evitare rumori alla fine
+                if clip.audio:
+                    audio_clip = clip.audio.subclip(0, clip.duration)
+                    clip = clip.set_audio(audio_clip)
                 # Salva il file video tagliato
-                # FIX: Imposta 'preset' su 'ultrafast' per una codifica più veloce e meno incline a errori.
-                # Aggiungi ffmpeg_params=["-async", "1"] per sincronizzare l'audio e il video.
-                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac", preset='ultrafast', ffmpeg_params=["-async", "1"])
+                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac")
             else:
                 # Salva il file audio tagliato
                 clip.write_audiofile(self.output_path)
