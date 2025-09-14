@@ -77,16 +77,14 @@ class CropThread(QThread):
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
-            # FIX: Riduci leggermente la durata per evitare l'eco audio alla fine
-            if cropped_video.duration and cropped_video.duration > 0.15:
-                cropped_video = cropped_video.subclip(0, cropped_video.duration - 0.15)
-
             output_path = tempfile.mktemp(suffix='.mp4')
 
             # Use the custom logger to get progress updates
             logger = CropLogger(self.progress)
 
-            cropped_video.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger)
+            # FIX: Imposta 'preset' su 'ultrafast' per una codifica più veloce e meno incline a errori.
+            # Aggiungi ffmpeg_params=["-async", "1"] per sincronizzare l'audio e il video.
+            cropped_video.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger, preset='ultrafast', ffmpeg_params=["-async", "1"])
 
             self.completed.emit(output_path)
         except Exception as e:
