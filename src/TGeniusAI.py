@@ -111,6 +111,7 @@ class VideoAudioManager(QMainWindow):
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
 
         self.initUI()
+        self.videoContainer.resizeEvent = self.videoContainerResizeEvent
         self.setupDockSettingsManager()
         self.bookmarkStart = None
         self.bookmarkEnd = None
@@ -239,6 +240,11 @@ class VideoAudioManager(QMainWindow):
         self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
+
+        self.videoContainer = QWidget()
+        self.videoContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoContainer.setToolTip("Video container for panning and zooming")
+        self.videoCropWidget.setParent(self.videoContainer)
 
         self.videoOverlay = VideoOverlay(self.videoCropWidget)
         self.videoOverlay.setGeometry(self.videoCropWidget.rect())
@@ -422,7 +428,7 @@ class VideoAudioManager(QMainWindow):
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(self.videoCropWidget)
+        videoPlayerLayout.addWidget(self.videoContainer)
         videoPlayerLayout.addLayout(timecodeLayout)
 
         # Timecode input
@@ -696,6 +702,11 @@ class VideoAudioManager(QMainWindow):
 
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
+
+    def videoContainerResizeEvent(self, event):
+        if self.zoom_level == 1.0:
+            self.videoCropWidget.setGeometry(self.videoContainer.rect())
+        QWidget.resizeEvent(self.videoContainer, event)
 
     def videoCropWidgetResizeEvent(self, event):
         # Chiama il metodo resizeEvent originale del widget
@@ -1255,10 +1266,7 @@ class VideoAudioManager(QMainWindow):
         return super().eventFilter(source, event)
 
     def handleWheelEvent(self, event):
-        mouse_pos = event.position().toPoint()
-        widget_pos = self.videoCropWidget.pos()
-        mouse_x_in_widget = mouse_pos.x() - widget_pos.x()
-        mouse_y_in_widget = mouse_pos.y() - widget_pos.y()
+        mouse_pos = event.position()
 
         # Calcola la variazione di zoom basata sul delta dello scroll della rotellina del mouse
         delta = event.angleDelta().y()
@@ -1268,11 +1276,11 @@ class VideoAudioManager(QMainWindow):
         elif delta < 0:
             self.zoom_level *= 0.9
 
-        self.applyVideoZoom(mouse_x_in_widget, mouse_y_in_widget, old_zoom_level)
+        self.applyVideoZoom(mouse_pos.x(), mouse_pos.y(), old_zoom_level)
 
     def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
         # Calcola le nuove dimensioni basate sul livello di zoom attuale
-        original_size = self.videoCropWidget.sizeHint()
+        original_size = self.videoContainer.size()
         new_width = int(original_size.width() * self.zoom_level)
         new_height = int(original_size.height() * self.zoom_level)
         self.videoCropWidget.resize(new_width, new_height)
@@ -2645,6 +2653,10 @@ class VideoAudioManager(QMainWindow):
         """Load and play video or audio, updating UI based on file type."""
         # Scarica il video corrente prima di caricarne uno nuovo
         self.player.stop()
+
+        self.zoom_level = 1.0
+        if hasattr(self, 'videoContainer'):
+            self.videoCropWidget.setGeometry(self.videoContainer.rect())
 
         if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
