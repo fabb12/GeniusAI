@@ -25,17 +25,14 @@ class VideoCuttingThread(QThread):
             else:
                 raise ValueError("Formato file non supportato")
 
-            # FIX: Riduci leggermente la durata per evitare l'eco audio alla fine
-            end_time = self.end_time - 0.15
-            if end_time < self.start_time:
-                end_time = self.end_time
-
             # Taglia il media tra start_time e end_time
-            clip = media.subclip(self.start_time, end_time)
+            clip = media.subclip(self.start_time, self.end_time)
 
             if is_video:
                 # Salva il file video tagliato
-                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac")
+                # FIX: Imposta 'preset' su 'ultrafast' per una codifica più veloce e meno incline a errori.
+                # Aggiungi ffmpeg_params=["-async", "1"] per sincronizzare l'audio e il video.
+                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac", preset='ultrafast', ffmpeg_params=["-async", "1"])
             else:
                 # Salva il file audio tagliato
                 clip.write_audiofile(self.output_path)
