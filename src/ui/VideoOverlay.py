@@ -1,12 +1,16 @@
 from PyQt6.QtWidgets import QWidget
-from PyQt6.QtCore import Qt, QRect, QPoint
+from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import QPainter, QPen, QColor, QPixmap
 import os
 
 class VideoOverlay(QWidget):
-    def __init__(self, parent=None):
+    panned = pyqtSignal(QPoint)
+    zoomed = pyqtSignal(float, QPoint)
+    view_reset = pyqtSignal()
+
+    def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        # Assicurati di ricevere gli eventi del mouse
+        self.main_window = main_window
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
         self.crop_points = []
@@ -16,6 +20,8 @@ class VideoOverlay(QWidget):
         self.watermark_size = 0
         self.watermark_pixmap = None
         self.watermark_position = "Bottom Right"
+        self.is_panning = False
+        self.last_mouse_position = QPoint()
 
     def setWatermark(self, enabled, path, size, position):
         self.watermark_enabled = enabled
@@ -28,18 +34,35 @@ class VideoOverlay(QWidget):
             self.watermark_pixmap = None
         self.update()
 
+    def wheelEvent(self, event):
+        delta = event.angleDelta().y()
+        self.zoomed.emit(delta, event.position().toPoint())
+
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.RightButton:
-            if len(self.crop_points) >= 2:
-                self.crop_points = []
-                self.crop_rect = QRect()
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_panning = True
+            self.last_mouse_position = event.position().toPoint()
+        elif event.button() == Qt.MouseButton.RightButton:
+            if self.main_window.zoom_level != 1.0:
+                self.view_reset.emit()
+            else:
+                if len(self.crop_points) >= 2:
+                    self.crop_points = []
+                    self.crop_rect = QRect()
+                self.crop_points.append(event.pos())
+                if len(self.crop_points) == 2:
+                    self.crop_rect = QRect(self.crop_points[0], self.crop_points[1]).normalized()
+                self.update()
 
-            self.crop_points.append(event.pos())
+    def mouseMoveEvent(self, event):
+        if self.is_panning:
+            delta = event.position().toPoint() - self.last_mouse_position
+            self.panned.emit(delta)
+            self.last_mouse_position = event.position().toPoint()
 
-            if len(self.crop_points) == 2:
-                self.crop_rect = QRect(self.crop_points[0], self.crop_points[1]).normalized()
-
-            self.update()
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.is_panning = False
 
     def paintEvent(self, event):
         painter = QPainter(self)

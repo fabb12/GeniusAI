@@ -246,16 +246,19 @@ class VideoAudioManager(QMainWindow):
         self.videoContainer.setToolTip("Video container for panning and zooming")
         self.videoCropWidget.setParent(self.videoContainer)
 
-        self.videoOverlay = VideoOverlay(self.videoCropWidget)
+        self.videoOverlay = VideoOverlay(self, self.videoCropWidget)
         self.videoOverlay.setGeometry(self.videoCropWidget.rect())
         self.videoOverlay.show()
-        self.videoOverlay.raise_()  # Porta l'overlay in primo piano
+        self.videoOverlay.raise_()
         self.videoCropWidget.resizeEvent = self.videoCropWidgetResizeEvent
 
         self.zoom_level = 1.0
-        self.videoCropWidget.installEventFilter(self)
         self.is_panning = False
         self.last_mouse_position = QPoint()
+
+        self.videoOverlay.panned.connect(self.handle_pan)
+        self.videoOverlay.zoomed.connect(self.handle_zoom)
+        self.videoOverlay.view_reset.connect(self.reset_view)
 
         self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
@@ -428,7 +431,7 @@ class VideoAudioManager(QMainWindow):
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(self.videoContainer)
+        videoPlayerLayout.addWidget(self.videoCropWidget)
         videoPlayerLayout.addLayout(timecodeLayout)
 
         # Timecode input
@@ -713,6 +716,33 @@ class VideoAudioManager(QMainWindow):
         CropVideoWidget.resizeEvent(self.videoCropWidget, event)
         # Aggiorna la geometria dell'overlay in base alle dimensioni attuali del widget
         self.videoOverlay.setGeometry(self.videoCropWidget.rect())
+
+    def handle_pan(self, delta):
+        new_pos = self.videoCropWidget.pos() + delta
+        self.videoCropWidget.move(new_pos)
+
+    def handle_zoom(self, delta, mouse_pos):
+        old_zoom_level = self.zoom_level
+        if delta > 0:
+            self.zoom_level *= 1.1
+        elif delta < 0:
+            self.zoom_level *= 0.9
+
+        original_size = self.videoContainer.size()
+        new_width = int(original_size.width() * self.zoom_level)
+        new_height = int(original_size.height() * self.zoom_level)
+        self.videoCropWidget.resize(new_width, new_height)
+
+        scale_change = self.zoom_level / old_zoom_level
+        new_x = mouse_pos.x() * scale_change - mouse_pos.x()
+        new_y = mouse_pos.y() * scale_change - mouse_pos.y()
+        current_pos = self.videoCropWidget.pos()
+        new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
+        self.videoCropWidget.move(new_pos)
+
+    def reset_view(self):
+        self.zoom_level = 1.0
+        self.videoCropWidget.setGeometry(self.videoContainer.rect())
 
     def createWorkflow(self):
         # Implementazione per creare un nuovo workflow
@@ -1248,60 +1278,6 @@ class VideoAudioManager(QMainWindow):
 
         self.cutting_thread.start()
 
-    def eventFilter(self, source, event):
-        if source == self.videoCropWidget:
-            if event.type() == QEvent.Type.Wheel:
-                self.handleWheelEvent(event)
-                return True
-            elif event.type() == QEvent.Type.MouseButtonPress and event.buttons() & Qt.MouseButton.LeftButton:
-                self.is_panning = True
-                self.last_mouse_position = event.position().toPoint()
-                return True
-            elif event.type() == QEvent.Type.MouseMove and self.is_panning:
-                self.handlePanEvent(event)
-                return True
-            elif event.type() == QEvent.Type.MouseButtonRelease:
-                self.is_panning = False
-                return True
-        return super().eventFilter(source, event)
-
-    def handleWheelEvent(self, event):
-        mouse_pos = event.position()
-
-        # Calcola la variazione di zoom basata sul delta dello scroll della rotellina del mouse
-        delta = event.angleDelta().y()
-        old_zoom_level = self.zoom_level
-        if delta > 0:
-            self.zoom_level *= 1.1
-        elif delta < 0:
-            self.zoom_level *= 0.9
-
-        self.applyVideoZoom(mouse_pos.x(), mouse_pos.y(), old_zoom_level)
-
-    def applyVideoZoom(self, mouse_x, mouse_y, old_zoom_level):
-        # Calcola le nuove dimensioni basate sul livello di zoom attuale
-        original_size = self.videoContainer.size()
-        new_width = int(original_size.width() * self.zoom_level)
-        new_height = int(original_size.height() * self.zoom_level)
-        self.videoCropWidget.resize(new_width, new_height)
-
-        # Calcola la nuova posizione per centrare lo zoom attorno al mouse
-        scale_change = self.zoom_level / old_zoom_level
-        new_x = mouse_x * scale_change - mouse_x
-        new_y = mouse_y * scale_change - mouse_y
-        current_pos = self.videoCropWidget.pos()
-        new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
-        self.videoCropWidget.move(new_pos)
-
-    def handlePanEvent(self, event):
-        # Calcola la differenza di movimento
-        current_position = event.position().toPoint()
-        delta = current_position - self.last_mouse_position
-        self.last_mouse_position = current_position
-
-        # Sposta il contenuto del widget di video
-        new_pos = self.videoCropWidget.pos() + delta
-        self.videoCropWidget.move(new_pos)
 
     def setVolume(self, value):
         self.audioOutput.setVolume(value / 100.0)
@@ -2653,10 +2629,7 @@ class VideoAudioManager(QMainWindow):
         """Load and play video or audio, updating UI based on file type."""
         # Scarica il video corrente prima di caricarne uno nuovo
         self.player.stop()
-
-        self.zoom_level = 1.0
-        if hasattr(self, 'videoContainer'):
-            self.videoCropWidget.setGeometry(self.videoContainer.rect())
+        self.reset_view()
 
         if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
