@@ -2209,6 +2209,10 @@ class VideoAudioManager(QMainWindow):
             logging.debug("No input audio devices found.")
         recordingLayout.addWidget(audioGroupBox)
 
+        self.recordSystemAudioCheckBox = QCheckBox("Registra audio di sistema (output cuffie)")
+        self.recordSystemAudioCheckBox.setToolTip(
+            "Registra l'audio che viene riprodotto nel sistema (utile con cuffie Bluetooth)")
+        audioLayout.addWidget(self.recordSystemAudioCheckBox)
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
         saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
 
@@ -2353,7 +2357,23 @@ class VideoAudioManager(QMainWindow):
             self.startRecordingButton.setEnabled(True)
             return
 
+
+        # Rileva se registrare l'audio di sistema
+        use_system_audio = self.recordSystemAudioCheckBox.isChecked() if hasattr(self, 'recordSystemAudioCheckBox') else False
+
+        # Rileva automaticamente se ci sono cuffie Bluetooth connesse
         bluetooth_mode = self._is_bluetooth_mode_active()
+        if bluetooth_mode:
+            # Se ci sono cuffie Bluetooth, suggerisci di usare l'audio di sistema
+            if not use_system_audio and selected_audio_devices:
+                reply = QMessageBox.question(
+                    self, "Cuffie Bluetooth rilevate",
+                    "Sono state rilevate cuffie Bluetooth. Vuoi registrare anche l'audio di sistema?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    use_system_audio = True
 
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
@@ -2367,7 +2387,8 @@ class VideoAudioManager(QMainWindow):
             watermark_size=self.watermarkSize,
             watermark_position=self.watermarkPosition,
             bluetooth_mode=bluetooth_mode,
-            audio_volume=4.0
+            audio_volume=4.0,
+            use_system_audio=use_system_audio  # Passa il nuovo parametro
         )
 
         self.recorder_thread.error_signal.connect(self.showError)

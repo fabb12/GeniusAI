@@ -6,6 +6,7 @@ import os
 from src.config import WATERMARK_IMAGE
 from src.config import DEFAULT_AUDIO_CHANNELS, DEFAULT_FRAME_RATE
 
+
 class ScreenRecorder(QThread):
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
@@ -15,7 +16,7 @@ class ScreenRecorder(QThread):
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
-                 bluetooth_mode=False, audio_volume=1.0):
+                 bluetooth_mode=False, audio_volume=1.0, use_system_audio=False):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -25,8 +26,9 @@ class ScreenRecorder(QThread):
         self.frame_rate = frames
         self.bluetooth_mode = bluetooth_mode
         self.audio_volume = audio_volume
+        self.use_system_audio = use_system_audio  # Nuovo parametro per audio di sistema
         # Correctly determine if audio should be recorded
-        self.record_audio = record_audio and bool(self.audio_inputs)
+        self.record_audio = record_audio and (bool(self.audio_inputs) or use_system_audio)
         self.is_running = True
         self.use_watermark = use_watermark
         self.watermark_image = watermark_path if watermark_path else WATERMARK_IMAGE
@@ -71,29 +73,58 @@ class ScreenRecorder(QThread):
         if self.use_watermark:
             ffmpeg_command.extend(['-i', self.watermark_image])
 
-        # Add audio inputs if any
-        if self.record_audio:
+        # Aggiungi audio di sistema se richiesto (WASAPI loopback per Windows)
+        audio_input_count = 0
+        system_audio_index = None
+
+        if self.use_system_audio:
+            # Usa WASAPI per catturare l'audio di sistema (quello che esce dalle cuffie)
+            ffmpeg_command.extend([
+                '-f', 'dshow',
+                '-i', 'audio=virtual-audio-capturer'  # Nome del dispositivo virtuale
+            ])
+            audio_input_count += 1
+            system_audio_index = audio_input_count + (2 if self.use_watermark else 1)
+
+            # Alternativa: prova con il dispositivo di loopback predefinito
+            # Se virtual-audio-capturer non funziona, prova con:
+            # '-i', 'audio=Stereo Mix (Realtek High Definition Audio)'
+            # o con WASAPI direttamente:
+            # ffmpeg_command.extend([
+            #     '-f', 'dshow',
+            #     '-audio_buffer_size', '50',
+            #     '-i', 'audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\wave_{GUID_DEL_DISPOSITIVO}'
+            # ])
+
+        # Add microphone/other audio inputs
+        if self.record_audio and self.audio_inputs:
             for audio_device in self.audio_inputs:
                 ffmpeg_command.extend(['-f', 'dshow'])
-                # For Bluetooth, set device options for compatibility
-                if self.bluetooth_mode:
-                    ffmpeg_command.extend(['-audio_buffer_size', '100'])
+
+                # Configurazione specifica per Bluetooth
+                if self.bluetooth_mode or 'bluetooth' in audio_device.lower():
+                    ffmpeg_command.extend([
+                        '-audio_buffer_size', '200',  # Buffer più grande per Bluetooth
+                        '-thread_queue_size', '1024'  # Coda thread più grande
+                    ])
                 else:
-                    # Provide default high-quality settings for other devices
-                    ffmpeg_command.extend(['-sample_rate', '44100'])
-                    ffmpeg_command.extend(['-channels', '2'])
+                    ffmpeg_command.extend([
+                        '-sample_rate', '44100',
+                        '-channels', '2',
+                        '-audio_buffer_size', '50'
+                    ])
+
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
+                audio_input_count += 1
 
         # --- Build the filter_complex string and map arguments ---
         filter_complex_parts = []
         map_args = []
         audio_codec_args = []
-        num_audio_inputs = len(self.audio_inputs)
 
         if self.use_watermark:
-            # Watermark is input 1, so video is [0:v] and watermark is [1:v]
-            # Scale the watermark to be x% of the video height
-            scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
+            # Watermark processing
+            scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size / 100}[scaled_wm]"
             filter_complex_parts.append(scale_filter)
 
             # Position the watermark
@@ -108,43 +139,69 @@ class ScreenRecorder(QThread):
 
             filter_complex_parts.append(overlay_filter)
             map_args.extend(['-map', '[v_out]'])
-            audio_input_start_index = 2  # Audio inputs start after video and watermark
+            audio_input_start_index = 2
         else:
-            # No watermark, just map the video directly
             map_args.extend(['-map', '0:v'])
-            audio_input_start_index = 1  # Audio inputs start after video
+            audio_input_start_index = 1
 
-        if self.record_audio:
-            # Determine if the volume filter needs to be applied
+        # Gestione audio migliorata
+        if audio_input_count > 0:
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
 
-            if num_audio_inputs == 1:
-                audio_input_stream = f"[{audio_input_start_index}:a]"
+            if audio_input_count == 1:
+                # Single audio source
+                audio_index = audio_input_start_index if not self.use_watermark else audio_input_start_index
+                audio_input_stream = f"[{audio_index}:a]"
+
                 if apply_volume_filter:
-                    # Apply volume filter to the single audio stream
                     volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
                     filter_complex_parts.append(volume_filter)
                     map_args.extend(['-map', '[a_out]'])
                 else:
-                    # No volume adjustment, map directly
-                    map_args.extend(['-map', audio_input_stream])
-                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
+                    map_args.extend(['-map', f'{audio_index}:a'])
 
-            elif num_audio_inputs > 1:
-                audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
-                if apply_volume_filter:
-                    # Merge audio inputs and then apply the volume filter
-                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged];[a_merged]volume={self.audio_volume}[a_out]"
+            else:
+                # Multiple audio sources - mix them together
+                audio_inputs_to_mix = []
+                current_index = audio_input_start_index
+
+                # Aggiungi tutti gli input audio
+                for i in range(audio_input_count):
+                    audio_inputs_to_mix.append(f"[{current_index}:a]")
+                    current_index += 1
+
+                # Crea il filtro amix per mixare tutti gli audio
+                audio_merge = "".join(audio_inputs_to_mix)
+
+                if self.bluetooth_mode:
+                    # Per Bluetooth usa amix invece di amerge per migliore compatibilità
+                    mix_filter = f"{audio_merge}amix=inputs={audio_input_count}:duration=longest:dropout_transition=2"
                 else:
-                    # Just merge the audio inputs
-                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
-                filter_complex_parts.append(audio_filter)
-                map_args.extend(['-map', '[a_out]'])
-                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
+                    mix_filter = f"{audio_merge}amerge=inputs={audio_input_count}"
 
-            # The -ac and -ar options have been moved to the dshow input options for bluetooth mode
-            # if self.bluetooth_mode:
-            #     audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
+                if apply_volume_filter:
+                    mix_filter += f"[a_mixed];[a_mixed]volume={self.audio_volume}[a_out]"
+                else:
+                    mix_filter += "[a_out]"
+
+                filter_complex_parts.append(mix_filter)
+                map_args.extend(['-map', '[a_out]'])
+
+            # Configurazione codec audio
+            if self.bluetooth_mode:
+                # Configurazione ottimizzata per Bluetooth
+                audio_codec_args = [
+                    '-c:a', 'aac',
+                    '-b:a', '128k',  # Bitrate ridotto per Bluetooth
+                    '-ac', '2',  # Stereo
+                    '-ar', '44100'  # Sample rate standard
+                ]
+            else:
+                audio_codec_args = [
+                    '-c:a', 'aac',
+                    '-b:a', '192k',
+                    '-ac', '2'
+                ]
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)
@@ -152,25 +209,39 @@ class ScreenRecorder(QThread):
 
         ffmpeg_command.extend(map_args)
 
-        # Add final video output options
+        # Video encoding options
         ffmpeg_command.extend([
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart', # Add faststart flag for robustness
+            '-movflags', '+faststart',
         ])
 
         # Add audio codec options if audio is recorded
-        if self.record_audio:
+        if audio_input_count > 0:
             ffmpeg_command.extend(audio_codec_args)
+            # Aggiungi sincronizzazione audio migliorata
+            ffmpeg_command.extend([
+                '-async', '1',  # Sincronizzazione audio
+                '-vsync', 'cfr'  # Frame rate costante
+            ])
 
         ffmpeg_command.extend(['-y', self.output_path])
+
+        # Debug: stampa il comando completo
+        print("FFmpeg command:", " ".join(ffmpeg_command))
 
         # Use CREATE_NO_WINDOW to hide the console window
         creationflags = subprocess.CREATE_NO_WINDOW
 
-        # Start the ffmpeg process in binary mode (remove text=True)
-        self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
+        # Start the ffmpeg process
+        self.ffmpeg_process = subprocess.Popen(
+            ffmpeg_command,
+            stdin=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            creationflags=creationflags
+        )
 
         # Regex to parse ffmpeg's progress output
         stats_regex = re.compile(
@@ -193,7 +264,9 @@ class ScreenRecorder(QThread):
                 if match:
                     stats = match.groupdict()
                     self.stats_updated.emit(stats)
-                print(line_str) # for debugging
+                # Debug output
+                if "error" in line_str.lower() or "warning" in line_str.lower():
+                    print(f"FFmpeg: {line_str}")
 
         # Ensure recording is stopped cleanly
         if self.ffmpeg_process.poll() is None:
@@ -202,7 +275,6 @@ class ScreenRecorder(QThread):
     def stop_recording(self):
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             try:
-                # Write binary 'q' to stdin
                 self.ffmpeg_process.stdin.write(b'q')
                 self.ffmpeg_process.stdin.flush()
                 self.ffmpeg_process.wait(timeout=5)
@@ -217,6 +289,6 @@ class ScreenRecorder(QThread):
     def stop(self):
         self.is_running = False
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
-             self.stop_recording()
+            self.stop_recording()
         else:
             self.recording_stopped_signal.emit()
