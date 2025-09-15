@@ -19,6 +19,12 @@ class ScreenRecorder(QThread):
         Usa PyAudioWPatch per trovare il dispositivo di loopback WASAPI predefinito.
         Questo cattura l'audio che viene riprodotto sul dispositivo di output predefinito (es. cuffie).
         """
+        # Prima di tutto, controlla se stiamo usando la versione patchata di PyAudio.
+        # La versione standard non ha questo attributo.
+        if not hasattr(pyaudio, 'get_loopback_device_info_generator'):
+            self.error_signal.emit("Libreria audio richiesta non trovata. Eseguire 'pip install PyAudioWPatch' e riprovare.")
+            return None
+
         try:
             p = pyaudio.PyAudio()
             # Trova l'API host WASAPI
@@ -35,11 +41,21 @@ class ScreenRecorder(QThread):
                     # Cerca un dispositivo di loopback che corrisponda al nome del dispositivo di output
                     # o che abbia un nome simile, escludendo la parte "(loopback)"
                     if default_speakers["name"] in loopback["name"]:
-                        print(f"Found loopback device: {loopback['name']}")
-                        return loopback["name"]
+                        device_name = loopback["name"]
+                        print(f"Found loopback device: {device_name}")
+                        # Sanitize the name for ffmpeg by removing the problematic suffix
+                        if "[Loopback]" in device_name:
+                            device_name = device_name.replace("[Loopback]", "").strip()
+                            print(f"Using sanitized loopback device name: {device_name}")
+                        return device_name
 
-            print(f"Using default loopback device: {default_speakers['name']}")
-            return default_speakers["name"]
+            device_name = default_speakers["name"]
+            print(f"Using default loopback device: {device_name}")
+            # Sanitize the name for ffmpeg
+            if "[Loopback]" in device_name:
+                device_name = device_name.replace("[Loopback]", "").strip()
+                print(f"Using sanitized default loopback device name: {device_name}")
+            return device_name
 
         except Exception as e:
             self.error_signal.emit(f"Error getting loopback device: {e}")

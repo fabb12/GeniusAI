@@ -2503,7 +2503,7 @@ class VideoAudioManager(QMainWindow):
         return False
 
     def showError(self, message):
-        logging.error("Error recording thread:",message)
+        logging.error("Error from recording thread: %s", message)
         #QMessageBox.critical(self, "Errore", message)
 
     def updateRecordingStats(self, stats):
