@@ -3,11 +3,51 @@ import re
 from screeninfo import get_monitors
 from PyQt6.QtCore import QThread, pyqtSignal
 import os
+try:
+    import pyaudiowpatch as pyaudio
+except ImportError:
+    print("PyAudioWPatch not found, falling back to standard PyAudio. Loopback recording might not work.")
+    import pyaudio
+
 from src.config import WATERMARK_IMAGE
 from src.config import DEFAULT_AUDIO_CHANNELS, DEFAULT_FRAME_RATE
 
 
 class ScreenRecorder(QThread):
+    def _get_loopback_device_name(self):
+        """
+        Usa PyAudioWPatch per trovare il dispositivo di loopback WASAPI predefinito.
+        Questo cattura l'audio che viene riprodotto sul dispositivo di output predefinito (es. cuffie).
+        """
+        try:
+            p = pyaudio.PyAudio()
+            # Trova l'API host WASAPI
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            if not wasapi_info:
+                self.error_signal.emit("WASAPI host API not found.")
+                return None
+
+            # Trova il dispositivo di loopback predefinito per WASAPI
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+
+            if not default_speakers["isLoopbackDevice"]:
+                for loopback in p.get_loopback_device_info_generator():
+                    # Cerca un dispositivo di loopback che corrisponda al nome del dispositivo di output
+                    # o che abbia un nome simile, escludendo la parte "(loopback)"
+                    if default_speakers["name"] in loopback["name"]:
+                        print(f"Found loopback device: {loopback['name']}")
+                        return loopback["name"]
+
+            print(f"Using default loopback device: {default_speakers['name']}")
+            return default_speakers["name"]
+
+        except Exception as e:
+            self.error_signal.emit(f"Error getting loopback device: {e}")
+            return None
+        finally:
+            if 'p' in locals() and p:
+                p.terminate()
+
     error_signal = pyqtSignal(str)
     recording_started_signal = pyqtSignal()
     recording_stopped_signal = pyqtSignal()
@@ -78,23 +118,20 @@ class ScreenRecorder(QThread):
         system_audio_index = None
 
         if self.use_system_audio:
-            # Usa WASAPI per catturare l'audio di sistema (quello che esce dalle cuffie)
-            ffmpeg_command.extend([
-                '-f', 'dshow',
-                '-i', 'audio=virtual-audio-capturer'  # Nome del dispositivo virtuale
-            ])
-            audio_input_count += 1
-            system_audio_index = audio_input_count + (2 if self.use_watermark else 1)
-
-            # Alternativa: prova con il dispositivo di loopback predefinito
-            # Se virtual-audio-capturer non funziona, prova con:
-            # '-i', 'audio=Stereo Mix (Realtek High Definition Audio)'
-            # o con WASAPI direttamente:
-            # ffmpeg_command.extend([
-            #     '-f', 'dshow',
-            #     '-audio_buffer_size', '50',
-            #     '-i', 'audio=@device_cm_{33D9A762-90C8-11D0-BD43-00A0C911CE86}\wave_{GUID_DEL_DISPOSITIVO}'
-            # ])
+            loopback_device_name = self._get_loopback_device_name()
+            if loopback_device_name:
+                print(f"Using system audio loopback device: {loopback_device_name}")
+                ffmpeg_command.extend([
+                    '-f', 'dshow',
+                    '-i', f'audio={loopback_device_name}'
+                ])
+                audio_input_count += 1
+                # L'indice dell'input audio di sistema sarà sempre il primo dopo il video (e watermark se presente)
+                system_audio_index = 1 if not self.use_watermark else 2
+            else:
+                self.error_signal.emit("System audio recording requested, but no loopback device found.")
+                # Disabilita la registrazione dell'audio di sistema se non si trova il dispositivo
+                self.use_system_audio = False
 
         # Add microphone/other audio inputs
         if self.record_audio and self.audio_inputs:
@@ -148,44 +185,38 @@ class ScreenRecorder(QThread):
         if audio_input_count > 0:
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
 
+            # Elenco degli stream audio di input (es. ['[2:a]', '[3:a]'])
+            input_streams = [f"[{audio_input_start_index + i}:a]" for i in range(audio_input_count)]
+
+            last_processed_stream = ""
+
             if audio_input_count == 1:
-                # Single audio source
-                audio_index = audio_input_start_index if not self.use_watermark else audio_input_start_index
-                audio_input_stream = f"[{audio_index}:a]"
-
-                if apply_volume_filter:
-                    volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
-                    filter_complex_parts.append(volume_filter)
-                    map_args.extend(['-map', '[a_out]'])
-                else:
-                    map_args.extend(['-map', f'{audio_index}:a'])
-
+                # Se c'è una sola fonte audio, questa è il nostro stream di partenza
+                last_processed_stream = input_streams[0]
             else:
-                # Multiple audio sources - mix them together
-                audio_inputs_to_mix = []
-                current_index = audio_input_start_index
-
-                # Aggiungi tutti gli input audio
-                for i in range(audio_input_count):
-                    audio_inputs_to_mix.append(f"[{current_index}:a]")
-                    current_index += 1
-
-                # Crea il filtro amix per mixare tutti gli audio
-                audio_merge = "".join(audio_inputs_to_mix)
+                # Se ci sono più fonti, le mixiamo
+                merged_inputs = "".join(input_streams)
+                # L'output del mixaggio diventa il nostro nuovo stream
+                last_processed_stream = "[a_mixed]"
 
                 if self.bluetooth_mode:
-                    # Per Bluetooth usa amix invece di amerge per migliore compatibilità
-                    mix_filter = f"{audio_merge}amix=inputs={audio_input_count}:duration=longest:dropout_transition=2"
+                    mix_filter = f"{merged_inputs}amix=inputs={audio_input_count}:duration=longest:dropout_transition=2{last_processed_stream}"
                 else:
-                    mix_filter = f"{audio_merge}amerge=inputs={audio_input_count}"
-
-                if apply_volume_filter:
-                    mix_filter += f"[a_mixed];[a_mixed]volume={self.audio_volume}[a_out]"
-                else:
-                    mix_filter += "[a_out]"
+                    mix_filter = f"{merged_inputs}amerge=inputs={audio_input_count}{last_processed_stream}"
 
                 filter_complex_parts.append(mix_filter)
-                map_args.extend(['-map', '[a_out]'])
+
+            # Applica il filtro del volume all'ultimo stream processato (singolo o mixato)
+            if apply_volume_filter:
+                final_audio_stream = "[a_out]"
+                volume_filter = f"{last_processed_stream}volume={self.audio_volume}{final_audio_stream}"
+                filter_complex_parts.append(volume_filter)
+            else:
+                # Se non c'è filtro volume, lo stream finale è l'ultimo processato
+                final_audio_stream = last_processed_stream
+
+            # Mappa lo stream audio finale
+            map_args.extend(['-map', final_audio_stream])
 
             # Configurazione codec audio
             if self.bluetooth_mode:
