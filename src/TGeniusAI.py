@@ -133,6 +133,9 @@ class VideoAudioManager(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.cursor_overlay = CursorOverlay()
         self.cursor_overlay.hide()
+        self.use_vb_cable = False
+        self.audio_device_layout = None
+        self.audio_checkbox_container = None
         self.load_recording_settings()
         self.setDefaultAudioDevice()
         self.raw_transcription_text = ""
@@ -155,11 +158,15 @@ class VideoAudioManager(QMainWindow):
         self.watermarkPath = settings.value("recording/watermarkPath", "res/watermark.png")
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
         self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
+        self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
 
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
         self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
         self.videoOverlay.setWatermark(self.enableWatermark, self.watermarkPath, self.watermarkSize, self.watermarkPosition)
+
+        if self.audio_device_layout is not None:
+            self.update_audio_device_list()
 
     def initUI(self):
         """
@@ -2131,7 +2138,10 @@ class VideoAudioManager(QMainWindow):
                 except (UnicodeDecodeError, AttributeError):
                     device_name = device_info.get('name')
 
-                if 'microphone' in device_name.lower() or 'stereo mix' in device_name.lower():
+                is_standard_device = 'microphone' in device_name.lower() or 'stereo mix' in device_name.lower()
+                is_vb_cable = ('cable' in device_name.lower() or 'voicemeeter' in device_name.lower()) and self.use_vb_cable
+
+                if is_standard_device or is_vb_cable:
                     potential_devices.append(device_name)
 
         # 2. Filter out shorter, partial names (likely truncated)
@@ -2148,6 +2158,33 @@ class VideoAudioManager(QMainWindow):
         # 3. Remove exact duplicates and return
         p.terminate()
         return list(dict.fromkeys(filtered_devices)) # dict.fromkeys preserves order and removes duplicates
+
+    def update_audio_device_list(self):
+        """Clears and rebuilds the audio device list in the UI based on current settings."""
+        if self.audio_device_layout is None:
+            logging.warning("audio_device_layout is not initialized.")
+            return
+
+        # Clear existing widgets from the checkbox layout
+        while self.audio_device_layout.count():
+            child = self.audio_device_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Re-populate the checkbox layout
+        self.audio_buttons = []
+        audio_devices = self.print_audio_devices()
+        if audio_devices:
+            for device in audio_devices:
+                check_box = QCheckBox(device)
+                self.audio_device_layout.addWidget(check_box)
+                self.audio_buttons.append(check_box)
+        else:
+            logging.debug("No input audio devices found.")
+            no_device_label = QLabel("Nessun dispositivo audio trovato.")
+            self.audio_device_layout.addWidget(no_device_label)
+
+        self.setDefaultAudioDevice()
 
     def createRecordingDock(self):
         dock =CustomDock("Registrazione", closable=True)
@@ -2231,18 +2268,15 @@ class VideoAudioManager(QMainWindow):
 
         # Audio selection group box
         audioGroupBox = QGroupBox("Seleziona Audio")
-        audioLayout = QVBoxLayout(audioGroupBox)
-        audioLayout.addWidget(self.audioTestResultLabel)
+        mainAudioLayout = QVBoxLayout(audioGroupBox)
+        mainAudioLayout.addWidget(self.audioTestResultLabel)
 
-        self.audio_buttons = []
-        audio_devices = self.print_audio_devices()
-        if audio_devices:
-            for device in audio_devices:
-                check_box = QCheckBox(device)
-                audioLayout.addWidget(check_box)
-                self.audio_buttons.append(check_box)
-        else:
-            logging.debug("No input audio devices found.")
+        # Container for checkboxes
+        self.audio_checkbox_container = QWidget()
+        self.audio_device_layout = QVBoxLayout(self.audio_checkbox_container)
+        mainAudioLayout.addWidget(self.audio_checkbox_container)
+
+        self.update_audio_device_list()
         recordingLayout.addWidget(audioGroupBox)
 
         saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
@@ -2504,7 +2538,7 @@ class VideoAudioManager(QMainWindow):
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""
-        bluetooth_keywords = ['headset', 'hands-free', 'cuffie', 'bluetooth']
+        bluetooth_keywords = ['headset', 'hands-free', 'cuffie', 'bluetooth', 'cable', 'vb-audio']
 
         selected_audio_devices = []
         for button in self.audio_buttons:
