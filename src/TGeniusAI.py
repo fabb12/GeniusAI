@@ -111,6 +111,17 @@ class VideoAudioManager(QMainWindow):
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
         self.is_recording = False
 
+        # Initialize attributes before UI
+        self.use_vb_cable = False
+        self.audio_device_layout = None
+        self.audio_checkbox_container = None
+        self.enableWatermark = False
+        self.watermarkPath = ""
+        self.watermarkSize = 0
+        self.watermarkPosition = "Bottom Right"
+        self.enableCursorHighlight = False
+        self.cursor_overlay = CursorOverlay()
+
         self.initUI()
         self.videoContainer.resizeEvent = self.videoContainerResizeEvent
         self.setupDockSettingsManager()
@@ -125,17 +136,11 @@ class VideoAudioManager(QMainWindow):
         self.current_audio_path = None
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
-        self.enableWatermark = False
-        self.watermarkPath = ""
-        self.watermarkSize = 0
-        self.watermarkPosition = "Bottom Right"
-        self.enableCursorHighlight = False
+
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-        self.cursor_overlay = CursorOverlay()
+
         self.cursor_overlay.hide()
-        self.use_vb_cable = False
-        self.audio_device_layout = None
-        self.audio_checkbox_container = None
+
         self.load_recording_settings()
         self.setDefaultAudioDevice()
         self.raw_transcription_text = ""
