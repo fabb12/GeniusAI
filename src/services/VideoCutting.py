@@ -1,17 +1,23 @@
+import os
 from PyQt6.QtCore import QThread, pyqtSignal
-from moviepy.editor import VideoFileClip, AudioFileClip
+from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
 
 class VideoCuttingThread(QThread):
     progress = pyqtSignal(int)
     completed = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, media_path, start_time, end_time, output_path):
+    def __init__(self, media_path, start_time, end_time, output_path,
+                 use_watermark=False, watermark_path=None, watermark_size=10, watermark_position="Bottom Right"):
         super().__init__()
         self.media_path = media_path
         self.start_time = start_time
         self.end_time = end_time
         self.output_path = output_path
+        self.use_watermark = use_watermark
+        self.watermark_path = watermark_path
+        self.watermark_size = watermark_size
+        self.watermark_position = watermark_position
 
     def run(self):
         try:
@@ -34,6 +40,41 @@ class VideoCuttingThread(QThread):
 
             # Taglia il media tra start_time e end_time
             clip = media.subclip(self.start_time, end_time)
+
+            if is_video and self.use_watermark:
+                if not self.watermark_path or not os.path.exists(self.watermark_path):
+                    self.error.emit(f"File watermark non valido: {self.watermark_path}")
+                    return
+
+                if not isinstance(self.watermark_size, (int, float)) or self.watermark_size <= 0:
+                    self.error.emit(f"Dimensione watermark non valida: {self.watermark_size}")
+                    return
+
+                valid_positions = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"]
+                if self.watermark_position not in valid_positions:
+                    self.error.emit(f"Posizione watermark non valida: {self.watermark_position}")
+                    return
+
+                try:
+                    watermark_clip = (ImageClip(self.watermark_path)
+                                      .set_duration(clip.duration)
+                                      .resize(height=int(clip.h * self.watermark_size / 100))
+                                      .set_opacity(0.5))
+
+                    # Position the watermark
+                    position_map = {
+                        "Top Left": ("left", "top"),
+                        "Top Right": ("right", "top"),
+                        "Bottom Left": ("left", "bottom"),
+                        "Bottom Right": ("right", "bottom")
+                    }
+                    watermark_clip = watermark_clip.set_position(position_map[self.watermark_position])
+
+                    clip = CompositeVideoClip([clip, watermark_clip])
+                except Exception as e:
+                    self.error.emit(f"Errore durante l'applicazione del watermark: {e}")
+                    return
+
 
             if is_video:
                 # Salva il file video tagliato
