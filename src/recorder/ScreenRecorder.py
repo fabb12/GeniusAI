@@ -82,7 +82,7 @@ class ScreenRecorder(QThread):
                     # Provide default high-quality settings for other devices
                     ffmpeg_command.extend(['-sample_rate', '44100'])
                     ffmpeg_command.extend(['-channels', '2'])
-                ffmpeg_command.extend(['-i', f'audio="{audio_device}"'])
+                ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
         # --- Build the filter_complex string and map arguments ---
         filter_complex_parts = []
