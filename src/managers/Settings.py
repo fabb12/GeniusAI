@@ -1,14 +1,70 @@
 # File: managers/Settings.py
 import subprocess
 import re
+import cv2
+import numpy as np
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
     QLineEdit, QFormLayout, QMessageBox, QCheckBox,
     QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout
 )
-from PyQt6.QtCore import QSettings
+from PyQt6.QtCore import QSettings, QThread, pyqtSignal, Qt
+from PyQt6.QtGui import QImage, QPixmap
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, FFMPEG_PATH
+
+class WebcamPreviewThread(QThread):
+    frame_ready = pyqtSignal(QImage)
+    error = pyqtSignal(str)
+
+    def __init__(self, device_name, parent=None):
+        super().__init__(parent)
+        self.device_name = device_name
+        self.running = True
+        self.device_index = -1
+
+    def run(self):
+        # Tenta di trovare l'indice del dispositivo dal nome
+        # Questo è un approccio semplificato; una soluzione reale potrebbe richiedere un parsing più complesso
+        # o una libreria che mappi i nomi dshow agli indici opencv.
+        # Per ora, proviamo gli indici comuni.
+        cap = None
+        for i in range(5): # Prova i primi 5 indici
+            try:
+                temp_cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+                if temp_cap.isOpened():
+                    # Heuristic: assume this is the one for now. A better way is needed for production.
+                    cap = temp_cap
+                    self.device_index = i
+                    break
+                else:
+                    temp_cap.release()
+            except Exception:
+                continue
+
+        if cap is None or not cap.isOpened():
+            self.error.emit("Impossibile aprire la webcam. Potrebbe essere in uso o non funzionare correttamente.")
+            return
+
+        while self.running:
+            ret, frame = cap.read()
+            if not ret:
+                self.msleep(10)
+                continue
+
+            # Converte il frame da BGR (OpenCV) a RGB (Qt)
+            rgb_image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = rgb_image.shape
+            bytes_per_line = ch * w
+            qt_image = QImage(rgb_image.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            self.frame_ready.emit(qt_image.copy())
+            self.msleep(30)  # ~30 FPS
+
+        cap.release()
+
+    def stop(self):
+        self.running = False
+        self.wait()
 
 def get_video_devices():
     """Esegue ffmpeg per ottenere un elenco dei dispositivi video dshow."""
@@ -65,12 +121,12 @@ def get_video_devices():
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super(SettingsDialog, self).__init__(parent)
-        self.setWindowTitle("Impostazioni Applicazione") # Titolo più generale
+        self.setWindowTitle("Impostazioni Applicazione")
         self.settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.preview_thread = None
 
-        # Dizionari per tenere traccia dei controlli UI
         self.model_combos = {}
-        self.api_key_edits = {} # Per memorizzare i QLineEdit delle API key
+        self.api_key_edits = {}
 
         layout = QVBoxLayout(self)
 
@@ -257,8 +313,81 @@ class SettingsDialog(QDialog):
         self.videoCodecComboBox.addItem("h264_amf (AMD GPU, Veloce)", "h264_amf")
         layout.addRow("Codec Video:", self.videoCodecComboBox)
 
+        # --- Webcam Preview ---
+        self.webcamPreviewLabel = QLabel("L'anteprima della webcam apparirà qui.")
+        self.webcamPreviewLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.webcamPreviewLabel.setFixedSize(320, 180) # Dimensione fissa per l'anteprima
+        self.webcamPreviewLabel.setStyleSheet("border: 1px solid #555; background-color: #000;")
+        preview_layout = QHBoxLayout()
+        preview_layout.addWidget(self.webcamPreviewLabel)
+        layout.addRow("Anteprima:", preview_layout)
+
+        # --- Connect Signals ---
+        self.webcamDeviceComboBox.currentTextChanged.connect(self.update_webcam_preview)
+        self.enableWebcamPip.toggled.connect(self.toggle_preview_visibility)
+
 
         return widget
+
+    def showEvent(self, event):
+        """Chiamato quando il dialogo sta per essere mostrato."""
+        super().showEvent(event)
+        self.toggle_preview_visibility(self.enableWebcamPip.isChecked())
+
+    def closeEvent(self, event):
+        """Chiamato quando il dialogo viene chiuso."""
+        self.stop_preview()
+        super().closeEvent(event)
+
+    def toggle_preview_visibility(self, checked):
+        if checked:
+            self.webcamPreviewLabel.setVisible(True)
+            self.update_webcam_preview(self.webcamDeviceComboBox.currentText())
+        else:
+            self.webcamPreviewLabel.setVisible(False)
+            self.stop_preview()
+
+    def update_webcam_preview(self, device_name):
+        self.stop_preview()
+
+        if not self.enableWebcamPip.isChecked():
+            return
+
+        if not device_name or "ERRORE" in device_name or "Nessun dispositivo" in device_name:
+            self.webcamPreviewLabel.setText("Nessun dispositivo valido selezionato.")
+            # Mostra il messaggio di avviso sui permessi se la lista dispositivi è vuota
+            if "Nessun dispositivo" in self.webcamDeviceComboBox.currentText() or "ERRORE" in self.webcamDeviceComboBox.currentText():
+                 QMessageBox.warning(self, "Dispositivi non trovati",
+                                    "Nessuna webcam trovata. Questo potrebbe essere un problema di autorizzazioni.\n\n"
+                                    "Prova a eseguire l'applicazione come **amministratore**.\n\n"
+                                    "La funzione di anteprima e registrazione della webcam sarà disabilitata.")
+            return
+
+        self.preview_thread = WebcamPreviewThread(device_name, self)
+        self.preview_thread.frame_ready.connect(self.set_preview_image)
+        self.preview_thread.error.connect(self.show_preview_error)
+        self.preview_thread.start()
+
+    def set_preview_image(self, image):
+        pixmap = QPixmap.fromImage(image)
+        self.webcamPreviewLabel.setPixmap(pixmap.scaled(
+            self.webcamPreviewLabel.size(),
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        ))
+
+    def show_preview_error(self, error_message):
+        self.webcamPreviewLabel.setText(f"Errore anteprima:\n{error_message}")
+        self.stop_preview()
+
+    def stop_preview(self):
+        if self.preview_thread and self.preview_thread.isRunning():
+            self.preview_thread.stop()
+            self.preview_thread = None
+        # Resetta il label dell'anteprima
+        self.webcamPreviewLabel.setText("L'anteprima della webcam apparirà qui.")
+        self.webcamPreviewLabel.setStyleSheet("border: 1px solid #555; background-color: #000;")
+
 
     def browseWatermark(self):
         # Open a file dialog to select an image
