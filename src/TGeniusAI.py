@@ -2081,37 +2081,23 @@ class VideoAudioManager(QMainWindow):
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
         num_devices = p.get_device_count()
-        audio_devices = {}
-
-        def is_similar(name1, name2, threshold=0.8):
-            # Check if two names are similar above a certain threshold
-            return SequenceMatcher(None, name1, name2).ratio() > threshold
+        audio_devices = []
 
         for i in range(num_devices):
             device_info = p.get_device_info_by_index(i)
             if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
-                # Include only the primary microphone and stereo mix
-                if 'microphone' in device_info.get('name').lower() or 'stereo mix' in device_info.get('name').lower():
+                try:
+                    # Try to decode the name with UTF-8, fallback to default encoding
+                    device_name = device_info.get('name').decode('utf-8')
+                except (UnicodeDecodeError, AttributeError):
                     device_name = device_info.get('name')
 
-                    # Check for duplicates with similar names
-                    to_add = True
-                    to_remove = None
-                    for existing_name in audio_devices.keys():
-                        if is_similar(device_name, existing_name):
-                            if len(device_name) > len(existing_name):
-                                to_remove = existing_name
-                            else:
-                                to_add = False
-                            break
-
-                    if to_remove:
-                        del audio_devices[to_remove]
-                    if to_add:
-                        audio_devices[device_name] = device_info.get('name')
+                # Filter for relevant devices
+                if 'microphone' in device_name.lower() or 'stereo mix' in device_name.lower():
+                    audio_devices.append(device_name)
 
         p.terminate()
-        return list(audio_devices.keys())  # Convert the dictionary keys back to a list
+        return audio_devices
 
     def createRecordingDock(self):
         dock =CustomDock("Registrazione", closable=True)
