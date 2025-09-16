@@ -134,6 +134,7 @@ class VideoAudioManager(QMainWindow):
         self.cursor_overlay.hide()
         self.load_recording_settings()
         self.setDefaultAudioDevice()
+        self.raw_transcription_text = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -526,11 +527,17 @@ class VideoAudioManager(QMainWindow):
         self.transcribeButton = QPushButton('Trascrivi Video')
         self.transcribeButton.setToolTip("Avvia la trascrizione del video attualmente caricato")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
+
+        self.markdownViewCheckbox = QCheckBox("Visualizza Markdown")
+        self.markdownViewCheckbox.setToolTip("Visualizza la trascrizione come Markdown renderizzato o testo grezzo")
+        self.markdownViewCheckbox.setChecked(False)
+
         buttonsLayoutBase2.addWidget(self.resetButton)
         buttonsLayoutBase2.addWidget(self.pasteButton)
         buttonsLayoutBase2.addWidget(self.loadButton)
         buttonsLayoutBase2.addWidget(self.saveButton)
         buttonsLayoutBase2.addWidget(self.transcribeButton)
+        buttonsLayoutBase2.addWidget(self.markdownViewCheckbox)
         gridLayoutBase.addLayout(buttonsLayoutBase2, 2, 0, 1, 2)
         tabBase.setLayout(gridLayoutBase)
         tabWidget.addTab(tabBase, "Strumenti Base")
@@ -580,6 +587,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
+        self.markdownViewCheckbox.toggled.connect(self.on_markdown_view_toggled)
         finalTransLayout.addWidget(self.transcriptionTextArea, 1)
 
         transGroupBox.setLayout(finalTransLayout)
@@ -1010,7 +1018,21 @@ class VideoAudioManager(QMainWindow):
 
     def onProcessComplete(self, result):
         self.progressDialog.close()
-        self.transcriptionTextArea.setPlainText(result)
+        self.raw_transcription_text = result
+        self.transcriptionTextArea.blockSignals(True)
+        if self.markdownViewCheckbox.isChecked():
+            self.transcriptionTextArea.setMarkdown(result)
+        else:
+            self.transcriptionTextArea.setPlainText(result)
+        self.transcriptionTextArea.blockSignals(False)
+
+    def on_markdown_view_toggled(self, checked):
+        self.transcriptionTextArea.blockSignals(True)
+        if checked:
+            self.transcriptionTextArea.setMarkdown(self.raw_transcription_text)
+        else:
+            self.transcriptionTextArea.setPlainText(self.raw_transcription_text)
+        self.transcriptionTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
         self.progressDialog.close()
@@ -2502,12 +2524,12 @@ class VideoAudioManager(QMainWindow):
 
         # Controlla se l'utente ha effettivamente scelto un file
         if path:
-            # Ottieni il testo dal QTextEdit
-            text_to_save = self.transcriptionTextArea.toPlainText()
+            # Usa il testo grezzo per preservare il Markdown
+            text_to_save = self.raw_transcription_text
 
             # Prova a salvare il testo nel file scelto
             try:
-                with open(path, 'w') as file:
+                with open(path, 'w', encoding='utf-8') as file:
                     file.write(text_to_save)
                 logging.debug("File salvato correttamente!")
             except Exception as e:
@@ -2524,8 +2546,13 @@ class VideoAudioManager(QMainWindow):
                 with open(path, 'r') as file:
                     text_loaded = file.read()
 
-                # Imposta il contenuto nel QTextEdit
-                self.transcriptionTextArea.setPlainText(text_loaded)
+                self.raw_transcription_text = text_loaded
+                self.transcriptionTextArea.blockSignals(True)
+                if self.markdownViewCheckbox.isChecked():
+                    self.transcriptionTextArea.setMarkdown(text_loaded)
+                else:
+                    self.transcriptionTextArea.setPlainText(text_loaded)
+                self.transcriptionTextArea.blockSignals(False)
                 logging.debug("File caricato correttamente!")
             except Exception as e:
                 logging.debug("Errore durante il caricamento del file:", e)
@@ -2948,6 +2975,14 @@ class VideoAudioManager(QMainWindow):
 
 
     def handleTextChange(self):
+        if self.transcriptionTextArea.signalsBlocked():
+            return
+
+        if self.markdownViewCheckbox.isChecked():
+            self.raw_transcription_text = self.transcriptionTextArea.toMarkdown()
+        else:
+            self.raw_transcription_text = self.transcriptionTextArea.toPlainText()
+
         current_html = self.transcriptionTextArea.toHtml()
         if current_html.strip():
             if self.timecodeEnabled:
@@ -3060,7 +3095,14 @@ class VideoAudioManager(QMainWindow):
 
         def complete(text, temp_files):
             if not progress_dialog.wasCanceled():
-                self.transcriptionTextArea.setText(text)
+                self.raw_transcription_text = text
+                self.transcriptionTextArea.blockSignals(True)
+                if self.markdownViewCheckbox.isChecked():
+                    self.transcriptionTextArea.setMarkdown(text)
+                else:
+                    self.transcriptionTextArea.setPlainText(text)
+                self.transcriptionTextArea.blockSignals(False)
+
                 progress_dialog.setValue(100)
                 progress_dialog.close()
                 self.cleanupFiles(temp_files)  # Immediately cleanup after transcription
