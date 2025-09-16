@@ -1308,7 +1308,16 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
 
-        self.cutting_thread = VideoCuttingThread(media_path, start_time, end_time, output_path)
+        self.cutting_thread = VideoCuttingThread(
+            media_path,
+            start_time,
+            end_time,
+            output_path,
+            use_watermark=self.enableWatermark,
+            watermark_path=self.watermarkPath,
+            watermark_size=self.watermarkSize,
+            watermark_position=self.watermarkPosition
+        )
         self.cutting_thread.progress.connect(self.progressDialog.setValue)
         self.cutting_thread.completed.connect(self.onCutCompleted)
         self.cutting_thread.error.connect(self.onCutError)
