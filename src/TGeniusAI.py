@@ -2081,23 +2081,34 @@ class VideoAudioManager(QMainWindow):
     def print_audio_devices(self):
         p = pyaudio.PyAudio()
         num_devices = p.get_device_count()
-        audio_devices = []
 
+        # 1. Get all potential device names
+        potential_devices = []
         for i in range(num_devices):
             device_info = p.get_device_info_by_index(i)
             if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
                 try:
-                    # Try to decode the name with UTF-8, fallback to default encoding
                     device_name = device_info.get('name').decode('utf-8')
                 except (UnicodeDecodeError, AttributeError):
                     device_name = device_info.get('name')
 
-                # Filter for relevant devices
                 if 'microphone' in device_name.lower() or 'stereo mix' in device_name.lower():
-                    audio_devices.append(device_name)
+                    potential_devices.append(device_name)
 
+        # 2. Filter out shorter, partial names (likely truncated)
+        filtered_devices = []
+        for name in potential_devices:
+            is_partial = False
+            for other_name in potential_devices:
+                if name != other_name and name in other_name:
+                    is_partial = True
+                    break
+            if not is_partial:
+                filtered_devices.append(name)
+
+        # 3. Remove exact duplicates and return
         p.terminate()
-        return audio_devices
+        return list(dict.fromkeys(filtered_devices)) # dict.fromkeys preserves order and removes duplicates
 
     def createRecordingDock(self):
         dock =CustomDock("Registrazione", closable=True)
