@@ -1936,19 +1936,31 @@ class VideoAudioManager(QMainWindow):
 
 
     def selectScreen(self, screen_index):
-        self.selected_screen_index = screen_index
-        for i, button in enumerate(self.screen_buttons):
-            button.set_selected(i == screen_index)
+        if self.is_recording:
+            if screen_index != self.selected_screen_index:
+                if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
+                    self.recorder_thread.stop()
+                    self.recorder_thread.wait()
 
-        if hasattr(self, 'monitor_preview') and self.monitor_preview:
-            self.monitor_preview.close()
+                self.selected_screen_index = screen_index
+                for i, button in enumerate(self.screen_buttons):
+                    button.set_selected(i == screen_index)
 
-        monitors = get_monitors()
-        if screen_index < len(monitors):
-            monitor = monitors[screen_index]
-            self.monitor_preview = MonitorPreview(monitor)
-            self.monitor_preview.show()
-            self.selectedMonitorLabel.setText(f"Monitor: Schermo {screen_index + 1} ({monitor.width}x{monitor.height})")
+                self._startRecordingSegment()
+        else:
+            self.selected_screen_index = screen_index
+            for i, button in enumerate(self.screen_buttons):
+                button.set_selected(i == screen_index)
+
+            if hasattr(self, 'monitor_preview') and self.monitor_preview:
+                self.monitor_preview.close()
+
+            monitors = get_monitors()
+            if screen_index < len(monitors):
+                monitor = monitors[screen_index]
+                self.monitor_preview = MonitorPreview(monitor)
+                self.monitor_preview.show()
+                self.selectedMonitorLabel.setText(f"Monitor: Schermo {screen_index + 1} ({monitor.width}x{monitor.height})")
 
 
     def browseFolderLocation(self):
