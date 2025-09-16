@@ -19,33 +19,48 @@ def get_video_devices():
             '-f', 'dshow',
             '-i', 'dummy'
         ]
-        # Esegui il comando in un modo che non apra una finestra della console
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
+        # Esegui il comando catturando sia stdout che stderr
         result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', startupinfo=startupinfo)
 
-        output = result.stderr
+        # Concatena stdout e stderr per una diagnosi completa
+        output = result.stdout + "\n" + result.stderr
+
+        # Stampa l'output completo di ffmpeg per il debug, questo sarà visibile nella console
+        print("--- Inizio Output Rilevamento Dispositivi FFMPEG ---")
+        print(output)
+        print("--- Fine Output Rilevamento Dispositivi FFMPEG ---")
 
         devices = []
-        # Cerca la sezione dei dispositivi video e poi estrai i nomi dei dispositivi
         in_video_devices_section = False
         for line in output.splitlines():
+            # Cerca l'inizio della sezione dei dispositivi video
             if "DirectShow video devices" in line:
                 in_video_devices_section = True
                 continue
+            # Esci se raggiungi la sezione audio
             if "DirectShow audio devices" in line:
-                in_video_devices_section = False
                 break
 
+            # Se siamo nella sezione giusta, cerca i nomi dei dispositivi
             if in_video_devices_section:
-                match = re.search(r'\"(.*?)\" \(video\)', line)
+                match = re.search(r'\"(.*?)\"', line)
                 if match:
-                    devices.append(match.group(1))
+                    device_name = match.group(1)
+                    # A volte ffmpeg elenca nomi alternativi, evitiamo di aggiungerli
+                    if not device_name.startswith('@'):
+                        devices.append(device_name)
+
+        print(f"Dispositivi video rilevati: {devices}")
         return devices
+    except FileNotFoundError:
+        print(f"ERRORE CRITICO: ffmpeg.exe non trovato al percorso: {FFMPEG_PATH}")
+        return ["ERRORE: ffmpeg.exe non trovato"]
     except Exception as e:
-        print(f"Errore durante l'elenco dei dispositivi video: {e}")
-        return []
+        print(f"ERRORE CRITICO durante l'elenco dei dispositivi video: {e}")
+        return [f"ERRORE: {e}"]
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -239,6 +254,7 @@ class SettingsDialog(QDialog):
         self.videoCodecComboBox.addItem("libx264 (Software, Compatibile)", "libx264")
         self.videoCodecComboBox.addItem("h264_nvenc (NVIDIA GPU, Veloce)", "h264_nvenc")
         self.videoCodecComboBox.addItem("h264_qsv (Intel GPU, Veloce)", "h264_qsv")
+        self.videoCodecComboBox.addItem("h264_amf (AMD GPU, Veloce)", "h264_amf")
         layout.addRow("Codec Video:", self.videoCodecComboBox)
 
 
