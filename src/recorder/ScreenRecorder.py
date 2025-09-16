@@ -29,7 +29,9 @@ class ScreenRecorder(QThread):
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
         self.use_watermark = use_watermark
-        self.watermark_image = watermark_path if watermark_path else WATERMARK_IMAGE
+        raw_path = watermark_path if watermark_path else WATERMARK_IMAGE
+        # Normalize path for ffmpeg command line
+        self.watermark_image = raw_path.replace('\\', '/')
         self.watermark_size = watermark_size
         self.watermark_position = watermark_position
         self.ffmpeg_process = None
@@ -39,9 +41,9 @@ class ScreenRecorder(QThread):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
             self.is_running = False
 
-        # Check if watermark image exists
-        if self.use_watermark and not os.path.isfile(self.watermark_image):
-            self.error_signal.emit(f"Watermark image not found at {self.watermark_image}")
+        # Check if watermark image exists using the original, un-escaped path
+        if self.use_watermark and not os.path.isfile(raw_path):
+            self.error_signal.emit(f"Watermark image not found at {raw_path}")
             self.use_watermark = False
 
     def get_monitor_offset(self):
