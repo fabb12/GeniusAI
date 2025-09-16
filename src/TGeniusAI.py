@@ -123,6 +123,8 @@ class VideoAudioManager(QMainWindow):
         self.cursor_overlay = CursorOverlay()
 
         self.initUI()
+
+        # Move these initializations to after initUI
         self.videoContainer.resizeEvent = self.videoContainerResizeEvent
         self.setupDockSettingsManager()
         self.bookmarkStart = None
@@ -141,7 +143,7 @@ class VideoAudioManager(QMainWindow):
 
         self.cursor_overlay.hide()
 
-        self.load_recording_settings()
+        self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
         self.raw_transcription_text = ""
 
