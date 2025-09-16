@@ -19,6 +19,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere zoom testo in area trascrizione con rotella + / -
 -   non funziona generaxion powerpoint 
 - sistemare cuffie
+- metter webcam in pip'
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
