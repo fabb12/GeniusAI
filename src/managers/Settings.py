@@ -173,6 +173,11 @@ class SettingsDialog(QDialog):
         self.watermarkPositionComboBox.addItems(["Top Left", "Top Right", "Bottom Left", "Bottom Right"])
         layout.addRow("Posizione Watermark:", self.watermarkPositionComboBox)
 
+        # Add new control for VB-Cable
+        self.useVBCableCheckBox = QCheckBox()
+        self.useVBCableCheckBox.setToolTip("Se abilitato, mostra l'opzione VB-CABLE per la registrazione audio, utile per cuffie bluetooth.")
+        layout.addRow("Abilita VB-CABLE (cuffie):", self.useVBCableCheckBox)
+
 
         return widget
 
@@ -214,6 +219,7 @@ class SettingsDialog(QDialog):
         self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", "res/watermark.png"))
         self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
         self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
+        self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -254,6 +260,7 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/watermarkPath", self.watermarkPathEdit.text())
         self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
         self.settings.setValue("recording/watermarkPosition", self.watermarkPositionComboBox.currentText())
+        self.settings.setValue("recording/useVBCable", self.useVBCableCheckBox.isChecked())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
