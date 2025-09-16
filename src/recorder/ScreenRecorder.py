@@ -101,75 +101,83 @@ class ScreenRecorder(QThread):
         filter_complex_parts = []
         map_args = []
         audio_codec_args = []
-        last_video_stream = "[0:v]"
 
-        # 1. Webcam PiP Filter
+        # --- Video Filter Chain ---
+        last_video_stream_label = "[0:v]"
+        video_filters_applied = (self.record_webcam and webcam_input_index != -1) or \
+                                (self.use_watermark and watermark_input_index != -1)
+
         if self.record_webcam and webcam_input_index != -1:
-            # Scale the webcam video (e.g., to 1/4 of the main video width)
-            # Using -2 for height preserves the aspect ratio
             pip_scale_filter = f"[{webcam_input_index}:v]scale=iw/4:-2[pip]"
             filter_complex_parts.append(pip_scale_filter)
 
-            # Position the webcam overlay
-            if self.webcam_position == "Top Left":
-                pip_overlay_filter = f"{last_video_stream}[pip]overlay=10:10[v_with_pip]"
-            elif self.webcam_position == "Top Right":
-                pip_overlay_filter = f"{last_video_stream}[pip]overlay=W-w-10:10[v_with_pip]"
-            elif self.webcam_position == "Bottom Left":
-                pip_overlay_filter = f"{last_video_stream}[pip]overlay=10:H-h-10[v_with_pip]"
-            else:  # Bottom Right
-                pip_overlay_filter = f"{last_video_stream}[pip]overlay=W-w-10:H-h-10[v_with_pip]"
-            filter_complex_parts.append(pip_overlay_filter)
-            last_video_stream = "[v_with_pip]"
+            overlay_positions = {
+                "Top Left": "10:10",
+                "Top Right": "W-w-10:10",
+                "Bottom Left": "10:H-h-10",
+                "Bottom Right": "W-w-10:H-h-10"
+            }
+            position = overlay_positions.get(self.webcam_position, "W-w-10:H-h-10")
 
-        # 2. Watermark Filter
+            output_label = "[v_out]" if not (self.use_watermark and watermark_input_index != -1) else "[v_with_pip]"
+            pip_overlay_filter = f"{last_video_stream_label}[pip]overlay={position}{output_label}"
+            filter_complex_parts.append(pip_overlay_filter)
+            last_video_stream_label = output_label
+
         if self.use_watermark and watermark_input_index != -1:
-            # Scale the watermark
             wm_scale_filter = f"[{watermark_input_index}:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
             filter_complex_parts.append(wm_scale_filter)
 
-            # Position the watermark
-            if self.watermark_position == "Top Left":
-                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=10:10[v_out]"
-            elif self.watermark_position == "Top Right":
-                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=W-w-10:10[v_out]"
-            elif self.watermark_position == "Bottom Left":
-                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=10:H-h-10[v_out]"
-            else:  # Bottom Right
-                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=W-w-10:H-h-10[v_out]"
+            overlay_positions = {
+                "Top Left": "10:10",
+                "Top Right": "W-w-10:10",
+                "Bottom Left": "10:H-h-10",
+                "Bottom Right": "W-w-10:H-h-10"
+            }
+            position = overlay_positions.get(self.watermark_position, "W-w-10:H-h-10")
+
+            wm_overlay_filter = f"{last_video_stream_label}[scaled_wm]overlay={position}[v_out]"
             filter_complex_parts.append(wm_overlay_filter)
-            last_video_stream = "[v_out]"
+            last_video_stream_label = "[v_out]"
 
-        map_args.extend(['-map', last_video_stream])
-
-        # 3. Audio Filter
+        # --- Audio Filter Chain ---
+        audio_filters_applied = False
         if self.record_audio:
             num_audio_inputs = len(self.audio_inputs)
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
 
-            if num_audio_inputs == 1:
-                audio_input_stream = f"[{audio_input_start_index}:a]"
-                if apply_volume_filter:
-                    volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
-                    filter_complex_parts.append(volume_filter)
-                    map_args.extend(['-map', '[a_out]'])
+            if num_audio_inputs > 1 or apply_volume_filter:
+                audio_filters_applied = True
+                if num_audio_inputs > 1:
+                    audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
+                    merge_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged]"
+                    filter_complex_parts.append(merge_filter)
+                    last_audio_stream_label = "[a_merged]"
                 else:
-                    map_args.extend(['-map', audio_input_stream])
+                    last_audio_stream_label = f"[{audio_input_start_index}:a]"
+
+                if apply_volume_filter:
+                    volume_filter = f"{last_audio_stream_label}volume={self.audio_volume}[a_out]"
+                    filter_complex_parts.append(volume_filter)
+
+                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
+                if num_audio_inputs > 1:
+                    audio_codec_args.extend(['-ac', '2'])
+            else: # Single audio input, no volume change
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
 
-            elif num_audio_inputs > 1:
-                audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
-                if apply_volume_filter:
-                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged];[a_merged]volume={self.audio_volume}[a_out]"
-                else:
-                    audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
-                filter_complex_parts.append(audio_filter)
-                map_args.extend(['-map', '[a_out]'])
-                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
 
+        # --- Assemble Command ---
         if filter_complex_parts:
-            combined_filter = ";".join(filter_complex_parts)
-            ffmpeg_command.extend(['-filter_complex', combined_filter])
+            ffmpeg_command.extend(['-filter_complex', ";".join(filter_complex_parts)])
+            map_args.extend(['-map', last_video_stream_label])
+            if self.record_audio:
+                map_args.extend(['-map', '[a_out]' if audio_filters_applied else f'[{audio_input_start_index}:a]'])
+        else:
+            # No filters, direct mapping
+            map_args.extend(['-map', '0:v'])
+            if self.record_audio:
+                map_args.extend(['-map', f'{audio_input_start_index}:a'])
 
         ffmpeg_command.extend(map_args)
 
