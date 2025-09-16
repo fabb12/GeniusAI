@@ -119,6 +119,9 @@ class VideoAudioManager(QMainWindow):
         self.watermarkPath = ""
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
+        self.record_webcam = False
+        self.webcam_device = ""
+        self.webcam_position = "Bottom Right"
         self.enableCursorHighlight = False
         self.cursor_overlay = CursorOverlay()
 
@@ -166,6 +169,11 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
         self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
+
+        # Carica le impostazioni della webcam
+        self.record_webcam = settings.value("recording/enableWebcamPip", False, type=bool)
+        self.webcam_device = settings.value("recording/webcamDevice", "Integrated Camera")
+        self.webcam_position = settings.value("recording/webcamPipPosition", "Bottom Right")
 
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
@@ -2453,7 +2461,10 @@ class VideoAudioManager(QMainWindow):
             watermark_size=self.watermarkSize,
             watermark_position=self.watermarkPosition,
             bluetooth_mode=bluetooth_mode,
-            audio_volume=4.0
+            audio_volume=4.0,
+            record_webcam=self.record_webcam,
+            webcam_device=self.webcam_device,
+            webcam_position=self.webcam_position
         )
 
         self.recorder_thread.error_signal.connect(self.showError)

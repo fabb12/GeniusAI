@@ -15,7 +15,8 @@ class ScreenRecorder(QThread):
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
-                 bluetooth_mode=False, audio_volume=1.0):
+                 bluetooth_mode=False, audio_volume=1.0,
+                 record_webcam=False, webcam_device=None, webcam_position="Bottom Right"):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -33,6 +34,11 @@ class ScreenRecorder(QThread):
         self.watermark_size = watermark_size
         self.watermark_position = watermark_position
         self.ffmpeg_process = None
+
+        # Webcam settings
+        self.record_webcam = record_webcam
+        self.webcam_device = webcam_device
+        self.webcam_position = webcam_position
 
         # Check if ffmpeg.exe exists
         if not os.path.isfile(self.ffmpeg_path):
@@ -68,83 +74,98 @@ class ScreenRecorder(QThread):
             '-i', 'desktop',
         ]
 
+        # --- Input Management ---
+        input_count = 1  # Starts with 1 for the screen grab
+        webcam_input_index = -1
+        watermark_input_index = -1
+
+        if self.record_webcam and self.webcam_device:
+            ffmpeg_command.extend(['-f', 'dshow', '-i', f'video={self.webcam_device}'])
+            webcam_input_index = input_count
+            input_count += 1
+
         if self.use_watermark:
             ffmpeg_command.extend(['-i', self.watermark_image])
+            watermark_input_index = input_count
+            input_count += 1
 
-        # Add audio inputs if any
+        audio_input_start_index = input_count
         if self.record_audio:
             for audio_device in self.audio_inputs:
                 ffmpeg_command.extend(['-f', 'dshow'])
-                # For Bluetooth, set device options for compatibility
                 if self.bluetooth_mode:
                     ffmpeg_command.extend(['-audio_buffer_size', '100'])
-
-                # Let ffmpeg use the default sample rate and channels from the device
-                # ffmpeg_command.extend(['-sample_rate', '44100'])
-                # ffmpeg_command.extend(['-channels', '2'])
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
-        # --- Build the filter_complex string and map arguments ---
+        # --- Filter and Mapping Management ---
         filter_complex_parts = []
         map_args = []
         audio_codec_args = []
-        num_audio_inputs = len(self.audio_inputs)
+        last_video_stream = "[0:v]"
 
-        if self.use_watermark:
-            # Watermark is input 1, so video is [0:v] and watermark is [1:v]
-            # Scale the watermark to be x% of the video height
-            scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
-            filter_complex_parts.append(scale_filter)
+        # 1. Webcam PiP Filter
+        if self.record_webcam and webcam_input_index != -1:
+            # Scale the webcam video (e.g., to 1/4 of the main video width)
+            # Using -2 for height preserves the aspect ratio
+            pip_scale_filter = f"[{webcam_input_index}:v]scale=iw/4:-2[pip]"
+            filter_complex_parts.append(pip_scale_filter)
+
+            # Position the webcam overlay
+            if self.webcam_position == "Top Left":
+                pip_overlay_filter = f"{last_video_stream}[pip]overlay=10:10[v_with_pip]"
+            elif self.webcam_position == "Top Right":
+                pip_overlay_filter = f"{last_video_stream}[pip]overlay=W-w-10:10[v_with_pip]"
+            elif self.webcam_position == "Bottom Left":
+                pip_overlay_filter = f"{last_video_stream}[pip]overlay=10:H-h-10[v_with_pip]"
+            else:  # Bottom Right
+                pip_overlay_filter = f"{last_video_stream}[pip]overlay=W-w-10:H-h-10[v_with_pip]"
+            filter_complex_parts.append(pip_overlay_filter)
+            last_video_stream = "[v_with_pip]"
+
+        # 2. Watermark Filter
+        if self.use_watermark and watermark_input_index != -1:
+            # Scale the watermark
+            wm_scale_filter = f"[{watermark_input_index}:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
+            filter_complex_parts.append(wm_scale_filter)
 
             # Position the watermark
             if self.watermark_position == "Top Left":
-                overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
+                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=10:10[v_out]"
             elif self.watermark_position == "Top Right":
-                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
+                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=W-w-10:10[v_out]"
             elif self.watermark_position == "Bottom Left":
-                overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
+                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=10:H-h-10[v_out]"
             else:  # Bottom Right
-                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
+                wm_overlay_filter = f"{last_video_stream}[scaled_wm]overlay=W-w-10:H-h-10[v_out]"
+            filter_complex_parts.append(wm_overlay_filter)
+            last_video_stream = "[v_out]"
 
-            filter_complex_parts.append(overlay_filter)
-            map_args.extend(['-map', '[v_out]'])
-            audio_input_start_index = 2  # Audio inputs start after video and watermark
-        else:
-            # No watermark, just map the video directly
-            map_args.extend(['-map', '0:v'])
-            audio_input_start_index = 1  # Audio inputs start after video
+        map_args.extend(['-map', last_video_stream])
 
+        # 3. Audio Filter
         if self.record_audio:
-            # Determine if the volume filter needs to be applied
+            num_audio_inputs = len(self.audio_inputs)
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
 
             if num_audio_inputs == 1:
                 audio_input_stream = f"[{audio_input_start_index}:a]"
                 if apply_volume_filter:
-                    # Apply volume filter to the single audio stream
                     volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
                     filter_complex_parts.append(volume_filter)
                     map_args.extend(['-map', '[a_out]'])
                 else:
-                    # No volume adjustment, map directly
                     map_args.extend(['-map', audio_input_stream])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
 
             elif num_audio_inputs > 1:
                 audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
                 if apply_volume_filter:
-                    # Merge audio inputs and then apply the volume filter
                     audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged];[a_merged]volume={self.audio_volume}[a_out]"
                 else:
-                    # Just merge the audio inputs
                     audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
                 filter_complex_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
-
-            # The -ac and -ar options have been moved to the dshow input options for bluetooth mode
-            # if self.bluetooth_mode:
-            #     audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)

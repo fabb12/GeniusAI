@@ -178,6 +178,17 @@ class SettingsDialog(QDialog):
         self.useVBCableCheckBox.setToolTip("Se abilitato, mostra l'opzione VB-CABLE per la registrazione audio, utile per cuffie bluetooth.")
         layout.addRow("Abilita VB-CABLE (cuffie):", self.useVBCableCheckBox)
 
+        # --- Webcam Picture-in-Picture Settings ---
+        self.enableWebcamPip = QCheckBox()
+        layout.addRow("Abilita Webcam Picture-in-Picture:", self.enableWebcamPip)
+
+        self.webcamDeviceEdit = QLineEdit()
+        self.webcamDeviceEdit.setToolTip("Il nome esatto della webcam come riconosciuto da ffmpeg.")
+        layout.addRow("Nome Dispositivo Webcam:", self.webcamDeviceEdit)
+
+        self.webcamPipPositionComboBox = QComboBox()
+        self.webcamPipPositionComboBox.addItems(["Top Left", "Top Right", "Bottom Left", "Bottom Right"])
+        layout.addRow("Posizione Webcam PiP:", self.webcamPipPositionComboBox)
 
         return widget
 
@@ -221,6 +232,11 @@ class SettingsDialog(QDialog):
         self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
         self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))
 
+        # --- Carica Impostazioni Webcam PiP ---
+        self.enableWebcamPip.setChecked(self.settings.value("recording/enableWebcamPip", False, type=bool))
+        self.webcamDeviceEdit.setText(self.settings.value("recording/webcamDevice", "Integrated Camera"))
+        self.webcamPipPositionComboBox.setCurrentText(self.settings.value("recording/webcamPipPosition", "Bottom Right"))
+
 
     def _setComboBoxValue(self, combo_box, value):
         """Imposta il valore corrente della ComboBox se il valore è presente."""
@@ -261,6 +277,11 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
         self.settings.setValue("recording/watermarkPosition", self.watermarkPositionComboBox.currentText())
         self.settings.setValue("recording/useVBCable", self.useVBCableCheckBox.isChecked())
+
+        # --- Salva Impostazioni Webcam PiP ---
+        self.settings.setValue("recording/enableWebcamPip", self.enableWebcamPip.isChecked())
+        self.settings.setValue("recording/webcamDevice", self.webcamDeviceEdit.text())
+        self.settings.setValue("recording/webcamPipPosition", self.webcamPipPositionComboBox.currentText())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
