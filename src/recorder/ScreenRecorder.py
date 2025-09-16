@@ -16,7 +16,7 @@ class ScreenRecorder(QThread):
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
                  bluetooth_mode=False, audio_volume=1.0,
-                 record_webcam=False, webcam_device=None, webcam_position="Bottom Right"):
+                 record_webcam=False, webcam_device=None, webcam_position="Bottom Right", video_codec='libx264'):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -39,6 +39,7 @@ class ScreenRecorder(QThread):
         self.record_webcam = record_webcam
         self.webcam_device = webcam_device
         self.webcam_position = webcam_position
+        self.video_codec = video_codec
 
         # Check if ffmpeg.exe exists
         if not os.path.isfile(self.ffmpeg_path):
@@ -179,7 +180,7 @@ class ScreenRecorder(QThread):
 
         # Add final video output options
         ffmpeg_command.extend([
-            '-c:v', 'libx264',
+            '-c:v', self.video_codec,
             '-preset', 'ultrafast',
             '-pix_fmt', 'yuv420p',
             '-movflags', '+faststart', # Add faststart flag for robustness

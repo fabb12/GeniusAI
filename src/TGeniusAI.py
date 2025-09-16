@@ -122,6 +122,7 @@ class VideoAudioManager(QMainWindow):
         self.record_webcam = False
         self.webcam_device = ""
         self.webcam_position = "Bottom Right"
+        self.video_codec = "libx264"
         self.enableCursorHighlight = False
         self.cursor_overlay = CursorOverlay()
 
@@ -172,8 +173,9 @@ class VideoAudioManager(QMainWindow):
 
         # Carica le impostazioni della webcam
         self.record_webcam = settings.value("recording/enableWebcamPip", False, type=bool)
-        self.webcam_device = settings.value("recording/webcamDevice", "Integrated Camera")
+        self.webcam_device = settings.value("recording/webcamDevice", "")
         self.webcam_position = settings.value("recording/webcamPipPosition", "Bottom Right")
+        self.video_codec = settings.value("recording/videoCodec", "libx264")
 
         # Configura l'aspetto dell'overlay
         self.cursor_overlay.set_show_red_dot(self.show_red_dot)
@@ -2464,7 +2466,8 @@ class VideoAudioManager(QMainWindow):
             audio_volume=4.0,
             record_webcam=self.record_webcam,
             webcam_device=self.webcam_device,
-            webcam_position=self.webcam_position
+            webcam_position=self.webcam_position,
+            video_codec=self.video_codec
         )
 
         self.recorder_thread.error_signal.connect(self.showError)

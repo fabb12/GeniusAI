@@ -1,6 +1,6 @@
 # File: managers/Settings.py
-# Corretto per QSizePolicy.Policy.Expanding e include il tab API Keys
-
+import subprocess
+import re
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
@@ -8,8 +8,44 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout
 )
 from PyQt6.QtCore import QSettings
-# Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
-from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT
+from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, FFMPEG_PATH
+
+def get_video_devices():
+    """Esegue ffmpeg per ottenere un elenco dei dispositivi video dshow."""
+    try:
+        ffmpeg_cmd = [
+            FFMPEG_PATH,
+            '-list_devices', 'true',
+            '-f', 'dshow',
+            '-i', 'dummy'
+        ]
+        # Esegui il comando in un modo che non apra una finestra della console
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+        result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', startupinfo=startupinfo)
+
+        output = result.stderr
+
+        devices = []
+        # Cerca la sezione dei dispositivi video e poi estrai i nomi dei dispositivi
+        in_video_devices_section = False
+        for line in output.splitlines():
+            if "DirectShow video devices" in line:
+                in_video_devices_section = True
+                continue
+            if "DirectShow audio devices" in line:
+                in_video_devices_section = False
+                break
+
+            if in_video_devices_section:
+                match = re.search(r'\"(.*?)\" \(video\)', line)
+                if match:
+                    devices.append(match.group(1))
+        return devices
+    except Exception as e:
+        print(f"Errore durante l'elenco dei dispositivi video: {e}")
+        return []
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -182,13 +218,29 @@ class SettingsDialog(QDialog):
         self.enableWebcamPip = QCheckBox()
         layout.addRow("Abilita Webcam Picture-in-Picture:", self.enableWebcamPip)
 
-        self.webcamDeviceEdit = QLineEdit()
-        self.webcamDeviceEdit.setToolTip("Il nome esatto della webcam come riconosciuto da ffmpeg.")
-        layout.addRow("Nome Dispositivo Webcam:", self.webcamDeviceEdit)
+        self.webcamDeviceComboBox = QComboBox()
+        self.webcamDeviceComboBox.setToolTip("Seleziona il dispositivo webcam da usare.")
+        # Popola la combobox con i dispositivi video trovati
+        video_devices = get_video_devices()
+        if video_devices:
+            self.webcamDeviceComboBox.addItems(video_devices)
+        else:
+            self.webcamDeviceComboBox.addItem("Nessun dispositivo video trovato")
+            self.webcamDeviceComboBox.setEnabled(False)
+        layout.addRow("Dispositivo Webcam:", self.webcamDeviceComboBox)
 
         self.webcamPipPositionComboBox = QComboBox()
         self.webcamPipPositionComboBox.addItems(["Top Left", "Top Right", "Bottom Left", "Bottom Right"])
         layout.addRow("Posizione Webcam PiP:", self.webcamPipPositionComboBox)
+
+        # --- Performance Settings ---
+        self.videoCodecComboBox = QComboBox()
+        self.videoCodecComboBox.setToolTip("Scegli un codec video. I codec hardware (NVENC, QSV) offrono prestazioni migliori se supportati.")
+        self.videoCodecComboBox.addItem("libx264 (Software, Compatibile)", "libx264")
+        self.videoCodecComboBox.addItem("h264_nvenc (NVIDIA GPU, Veloce)", "h264_nvenc")
+        self.videoCodecComboBox.addItem("h264_qsv (Intel GPU, Veloce)", "h264_qsv")
+        layout.addRow("Codec Video:", self.videoCodecComboBox)
+
 
         return widget
 
@@ -234,8 +286,16 @@ class SettingsDialog(QDialog):
 
         # --- Carica Impostazioni Webcam PiP ---
         self.enableWebcamPip.setChecked(self.settings.value("recording/enableWebcamPip", False, type=bool))
-        self.webcamDeviceEdit.setText(self.settings.value("recording/webcamDevice", "Integrated Camera"))
+        saved_webcam = self.settings.value("recording/webcamDevice", "")
+        if saved_webcam and self.webcamDeviceComboBox.findText(saved_webcam) != -1:
+            self.webcamDeviceComboBox.setCurrentText(saved_webcam)
         self.webcamPipPositionComboBox.setCurrentText(self.settings.value("recording/webcamPipPosition", "Bottom Right"))
+
+        # --- Carica Impostazioni Performance ---
+        saved_codec = self.settings.value("recording/videoCodec", "libx264")
+        codec_index = self.videoCodecComboBox.findData(saved_codec)
+        if codec_index != -1:
+            self.videoCodecComboBox.setCurrentIndex(codec_index)
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -280,8 +340,11 @@ class SettingsDialog(QDialog):
 
         # --- Salva Impostazioni Webcam PiP ---
         self.settings.setValue("recording/enableWebcamPip", self.enableWebcamPip.isChecked())
-        self.settings.setValue("recording/webcamDevice", self.webcamDeviceEdit.text())
+        self.settings.setValue("recording/webcamDevice", self.webcamDeviceComboBox.currentText())
         self.settings.setValue("recording/webcamPipPosition", self.webcamPipPositionComboBox.currentText())
+
+        # --- Salva Impostazioni Performance ---
+        self.settings.setValue("recording/videoCodec", self.videoCodecComboBox.currentData())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
