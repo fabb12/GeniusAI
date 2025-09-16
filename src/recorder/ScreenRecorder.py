@@ -78,10 +78,10 @@ class ScreenRecorder(QThread):
                 # For Bluetooth, set device options for compatibility
                 if self.bluetooth_mode:
                     ffmpeg_command.extend(['-audio_buffer_size', '100'])
-                else:
-                    # Provide default high-quality settings for other devices
-                    ffmpeg_command.extend(['-sample_rate', '44100'])
-                    ffmpeg_command.extend(['-channels', '2'])
+
+                # Let ffmpeg use the default sample rate and channels from the device
+                # ffmpeg_command.extend(['-sample_rate', '44100'])
+                # ffmpeg_command.extend(['-channels', '2'])
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
         # --- Build the filter_complex string and map arguments ---
