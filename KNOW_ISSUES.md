@@ -18,7 +18,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
 - [ ] aggiungere zoom testo in area trascrizione con rotella + / -
 -   non funziona generaxion powerpoint 
-- on funzioan pil pan del vidoe 
+- sistemare cuffie
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
