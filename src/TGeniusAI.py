@@ -109,6 +109,7 @@ class VideoAudioManager(QMainWindow):
         self.recording_indicator.setVisible(False)
         self.indicator_timer = QTimer(self)
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
+        self.is_recording = False
 
         self.initUI()
         self.videoContainer.resizeEvent = self.videoContainerResizeEvent
@@ -1938,16 +1939,20 @@ class VideoAudioManager(QMainWindow):
     def selectScreen(self, screen_index):
         if self.is_recording:
             if screen_index != self.selected_screen_index:
+                # Stop the current recording segment
                 if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
                     self.recorder_thread.stop()
                     self.recorder_thread.wait()
 
+                # Update the selected screen and UI
                 self.selected_screen_index = screen_index
                 for i, button in enumerate(self.screen_buttons):
                     button.set_selected(i == screen_index)
 
+                # Start a new recording segment for the new screen
                 self._startRecordingSegment()
         else:
+            # If not recording, just update the preview
             self.selected_screen_index = screen_index
             for i, button in enumerate(self.screen_buttons):
                 button.set_selected(i == screen_index)
