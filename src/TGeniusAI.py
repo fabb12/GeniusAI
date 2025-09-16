@@ -62,13 +62,12 @@ from services.FrameExtractor import FrameExtractor
 from services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from ui.CropDialog import CropDialog
-from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
-from config import MUSIC_DIR
-from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
-    DEFAULT_SIMILARITY, DEFAULT_STYLE, DEFAULT_FRAME_RATE,DEFAULT_VOICES
+from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
+                    MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
+                    DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
+                    DEFAULT_FRAME_RATE, DEFAULT_VOICES, SPLASH_IMAGES_DIR,
+                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE)
 import os
-from config import SPLASH_IMAGES_DIR
-from config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
 AudioSegment.converter = FFMPEG_PATH
 from ui.VideoOverlay import VideoOverlay
 
@@ -105,7 +104,7 @@ class VideoAudioManager(QMainWindow):
 
         # Blinking recording indicator
         self.recording_indicator = QLabel(self)
-        self.recording_indicator.setPixmap(QIcon("./res/rec.png").pixmap(16, 16))
+        self.recording_indicator.setPixmap(QIcon(get_resource("rec.png")).pixmap(16, 16))
         self.recording_indicator.setVisible(False)
         self.indicator_timer = QTimer(self)
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
@@ -162,7 +161,7 @@ class VideoAudioManager(QMainWindow):
         self.show_red_dot = settings.value("cursor/showRedDot", False, type=bool)
         self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
         self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
-        self.watermarkPath = settings.value("recording/watermarkPath", "res/watermark.png")
+        self.watermarkPath = settings.value("recording/watermarkPath", WATERMARK_IMAGE)
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
         self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
@@ -182,7 +181,7 @@ class VideoAudioManager(QMainWindow):
         e definendo la sezione di trascrizione con QTabWidget e area di testo sempre visibile.
         """
         # Impostazione dell'icona della finestra
-        self.setWindowIcon(QIcon('./res/eye.png'))
+        self.setWindowIcon(QIcon(get_resource('eye.png')))
 
         # Creazione dell'area dei dock
         area = DockArea()
@@ -285,47 +284,47 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
 
         self.playButton = QPushButton('')
-        self.playButton.setIcon(QIcon("./res/play.png"))
+        self.playButton.setIcon(QIcon(get_resource("play.png")))
         self.playButton.setToolTip("Riproduci/Pausa il video input")
         self.playButton.clicked.connect(self.togglePlayPause)
 
         self.stopButton = QPushButton('')
-        self.stopButton.setIcon(QIcon("./res/stop.png"))
+        self.stopButton.setIcon(QIcon(get_resource("stop.png")))
         self.stopButton.setToolTip("Ferma la riproduzione del video input")
 
         self.setStartBookmarkButton = QPushButton('')
-        self.setStartBookmarkButton.setIcon(QIcon("./res/bookmark_1.png"))
+        self.setStartBookmarkButton.setIcon(QIcon(get_resource("bookmark_1.png")))
         self.setStartBookmarkButton.setToolTip("Imposta segnalibro di inizio sul video input")
 
         self.setEndBookmarkButton = QPushButton('')
-        self.setEndBookmarkButton.setIcon(QIcon("./res/bookmark_2.png"))
+        self.setEndBookmarkButton.setIcon(QIcon(get_resource("bookmark_2.png")))
         self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine sul video input")
 
         self.cutButton = QPushButton('')
-        self.cutButton.setIcon(QIcon("./res/taglia.png"))
+        self.cutButton.setIcon(QIcon(get_resource("taglia.png")))
         self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
 
         self.cropButton = QPushButton('')
-        self.cropButton.setIcon(QIcon("./res/crop.png"))
+        self.cropButton.setIcon(QIcon(get_resource("crop.png")))
         self.cropButton.setToolTip("Apre la finestra di dialogo per ritagliare il video")
 
 
         self.rewindButton = QPushButton('<< 5s')
-        self.rewindButton.setIcon(QIcon("./res/rewind.png"))
+        self.rewindButton.setIcon(QIcon(get_resource("rewind.png")))
         self.rewindButton.setToolTip("Riavvolgi il video di 5 secondi")
 
         self.frameBackwardButton = QPushButton('|<')
         self.frameBackwardButton.setToolTip("Indietro di un frame")
 
         self.forwardButton = QPushButton('>> 5s')
-        self.forwardButton.setIcon(QIcon("./res/forward.png"))
+        self.forwardButton.setIcon(QIcon(get_resource("forward.png")))
         self.forwardButton.setToolTip("Avanza il video di 5 secondi")
 
         self.frameForwardButton = QPushButton('>|')
         self.frameForwardButton.setToolTip("Avanti di un frame")
 
         self.deleteButton = QPushButton('')
-        self.deleteButton.setIcon(QIcon("./res/trash-bin.png"))
+        self.deleteButton.setIcon(QIcon(get_resource("trash-bin.png")))
         self.deleteButton.setToolTip("Cancella la parte selezionata del video")
 
         self.stopButton.clicked.connect(self.stopVideo)
@@ -359,23 +358,23 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
         self.playButtonOutput = QPushButton('')
-        self.playButtonOutput.setIcon(QIcon("./res/play.png"))
+        self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
         self.playButtonOutput.setToolTip("Riproduci/Pausa il video output")
         self.playButtonOutput.clicked.connect(self.togglePlayPauseOutput)
 
         stopButtonOutput = QPushButton('')
-        stopButtonOutput.setIcon(QIcon("./res/stop.png"))
+        stopButtonOutput.setIcon(QIcon(get_resource("stop.png")))
         stopButtonOutput.setToolTip("Ferma la riproduzione del video output")
 
         changeButtonOutput = QPushButton('')
-        changeButtonOutput.setIcon(QIcon("./res/change.png"))
+        changeButtonOutput.setIcon(QIcon(get_resource("change.png")))
         changeButtonOutput.setToolTip("Sposta il video output nel Video Player Input")
         changeButtonOutput.clicked.connect(
             lambda: self.loadVideo(self.videoPathLineOutputEdit, os.path.basename(self.videoPathLineOutputEdit))
         )
 
         syncPositionButton = QPushButton('Sync Position')
-        syncPositionButton.setIcon(QIcon("./res/sync.png"))
+        syncPositionButton.setIcon(QIcon(get_resource("sync.png")))
         syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
         syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
 
@@ -520,22 +519,22 @@ class VideoAudioManager(QMainWindow):
         # Per i pulsanti base, usiamo un QHBoxLayout e lo inseriamo in una cella della griglia
         buttonsLayoutBase2 = QHBoxLayout()
         self.resetButton = QPushButton()
-        self.resetButton.setIcon(QIcon("./res/reset.png"))
+        self.resetButton.setIcon(QIcon(get_resource("reset.png")))
         self.resetButton.setFixedSize(24, 24)
         self.resetButton.setToolTip("Ripulisce la trascrizione")
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
         self.pasteButton = QPushButton()
-        self.pasteButton.setIcon(QIcon("./res/paste.png"))
+        self.pasteButton.setIcon(QIcon(get_resource("paste.png")))
         self.pasteButton.setFixedSize(24, 24)
         self.pasteButton.setToolTip("Incolla il testo dagli appunti")
         self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
         self.saveButton = QPushButton()
-        self.saveButton.setIcon(QIcon("./res/save.png"))
+        self.saveButton.setIcon(QIcon(get_resource("save.png")))
         self.saveButton.setFixedSize(24, 24)
         self.saveButton.setToolTip("Salva la trascrizione su file")
         self.saveButton.clicked.connect(self.saveText)
         self.loadButton = QPushButton()
-        self.loadButton.setIcon(QIcon("./res/load.png"))
+        self.loadButton.setIcon(QIcon(get_resource("load.png")))
         self.loadButton.setFixedSize(24, 24)
         self.loadButton.setToolTip("Carica una trascrizione da file")
         self.loadButton.clicked.connect(self.loadText)
@@ -647,7 +646,7 @@ class VideoAudioManager(QMainWindow):
         mainToolbar.addWidget(self.recording_indicator)
 
         # Azione di condivisione
-        shareAction = QAction(QIcon("./res/share.png"), "Condividi Video", self)
+        shareAction = QAction(QIcon(get_resource("share.png")), "Condividi Video", self)
         shareAction.setToolTip("Condividi il video attualmente caricato")
         shareAction.triggered.connect(self.onShareButtonClicked)
         mainToolbar.addAction(shareAction)
@@ -655,32 +654,32 @@ class VideoAudioManager(QMainWindow):
         mainToolbar.addSeparator()
 
         # Workflow Actions (Azioni AI)
-        self.summarizeMeetingAction = QAction(QIcon("./res/meet_sum.png"), 'Riassumi Riunione', self)
+        self.summarizeMeetingAction = QAction(QIcon(get_resource("meet_sum.png")), 'Riassumi Riunione', self)
         self.summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
         self.summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
         mainToolbar.addAction(self.summarizeMeetingAction)
 
-        self.summarizeAction = QAction(QIcon("./res/text_sum.png"), 'Riassumi Testo', self)
+        self.summarizeAction = QAction(QIcon(get_resource("text_sum.png")), 'Riassumi Testo', self)
         self.summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
         self.summarizeAction.triggered.connect(self.processTextWithAI)
         mainToolbar.addAction(self.summarizeAction)
 
-        self.fixTextAction = QAction(QIcon("./res/text_fix.png"), 'Correggi Testo', self)
+        self.fixTextAction = QAction(QIcon(get_resource("text_fix.png")), 'Correggi Testo', self)
         self.fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
         self.fixTextAction.triggered.connect(self.fixTextWithAI)
         mainToolbar.addAction(self.fixTextAction)
 
-        self.generatePptxAction = QAction(QIcon("./res/save.png"), 'Genera Presentazione', self)
+        self.generatePptxAction = QAction(QIcon(get_resource("save.png")), 'Genera Presentazione', self)
         self.generatePptxAction.setStatusTip('Crea una presentazione PowerPoint dal testo')
         self.generatePptxAction.triggered.connect(self.openPptxDialog)
         mainToolbar.addAction(self.generatePptxAction)
 
-        self.extractInfoAction = QAction(QIcon("./res/frame_get.png"), 'Estrai Info da Video', self)
+        self.extractInfoAction = QAction(QIcon(get_resource("frame_get.png")), 'Estrai Info da Video', self)
         self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
         self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
         mainToolbar.addAction(self.extractInfoAction)
 
-        self.summarizeYouTubeAction = QAction(QIcon("./res/meet_sum.png"), 'Riassumi Riunione', self)
+        self.summarizeYouTubeAction = QAction(QIcon(get_resource("meet_sum.png")), 'Riassumi Riunione', self)
         self.summarizeYouTubeAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
         self.summarizeYouTubeAction.triggered.connect(self.summarizeYouTube)
         #mainToolbar.addAction(self.summarizeYouTubeAction)
@@ -691,22 +690,22 @@ class VideoAudioManager(QMainWindow):
         self.addToolBar(workspaceToolbar)
 
         # Workspace Actions (Layouts)
-        self.defaultLayoutAction = QAction(QIcon("./res/meet.png"), 'Default', self)
+        self.defaultLayoutAction = QAction(QIcon(get_resource("meet.png")), 'Default', self)
         self.defaultLayoutAction.setToolTip("Layout di default")
         self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
         workspaceToolbar.addAction(self.defaultLayoutAction)
 
-        self.recordingLayoutAction = QAction(QIcon("./res/lay_rec.png"), 'Registrazione', self)
+        self.recordingLayoutAction = QAction(QIcon(get_resource("lay_rec.png")), 'Registrazione', self)
         self.recordingLayoutAction.setToolTip("Layout per la registrazione")
         self.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
         workspaceToolbar.addAction(self.recordingLayoutAction)
 
-        self.comparisonLayoutAction = QAction(QIcon("./res/load1.png"), 'Confronto', self)
+        self.comparisonLayoutAction = QAction(QIcon(get_resource("load1.png")), 'Confronto', self)
         self.comparisonLayoutAction.setToolTip("Layout per il confronto")
         self.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
         workspaceToolbar.addAction(self.comparisonLayoutAction)
 
-        self.transcriptionLayoutAction = QAction(QIcon("./res/load2.png"), 'Trascrizione', self)
+        self.transcriptionLayoutAction = QAction(QIcon(get_resource("load2.png")), 'Trascrizione', self)
         self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
         self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
         workspaceToolbar.addAction(self.transcriptionLayoutAction)
@@ -714,7 +713,7 @@ class VideoAudioManager(QMainWindow):
         workspaceToolbar.addSeparator()
 
         # Azione Impostazioni
-        settingsAction = QAction(QIcon("./res/gear.png"), "Impostazioni", self)
+        settingsAction = QAction(QIcon(get_resource("gear.png")), "Impostazioni", self)
         settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
         workspaceToolbar.addAction(settingsAction)
@@ -868,18 +867,18 @@ class VideoAudioManager(QMainWindow):
     def togglePlayPauseOutput(self):
         if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.playerOutput.pause()
-            self.playButtonOutput.setIcon(QIcon("./res/play.png"))  # Cambia l'icona in Play
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
         else:
             self.playerOutput.play()
-            self.playButtonOutput.setIcon(QIcon("./res/pausa.png"))  # Cambia l'icona in Pausa
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
 
     def togglePlayPause(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
-            self.playButton.setIcon(QIcon("./res/play.png"))  # Cambia l'icona in Play
+            self.playButton.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
         else:
             self.player.play()
-            self.playButton.setIcon(QIcon("./res/pausa.png"))  # Cambia l'icona in Pausa
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
 
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
@@ -2330,15 +2329,15 @@ class VideoAudioManager(QMainWindow):
         # recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
 
         self.startRecordingButton = QPushButton("")
-        self.startRecordingButton.setIcon(QIcon("./res/rec.png"))
+        self.startRecordingButton.setIcon(QIcon(get_resource("rec.png")))
         self.startRecordingButton.setToolTip("Inizia la registrazione")
 
         self.stopRecordingButton = QPushButton("")
-        self.stopRecordingButton.setIcon(QIcon("./res/stop.png"))
+        self.stopRecordingButton.setIcon(QIcon(get_resource("stop.png")))
         self.stopRecordingButton.setToolTip("Ferma la registrazione")
 
         self.pauseRecordingButton = QPushButton("")
-        self.pauseRecordingButton.setIcon(QIcon("./res/pausa_play.png"))
+        self.pauseRecordingButton.setIcon(QIcon(get_resource("pausa_play.png")))
         self.pauseRecordingButton.setToolTip("Pausa/Riprendi la registrazione")
         self.pauseRecordingButton.setEnabled(False)
 
@@ -2845,11 +2844,11 @@ class VideoAudioManager(QMainWindow):
         agentAIsMenu.addAction(createGuideAction)
 
         videoMenu = menuBar.addMenu('&Video')
-        releaseSourceAction = QAction(QIcon("./res/reset.png"), "Unload Video Source", self)
+        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Source", self)
         releaseSourceAction.triggered.connect(self.releaseSourceVideo)
         videoMenu.addAction(releaseSourceAction)
 
-        releaseOutputAction = QAction(QIcon("./res/reset.png"), "Unload Video Output", self)
+        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Output", self)
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         videoMenu.addAction(releaseOutputAction)
 

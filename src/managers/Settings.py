@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
-from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT
+from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -216,7 +216,7 @@ class SettingsDialog(QDialog):
 
         # --- Carica Impostazioni Registrazione ---
         self.enableWatermark.setChecked(self.settings.value("recording/enableWatermark", True, type=bool))
-        self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", "res/watermark.png"))
+        self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", WATERMARK_IMAGE))
         self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
         self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
         self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))

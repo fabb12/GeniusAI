@@ -220,6 +220,18 @@ PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
 # --- Percorsi Risorse ---
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
 
+def get_resource(relative_path: str) -> str:
+    """
+    Costruisce un percorso assoluto per una risorsa nella cartella 'res'.
+
+    Args:
+        relative_path (str): Il percorso relativo all'interno della cartella 'res' (es. 'icons/icon.png').
+
+    Returns:
+        str: Il percorso assoluto della risorsa.
+    """
+    return os.path.join(RESOURCES_DIR, relative_path)
+
 def get_splash_images_dir():
     """Ottiene il percorso della cartella splash_images in modo compatibile."""
     return os.path.join(RESOURCES_DIR, "splash_images")
