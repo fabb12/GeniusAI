@@ -38,6 +38,9 @@ class SettingsDialog(QDialog):
         # Tab per la Registrazione
         tabs.addTab(self.createRecordingSettingsTab(), "Registrazione")
 
+        # Tab per il Salvataggio
+        tabs.addTab(self.createSavingSettingsTab(), "Salvataggio")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -187,6 +190,16 @@ class SettingsDialog(QDialog):
         if filePath:
             self.watermarkPathEdit.setText(filePath)
 
+    def createSavingSettingsTab(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.saveWithPlaybackSpeed = QCheckBox()
+        self.saveWithPlaybackSpeed.setToolTip("Se abilitato, il video verrà salvato con la velocità di riproduzione corrente.")
+        layout.addRow("Salva video con la velocità di riproduzione:", self.saveWithPlaybackSpeed)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -220,6 +233,9 @@ class SettingsDialog(QDialog):
         self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
         self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
         self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))
+
+        # --- Carica Impostazioni Salvataggio ---
+        self.saveWithPlaybackSpeed.setChecked(self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -261,6 +277,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
         self.settings.setValue("recording/watermarkPosition", self.watermarkPositionComboBox.currentText())
         self.settings.setValue("recording/useVBCable", self.useVBCableCheckBox.isChecked())
+
+        # --- Salva Impostazioni Salvataggio ---
+        self.settings.setValue("saving/saveWithPlaybackSpeed", self.saveWithPlaybackSpeed.isChecked())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()

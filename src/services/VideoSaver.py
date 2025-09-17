@@ -28,7 +28,7 @@ class VideoSaver:
         except Exception as e:
             return False, str(e)
 
-    def save_compressed(self, source_path, target_path, quality=5):
+    def save_compressed(self, source_path, target_path, quality=5, playback_rate=1.0):
         """
         Comprime il video per email o condivisione.
 
@@ -36,6 +36,7 @@ class VideoSaver:
             source_path (str): Percorso del video sorgente
             target_path (str): Percorso dove salvare il video compresso
             quality (int): Livello di qualità da 1 (minima) a 10 (massima)
+            playback_rate (float): Velocità di riproduzione
 
         Returns:
             tuple: (success, error_message)
@@ -57,6 +58,37 @@ class VideoSaver:
             command = [
                 ffmpeg_path,
                 '-i', source_path,
+            ]
+
+            video_filters = []
+            audio_filters = []
+
+            if playback_rate != 1.0 and playback_rate > 0:
+                video_filters.append(f"setpts={1.0/playback_rate}*PTS")
+
+                # atempo filter can only be between 0.5 and 100.0. Chain them if needed.
+                atempo_filters = []
+                rate = playback_rate
+                while rate > 100.0:
+                    atempo_filters.append("atempo=100.0")
+                    rate /= 100.0
+                while rate < 0.5 and rate > 0:
+                    atempo_filters.append("atempo=0.5")
+                    rate /= 0.5
+                if rate != 1.0 :
+                    atempo_filters.append(f"atempo={rate}")
+
+                if atempo_filters:
+                        audio_filters.append(','.join(atempo_filters))
+
+            if video_filters:
+                command.extend(['-filter:v', ",".join(video_filters)])
+
+            if audio_filters:
+                command.extend(['-filter:a', ",".join(audio_filters)])
+
+
+            command.extend([
                 '-c:v', 'libx264',
                 '-crf', str(crf),
                 '-preset', 'medium',  # Compromesso tra velocità e compressione
@@ -64,7 +96,7 @@ class VideoSaver:
                 '-b:a', '128k',  # Bitrate audio
                 '-y',  # Sovrascrivi file di output
                 target_path
-            ]
+            ])
 
             # Esegui il comando
             process = subprocess.Popen(
