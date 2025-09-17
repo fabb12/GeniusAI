@@ -105,7 +105,7 @@ class VideoAudioManager(QMainWindow):
         # Blinking recording indicator
         self.recording_indicator = QLabel(self)
         self.recording_indicator.setPixmap(QIcon(get_resource("rec.png")).pixmap(16, 16))
-        self.recording_indicator.setVisible(False)
+        self.recording_indicator.setVisible(True)
         self.indicator_timer = QTimer(self)
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
         self.is_recording = False
@@ -668,19 +668,11 @@ class VideoAudioManager(QMainWindow):
 
 
 
-        # --- PRIMA TOOLBAR (Principale) ---
+
+        # --- TOOLBAR (Principale) ---
         mainToolbar = QToolBar("Main Toolbar")
         mainToolbar.setToolTip("Barra degli strumenti principale per le azioni")
         self.addToolBar(mainToolbar)
-
-        # Aggiungi l'indicatore di registrazione lampeggiante
-        mainToolbar.addWidget(self.recording_indicator)
-
-        # Azione di condivisione
-        shareAction = QAction(QIcon(get_resource("share.png")), "Condividi Video", self)
-        shareAction.setToolTip("Condividi il video attualmente caricato")
-        shareAction.triggered.connect(self.onShareButtonClicked)
-        mainToolbar.addAction(shareAction)
 
         mainToolbar.addSeparator()
 
@@ -743,12 +735,26 @@ class VideoAudioManager(QMainWindow):
 
         workspaceToolbar.addSeparator()
 
+        serviceToolbar = QToolBar("Rec Toolbar")
+        serviceToolbar.setToolTip("Barra servizio")
+        self.addToolBar(serviceToolbar)
+
+        # Aggiungi l'indicatore di registrazione lampeggiante
+        serviceToolbar.addWidget(self.recording_indicator)
+
+        # Azione di condivisione
+        shareAction = QAction(QIcon(get_resource("share.png")), "Condividi Video", self)
+        shareAction.setToolTip("Condividi il video attualmente caricato")
+        shareAction.triggered.connect(self.onShareButtonClicked)
+        serviceToolbar.addAction(shareAction)
+
         # Azione Impostazioni
         settingsAction = QAction(QIcon(get_resource("gear.png")), "Impostazioni", self)
         settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
         settingsAction.triggered.connect(self.showSettingsDialog)
-        workspaceToolbar.addAction(settingsAction)
+        serviceToolbar.addAction(settingsAction)
 
+        serviceToolbar.addSeparator()
         # Configurazione della menu bar (questa parte rimane invariata)
         self.setupMenuBar()
 
