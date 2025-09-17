@@ -110,6 +110,11 @@ class VideoAudioManager(QMainWindow):
         self.indicator_timer.timeout.connect(self.toggle_recording_indicator)
         self.is_recording = False
 
+        self.reverseTimer = QTimer(self)
+        self.reverseTimer.timeout.connect(self.reversePlaybackStep)
+        self.reverseTimerOutput = QTimer(self)
+        self.reverseTimerOutput.timeout.connect(self.reversePlaybackStepOutput)
+
         # Initialize attributes before UI
         self.use_vb_cable = False
         self.audio_device_layout = None
@@ -411,6 +416,19 @@ class VideoAudioManager(QMainWindow):
         videoOutputLayout.addWidget(self.videoOutputWidget)
         videoOutputLayout.addLayout(timecodeLayoutOutput)
         videoOutputLayout.addWidget(videoSliderOutput)
+
+        # Speed control for output player
+        speedLayoutOutput = QHBoxLayout()
+        speedLayoutOutput.addWidget(QLabel("Velocità:"))
+        self.speedSpinBoxOutput = QSpinBox()
+        self.speedSpinBoxOutput.setRange(-20, 20)
+        self.speedSpinBoxOutput.setSuffix("x")
+        self.speedSpinBoxOutput.setValue(1)
+        self.speedSpinBoxOutput.setSingleStep(1)
+        self.speedSpinBoxOutput.valueChanged.connect(self.setPlaybackRateOutput)
+        speedLayoutOutput.addWidget(self.speedSpinBoxOutput)
+        videoOutputLayout.addLayout(speedLayoutOutput)
+
         videoOutputLayout.addLayout(playbackControlLayoutOutput)
 
         self.playerOutput.durationChanged.connect(self.updateDurationOutput)
@@ -463,6 +481,19 @@ class VideoAudioManager(QMainWindow):
         videoPlayerLayout.addLayout(timecode_input_layout)
 
         videoPlayerLayout.addWidget(self.videoSlider)
+
+        # Speed control
+        speedLayout = QHBoxLayout()
+        speedLayout.addWidget(QLabel("Velocità:"))
+        self.speedSpinBox = QSpinBox()
+        self.speedSpinBox.setRange(-20, 20)
+        self.speedSpinBox.setSuffix("x")
+        self.speedSpinBox.setValue(1)
+        self.speedSpinBox.setSingleStep(1)
+        self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
+        speedLayout.addWidget(self.speedSpinBox)
+        videoPlayerLayout.addLayout(speedLayout)
+
         videoPlayerLayout.addLayout(playbackControlLayout)
 
         # Controlli volume input e velocità
@@ -864,21 +895,108 @@ class VideoAudioManager(QMainWindow):
 
         return version, build_date
 
-    def togglePlayPauseOutput(self):
-        if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+    def setPlaybackRateInput(self, rate):
+        if rate == 0:
+            rate = 1
+            self.speedSpinBox.setValue(1)
+
+        if rate > 0:
+            self.reverseTimer.stop()
+            self.player.setPlaybackRate(float(rate))
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.player.play()
+        else:  # rate < 0
+            self.player.pause()
+            self.player.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps() * abs(rate)))
+            if interval <= 0:
+                interval = 20
+            self.reverseTimer.start(interval)
+
+    def reversePlaybackStep(self):
+        current_pos = self.player.position()
+        step = 1000 / self.get_current_fps()
+        new_pos = current_pos - step
+        if new_pos < 0:
+            new_pos = 0
+            self.reverseTimer.stop()
+            self.playButton.setIcon(QIcon(get_resource("play.png")))
+        self.player.setPosition(int(new_pos))
+
+    def setPlaybackRateOutput(self, rate):
+        if rate == 0:
+            rate = 1
+            self.speedSpinBoxOutput.setValue(1)
+
+        if rate > 0:
+            self.reverseTimerOutput.stop()
+            self.playerOutput.setPlaybackRate(float(rate))
+            if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.playerOutput.play()
+        else:  # rate < 0
             self.playerOutput.pause()
-            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
+            self.playerOutput.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps_output() * abs(rate)))
+            if interval <= 0:
+                interval = 20
+            self.reverseTimerOutput.start(interval)
+
+    def reversePlaybackStepOutput(self):
+        current_pos = self.playerOutput.position()
+        step = 1000 / self.get_current_fps_output()
+        new_pos = current_pos - step
+        if new_pos < 0:
+            new_pos = 0
+            self.reverseTimerOutput.stop()
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+        self.playerOutput.setPosition(int(new_pos))
+
+    def get_current_fps_output(self):
+        if not self.videoPathLineOutputEdit:
+            return 30
+        try:
+            return VideoFileClip(self.videoPathLineOutputEdit).fps
+        except Exception as e:
+            print(f"Error getting FPS for output: {e}")
+            return 30  # default fps
+
+    def togglePlayPauseOutput(self):
+        rate = self.speedSpinBoxOutput.value()
+        if rate < 0:
+            if self.reverseTimerOutput.isActive():
+                self.reverseTimerOutput.stop()
+                self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+            else:
+                interval = int(1000 / (self.get_current_fps_output() * abs(rate)))
+                if interval <= 0: interval = 20
+                self.reverseTimerOutput.start(interval)
+                self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
         else:
-            self.playerOutput.play()
-            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
+            if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.playerOutput.pause()
+                self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+            else:
+                self.playerOutput.play()
+                self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
 
     def togglePlayPause(self):
-        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
-            self.player.pause()
-            self.playButton.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
+        rate = self.speedSpinBox.value()
+        if rate < 0:
+            if self.reverseTimer.isActive():
+                self.reverseTimer.stop()
+                self.playButton.setIcon(QIcon(get_resource("play.png")))
+            else:
+                interval = int(1000 / (self.get_current_fps() * abs(rate)))
+                if interval <= 0: interval = 20
+                self.reverseTimer.start(interval)
+                self.playButton.setIcon(QIcon(get_resource("pausa.png")))
         else:
-            self.player.play()
-            self.playButton.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.player.pause()
+                self.playButton.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
+            else:
+                self.player.play()
+                self.playButton.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
 
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
@@ -1831,6 +1949,19 @@ class VideoAudioManager(QMainWindow):
         frameCountLayout.addWidget(QLabel("Numero frame:"))
         frameCountLayout.addWidget(self.infoFrameCountSpin)
         infoExtractionLayout.addLayout(frameCountLayout)
+
+        # Language selection
+        languageLayout = QHBoxLayout()
+        languageLayout.addWidget(QLabel("Lingua:"))
+        self.languageInput = QComboBox()
+        self.languageInput.addItem("Italiano", "it")
+        self.languageInput.addItem("Inglese", "en")
+        self.languageInput.addItem("Francese", "fr")
+        self.languageInput.addItem("Spagnolo", "es")
+        self.languageInput.addItem("Tedesco", "de")
+        self.languageInput.setToolTip("Seleziona la lingua per l'analisi dell'audio")
+        languageLayout.addWidget(self.languageInput)
+        infoExtractionLayout.addLayout(languageLayout)
 
         # Checkbox per l'analisi combinata
         self.combinedAnalysisCheckbox = QCheckBox("Analisi combinata (Immagini e Audio)")
@@ -2889,10 +3020,19 @@ class VideoAudioManager(QMainWindow):
 
         # Salva il video in base alle opzioni selezionate
         if save_options['use_compression']:
+            settings = QSettings("Genius", "GeniusAI")
+            save_with_speed = settings.value("saving/saveWithPlaybackSpeed", False, type=bool)
+            rate = 1.0
+            if save_with_speed:
+                rate = self.speedSpinBoxOutput.value()
+                if rate == 0:
+                    rate = 1.0
+
             success, error_msg = video_saver.save_compressed(
                 self.videoPathLineOutputEdit,
                 fileName,
-                quality=save_options['compression_quality']
+                quality=save_options['compression_quality'],
+                playback_rate=rate
             )
         else:
             success, error_msg = video_saver.save_original(
