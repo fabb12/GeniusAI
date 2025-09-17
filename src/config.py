@@ -254,10 +254,10 @@ DEFAULT_WINDOW_HEIGHT = 800
 
 # --- Impostazioni Voci (ElevenLabs) ---
 DEFAULT_VOICES = {
-    "Alessio": "BTpQARcEj1XqVxdZjTI7",
-    "Marco": "GcAgjAjkhWsmUd4GlPiv",
-    "Matilda": "atq1BFi5ZHt88WgSOJRB",
-    "Mika": "B2j2knC2POvVW0XJE6Hi"
+    "Lily": "pFZP5JQG7iQjIQuC4Bku",
+    "Giovanni": "zcAOhNBS3c14rBihAFp1",
+    "Carmelo": "pWHqWjkaSNybDOvgMt58",
+    "Tosca": "fNmw8sukfGuvWVOp33Ge"
     # Aggiungere altre voci predefinite se necessario
 }
 
