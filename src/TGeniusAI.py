@@ -56,7 +56,6 @@ from services.ProcessTextAI import ProcessTextAI
 from ui.SplashScreen import SplashScreen
 from services.ShareVideo import VideoSharingManager
 from ui.MonitorPreview import MonitorPreview
-from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from services.VideoCropping import CropThread
@@ -124,7 +123,6 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
         self.enableCursorHighlight = False
-        self.cursor_overlay = CursorOverlay()
 
         self.initUI()
 
@@ -144,8 +142,6 @@ class VideoAudioManager(QMainWindow):
         self.videoSharingManager = VideoSharingManager(self)
 
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-
-        self.cursor_overlay.hide()
 
         self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
@@ -172,8 +168,8 @@ class VideoAudioManager(QMainWindow):
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
 
         # Configura l'aspetto dell'overlay
-        self.cursor_overlay.set_show_red_dot(self.show_red_dot)
-        self.cursor_overlay.set_show_yellow_triangle(self.show_yellow_triangle)
+        self.videoOverlay.set_show_red_dot(self.show_red_dot)
+        self.videoOverlay.set_show_yellow_triangle(self.show_yellow_triangle)
         self.videoOverlay.setWatermark(self.enableWatermark, self.watermarkPath, self.watermarkSize, self.watermarkPosition)
 
         if self.audio_device_layout is not None:
@@ -2510,9 +2506,6 @@ class VideoAudioManager(QMainWindow):
         self.recording_segments = []  # Initialize the list to store recording segments
         self.is_paused = False
 
-        if self.enableCursorHighlight and (self.show_red_dot or self.show_yellow_triangle):
-            self.cursor_overlay.show()
-
         self.recordingTime = QTime(0, 0, 0)
         self.rec_timer.start(1000)
         self._startRecordingSegment()
@@ -2654,7 +2647,6 @@ class VideoAudioManager(QMainWindow):
             self.monitor_preview.close()
             self.monitor_preview = None
 
-        self.cursor_overlay.hide()
         self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
         self.timecodeLabel.setText('00:00:00')
         self.outputFileLabel.setText("File: N/A")
