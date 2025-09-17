@@ -251,22 +251,19 @@ class VideoAudioManager(QMainWindow):
         # ---------------------
         # PLAYER INPUT
         # ---------------------
-        self.videoCropWidget = CropVideoWidget()
+        self.videoContainer = QWidget()
+        self.videoContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoContainer.setToolTip("Video container for panning and zooming")
+
+        self.videoCropWidget = CropVideoWidget(parent=self.videoContainer)
         self.videoCropWidget.setAcceptDrops(True)
         self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
 
-        self.videoContainer = QWidget()
-        self.videoContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.videoContainer.setToolTip("Video container for panning and zooming")
-        self.videoCropWidget.setParent(self.videoContainer)
-
-        self.videoOverlay = VideoOverlay(self, self.videoCropWidget)
-        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
+        self.videoOverlay = VideoOverlay(self, parent=self.videoContainer)
         self.videoOverlay.show()
         self.videoOverlay.raise_()
-        self.videoCropWidget.resizeEvent = self.videoCropWidgetResizeEvent
 
         self.zoom_level = 1.0
         self.is_panning = False
@@ -460,7 +457,7 @@ class VideoAudioManager(QMainWindow):
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
-        videoPlayerLayout.addWidget(self.videoCropWidget)
+        videoPlayerLayout.addWidget(self.videoContainer)
         videoPlayerLayout.addLayout(timecodeLayout)
 
         # Timecode input
@@ -757,15 +754,16 @@ class VideoAudioManager(QMainWindow):
         self.applyStyleToAllDocks()
 
     def videoContainerResizeEvent(self, event):
+        # When the container is resized, resize both the video widget and the overlay
         if self.zoom_level == 1.0:
             self.videoCropWidget.setGeometry(self.videoContainer.rect())
+            self.videoOverlay.setGeometry(self.videoContainer.rect())
         QWidget.resizeEvent(self.videoContainer, event)
 
     def videoCropWidgetResizeEvent(self, event):
-        # Chiama il metodo resizeEvent originale del widget
+        # The overlay is now a sibling of the video widget, so we don't need to resize it here.
+        # Just call the original resize event.
         CropVideoWidget.resizeEvent(self.videoCropWidget, event)
-        # Aggiorna la geometria dell'overlay in base alle dimensioni attuali del widget
-        self.videoOverlay.setGeometry(self.videoCropWidget.rect())
 
     def handle_pan(self, delta):
         new_pos = self.videoCropWidget.pos() + delta
