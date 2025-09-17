@@ -1093,7 +1093,6 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
-        self.generazioneAIDock.setVisible(False)
 
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
