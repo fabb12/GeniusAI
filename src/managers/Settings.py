@@ -137,9 +137,6 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         layout = QFormLayout(widget)
 
-        self.enableCursorHighlight = QCheckBox()
-        layout.addRow("Abilita Evidenziazione Cursore:", self.enableCursorHighlight)
-
         self.showRedDot = QCheckBox()
         layout.addRow("Mostra Punto Rosso:", self.showRedDot)
 
@@ -223,7 +220,6 @@ class SettingsDialog(QDialog):
                  combo.setCurrentIndex(0)
 
         # --- Carica Impostazioni Cursore ---
-        self.enableCursorHighlight.setChecked(self.settings.value("cursor/enableHighlight", False, type=bool))
         self.showRedDot.setChecked(self.settings.value("cursor/showRedDot", True, type=bool))
         self.showYellowTriangle.setChecked(self.settings.value("cursor/showYellowTriangle", True, type=bool))
 
@@ -267,7 +263,6 @@ class SettingsDialog(QDialog):
                 self.settings.setValue(setting_key, current_model)
 
         # --- Salva Impostazioni Cursore ---
-        self.settings.setValue("cursor/enableHighlight", self.enableCursorHighlight.isChecked())
         self.settings.setValue("cursor/showRedDot", self.showRedDot.isChecked())
         self.settings.setValue("cursor/showYellowTriangle", self.showYellowTriangle.isChecked())
 

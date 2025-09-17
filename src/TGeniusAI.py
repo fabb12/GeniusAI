@@ -122,7 +122,6 @@ class VideoAudioManager(QMainWindow):
         self.watermarkPath = ""
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
-        self.enableCursorHighlight = False
 
         self.initUI()
 
@@ -158,8 +157,8 @@ class VideoAudioManager(QMainWindow):
         settings = QSettings("Genius", "GeniusAI")
 
         # Leggi le impostazioni e salvale in variabili "self"
-        self.enableCursorHighlight = settings.value("cursor/enableHighlight", False, type=bool)
-        self.show_red_dot = settings.value("cursor/showRedDot", False, type=bool)
+
+        self.show_red_dot = settings.value("cursor/showRedDot", True, type=bool)
         self.show_yellow_triangle = settings.value("cursor/showYellowTriangle", False, type=bool)
         self.enableWatermark = settings.value("recording/enableWatermark", False, type=bool)
         self.watermarkPath = settings.value("recording/watermarkPath", WATERMARK_IMAGE)
