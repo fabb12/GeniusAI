@@ -153,8 +153,9 @@ class PptxDialog(QDialog):
 
         if image_paths:
             preview_dialog = PreviewDialog(image_paths, self)
-            # Non facciamo self.accept() qui, l'utente deve premere "Genera"
-            preview_dialog.exec()
+            if preview_dialog.exec():
+                # Se l'utente clicca "Salva" nell'anteprima, procedi con la generazione
+                self.handle_generate()
             preview_dialog.cleanup()
 
     def handle_generate(self):
@@ -177,7 +178,7 @@ class PptxDialog(QDialog):
             settings["template_path"]
         )
         # Se la creazione va a buon fine, il metodo sopra mostra già un messaggio.
-        # Possiamo chiudere il dialogo dopo la generazione.
+        # Chiudiamo il dialogo dopo la generazione.
         self.accept()
 
     def get_ai_text(self):

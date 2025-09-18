@@ -304,30 +304,45 @@ class PptxGeneration:
                 QMessageBox.critical(parent, "Errore Template", "Il template non contiene i layout necessari ('Title Slide', 'Title and Content').")
                 return
 
-            # --- Parsing del testo generato dall'AI (Logica Migliorata) ---
+            # --- Parsing del testo generato dall'AI (Logica State-Machine) ---
+            slides_data = []
+            current_slide = None
+            current_section = None
+
             # Pulisce il testo da eventuali markdown per i titoli
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
 
-            # Divide il testo in blocchi per ogni slide, usando "Titolo:" come delimitatore
-            slide_chunks = re.split(r'\n(?=Titolo:)', "Titolo:" + clean_text.replace("Titolo:", "", 1))
+            for line in clean_text.splitlines():
+                line_lower = line.lower()
+                if line_lower.startswith('titolo:'):
+                    if current_slide:
+                        slides_data.append(current_slide)
+                    current_slide = {'titolo': line[len('titolo:'):].strip(), 'sottotitolo': '', 'contenuto': ''}
+                    current_section = 'titolo'
+                elif line_lower.startswith('sottotitolo:'):
+                    if current_slide:
+                        current_slide['sottotitolo'] = line[len('sottotitolo:'):].strip()
+                        current_section = 'sottotitolo'
+                elif line_lower.startswith('contenuto:'):
+                    if current_slide:
+                        current_slide['contenuto'] = line[len('contenuto:'):].strip()
+                        current_section = 'contenuto'
+                elif current_slide and current_section:
+                    # Aggiunge la linea alla sezione corrente
+                    current_slide[current_section] += '\n' + line.strip()
 
-            if not slide_chunks or len(slide_chunks) < 1:
-                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile dividere il testo in slide.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
+            if current_slide:
+                slides_data.append(current_slide)
+
+            if not slides_data:
+                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo generato dall'AI.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
                 return
 
             # --- Creazione Slide ---
-            for index, chunk in enumerate(slide_chunks):
-                if not chunk.strip():
-                    continue
-
-                # Estrae titolo, sottotitolo e contenuto da ogni blocco
-                title_match = re.search(r'Titolo:\s*(.*?)(?=\nSottotitolo:|\nContenuto:|$)', chunk, re.DOTALL | re.IGNORECASE)
-                subtitle_match = re.search(r'Sottotitolo:\s*(.*?)(?=\nContenuto:|$)', chunk, re.DOTALL | re.IGNORECASE)
-                content_match = re.search(r'Contenuto:\s*(.*)', chunk, re.DOTALL | re.IGNORECASE)
-
-                titolo_text = title_match.group(1).strip() if title_match else f"Slide {index + 1}"
-                sottotitolo_text = subtitle_match.group(1).strip() if subtitle_match else ""
-                contenuto_text = content_match.group(1).strip() if content_match else ""
+            for index, slide_data in enumerate(slides_data):
+                titolo_text = slide_data.get('titolo', f'Slide {index + 1}').strip()
+                sottotitolo_text = slide_data.get('sottotitolo', '').strip()
+                contenuto_text = slide_data.get('contenuto', '').strip()
 
                 logging.debug(f"Creazione Slide {index + 1}: Titolo='{titolo_text}', Sottotitolo='{sottotitolo_text}'")
 
@@ -353,13 +368,12 @@ class PptxGeneration:
                         # Se il sottotitolo non ha un suo placeholder, mettilo come prima riga del corpo
                         effective_content = ""
                         if sottotitolo_text and not subtitle_shape:
-                            effective_content += sottotitolo_text + "\n"
+                            effective_content += sottotitolo_text + "\n\n" # Aggiungi spazio dopo il sottotitolo
 
                         effective_content += contenuto_text
 
                         # Rimuovi i trattini/bullet point iniziali dal testo, saranno gestiti da pptx
-                        cleaned_content = re.sub(r'^\s*[-*•]\s*', '', effective_content, flags=re.MULTILINE)
-                        lines = [line.strip() for line in cleaned_content.split('\n') if line.strip()]
+                        lines = [re.sub(r'^\s*[-*•]\s*', '', line).strip() for line in effective_content.split('\n') if line.strip()]
 
                         for i, line in enumerate(lines):
                             p = tf.add_paragraph()
