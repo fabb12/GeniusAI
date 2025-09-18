@@ -33,51 +33,14 @@ class PptxGeneration:
     """
 
     @staticmethod
-    def _get_layout(prs, layout_name):
-        """Trova un layout pelo nome. Se non lo trova, restituisce un fallback."""
-        for layout in prs.slide_layouts:
-            if layout.name == layout_name:
-                return layout
-        # Fallback a indici comuni se il nome non viene trovato
-        if layout_name == "Title Slide":
-            return prs.slide_layouts[0]
-        if layout_name == "Title and Content":
-            return prs.slide_layouts[1]
+    def _get_layout(prs, layout_names):
+        """Trova un layout da una lista di possibili nomi."""
+        for name in layout_names:
+            for layout in prs.slide_layouts:
+                if layout.name.strip().lower() == name.lower():
+                    return layout
         return None
 
-    @staticmethod
-    def _find_placeholder(slide, placeholder_type):
-        """
-        Trova un placeholder specifico in una slide.
-        Se non trova un match esatto, per il corpo del testo (BODY) cerca il placeholder
-        più grande che non sia il titolo.
-        """
-        # Prova a trovare un match esatto prima
-        for shape in slide.placeholders:
-            if shape.placeholder_format.type == placeholder_type:
-                return shape
-
-        # Fallback specifico per il corpo del testo
-        if placeholder_type == PP_PLACEHOLDER.BODY:
-            largest_placeholder = None
-            max_area = 0
-
-            for shape in slide.placeholders:
-                # Ignora il titolo
-                if shape.placeholder_format.type == PP_PLACEHOLDER.TITLE:
-                    continue
-
-                # Calcola l'area e trova il più grande
-                area = shape.width * shape.height
-                if area > max_area:
-                    max_area = area
-                    largest_placeholder = shape
-
-            if largest_placeholder is not None:
-                logging.warning(f"Nessun placeholder BODY trovato. Utilizzo il placeholder più grande come fallback.")
-                return largest_placeholder
-
-        return None
 
     @staticmethod
     def createPresentationFromFile(parent, file_path, num_slide, company_name, language):
@@ -91,26 +54,20 @@ class PptxGeneration:
                 QMessageBox.warning(parent, "File Vuoto", "Il file selezionato è vuoto.")
                 return
 
-            # Chiama la logica di generazione del testo
             result_tuple = PptxGeneration.generaTestoPerSlide(testo, num_slide, company_name, language)
 
-            # Controlla il risultato della chiamata API
             if not isinstance(result_tuple, tuple) or len(result_tuple) != 3:
-                 # L'errore è già stato loggato in generaTestoPerSlide
                  QMessageBox.critical(parent, "Errore API", f"Errore durante la generazione del testo per le slide.\nDettagli:\n{result_tuple}")
                  return
 
             testo_per_slide, input_tokens, output_tokens = result_tuple
             logging.info(f"Generazione testo PPTX da file - Token Input: {input_tokens}, Token Output: {output_tokens}")
 
-            # Chiedi dove salvare il file
-            save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "",
-                                                       "PowerPoint Presentation (*.pptx)")
+            save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione", "", "PowerPoint Presentation (*.pptx)")
             if save_path:
-                # Crea il file PPTX
-                PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path)
+                PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, num_slides=num_slide)
             else:
-                QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+                QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato.")
         except FileNotFoundError:
              logging.error(f"File non trovato: {file_path}")
              QMessageBox.critical(parent, "Errore", f"File non trovato: {file_path}")
@@ -271,76 +228,96 @@ class PptxGeneration:
         """Metodo principale chiamato dall'UI per creare la presentazione."""
         testo_attuale = transcriptionTextArea.toPlainText()
         if not testo_attuale.strip():
-            QMessageBox.warning(parent, "Testo Mancante", "Inserisci del testo nell'area di trascrizione prima di generare la presentazione.")
+            QMessageBox.warning(parent, "Testo Mancante", "Inserisci del testo prima di generare.")
             return
 
-        save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione Come", "",
-                                                   "PowerPoint Presentation (*.pptx)")
+        save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione Come", "", "PowerPoint Presentation (*.pptx)")
         if not save_path:
-            QMessageBox.information(parent, "Annullato", "Operazione di salvataggio annullata.")
+            QMessageBox.information(parent, "Annullato", "Salvataggio annullato.")
             return
 
-        # Mostra un messaggio di attesa
-        wait_msg = QMessageBox(QMessageBox.Icon.Information, "Elaborazione", "Generazione del testo per la presentazione in corso...", QMessageBox.StandardButton.NoButton, parent)
+        wait_msg = QMessageBox(QMessageBox.Icon.Information, "Elaborazione", "Generazione del testo AI in corso...", QMessageBox.StandardButton.NoButton, parent)
         wait_msg.setWindowModality(Qt.WindowModality.WindowModal)
         wait_msg.show()
-        QApplication.processEvents() # Forza l'aggiornamento UI
+        QApplication.processEvents()
 
         try:
-            # Chiama la funzione per generare il testo con gestione errori inclusa
             result_tuple = PptxGeneration.generaTestoPerSlide(testo_attuale, num_slide, company_name, language)
-            wait_msg.close() # Chiudi il messaggio di attesa
+            wait_msg.close()
 
-            # Controlla il risultato
             if not isinstance(result_tuple, tuple) or len(result_tuple) != 3:
-                QMessageBox.critical(parent, "Errore Generazione Testo", f"Impossibile generare il contenuto della presentazione.\nErrore: {result_tuple}")
+                QMessageBox.critical(parent, "Errore Generazione Testo", f"Impossibile generare il contenuto.\nErrore: {result_tuple}")
                 return
 
-            testo_per_slide, input_tokens, output_tokens = result_tuple
-            logging.info(f"Generazione testo PPTX completata - Tokens In: {input_tokens}, Out: {output_tokens}")
+            testo_per_slide, _, _ = result_tuple
 
-            # Crea la presentazione dal testo generato
-            # Questo metodo ora contiene la logica di salvataggio e apertura
-            PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, template_path)
+            # Passa num_slides alla creazione del PPTX per il troncamento
+            PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, template_path, num_slides=num_slide)
 
         except Exception as e:
-             wait_msg.close() # Assicurati che il messaggio di attesa sia chiuso anche in caso di errore
+             wait_msg.close()
              logging.exception("Errore in creaPresentazione")
-             QMessageBox.critical(parent, "Errore Imprevisto", f"Si è verificato un errore durante la creazione della presentazione: {e}")
+             QMessageBox.critical(parent, "Errore Imprevisto", f"Errore durante la creazione: {e}")
 
+
+    @staticmethod
+    def _find_placeholder(slide, placeholder_type):
+        """Trova il primo placeholder di un tipo specifico."""
+        for shape in slide.placeholders:
+            if shape.placeholder_format.type == placeholder_type:
+                return shape
+        return None
+
+    @staticmethod
+    def _find_content_placeholder(slide):
+        """Trova il placeholder principale per il contenuto, cercando BODY o OBJECT."""
+        logging.info(f"Cerco placeholder BODY in '{slide.slide_layout.name}'")
+        placeholders = [p for p in slide.placeholders if p.placeholder_format.type == PP_PLACEHOLDER.BODY]
+        if placeholders:
+            logging.info(f"Trovati {len(placeholders)} placeholder BODY.")
+            return max(placeholders, key=lambda p: p.width * p.height) if len(placeholders) > 1 else placeholders[0]
+
+        logging.info(f"Nessun placeholder BODY trovato. Cerco placeholder OBJECT.")
+        placeholders = [p for p in slide.placeholders if p.placeholder_format.type == PP_PLACEHOLDER.OBJECT]
+        if placeholders:
+            logging.info(f"Trovati {len(placeholders)} placeholder OBJECT.")
+            return max(placeholders, key=lambda p: p.width * p.height) if len(placeholders) > 1 else placeholders[0]
+
+        logging.warning("Nessun placeholder BODY o OBJECT trovato.")
+        return None
 
     @staticmethod
     def _add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape):
         """Aggiunge il contenuto principale (bullet points) a una slide."""
-        body_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.BODY)
+        body_shape = PptxGeneration._find_content_placeholder(slide)
         if not body_shape:
-            logging.warning("Placeholder del corpo non trovato nella slide.")
+            logging.warning("Nessun placeholder per il contenuto (BODY o OBJECT) trovato nella slide.")
             return
 
         tf = body_shape.text_frame
-        tf.clear()  # Pulisce il contenuto esistente
-        tf.word_wrap = True
+        # Pulisci i paragrafi esistenti invece di cancellare l'intero textframe per preservare lo stile
+        for para in tf.paragraphs:
+            para.clear()
 
-        # Unisci sottotitolo e contenuto se non c'è un placeholder per il sottotitolo
+        # Rimuovi paragrafi extra
+        while len(tf.paragraphs) > 1:
+            tf._bodyPr.remove(tf.paragraphs[-1]._p)
+
         effective_content = ""
         if subtitle_text and not subtitle_shape:
             effective_content = subtitle_text + "\n\n"
         effective_content += content_text
 
-        # Dividi il contenuto in linee e elabora ciascuna
         lines = effective_content.split('\n')
-
-        # Gestisce il caso in cui il primo paragrafo (spesso vuoto) viene pre-creato
         p = tf.paragraphs[0]
         first_line_processed = False
 
         for line in lines:
             if not line.strip():
-                continue # Salta le linee vuote
+                continue
 
-            # Rimuovi i bullet point e calcola l'indentazione
             clean_line = re.sub(r'^\s*[-*•]\s*', '', line)
-            indent_level = (len(line) - len(line.lstrip(' '))) // 2  # 2 spazi per livello
+            indent_level = (len(line) - len(line.lstrip(' '))) // 2
 
             if not first_line_processed:
                 p.text = clean_line
@@ -352,21 +329,32 @@ class PptxGeneration:
                 p.level = indent_level
 
     @staticmethod
-    def createPresentationFromText(parent, testo, output_file, template_path=None):
+    def _truncate_slides(slides_data, num_slides):
+        """Tronca o avvisa se il numero di slide generate non corrisponde a quello richiesto."""
+        if len(slides_data) > num_slides:
+            logging.warning(f"L'AI ha generato {len(slides_data)} slide, ma ne sono state richieste {num_slides}. Tronco le slide extra.")
+            return slides_data[:num_slides]
+        elif len(slides_data) < num_slides:
+            logging.warning(f"L'AI ha generato {len(slides_data)} slide, ma ne sono state richieste {num_slides}. Non verranno aggiunte slide vuote.")
+        return slides_data
+
+    @staticmethod
+    def createPresentationFromText(parent, testo, output_file, template_path=None, num_slides=None):
         """Crea il file .pptx dal testo strutturato generato dall'AI, rispettando il template."""
         logging.info(f"Tentativo di creare file PPTX: {output_file} con template: {template_path}")
         try:
-            # --- Inizializzazione della presentazione ---
             prs = Presentation(template_path) if template_path and os.path.exists(template_path) else Presentation()
 
-            # --- Ricerca dei layout necessari ---
-            title_slide_layout = PptxGeneration._get_layout(prs, "Title Slide")
-            content_slide_layout = PptxGeneration._get_layout(prs, "Title and Content")
+            title_layouts = ["Title Slide", "Copertina", "Title"]
+            content_layouts = ["Title and Content", "Contenuto", "Titolo e contenuto"]
+
+            title_slide_layout = PptxGeneration._get_layout(prs, title_layouts)
+            content_slide_layout = PptxGeneration._get_layout(prs, content_layouts)
+
             if not title_slide_layout or not content_slide_layout:
-                QMessageBox.critical(parent, "Errore Template", "Il template non contiene i layout necessari ('Title Slide', 'Title and Content').")
+                QMessageBox.critical(parent, "Errore Template", "Layout 'Title Slide' o 'Title and Content' non trovati nel template.")
                 return
 
-            # --- Parsing del testo generato dall'AI ---
             slides_data = []
             current_slide = None
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
@@ -379,10 +367,8 @@ class PptxGeneration:
                 elif current_slide and line_lower.startswith('sottotitolo:'):
                     current_slide['sottotitolo'] = line[len('sottotitolo:'):].strip()
                 elif current_slide and line_lower.startswith('contenuto:'):
-                    # L'inizio del contenuto non aggiunge testo, ma prepara a ricevere le linee successive
                     current_slide['contenuto'] = ""
                 elif current_slide:
-                    # Aggiunge la linea alla sezione corrente (che sarà il contenuto dopo il "Contenuto:")
                     current_slide['contenuto'] += line + '\n'
 
             if current_slide: slides_data.append(current_slide)
@@ -391,30 +377,44 @@ class PptxGeneration:
                 QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo dell'AI.")
                 return
 
-            # --- Creazione delle slide ---
-            for i, slide_data in enumerate(slides_data):
-                layout = title_slide_layout if i == 0 else content_slide_layout
-                slide = prs.slides.add_slide(layout)
+            if num_slides is not None:
+                slides_data = PptxGeneration._truncate_slides(slides_data, num_slides)
 
-                # Assegna titolo e sottotitolo
+            # --- Creazione delle slide ---
+            if not slides_data:
+                return
+
+            # Aggiungi la slide titolo
+            title_slide_data = slides_data.pop(0)
+            slide = prs.slides.add_slide(title_slide_layout)
+            if slide.shapes.title:
+                slide.shapes.title.text = title_slide_data.get('titolo', '').strip()
+
+            subtitle_text = title_slide_data.get('sottotitolo', '').strip()
+            subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
+            if subtitle_text and subtitle_shape:
+                subtitle_shape.text = subtitle_text
+
+            # Aggiungi le slide di contenuto
+            for slide_data in slides_data:
+                slide = prs.slides.add_slide(content_slide_layout)
+
                 if slide.shapes.title:
-                    slide.shapes.title.text = slide_data.get('titolo', f'Slide {i + 1}').strip()
+                    slide.shapes.title.text = slide_data.get('titolo', '').strip()
 
                 subtitle_text = slide_data.get('sottotitolo', '').strip()
                 subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
                 if subtitle_text and subtitle_shape:
                     subtitle_shape.text = subtitle_text
 
-                # Assegna contenuto principale usando il metodo helper
                 content_text = slide_data.get('contenuto', '').strip()
                 if content_text:
                     PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
 
-            # --- Salvataggio e feedback ---
             if prs.slides:
                 prs.save(output_file)
                 logging.info(f"Presentazione salvata con successo: {output_file}")
-                if parent: # Mostra dialoghi solo se c'è un parent
+                if parent:
                     QMessageBox.information(parent, "Successo", f"Presentazione generata e salvata:\n{output_file}")
                     reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
                     if reply == QMessageBox.StandardButton.Yes:
