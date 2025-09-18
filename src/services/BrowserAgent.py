@@ -45,25 +45,10 @@ from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 from src.services.FrameExtractor import FrameExtractor # Used for guide generation
 # Import configuration constants and structures
 from src.config import (
-    ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_API_KEY, OLLAMA_ENDPOINT, # API Keys/Endpoints
+    OLLAMA_ENDPOINT, get_api_key, # API Keys/Endpoints
     ACTION_MODELS_CONFIG, # Dictionary defining models per action
     PROMPT_BROWSER_GUIDE # Prompt for guide generation
 )
-
-# Configure Google GenAI (can be done once, potentially at app startup or here)
-# FrameExtractor might also call this. It's generally safe to call multiple times.
-if GOOGLE_API_KEY:
-    try:
-        import google.generativeai as genai
-        genai.configure(api_key=GOOGLE_API_KEY)
-        logging.info("Google Generative AI SDK configured successfully.")
-    except ImportError:
-        logging.warning("google.generativeai library not found. Gemini models will not be available.")
-    except Exception as e:
-        logging.error(f"Failed to configure Google Generative AI SDK: {e}")
-else:
-    logging.warning("GOOGLE_API_KEY not found in environment. Gemini models may not work.")
-
 
 class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
@@ -71,10 +56,10 @@ class AgentConfig:
     def __init__(self):
         self.settings = QSettings("ThemaConsulting", "GeniusAI")
 
-        # --- Load API Keys from config.py (which loads from .env) ---
-        self.anthropic_api_key = ANTHROPIC_API_KEY
-        self.google_api_key = GOOGLE_API_KEY
-        self.openai_api_key = OPENAI_API_KEY
+        # --- Load API Keys using the centralized get_api_key function ---
+        self.anthropic_api_key = get_api_key('anthropic')
+        self.google_api_key = get_api_key('google')
+        self.openai_api_key = get_api_key('openai')
         # Note: Ollama doesn't typically use an API key, but an endpoint
 
         # --- Load Browser Agent specific settings ---
@@ -940,8 +925,9 @@ class BrowserAgent:
             model_lower = guide_model_name.lower()
 
             if model_lower.startswith("claude"):
-                 if not self.agent_config.anthropic_api_key: raise ValueError("Anthropic API Key mancante per generare la guida.")
-                 client = anthropic.Anthropic(api_key=self.agent_config.anthropic_api_key)
+                 anthropic_api_key = get_api_key('anthropic')
+                 if not anthropic_api_key: raise ValueError("Anthropic API Key mancante per generare la guida.")
+                 client = anthropic.Anthropic(api_key=anthropic_api_key)
                  response = client.messages.create(
                      model=guide_model_name, max_tokens=4000, messages=[{"role": "user", "content": prompt}]
                  )
@@ -950,15 +936,17 @@ class BrowserAgent:
                  output_tokens = response.usage.output_tokens
 
             elif model_lower.startswith("gemini"):
-                 if not self.agent_config.google_api_key: raise ValueError("Google API Key mancante per generare la guida.")
-                 # Assumes genai is configured
+                 google_api_key = get_api_key('google')
+                 if not google_api_key: raise ValueError("Google API Key mancante per generare la guida.")
+                 genai.configure(api_key=google_api_key)
                  model = genai.GenerativeModel(guide_model_name)
                  response = model.generate_content(prompt)
                  guide_text = response.text
 
             elif model_lower.startswith("gpt"):
-                 if not self.agent_config.openai_api_key: raise ValueError("OpenAI API Key mancante per generare la guida.")
-                 client = ChatOpenAI(model_name=guide_model_name, openai_api_key=self.agent_config.openai_api_key)
+                 openai_api_key = get_api_key('openai')
+                 if not openai_api_key: raise ValueError("OpenAI API Key mancante per generare la guida.")
+                 client = ChatOpenAI(model_name=guide_model_name, openai_api_key=openai_api_key)
                  response = client.invoke(prompt) # Langchain style invocation
                  guide_text = response.content
 

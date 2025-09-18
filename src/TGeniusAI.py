@@ -59,7 +59,7 @@ from ui.CursorOverlay import CursorOverlay
 from managers.StreamToLogger import setup_logging
 from services.FrameExtractor import FrameExtractor
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from config import (ELEVENLABS_API_KEY, ANTHROPIC_API_KEY, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
+from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE)
 from config import MUSIC_DIR
 from config import DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,DEFAULT_STABILITY,\
     DEFAULT_SIMILARITY, DEFAULT_STYLE, DEFAULT_FRAME_RATE,DEFAULT_VOICES
@@ -88,9 +88,6 @@ class VideoAudioManager(QMainWindow):
 
         # Imposta il titolo della finestra con la versione e la data di build
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
-
-        self.api_key = ELEVENLABS_API_KEY
-        self.api_llm = ANTHROPIC_API_KEY
 
         self.setGeometry(500, 500, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         self.player = QMediaPlayer()
@@ -260,6 +257,16 @@ class VideoAudioManager(QMainWindow):
         self.generatePresentationButton.setToolTip("Clicca per generare la presentazione completa con AI")
         self.generatePresentationButton.clicked.connect(self.generateAIPresentation)
         generazioneAILayout.addWidget(self.generatePresentationButton)
+
+        generazioneAILayout.addSpacing(15)
+        aiOutputLabel = QLabel("Contenuto Generato (Modificabile):")
+        aiOutputLabel.setToolTip("Questo è il testo generato dall'AI. Puoi modificarlo prima di creare la presentazione.")
+        generazioneAILayout.addWidget(aiOutputLabel)
+
+        self.presentationAiTextEdit = QTextEdit()
+        self.presentationAiTextEdit.setPlaceholderText("Il testo generato dall'AI per la presentazione apparirà qui...")
+        self.presentationAiTextEdit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        generazioneAILayout.addWidget(self.presentationAiTextEdit)
 
         generazioneAIDockWidget.setLayout(generazioneAILayout)
         self.generazioneAIDock.addWidget(generazioneAIDockWidget)
@@ -712,17 +719,14 @@ class VideoAudioManager(QMainWindow):
             return
 
         num_frames = self.frameCountSpin.value()
-        api_key = self.api_llm  # Tua variabile con la chiave
-        if not api_key:
-            QMessageBox.warning(self, "API Key mancante", "Imposta la chiave API prima di estrarre i frame.")
-            return
 
         try:
             # 1) Crea l'extractor
+            # The FrameExtractor will automatically get the correct API key
+            # for the selected model from the settings.
             extractor = FrameExtractor(
                 video_path=self.videoPathLineEdit,
-                num_frames=num_frames,
-                anthropic_api_key=api_key
+                num_frames=num_frames
             )
 
             # 2) Estrae i frame
@@ -855,7 +859,7 @@ class VideoAudioManager(QMainWindow):
                                                                                           language)
         print(f"Token di input utilizzati: {input_tokens}")
         print(f"Token di output utilizzati: {output_tokens}")
-        self.transcriptionTextArea.setPlainText(testo_per_slide)
+        self.presentationAiTextEdit.setPlainText(testo_per_slide)
 
     def processTextWithAI(self):
         # Ottieni il testo corrente dal transcriptionTextArea
@@ -937,37 +941,29 @@ class VideoAudioManager(QMainWindow):
         QMessageBox.critical(self, "Errore", error_message)
 
     def generateAIPresentation(self):
-        try:
-            num_slide = int(self.numSlidesInput.text().strip())
-        except ValueError:
-            QMessageBox.warning(self, "Errore", "Per favore, inserisci un numero valido per le slide.")
+        # This method now takes the content from the dedicated presentation text edit area
+        # and creates the PowerPoint file. The logic for getting num_slides, company, etc.,
+        # is handled by generateTextForPresentation.
+
+        testo_strutturato = self.presentationAiTextEdit.toPlainText()
+        if not testo_strutturato.strip():
+            QMessageBox.warning(self, "Contenuto Mancante", "Il riquadro del contenuto della presentazione è vuoto.\nPer favore, genera prima il testo usando il pulsante 'Genera Testo per Presentazione con AI'.")
             return
 
-        company = self.companyNameInput.text().strip()
-        language = self.languageInput.currentText()
+        # Ask the user where to save the final presentation
+        save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione Come", "",
+                                                   "PowerPoint Presentation (*.pptx)")
 
-        #if not company:
-        #    QMessageBox.warning(self, "Errore", "Il campo 'Nome della Compagnia' non può essere vuoto.")
-        #    return
-
-        if not language:
-            QMessageBox.warning(self, "Errore", "Seleziona una lingua.")
-            return
-
-        testo_attuale = self.transcriptionTextArea.toPlainText()
-        if testo_attuale.strip() == "":
-            file_path, _ = QFileDialog.getOpenFileName(self, "Seleziona File di Testo", "", "Text Files (*.txt)")
-            if file_path:
-                PptxGeneration.createPresentationFromFile(self, file_path, num_slide, company, language)
-            else:
-                QMessageBox.warning(self, "Attenzione", "Nessun testo inserito e nessun file selezionato.")
+        if save_path:
+            try:
+                # Call the static method to create the presentation from the (potentially edited) text
+                PptxGeneration.createPresentationFromText(self, testo_strutturato, save_path)
+                # The createPresentationFromText method already shows success or error messages.
+            except Exception as e:
+                logging.exception("Errore imprevisto durante la chiamata a createPresentationFromText.")
+                QMessageBox.critical(self, "Errore Imprevisto", f"Si è verificato un errore imprevisto durante la creazione della presentazione:\n{e}")
         else:
-            save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "",
-                                                       "PowerPoint Presentation (*.pptx)")
-            if save_path:
-                PptxGeneration.createPresentationFromText(self, testo_attuale, save_path)
-            else:
-                QMessageBox.warning(self, "Attenzione", "Salvataggio annullato. Nessun file selezionato.")
+            QMessageBox.information(self, "Annullato", "Operazione di salvataggio annullata.")
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
@@ -2930,8 +2926,9 @@ class VideoAudioManager(QMainWindow):
         return error
 
     def generateAudioWithElevenLabs(self):
-        if not self.api_key:
-            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key prima di generare l'audio.")
+        api_key = get_api_key('elevenlabs')
+        if not api_key:
+            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key di ElevenLabs nelle impostazioni prima di generare l'audio.")
             return
 
         def convert_numbers_to_words(text):
@@ -2970,7 +2967,7 @@ class VideoAudioManager(QMainWindow):
         audio_save_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_generated.mp3")
 
         # Crea il thread con i nuovi parametri
-        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, self.api_key,
+        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key,
                                                   audio_save_path, self)
         self.audio_thread.progress.connect(self.progressDialog.setValue)
         self.audio_thread.completed.connect(self.onAudioGenerationCompleted)

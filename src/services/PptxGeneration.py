@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_ENDPOINT,
+    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_PPTX_GENERATION # Assicurati che questo percorso sia corretto e il file esista
 )
 
@@ -219,8 +219,9 @@ class PptxGeneration:
             elif "gemini" in model_name_lower:
                 # --- Logica per Google Gemini ---
                 logging.info(f"Chiamata API Gemini: {selected_model}")
-                if not GOOGLE_API_KEY: raise ValueError("API Key Google non configurata.")
-                genai.configure(api_key=GOOGLE_API_KEY)
+                google_api_key = get_api_key('google')
+                if not google_api_key: raise ValueError("API Key Google non configurata.")
+                genai.configure(api_key=google_api_key)
                 model = genai.GenerativeModel(selected_model, system_instruction=system_prompt_content) # Usa system instruction
                 response = model.generate_content(user_prompt) # Passa solo lo user prompt
                 # Aggiungi gestione errori risposta Gemini se necessario (es. blocco per safety)
@@ -237,8 +238,9 @@ class PptxGeneration:
             elif "claude" in model_name_lower:
                 # --- Logica per Anthropic Claude ---
                 logging.info(f"Chiamata API Claude: {selected_model}")
-                if not ANTHROPIC_API_KEY: raise ValueError("API Key Anthropic non configurata.")
-                client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+                anthropic_api_key = get_api_key('anthropic')
+                if not anthropic_api_key: raise ValueError("API Key Anthropic non configurata.")
+                client = anthropic.Anthropic(api_key=anthropic_api_key)
                 message = client.messages.create(
                     model=selected_model,
                     max_tokens=4096,
@@ -340,7 +342,19 @@ class PptxGeneration:
         """Crea il file .pptx dal testo strutturato generato dall'AI."""
         logging.info(f"Tentativo di creare file PPTX: {output_file}")
         try:
-            prs = Presentation()
+            settings = QSettings("ThemaConsulting", "GeniusAI")
+            template_path = settings.value("presentation/template_path", "")
+
+            if template_path and os.path.exists(template_path):
+                logging.info(f"Utilizzo del template di presentazione: {template_path}")
+                prs = Presentation(template_path)
+            else:
+                if template_path:
+                    logging.warning(f"Template di presentazione non trovato in '{template_path}'. Uso il template di default.")
+                else:
+                    logging.info("Nessun template di presentazione impostato. Uso il template di default.")
+                prs = Presentation()
+
             # Layout comuni (potrebbero variare leggermente tra versioni PPTX)
             title_slide_layout = prs.slide_layouts[0] # Slide titolo
             content_slide_layout = prs.slide_layouts[1] # Slide Titolo e Contenuto

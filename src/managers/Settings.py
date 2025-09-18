@@ -38,6 +38,9 @@ class SettingsDialog(QDialog):
         # Tab per la Registrazione
         tabs.addTab(self.createRecordingSettingsTab(), "Registrazione")
 
+        # Tab per la Presentazione
+        tabs.addTab(self.createPresentationSettingsTab(), "Presentazione")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -182,6 +185,26 @@ class SettingsDialog(QDialog):
         if filePath:
             self.watermarkPathEdit.setText(filePath)
 
+    def createPresentationSettingsTab(self):
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.templatePathEdit = QLineEdit()
+        self.templatePathEdit.setReadOnly(True)
+        browseButton = QPushButton("Sfoglia...")
+        browseButton.clicked.connect(self.browseTemplate)
+        pathLayout = QHBoxLayout()
+        pathLayout.addWidget(self.templatePathEdit)
+        pathLayout.addWidget(browseButton)
+        layout.addRow("File Template (.pptx):", pathLayout)
+
+        return widget
+
+    def browseTemplate(self):
+        filePath, _ = QFileDialog.getOpenFileName(self, "Seleziona Template Presentazione", "", "PowerPoint Files (*.pptx)")
+        if filePath:
+            self.templatePathEdit.setText(filePath)
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -214,6 +237,9 @@ class SettingsDialog(QDialog):
         self.watermarkPathEdit.setText(self.settings.value("recording/watermarkPath", "res/watermark.png"))
         self.watermarkSizeSpinBox.setValue(self.settings.value("recording/watermarkSize", 10, type=int))
         self.watermarkPositionComboBox.setCurrentText(self.settings.value("recording/watermarkPosition", "Bottom Right"))
+
+        # --- Carica Impostazioni Presentazione ---
+        self.templatePathEdit.setText(self.settings.value("presentation/template_path", ""))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -254,6 +280,9 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/watermarkPath", self.watermarkPathEdit.text())
         self.settings.setValue("recording/watermarkSize", self.watermarkSizeSpinBox.value())
         self.settings.setValue("recording/watermarkPosition", self.watermarkPositionComboBox.currentText())
+
+        # --- Salva Impostazioni Presentazione ---
+        self.settings.setValue("presentation/template_path", self.templatePathEdit.text())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
