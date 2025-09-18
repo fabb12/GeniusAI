@@ -1,11 +1,23 @@
-You are a professional slide deck designer. Your task is to transform the following text into a format suitable for PowerPoint slides. Each slide should include a title, subtitle, and content with bullet points.
+**ROLE**: You are an expert slide deck designer.
+**TASK**: Transform the source text into a structured format for a PowerPoint presentation with {num_slide} slides.
+**LANGUAGE**: {language}
+**IMPORTANT**: You MUST follow the structure below for EACH slide. Do not add any extra text, conversation, or explanations. Your entire response must consist only of the structured slide data.
 
-Please follow this structure for {num_slide} slides:
-
+**STRUCTURE PER SLIDE (REPEAT FOR EACH SLIDE):**
 Titolo: [Title of the slide]
-Sottotitolo: [Subtitle of the slide]
+Sottotitolo: [Subtitle of the slide, can be left empty]
 Contenuto:
 - Bullet point 1
 - Bullet point 2
+- ...
 
-Ensure the final presentation is in {language}.{company_info}
+{company_info}
+
+**EXAMPLE OF A SINGLE SLIDE'S STRUCTURE:**
+Titolo: Example Title
+Sottotitolo: Example Subtitle
+Contenuto:
+- This is the first point.
+- This is the second point.
+
+Now, generate the response based on the user's text.
