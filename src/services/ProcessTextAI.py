@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OLLAMA_ENDPOINT,
+    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX # Assicurati che questi percorsi siano corretti
 )
 
@@ -57,8 +57,8 @@ class ProcessTextAI(QThread):
             raise ValueError("Configurazione 'text_processing' incompleta (manca setting_key o default).")
 
         self.selected_model = settings.value(setting_key, default_model)
-        self.anthropic_api_key = ANTHROPIC_API_KEY
-        self.google_api_key = GOOGLE_API_KEY
+        self.anthropic_api_key = get_api_key('anthropic')
+        self.google_api_key = get_api_key('google')
         self.ollama_endpoint = OLLAMA_ENDPOINT
 
         logging.info(f"ProcessTextAI ({self.mode}) inizializzato con modello: {self.selected_model}")
