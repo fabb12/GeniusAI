@@ -33,89 +33,24 @@ class PptxGeneration:
     """
 
     @staticmethod
-    def impostaFont(shape, size_pt, text):
-        """Imposta il font per un dato shape (helper interno)."""
-        try:
-            text_frame = shape.text_frame
-            # Pulisce il testo predefinito se necessario
-            if len(text_frame.paragraphs) == 1 and text_frame.paragraphs[0].text != text and not text_frame.paragraphs[0].runs:
-                 text_frame.paragraphs[0].text = "" # Pulisce il testo placeholder
-            # Aggiunge o modifica il run
-            if not text_frame.paragraphs or not text_frame.paragraphs[0].runs:
-                 p = text_frame.paragraphs[0] if text_frame.paragraphs else text_frame.add_paragraph()
-                 run = p.add_run()
-            else: # Modifica il primo run esistente
-                 run = text_frame.paragraphs[0].runs[0]
-            run.text = text
-            font = run.font
-            font.name = 'Calibri' # O un altro font standard
-            font.size = Pt(size_pt)
-            return run # Ritorna il run per eventuali modifiche successive (bold, color)
-        except Exception as e:
-            logging.warning(f"Errore in impostaFont: {e}")
-            return None
+    def _get_layout(prs, layout_name):
+        """Trova un layout pelo nome. Se non lo trova, restituisce un fallback."""
+        for layout in prs.slide_layouts:
+            if layout.name == layout_name:
+                return layout
+        # Fallback a indici comuni se il nome non viene trovato
+        if layout_name == "Title Slide":
+            return prs.slide_layouts[0]
+        if layout_name == "Title and Content":
+            return prs.slide_layouts[1]
+        return None
 
     @staticmethod
-    def _aggiungi_paragrafo_formattato(shape_or_tf, text, size_pt, bold=False, color=None, bullet=False, level=0):
-        """Aggiunge un paragrafo formattato a uno shape o text_frame."""
-        try:
-            # Determina se è uno shape o un text_frame
-            if hasattr(shape_or_tf, 'text_frame'):
-                tf = shape_or_tf.text_frame
-                # Pulisce il testo predefinito del placeholder se è la prima aggiunta
-                # e il testo non è vuoto e non ci sono già run.
-                if len(tf.paragraphs) == 1 and tf.paragraphs[0].text != '' and not tf.paragraphs[0].runs and text:
-                    tf.paragraphs[0].text = ""
-                    tf.paragraphs[0].level = 0 # Resetta livello
-                    tf.paragraphs[0].font.size = None # Resetta font
-            elif hasattr(shape_or_tf, 'add_paragraph'): # È un text_frame
-                tf = shape_or_tf
-            else:
-                logging.error("Oggetto non valido passato a _aggiungi_paragrafo_formattato")
-                return None
-
-            p = tf.add_paragraph()
-            p.text = text.strip() # Imposta il testo direttamente
-            p.font.name = 'Calibri'
-            p.font.size = Pt(size_pt)
-            p.font.bold = bold
-            if color:
-                p.font.color.rgb = RGBColor(*color)
-            if bullet:
-                p.level = level
-            return p
-        except Exception as e:
-             logging.warning(f"Errore in _aggiungi_paragrafo_formattato: {e}")
-             return None
-
-    @staticmethod
-    def _aggiungi_footer(slide):
-        """Aggiunge un footer standard a una slide."""
-        left, top, width, height = Inches(0.5), Inches(7.0), Inches(9.0), Inches(0.5)
-        try:
-            footer_box = slide.shapes.add_textbox(left, top, width, height)
-            tf = footer_box.text_frame
-            p = tf.paragraphs[0]
-            p.text = "Made by GeniusAI"
-            p.font.name = 'Calibri'
-            p.font.size = Pt(10)
-            p.font.color.rgb = RGBColor(128, 128, 128) # Grigio
-            # Utilizza l'enumerazione corretta se disponibile o il valore intero
-            try:
-                 from pptx.enum.text import PP_ALIGN
-                 p.alignment = PP_ALIGN.CENTER
-            except ImportError:
-                 p.alignment = 2 # Valore intero per centro
-        except Exception as e:
-            logging.warning(f"Impossibile aggiungere footer: {e}")
-
-    @staticmethod
-    def _find_placeholder(slide, placeholder_types):
-        """Trova il primo placeholder che corrisponde a uno dei tipi dati."""
+    def _find_placeholder(slide, placeholder_type):
+        """Trova un placeholder specifico in una slide."""
         for shape in slide.placeholders:
-            for p_type in placeholder_types:
-                if shape.placeholder_format.type == p_type:
-                    return shape
+            if shape.placeholder_format.type == placeholder_type:
+                return shape
         return None
 
     @staticmethod
@@ -350,9 +285,10 @@ class PptxGeneration:
 
     @staticmethod
     def createPresentationFromText(parent, testo, output_file, template_path=None):
-        """Crea il file .pptx dal testo strutturato generato dall'AI."""
+        """Crea il file .pptx dal testo strutturato generato dall'AI, rispettando il template."""
         logging.info(f"Tentativo di creare file PPTX: {output_file}")
         try:
+            # --- Inizializzazione Presentazione ---
             if template_path and os.path.exists(template_path):
                 logging.info(f"Utilizzo del template: {template_path}")
                 prs = Presentation(template_path)
@@ -360,103 +296,79 @@ class PptxGeneration:
                 logging.info("Nessun template valido fornito, utilizzo un layout di default.")
                 prs = Presentation()
 
-            # Layout comuni (potrebbero variare leggermente tra versioni PPTX)
-            title_slide_layout = prs.slide_layouts[0] # Slide titolo
-            content_slide_layout = prs.slide_layouts[1] # Slide Titolo e Contenuto
-            # blank_slide_layout = prs.slide_layouts[6] # Slide vuota
+            # --- Ricerca Layout (più robusta) ---
+            title_slide_layout = PptxGeneration._get_layout(prs, "Title Slide")
+            content_slide_layout = PptxGeneration._get_layout(prs, "Title and Content")
+
+            if not title_slide_layout or not content_slide_layout:
+                QMessageBox.critical(parent, "Errore Template", "Il template non contiene i layout necessari ('Title Slide', 'Title and Content').")
+                return
 
             # --- Parsing del testo generato dall'AI ---
-            # Pulizia preliminare
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
-            clean_text = re.sub(r'[•*]\s*', '- ', clean_text) # Normalizza bullet a trattino
+            clean_text = re.sub(r'^[•*]\s*', '- ', clean_text, flags=re.MULTILINE)
 
-            # Pattern robusto che rende "Contenuto:" opzionale
             pattern = re.compile(r"Titolo:\s*(.*?)\s*(?:Sottotitolo:\s*(.*?)\s*)?(?:Contenuto:)?\s*(.*?)(?=\n\s*Titolo:|\Z)", re.DOTALL | re.IGNORECASE)
             slides_data = pattern.findall(clean_text)
 
             if not slides_data or all(not t and not s and not c for t, s, c in slides_data):
-                 QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo generato dall'AI.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
-                 return
+                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo generato dall'AI.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
+                return
 
             # --- Creazione Slide ---
             for index, (titolo_text, sottotitolo_text, contenuto_text) in enumerate(slides_data):
-                titolo_text = titolo_text.strip() if titolo_text else f"Slide {index + 1}"
-                sottotitolo_text = sottotitolo_text.strip() if sottotitolo_text else ""
-                contenuto_text = contenuto_text.strip() if contenuto_text else ""
+                titolo_text = titolo_text.strip() or f"Slide {index + 1}"
+                sottotitolo_text = sottotitolo_text.strip()
+                contenuto_text = contenuto_text.strip()
 
-                logging.debug(f"Creazione Slide {index + 1}: Titolo='{titolo_text}', Sottotitolo='{sottotitolo_text}'")
+                logging.debug(f"Creazione Slide {index + 1}: Titolo='{titolo_text}'")
 
-                if index == 0: # Prima slide di titolo
-                    slide = prs.slides.add_slide(title_slide_layout)
-                    title = slide.shapes.title
+                layout = title_slide_layout if index == 0 else content_slide_layout
+                slide = prs.slides.add_slide(layout)
 
-                    # Cerca un placeholder per il sottotitolo in modo robusto
-                    subtitle_placeholder_types = [
-                        PP_PLACEHOLDER.SUBTITLE,
-                        PP_PLACEHOLDER.CENTER_TITLE,
-                        PP_PLACEHOLDER.BODY
-                    ]
-                    subtitle = PptxGeneration._find_placeholder(slide, subtitle_placeholder_types)
+                # Assegna titolo e sottotitolo (se esistono nel layout)
+                if slide.shapes.title:
+                    slide.shapes.title.text = titolo_text
 
-                    if title:
-                        PptxGeneration.impostaFont(title, 44, titolo_text).bold = True
-                    if subtitle and sottotitolo_text:
-                        PptxGeneration.impostaFont(subtitle, 32, sottotitolo_text)
-                else: # Slide di contenuto
-                    slide = prs.slides.add_slide(content_slide_layout)
-                    title = slide.shapes.title
+                if sottotitolo_text:
+                    subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
+                    if subtitle_shape:
+                        subtitle_shape.text = sottotitolo_text
 
-                    # Cerca un placeholder per il corpo del testo
-                    content_placeholder = PptxGeneration._find_placeholder(slide, [PP_PLACEHOLDER.BODY])
+                # Assegna contenuto principale (per slide di contenuto)
+                if index > 0 and contenuto_text:
+                    body_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.BODY)
+                    if body_shape:
+                        tf = body_shape.text_frame
+                        tf.clear()  # Rimuove paragrafi di default
 
-                    if title:
-                        PptxGeneration.impostaFont(title, 36, titolo_text).bold = True
-
-                    if content_placeholder and content_placeholder.has_text_frame:
-                        tf = content_placeholder.text_frame
-                        tf.clear() # Pulisce placeholder
-                        tf.word_wrap = True
-
-                        # Aggiungi sottotitolo se presente
-                        if sottotitolo_text:
-                            p_sub = PptxGeneration._aggiungi_paragrafo_formattato(tf, sottotitolo_text, 24, color=(80, 80, 80))
-                            if p_sub: p_sub.space_after = Pt(12)
-
-                        # Aggiungi contenuto principale
+                        # Il primo paragrafo lo impostiamo senza bullet
                         lines = [line.strip() for line in contenuto_text.split('\n') if line.strip()]
+
+                        # Se c'è un sottotitolo nel corpo, lo formattiamo diversamente
+                        if sottotitolo_text and not PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE):
+                             p = tf.paragraphs[0] if tf.paragraphs else tf.add_paragraph()
+                             p.text = sottotitolo_text
+                             # Puoi impostare un font size specifico se vuoi, ma è meglio che lo erediti
+                             # p.font.size = Pt(24)
+                             # Aggiungiamo le altre linee
+                             lines.pop(0) # Rimuovi il sottotitolo dalla lista del contenuto
+
                         for line in lines:
-                            level = 0
-                            is_bullet = False
-                            cleaned_line = line
+                            # Rimuovi i trattini iniziali perché lo stile del template li aggiungerà
+                            cleaned_line = re.sub(r'^\s*-\s*', '', line).strip()
 
-                            # Rileva bullet e livello indentazione
-                            indent_match = re.match(r"^(\s*)(- |> |# )\s*", line)
+                            # Calcola il livello di indentazione
+                            indent_match = re.match(r"^(\s*)", line)
+                            indent_level = 0
                             if indent_match:
-                                indent_space = len(indent_match.group(1))
-                                level = indent_space // 2 # Stima livello base (2 spazi per livello)
-                                cleaned_line = line[len(indent_match.group(0)):].strip()
-                                is_bullet = True
+                                # Stima del livello: ogni 2 spazi è un livello
+                                indent_level = len(indent_match.group(1)) // 2
 
-                            # Gestione "Titolo Sezione: Testo" (euristica)
-                            section_match = re.match(r"^(.*?):\s+(.*)", cleaned_line)
-                            if section_match and len(section_match.group(1)) < 50 and not is_bullet:
-                                 heading_text = section_match.group(1).strip() + ":"
-                                 body_text = section_match.group(2).strip()
-                                 p_head = PptxGeneration._aggiungi_paragrafo_formattato(tf, heading_text, 20, bold=True, level=level)
-                                 if p_head and body_text:
-                                      # Aggiunge il corpo dopo il titolo sezione nello stesso paragrafo o uno nuovo
-                                      # Per semplicità, lo mettiamo in un nuovo paragrafo indentato
-                                      PptxGeneration._aggiungi_paragrafo_formattato(tf, body_text, 18, level=level+1 if level < 5 else 5)
-                            else:
-                                # Riga normale o bullet
-                                PptxGeneration._aggiungi_paragrafo_formattato(tf, cleaned_line, 18, bullet=is_bullet, level=level)
+                            p = tf.add_paragraph()
+                            p.text = cleaned_line
+                            p.level = indent_level if indent_level < 5 else 4 # Limita il livello massimo
 
-                    else:
-                        logging.warning(f"Placeholder di contenuto non trovato per slide {index + 1}")
-
-            # Aggiungi footer a tutte le slide
-            for slide in prs.slides:
-                PptxGeneration._aggiungi_footer(slide)
 
             # --- Salvataggio e Feedback ---
             if prs.slides:
