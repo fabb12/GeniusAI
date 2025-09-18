@@ -3,9 +3,9 @@
 import logging
 from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
-from services.FrameExtractor import FrameExtractor
-from services.AudioTranscript import TranscriptionThread
-from config import PROMPT_COMBINED_ANALYSIS, get_api_key
+from src.services.FrameExtractor import FrameExtractor
+from src.services.AudioTranscript import TranscriptionThread
+from src.config import PROMPT_COMBINED_ANALYSIS, get_api_key
 
 class FrameAnalysisThread(QThread):
     finished = pyqtSignal(str)

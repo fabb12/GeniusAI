@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
 
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
-from ui.CustomDock import CustomDock
+from src.ui.CustomDock import CustomDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
@@ -39,40 +39,40 @@ from langdetect import detect, LangDetectException
 import pycountry
 from difflib import SequenceMatcher
 
-from services.DownloadVideo import DownloadThread
-from services.AudioTranscript import TranscriptionThread
-from services.AudioGenerationREST import AudioGenerationThread
-from services.VideoCutting import VideoCuttingThread
-from recorder.ScreenRecorder import ScreenRecorder
-from managers.SettingsManager import DockSettingsManager
-from ui.CustVideoWidget import CropVideoWidget
-from ui.CustomSlider import CustomSlider
-from managers.Settings import SettingsDialog
-from ui.ScreenButton import ScreenButton
-from ui.CustumTextEdit import CustomTextEdit
-from services.PptxGeneration import PptxGeneration
-from ui.PptxDialog import PptxDialog
-from services.ProcessTextAI import ProcessTextAI
-from ui.SplashScreen import SplashScreen
-from services.ShareVideo import VideoSharingManager
-from ui.MonitorPreview import MonitorPreview
-from managers.StreamToLogger import setup_logging
-from services.FrameExtractor import FrameExtractor
-from services.VideoCropping import CropThread
+from src.services.DownloadVideo import DownloadThread
+from src.services.AudioTranscript import TranscriptionThread
+from src.services.AudioGenerationREST import AudioGenerationThread
+from src.services.VideoCutting import VideoCuttingThread
+from src.recorder.ScreenRecorder import ScreenRecorder
+from src.managers.SettingsManager import DockSettingsManager
+from src.ui.CustVideoWidget import CropVideoWidget
+from src.ui.CustomSlider import CustomSlider
+from src.managers.Settings import SettingsDialog
+from src.ui.ScreenButton import ScreenButton
+from src.ui.CustumTextEdit import CustomTextEdit
+from src.services.PptxGeneration import PptxGeneration
+from src.ui.PptxDialog import PptxDialog
+from src.services.ProcessTextAI import ProcessTextAI
+from src.ui.SplashScreen import SplashScreen
+from src.services.ShareVideo import VideoSharingManager
+from src.ui.MonitorPreview import MonitorPreview
+from src.managers.StreamToLogger import setup_logging
+from src.services.FrameExtractor import FrameExtractor
+from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
-from ui.CropDialog import CropDialog
-from config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
+from src.ui.CropDialog import CropDialog
+from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
                     DEFAULT_FRAME_RATE, DEFAULT_VOICES, SPLASH_IMAGES_DIR,
                     DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE)
 import os
 AudioSegment.converter = FFMPEG_PATH
-from ui.VideoOverlay import VideoOverlay
+from src.ui.VideoOverlay import VideoOverlay
 
 # Importa la classe MeetingSummarizer
-from services.MeetingSummarizer import MeetingSummarizer
-from services.CombinedAnalyzer import CombinedAnalyzer
+from src.services.MeetingSummarizer import MeetingSummarizer
+from src.services.CombinedAnalyzer import CombinedAnalyzer
 
 
 class VideoAudioManager(QMainWindow):
@@ -1167,25 +1167,12 @@ class VideoAudioManager(QMainWindow):
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
         current_text = self.transcriptionTextArea.toPlainText()
+        if not current_text.strip():
+            QMessageBox.warning(self, "Testo Mancante", "Il campo della trascrizione è vuoto. Inserisci del testo prima di generare una presentazione.")
+            return
+
         dialog = PptxDialog(self, transcription_text=current_text)
-
-        if dialog.exec():
-            settings = dialog.get_settings()
-
-            # Il metodo 'creaPresentazione' gestisce tutto:
-            # - Controllo del testo vuoto
-            # - Richiesta del percorso di salvataggio
-            # - Messaggio di attesa
-            # - Generazione del testo
-            # - Creazione della presentazione dal testo con il template
-            PptxGeneration.creaPresentazione(
-                self,
-                self.transcriptionTextArea,
-                settings["num_slides"],
-                settings["company_name"],
-                settings["language"],
-                settings["template_path"]
-            )
+        dialog.exec()
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
