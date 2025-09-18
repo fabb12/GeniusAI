@@ -47,10 +47,36 @@ class PptxGeneration:
 
     @staticmethod
     def _find_placeholder(slide, placeholder_type):
-        """Trova un placeholder specifico in una slide."""
+        """
+        Trova un placeholder specifico in una slide.
+        Se non trova un match esatto, per il corpo del testo (BODY) cerca il placeholder
+        più grande che non sia il titolo.
+        """
+        # Prova a trovare un match esatto prima
         for shape in slide.placeholders:
             if shape.placeholder_format.type == placeholder_type:
                 return shape
+
+        # Fallback specifico per il corpo del testo
+        if placeholder_type == PP_PLACEHOLDER.BODY:
+            largest_placeholder = None
+            max_area = 0
+
+            for shape in slide.placeholders:
+                # Ignora il titolo
+                if shape.placeholder_format.type == PP_PLACEHOLDER.TITLE:
+                    continue
+
+                # Calcola l'area e trova il più grande
+                area = shape.width * shape.height
+                if area > max_area:
+                    max_area = area
+                    largest_placeholder = shape
+
+            if largest_placeholder is not None:
+                logging.warning(f"Nessun placeholder BODY trovato. Utilizzo il placeholder più grande come fallback.")
+                return largest_placeholder
+
         return None
 
     @staticmethod
