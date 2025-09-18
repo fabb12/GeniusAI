@@ -304,70 +304,70 @@ class PptxGeneration:
                 QMessageBox.critical(parent, "Errore Template", "Il template non contiene i layout necessari ('Title Slide', 'Title and Content').")
                 return
 
-            # --- Parsing del testo generato dall'AI ---
+            # --- Parsing del testo generato dall'AI (Logica Migliorata) ---
+            # Pulisce il testo da eventuali markdown per i titoli
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
-            clean_text = re.sub(r'^[•*]\s*', '- ', clean_text, flags=re.MULTILINE)
 
-            pattern = re.compile(r"Titolo:\s*(.*?)\s*(?:Sottotitolo:\s*(.*?)\s*)?(?:Contenuto:)?\s*(.*?)(?=\n\s*Titolo:|\Z)", re.DOTALL | re.IGNORECASE)
-            slides_data = pattern.findall(clean_text)
+            # Divide il testo in blocchi per ogni slide, usando "Titolo:" come delimitatore
+            slide_chunks = re.split(r'\n(?=Titolo:)', "Titolo:" + clean_text.replace("Titolo:", "", 1))
 
-            if not slides_data or all(not t and not s and not c for t, s, c in slides_data):
-                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo generato dall'AI.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
+            if not slide_chunks or len(slide_chunks) < 1:
+                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile dividere il testo in slide.\nLa presentazione non può essere creata.\n\nTesto ricevuto:\n" + testo[:500] + "...")
                 return
 
             # --- Creazione Slide ---
-            for index, (titolo_text, sottotitolo_text, contenuto_text) in enumerate(slides_data):
-                titolo_text = titolo_text.strip() or f"Slide {index + 1}"
-                sottotitolo_text = sottotitolo_text.strip()
-                contenuto_text = contenuto_text.strip()
+            for index, chunk in enumerate(slide_chunks):
+                if not chunk.strip():
+                    continue
 
-                logging.debug(f"Creazione Slide {index + 1}: Titolo='{titolo_text}'")
+                # Estrae titolo, sottotitolo e contenuto da ogni blocco
+                title_match = re.search(r'Titolo:\s*(.*?)(?=\nSottotitolo:|\nContenuto:|$)', chunk, re.DOTALL | re.IGNORECASE)
+                subtitle_match = re.search(r'Sottotitolo:\s*(.*?)(?=\nContenuto:|$)', chunk, re.DOTALL | re.IGNORECASE)
+                content_match = re.search(r'Contenuto:\s*(.*)', chunk, re.DOTALL | re.IGNORECASE)
+
+                titolo_text = title_match.group(1).strip() if title_match else f"Slide {index + 1}"
+                sottotitolo_text = subtitle_match.group(1).strip() if subtitle_match else ""
+                contenuto_text = content_match.group(1).strip() if content_match else ""
+
+                logging.debug(f"Creazione Slide {index + 1}: Titolo='{titolo_text}', Sottotitolo='{sottotitolo_text}'")
 
                 layout = title_slide_layout if index == 0 else content_slide_layout
                 slide = prs.slides.add_slide(layout)
 
-                # Assegna titolo e sottotitolo (se esistono nel layout)
+                # Assegna titolo e sottotitolo
                 if slide.shapes.title:
                     slide.shapes.title.text = titolo_text
 
-                if sottotitolo_text:
-                    subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
-                    if subtitle_shape:
-                        subtitle_shape.text = sottotitolo_text
+                subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
+                if sottotitolo_text and subtitle_shape:
+                    subtitle_shape.text = sottotitolo_text
 
-                # Assegna contenuto principale (per slide di contenuto)
-                if index > 0 and contenuto_text:
+                # Assegna contenuto principale
+                if contenuto_text:
                     body_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.BODY)
                     if body_shape:
                         tf = body_shape.text_frame
-                        tf.clear()  # Rimuove paragrafi di default
+                        tf.clear()
+                        tf.word_wrap = True
 
-                        # Il primo paragrafo lo impostiamo senza bullet
-                        lines = [line.strip() for line in contenuto_text.split('\n') if line.strip()]
+                        # Se il sottotitolo non ha un suo placeholder, mettilo come prima riga del corpo
+                        effective_content = ""
+                        if sottotitolo_text and not subtitle_shape:
+                            effective_content += sottotitolo_text + "\n"
 
-                        # Se c'è un sottotitolo nel corpo, lo formattiamo diversamente
-                        if sottotitolo_text and not PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE):
-                             p = tf.paragraphs[0] if tf.paragraphs else tf.add_paragraph()
-                             p.text = sottotitolo_text
-                             # Puoi impostare un font size specifico se vuoi, ma è meglio che lo erediti
-                             # p.font.size = Pt(24)
-                             # Aggiungiamo le altre linee
-                             lines.pop(0) # Rimuovi il sottotitolo dalla lista del contenuto
+                        effective_content += contenuto_text
 
-                        for line in lines:
-                            # Rimuovi i trattini iniziali perché lo stile del template li aggiungerà
-                            cleaned_line = re.sub(r'^\s*-\s*', '', line).strip()
+                        # Rimuovi i trattini/bullet point iniziali dal testo, saranno gestiti da pptx
+                        cleaned_content = re.sub(r'^\s*[-*•]\s*', '', effective_content, flags=re.MULTILINE)
+                        lines = [line.strip() for line in cleaned_content.split('\n') if line.strip()]
 
-                            # Calcola il livello di indentazione
-                            indent_match = re.match(r"^(\s*)", line)
-                            indent_level = 0
-                            if indent_match:
-                                # Stima del livello: ogni 2 spazi è un livello
-                                indent_level = len(indent_match.group(1)) // 2
-
+                        for i, line in enumerate(lines):
                             p = tf.add_paragraph()
-                            p.text = cleaned_line
-                            p.level = indent_level if indent_level < 5 else 4 # Limita il livello massimo
+                            p.text = line
+
+                            # Logica di indentazione basata sugli spazi iniziali
+                            leading_spaces = len(line) - len(line.lstrip(' '))
+                            p.level = min(leading_spaces // 2, 4) # 2 spazi per livello, max 4
 
 
             # --- Salvataggio e Feedback ---
