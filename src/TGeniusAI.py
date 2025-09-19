@@ -73,6 +73,7 @@ from src.ui.VideoOverlay import VideoOverlay
 # Importa la classe MeetingSummarizer
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
+from src.services.VideoIntegrator import VideoIntegrationThread
 
 
 class VideoAudioManager(QMainWindow):
@@ -915,18 +916,19 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
 
-        # Avvia l'analisi solo video
-        self.analyzer = CombinedAnalyzer(
+        # Avvia il thread di integrazione video
+        self.integration_thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            combined_mode=False,  # Solo analisi video
-            parent_for_transcription=self
+            current_summary=self.text_before_integration,
+            parent=self
         )
-        self.analyzer.analysis_complete.connect(self.onIntegrazioneComplete)
-        self.analyzer.analysis_error.connect(self.onIntegrazioneError)
-        # self.analyzer.progress_update.connect(self.onAnalysisProgress) # Potremmo voler un progress dedicato
-        self.analyzer.start_analysis()
+        self.integration_thread.finished.connect(self.onIntegrazioneComplete)
+        self.integration_thread.error.connect(self.onIntegrazioneError)
+        self.integration_thread.progress.connect(self.updateProgressDialog)
+        self.progressDialog.canceled.connect(self.integration_thread.terminate)
+        self.integration_thread.start()
 
     def onIntegrazioneComplete(self, summary):
         self.progressDialog.close()
