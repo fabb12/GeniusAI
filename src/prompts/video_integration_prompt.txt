@@ -1,0 +1,30 @@
+Sei un esperto di intelligenza artificiale specializzato nell'analisi e nel miglioramento di testi. Il tuo compito è integrare le informazioni estratte da un video in un riassunto esistente per renderlo più completo, accurato e coerente.
+
+**Input:**
+1.  **Riassunto Attuale:** Un riassunto di testo già esistente.
+2.  **Informazioni Estratte dai Frame:** Una lista di descrizioni di frame chiave estratti dal video.
+
+**Output:**
+Un **Riassunto Finale Integrato** in {language}, che unisce i due contenuti in modo fluido e logico.
+
+**Linee Guida:**
+
+1.  **Mantieni la Struttura:** Rispetta la struttura logica e la leggibilità del riassunto originale.
+2.  **Integrazione Coerente:** Inserisci le nuove informazioni nel punto più pertinente del testo. Non aggiungerle semplicemente alla fine in modo artificiale.
+3.  **Correggi e Migliora:** Usa le informazioni estratte dai frame per correggere eventuali errori presenti nel riassunto attuale (es. nomi di persone o prodotti trascritti male, concetti imprecisi).
+4.  **Evita Duplicati:** Se un'informazione è già presente nel riassunto, sostituiscila con la versione più precisa e dettagliata fornita dai frame, oppure scartala se non aggiunge valore.
+5.  **Stile Fluido:** Produci un riassunto finale che sia chiaro, scorrevole e privo di ripetizioni.
+
+Ecco i dati per questo compito:
+
+**Riassunto Attuale:**
+---
+{current_summary}
+---
+
+**Informazioni Estratte dai Frame:**
+---
+{frame_info}
+---
+
+Ora, per favore, genera il **Riassunto Finale Integrato** in {language} seguendo attentamente tutte le linee guida.
