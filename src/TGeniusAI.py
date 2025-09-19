@@ -144,7 +144,8 @@ class VideoAudioManager(QMainWindow):
 
         self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
-        self.raw_transcription_text = ""
+        self.original_text = ""
+        self.summary_text = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -569,12 +570,18 @@ class VideoAudioManager(QMainWindow):
         self.markdownViewCheckbox.setToolTip("Visualizza la trascrizione come Markdown renderizzato o testo grezzo")
         self.markdownViewCheckbox.setChecked(False)
 
+        self.visualizzaRiassuntoCheckbox = QCheckBox("Visualizza Riassunto")
+        self.visualizzaRiassuntoCheckbox.setToolTip("Mostra il testo originale o il riassunto")
+        self.visualizzaRiassuntoCheckbox.setChecked(False)
+        self.visualizzaRiassuntoCheckbox.setEnabled(False) # Disabilitato di default
+
         buttonsLayoutBase2.addWidget(self.resetButton)
         buttonsLayoutBase2.addWidget(self.pasteButton)
         buttonsLayoutBase2.addWidget(self.loadButton)
         buttonsLayoutBase2.addWidget(self.saveButton)
         buttonsLayoutBase2.addWidget(self.transcribeButton)
         buttonsLayoutBase2.addWidget(self.markdownViewCheckbox)
+        buttonsLayoutBase2.addWidget(self.visualizzaRiassuntoCheckbox)
         gridLayoutBase.addLayout(buttonsLayoutBase2, 2, 0, 1, 2)
         tabBase.setLayout(gridLayoutBase)
         tabWidget.addTab(tabBase, "Strumenti Base")
@@ -624,7 +631,8 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
-        self.markdownViewCheckbox.toggled.connect(self.on_markdown_view_toggled)
+        self.markdownViewCheckbox.toggled.connect(self.update_transcription_view)
+        self.visualizzaRiassuntoCheckbox.toggled.connect(self.update_transcription_view)
         finalTransLayout.addWidget(self.transcriptionTextArea, 1)
 
         transGroupBox.setLayout(finalTransLayout)
@@ -1001,6 +1009,7 @@ class VideoAudioManager(QMainWindow):
     def summarizeMeeting(self):
         # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
+        self.original_text = current_text
 
         if not current_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci la trascrizione della riunione da riassumere.")
@@ -1026,6 +1035,7 @@ class VideoAudioManager(QMainWindow):
     def processTextWithAI(self):
         # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
+        self.original_text = current_text
 
         if not current_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
@@ -1052,6 +1062,7 @@ class VideoAudioManager(QMainWindow):
     def fixTextWithAI(self):
         # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
+        self.original_text = current_text
 
         if not current_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
@@ -1144,20 +1155,28 @@ class VideoAudioManager(QMainWindow):
 
     def onProcessComplete(self, result):
         self.progressDialog.close()
-        self.raw_transcription_text = result
-        self.transcriptionTextArea.blockSignals(True)
-        if self.markdownViewCheckbox.isChecked():
-            self.transcriptionTextArea.setMarkdown(result)
-        else:
-            self.transcriptionTextArea.setPlainText(result)
-        self.transcriptionTextArea.blockSignals(False)
+        self.summary_text = result
+        self.visualizzaRiassuntoCheckbox.setEnabled(True)
+        self.visualizzaRiassuntoCheckbox.setChecked(True)
+        self.update_transcription_view()
 
-    def on_markdown_view_toggled(self, checked):
-        self.transcriptionTextArea.blockSignals(True)
-        if checked:
-            self.transcriptionTextArea.setMarkdown(self.raw_transcription_text)
+    def update_transcription_view(self):
+        is_markdown = self.markdownViewCheckbox.isChecked()
+        show_summary = self.visualizzaRiassuntoCheckbox.isChecked()
+
+        text_to_display = ""
+        # Se è stato generato un riassunto e l'utente vuole visualizzarlo
+        if self.summary_text and show_summary:
+            text_to_display = self.summary_text
         else:
-            self.transcriptionTextArea.setPlainText(self.raw_transcription_text)
+            # Altrimenti, mostra il testo originale
+            text_to_display = self.original_text
+
+        self.transcriptionTextArea.blockSignals(True)
+        if is_markdown:
+            self.transcriptionTextArea.setMarkdown(text_to_display)
+        else:
+            self.transcriptionTextArea.setPlainText(text_to_display)
         self.transcriptionTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
@@ -2697,8 +2716,11 @@ class VideoAudioManager(QMainWindow):
 
         # Controlla se l'utente ha effettivamente scelto un file
         if path:
-            # Usa il testo grezzo per preservare il Markdown
-            text_to_save = self.raw_transcription_text
+            # Salva il contenuto attualmente visualizzato nell'editor
+            if self.markdownViewCheckbox.isChecked():
+                text_to_save = self.transcriptionTextArea.toMarkdown()
+            else:
+                text_to_save = self.transcriptionTextArea.toPlainText()
 
             # Prova a salvare il testo nel file scelto
             try:
@@ -2719,13 +2741,11 @@ class VideoAudioManager(QMainWindow):
                 with open(path, 'r') as file:
                     text_loaded = file.read()
 
-                self.raw_transcription_text = text_loaded
-                self.transcriptionTextArea.blockSignals(True)
-                if self.markdownViewCheckbox.isChecked():
-                    self.transcriptionTextArea.setMarkdown(text_loaded)
-                else:
-                    self.transcriptionTextArea.setPlainText(text_loaded)
-                self.transcriptionTextArea.blockSignals(False)
+                self.original_text = text_loaded
+                self.summary_text = ""
+                self.visualizzaRiassuntoCheckbox.setEnabled(False)
+                self.visualizzaRiassuntoCheckbox.setChecked(False)
+                self.update_transcription_view()
                 logging.debug("File caricato correttamente!")
             except Exception as e:
                 logging.debug("Errore durante il caricamento del file:", e)
@@ -3159,10 +3179,17 @@ class VideoAudioManager(QMainWindow):
         if self.transcriptionTextArea.signalsBlocked():
             return
 
+        # Quando l'utente modifica il testo, questo diventa il nuovo "original_text"
+        # e qualsiasi riassunto precedente viene invalidato.
+        self.summary_text = ""
+        self.visualizzaRiassuntoCheckbox.setEnabled(False)
+        self.visualizzaRiassuntoCheckbox.setChecked(False)
+
+        # Aggiorna original_text con il contenuto corrente
         if self.markdownViewCheckbox.isChecked():
-            self.raw_transcription_text = self.transcriptionTextArea.toMarkdown()
+            self.original_text = self.transcriptionTextArea.toMarkdown()
         else:
-            self.raw_transcription_text = self.transcriptionTextArea.toPlainText()
+            self.original_text = self.transcriptionTextArea.toPlainText()
 
         current_html = self.transcriptionTextArea.toHtml()
         if current_html.strip():
@@ -3276,13 +3303,11 @@ class VideoAudioManager(QMainWindow):
 
         def complete(text, temp_files):
             if not progress_dialog.wasCanceled():
-                self.raw_transcription_text = text
-                self.transcriptionTextArea.blockSignals(True)
-                if self.markdownViewCheckbox.isChecked():
-                    self.transcriptionTextArea.setMarkdown(text)
-                else:
-                    self.transcriptionTextArea.setPlainText(text)
-                self.transcriptionTextArea.blockSignals(False)
+                self.original_text = text
+                self.summary_text = ""
+                self.visualizzaRiassuntoCheckbox.setEnabled(False)
+                self.visualizzaRiassuntoCheckbox.setChecked(False)
+                self.update_transcription_view()
 
                 progress_dialog.setValue(100)
                 progress_dialog.close()
