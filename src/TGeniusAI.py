@@ -146,6 +146,8 @@ class VideoAudioManager(QMainWindow):
         self.setDefaultAudioDevice()
         self.original_text = ""
         self.summary_text = ""
+        self.text_before_integration = ""
+        self.text_after_integration = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -242,11 +244,11 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.videoMergeDock, 'top')
 
 
-        self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
-        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
-        area.addDock(self.infoExtractionDock, 'right')
-        self.createInfoExtractionDock()
+        # self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
+        # self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        # self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
+        # area.addDock(self.infoExtractionDock, 'right')
+        # self.createInfoExtractionDock()
 
         # ---------------------
         # PLAYER INPUT
@@ -612,6 +614,39 @@ class VideoAudioManager(QMainWindow):
         tabAdvanced.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
         tabWidget.addTab(tabAdvanced, "Strumenti Avanzati")
 
+        # --- TAB 3: Strumenti Estrazione ---
+        self.tabEstrazione = QWidget()
+        layoutEstrazione = QVBoxLayout()
+
+        # Numero di frame da estrarre
+        frameCountLayout = QHBoxLayout()
+        frameCountLayout.addWidget(QLabel("Numero frame da estrarre:"))
+        self.estrazioneFrameCountSpin = QSpinBox()
+        self.estrazioneFrameCountSpin.setMinimum(1)
+        self.estrazioneFrameCountSpin.setMaximum(30)
+        self.estrazioneFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
+        self.estrazioneFrameCountSpin.setToolTip("Imposta il numero di frame da estrarre per l'analisi video")
+        frameCountLayout.addWidget(self.estrazioneFrameCountSpin)
+        layoutEstrazione.addLayout(frameCountLayout)
+
+        # Bottone "Integra info video"
+        self.integraInfoButton = QPushButton("Integra info video")
+        self.integraInfoButton.setToolTip("Estrae info dal video e le integra nel riassunto")
+        layoutEstrazione.addWidget(self.integraInfoButton)
+
+        # Toggle per visualizzare "prima" e "dopo"
+        self.integrazioneToggle = QCheckBox("Visualizza dopo integrazione")
+        self.integrazioneToggle.setToolTip("Mostra/nasconde le informazioni integrate dal video")
+        self.integrazioneToggle.setEnabled(False) # Disabilitato di default
+        layoutEstrazione.addWidget(self.integrazioneToggle)
+
+        # Connessioni
+        self.integraInfoButton.clicked.connect(self.integraInfoVideo)
+        self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
+
+        self.tabEstrazione.setLayout(layoutEstrazione)
+        tabWidget.addTab(self.tabEstrazione, "Strumenti estrazione")
+
         # Layout finale nella sezione di trascrizione: il QTabWidget in alto e la text area sotto
         finalTransLayout = QVBoxLayout()
         tabWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
@@ -656,8 +691,8 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'videoMergeDock': self.videoMergeDock,
-            'infoExtractionDock': self.infoExtractionDock
+            'videoMergeDock': self.videoMergeDock
+            # 'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -697,10 +732,10 @@ class VideoAudioManager(QMainWindow):
         self.generatePptxAction.triggered.connect(self.openPptxDialog)
         mainToolbar.addAction(self.generatePptxAction)
 
-        self.extractInfoAction = QAction(QIcon(get_resource("frame_get.png")), 'Estrai Info da Video', self)
-        self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
-        self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
-        mainToolbar.addAction(self.extractInfoAction)
+        # self.extractInfoAction = QAction(QIcon(get_resource("frame_get.png")), 'Estrai Info da Video', self)
+        # self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
+        # self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
+        # mainToolbar.addAction(self.extractInfoAction)
 
         # --- SECONDA TOOLBAR (Workspace e Impostazioni) ---
         workspaceToolbar = QToolBar("Workspace Toolbar")
@@ -862,6 +897,58 @@ class VideoAudioManager(QMainWindow):
 
     def onAnalysisProgress(self, message):
         self.infoExtractionResultArea.append(message)
+
+    def integraInfoVideo(self):
+        if not self.videoPathLineEdit:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            return
+
+        # Salva il testo corrente come "prima dell'integrazione"
+        self.text_before_integration = self.transcriptionTextArea.toPlainText()
+        self.text_after_integration = ""
+        self.integrazioneToggle.setChecked(False)
+        self.integrazioneToggle.setEnabled(False)
+
+        # Mostra un dialogo di progresso
+        self.progressDialog = QProgressDialog("Estrazione informazioni dal video...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Integrazione Informazioni")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
+        # Avvia l'analisi solo video
+        self.analyzer = CombinedAnalyzer(
+            video_path=self.videoPathLineEdit,
+            num_frames=self.estrazioneFrameCountSpin.value(),
+            language=self.languageComboBox.currentText(),
+            combined_mode=False,  # Solo analisi video
+            parent_for_transcription=self
+        )
+        self.analyzer.analysis_complete.connect(self.onIntegrazioneComplete)
+        self.analyzer.analysis_error.connect(self.onIntegrazioneError)
+        # self.analyzer.progress_update.connect(self.onAnalysisProgress) # Potremmo voler un progress dedicato
+        self.analyzer.start_analysis()
+
+    def onIntegrazioneComplete(self, summary):
+        self.progressDialog.close()
+        # Combina il testo originale con il nuovo sommario
+        self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
+
+        # Aggiorna la text area e il toggle
+        self.transcriptionTextArea.setPlainText(self.text_after_integration)
+        self.integrazioneToggle.setEnabled(True)
+        self.integrazioneToggle.setChecked(True)
+        QMessageBox.information(self, "Completato", "Integrazione delle informazioni dal video completata.")
+
+    def onIntegrazioneError(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'integrazione:\n{error_message}")
+        self.integrazioneToggle.setEnabled(False)
+
+    def toggleIntegrazioneView(self, checked):
+        if checked:
+            self.transcriptionTextArea.setPlainText(self.text_after_integration)
+        else:
+            self.transcriptionTextArea.setPlainText(self.text_before_integration)
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -1932,65 +2019,6 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
-    def createInfoExtractionDock(self):
-        """Crea e restituisce il dock per l'estrazione di informazioni."""
-        dock = self.infoExtractionDock
-        infoExtractionGroup = QGroupBox("Opzioni di Estrazione")
-        infoExtractionLayout = QVBoxLayout()
-
-        # Spinbox per il numero di frame
-        self.infoFrameCountSpin = QSpinBox()
-        self.infoFrameCountSpin.setMinimum(1)
-        self.infoFrameCountSpin.setMaximum(30)
-        self.infoFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
-        self.infoFrameCountSpin.setToolTip("Imposta il numero di frame da estrarre")
-
-        frameCountLayout = QHBoxLayout()
-        frameCountLayout.addWidget(QLabel("Numero frame:"))
-        frameCountLayout.addWidget(self.infoFrameCountSpin)
-        infoExtractionLayout.addLayout(frameCountLayout)
-
-        # Language selection
-        languageLayout = QHBoxLayout()
-        languageLayout.addWidget(QLabel("Lingua:"))
-        self.languageInput = QComboBox()
-        self.languageInput.addItem("Italiano", "it")
-        self.languageInput.addItem("Inglese", "en")
-        self.languageInput.addItem("Francese", "fr")
-        self.languageInput.addItem("Spagnolo", "es")
-        self.languageInput.addItem("Tedesco", "de")
-        self.languageInput.setToolTip("Seleziona la lingua per l'analisi dell'audio")
-        languageLayout.addWidget(self.languageInput)
-        infoExtractionLayout.addLayout(languageLayout)
-
-        # Checkbox per l'analisi combinata
-        self.combinedAnalysisCheckbox = QCheckBox("Analisi combinata (Immagini e Audio)")
-        self.combinedAnalysisCheckbox.setToolTip("Include l'analisi dell'audio nella generazione del riassunto")
-        infoExtractionLayout.addWidget(self.combinedAnalysisCheckbox)
-
-        # Pulsante per avviare l'estrazione
-        self.extractInfoButton = QPushButton("Estrai Informazioni")
-        self.extractInfoButton.clicked.connect(self.onExtractFramesClicked)
-        infoExtractionLayout.addWidget(self.extractInfoButton)
-
-        infoExtractionGroup.setLayout(infoExtractionLayout)
-
-        # Area di testo per i risultati
-        self.infoExtractionResultArea = QTextEdit()
-        self.infoExtractionResultArea.setReadOnly(True)
-        self.infoExtractionResultArea.setPlaceholderText("I risultati dell'analisi verranno mostrati qui...")
-
-        mainLayout = QVBoxLayout()
-        mainLayout.addWidget(infoExtractionGroup)
-        mainLayout.addWidget(self.infoExtractionResultArea)
-
-        widget = QWidget()
-        widget.setLayout(mainLayout)
-        dock.addWidget(widget)
-
-    def showInfoExtractionDock(self):
-        self.infoExtractionDock.show()
-        self.infoExtractionDock.raise_()
 
     def setTimecodeMergeFromSlider(self):
         current_position = self.player.position()
@@ -3060,7 +3088,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
-        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
+        # self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -3071,7 +3099,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
-        viewMenu.addAction(self.actionToggleInfoExtractionDock)
+        # viewMenu.addAction(self.actionToggleInfoExtractionDock)
 
 
         # Aggiungi azioni per mostrare/nascondere tutti i docks
