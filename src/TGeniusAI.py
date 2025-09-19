@@ -2980,7 +2980,7 @@ class VideoAudioManager(QMainWindow):
         workflowsMenu.addAction(self.summarizeAction)
         workflowsMenu.addAction(self.fixTextAction)
         workflowsMenu.addAction(self.generatePptxAction)
-        workflowsMenu.addAction(self.extractInfoAction)
+        # workflowsMenu.addAction(self.extractInfoAction)
 
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
