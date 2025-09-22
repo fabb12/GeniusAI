@@ -13,7 +13,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere registrazione solo audio
 - [x] aggiungere tasto condividi via what app , teams ecc...
 - [x] aggiungere splash screen
-- [ ] aggiungere sync trascrizione video originali 
+- [ ] aggiungere sync trascrizione video originali  
 - [ ] aggiungere caricamento metadati video e trascrizione
 - [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
 - [ ] aggiungere zoom testo in area trascrizione con rotella + / -
