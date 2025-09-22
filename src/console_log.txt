@@ -1,0 +1,80 @@
+[2025-09-22 15:21:04,039 - ERROR] - Traceback (most recent call last):
+[2025-09-22 15:21:04,040 - ERROR] -   File "<frozen runpy>", line 198, in _run_module_as_main
+[2025-09-22 15:21:04,040 - ERROR] -   File "<frozen runpy>", line 88, in _run_code
+[2025-09-22 15:21:04,040 - ERROR] -   File "/app/src/TGeniusAI.py", line 4344, in <module>
+[2025-09-22 15:21:04,041 - ERROR] - window = VideoAudioManager()
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] - ^
+[2025-09-22 15:21:04,042 - ERROR] -   File "/app/src/TGeniusAI.py", line 129, in __init__
+[2025-09-22 15:21:04,042 - ERROR] - self.initUI()
+[2025-09-22 15:21:04,042 - ERROR] -   File "/app/src/TGeniusAI.py", line 233, in initUI
+[2025-09-22 15:21:04,043 - ERROR] - self.recordingDock = self.createRecordingDock()
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,043 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] - ^
+[2025-09-22 15:21:04,044 - ERROR] -   File "/app/src/TGeniusAI.py", line 2389, in createRecordingDock
+[2025-09-22 15:21:04,045 - ERROR] - monitors = get_monitors()
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,045 - ERROR] - ^
+[2025-09-22 15:21:04,046 - ERROR] - ^
+[2025-09-22 15:21:04,046 - ERROR] - ^
+[2025-09-22 15:21:04,046 - ERROR] - ^
+[2025-09-22 15:21:04,046 - ERROR] -   File "/home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/screeninfo/screeninfo.py", line 32, in get_monitors
+[2025-09-22 15:21:04,046 - ERROR] - raise ScreenInfoError("No enumerators available")
+[2025-09-22 15:21:04,046 - ERROR] - screeninfo.common
+[2025-09-22 15:21:04,046 - ERROR] - .
+[2025-09-22 15:21:04,046 - ERROR] - ScreenInfoError
+[2025-09-22 15:21:04,046 - ERROR] - :
+[2025-09-22 15:21:04,046 - ERROR] - No enumerators available
+[2025-09-22 15:26:10,730 - WARNING] - Could not get screen info: No enumerators available. Running in headless mode or without a display server.
+[2025-09-22 15:39:55,787 - WARNING] - Could not get screen info: No enumerators available. Running in headless mode or without a display server.
+[2025-09-22 15:56:33,241 - WARNING] - Could not get screen info: No enumerators available. Running in headless mode or without a display server.
