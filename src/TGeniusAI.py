@@ -727,7 +727,7 @@ class VideoAudioManager(QMainWindow):
         self.fixTextAction.triggered.connect(self.fixTextWithAI)
         mainToolbar.addAction(self.fixTextAction)
 
-        self.generatePptxAction = QAction(QIcon(get_resource("save.png")), 'Genera Presentazione', self)
+        self.generatePptxAction = QAction(QIcon(get_resource("powerpoint.png")), 'Genera Presentazione', self)
         self.generatePptxAction.setStatusTip('Crea una presentazione PowerPoint dal testo')
         self.generatePptxAction.triggered.connect(self.openPptxDialog)
         mainToolbar.addAction(self.generatePptxAction)
@@ -738,26 +738,27 @@ class VideoAudioManager(QMainWindow):
         self.addToolBar(workspaceToolbar)
 
         # Workspace Actions (Layouts)
-        self.defaultLayoutAction = QAction(QIcon(get_resource("meet.png")), 'Default', self)
-        self.defaultLayoutAction.setToolTip("Layout di default")
-        self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
-        workspaceToolbar.addAction(self.defaultLayoutAction)
 
-        self.recordingLayoutAction = QAction(QIcon(get_resource("lay_rec.png")), 'Registrazione', self)
+
+        self.recordingLayoutAction = QAction(QIcon(get_resource("rec.png")), 'Registrazione', self)
         self.recordingLayoutAction.setToolTip("Layout per la registrazione")
         self.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
         workspaceToolbar.addAction(self.recordingLayoutAction)
 
-        self.comparisonLayoutAction = QAction(QIcon(get_resource("load1.png")), 'Confronto', self)
+        self.comparisonLayoutAction = QAction(QIcon(get_resource("compare.png")), 'Confronto', self)
         self.comparisonLayoutAction.setToolTip("Layout per il confronto")
         self.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
         workspaceToolbar.addAction(self.comparisonLayoutAction)
 
-        self.transcriptionLayoutAction = QAction(QIcon(get_resource("load2.png")), 'Trascrizione', self)
+        self.transcriptionLayoutAction = QAction(QIcon(get_resource("script.png")), 'Trascrizione', self)
         self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
         self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
         workspaceToolbar.addAction(self.transcriptionLayoutAction)
 
+        self.defaultLayoutAction = QAction(QIcon(get_resource("default.png")), 'Default', self)
+        self.defaultLayoutAction.setToolTip("Layout di default")
+        self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
+        workspaceToolbar.addAction(self.defaultLayoutAction)
         workspaceToolbar.addSeparator()
 
         serviceToolbar = QToolBar("Rec Toolbar")
