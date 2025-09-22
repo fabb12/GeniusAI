@@ -10,7 +10,7 @@ import json
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QThread, pyqtSignal)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
@@ -60,7 +60,6 @@ from src.ui.MonitorPreview import MonitorPreview
 from src.managers.StreamToLogger import setup_logging
 from src.services.FrameExtractor import FrameExtractor
 from src.services.VideoCropping import CropThread
-from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
@@ -75,6 +74,56 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+
+class AudioProcessorThread(QThread):
+    finished = pyqtSignal(str, str, float)  # path, player_type, rate
+    error = pyqtSignal(str)
+
+    def __init__(self, audio_path, rate, player_type, parent=None):
+        super().__init__(parent)
+        self.audio_path = audio_path
+        self.rate = rate
+        self.player_type = player_type
+        self.is_running = True
+
+    def run(self):
+        try:
+            logging.info(f"AudioProcessorThread started for {self.audio_path} at rate {self.rate}x")
+
+            with AudioFileClip(self.audio_path) as audio_clip:
+                if not self.is_running:
+                    logging.info("AudioProcessorThread cancelled before processing.")
+                    return
+
+                logging.info("Applying speedx effect...")
+                sped_up_audio_clip = audio_clip.fx(vfx.speedx, self.rate)
+                temp_sped_up_audio_file = tempfile.mktemp(suffix=".mp3")
+
+                if not self.is_running:
+                    logging.info("AudioProcessorThread cancelled before writing file.")
+                    return
+
+                logging.info(f"Writing sped-up audio to {temp_sped_up_audio_file}")
+                # Removing logger=None to see ffmpeg output in console
+                sped_up_audio_clip.write_audiofile(temp_sped_up_audio_file)
+
+            if self.is_running:
+                logging.info(f"AudioProcessorThread finished successfully. Output: {temp_sped_up_audio_file}")
+                self.finished.emit(temp_sped_up_audio_file, self.player_type, self.rate)
+
+        except KeyboardInterrupt:
+            logging.error("Audio processing was interrupted by the user (KeyboardInterrupt).")
+            if self.is_running:
+                self.error.emit("Elaborazione audio interrotta.")
+        except Exception as e:
+            import traceback
+            logging.error(f"An exception occurred in AudioProcessorThread: {e}\n{traceback.format_exc()}")
+            if self.is_running:
+                self.error.emit(f"Errore durante l'elaborazione audio: {e}")
+
+    def stop(self):
+        logging.info("AudioProcessorThread stop called.")
+        self.is_running = False
 
 
 class VideoAudioManager(QMainWindow):
@@ -120,6 +169,7 @@ class VideoAudioManager(QMainWindow):
         self.audio_output_output.setVolume(1.0)
 
         self.recentFiles = []
+        self.audio_processing_thread = None
 
         # Blinking recording indicator
         self.recording_indicator = QLabel(self)
@@ -213,7 +263,7 @@ class VideoAudioManager(QMainWindow):
         area.setToolTip("Area principale dei dock")
 
         # ---------------------
-        # CREAZIONE DOCK PRINCIPali (invariati)
+        # CREAZIONE DOCK PRINCIPALI (invariati)
         # ---------------------
         self.videoPlayerDock = CustomDock("Video Player Input", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
@@ -1012,6 +1062,37 @@ class VideoAudioManager(QMainWindow):
             self.playButton.setIcon(QIcon(get_resource("play.png")))
         self.player.setPosition(int(new_pos))
 
+    def on_audio_processing_finished(self, new_audio_path, player_type, rate):
+        if self.audio_processing_thread and not self.audio_processing_thread.is_running:
+            return
+
+        if player_type == 'input':
+            player = self.player
+            audio_player = self.audio_player_input
+        else: # output
+            player = self.playerOutput
+            audio_player = self.audio_player_output
+
+        current_pos = player.position()
+        was_playing = player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+        if was_playing:
+            player.pause()
+            audio_player.pause()
+
+        audio_player.setSource(QUrl.fromLocalFile(new_audio_path))
+        player.setPlaybackRate(rate)
+
+        player.setPosition(current_pos)
+        audio_player.setPosition(int(current_pos / rate))
+
+        if was_playing:
+            player.play()
+            audio_player.play()
+
+        if hasattr(self, 'progressDialog') and self.progressDialog:
+            self.progressDialog.close()
+
     def set_playback_rate_with_pitch_preservation(self, rate, player_type):
         if player_type == 'input':
             player = self.player
@@ -1043,6 +1124,10 @@ class VideoAudioManager(QMainWindow):
             spin_box.setValue(1.0)
             return
 
+        if self.audio_processing_thread and self.audio_processing_thread.isRunning():
+            self.audio_processing_thread.stop()
+            self.audio_processing_thread.wait()
+
         # Handle reverse playback
         if rate < 0:
             player.pause()
@@ -1057,12 +1142,9 @@ class VideoAudioManager(QMainWindow):
             reverse_timer.start(interval)
             return
 
-        # If we were in reverse, stop it
         if reverse_timer.isActive():
             reverse_timer.stop()
 
-
-        # If rate is 1.0, restore normal playback
         if abs(rate - 1.0) < 0.01:
             player.setAudioOutput(main_audio_output)
             audio_player.stop()
@@ -1072,62 +1154,39 @@ class VideoAudioManager(QMainWindow):
                 player.setPosition(pos)
             return
 
-        # Mute the video player's own audio stream
         player.setAudioOutput(None)
 
         try:
-            # Step 1: Extract original audio if not already cached for this video
             if getattr(self, original_video_attr, None) != video_path:
-                logging.debug(f"Extracting audio for {video_path}")
+                logging.info(f"Extracting audio for {video_path}")
                 with VideoFileClip(video_path) as clip:
                     if clip.audio:
                         temp_audio_file = tempfile.mktemp(suffix=".mp3")
-                        clip.audio.write_audiofile(temp_audio_file, logger=None)
+                        clip.audio.write_audiofile(temp_audio_file)
                         setattr(self, original_audio_attr, temp_audio_file)
                         setattr(self, original_video_attr, video_path)
-                        logging.debug(f"Audio extracted to {temp_audio_file}")
+                        logging.info(f"Audio extracted to {temp_audio_file}")
                     else:
                         setattr(self, original_audio_attr, None)
                         setattr(self, original_video_attr, video_path)
                         logging.debug("Video has no audio.")
-                        player.setPlaybackRate(rate) # Still change rate for video-only
+                        player.setPlaybackRate(rate)
                         return
 
             original_audio_path = getattr(self, original_audio_attr, None)
             if not original_audio_path:
-                player.setPlaybackRate(rate) # Still change rate for video-only
+                player.setPlaybackRate(rate)
                 return
 
-            # Step 2: Create sped-up audio file
-            logging.debug(f"Creating sped-up audio at rate {rate}x")
-            with AudioFileClip(original_audio_path) as audio_clip:
-                sped_up_audio_clip = audio_clip.fx(vfx.speedx, rate)
-                temp_sped_up_audio_file = tempfile.mktemp(suffix=".mp3")
-                sped_up_audio_clip.write_audiofile(temp_sped_up_audio_file, logger=None)
-            logging.debug(f"Sped-up audio saved to {temp_sped_up_audio_file}")
+            self.progressDialog = QProgressDialog("Elaborazione audio...", "Annulla", 0, 0, self)
+            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
 
-            # Step 3: Play video (muted) at new rate and play new audio track
-            current_pos = player.position()
-
-            was_playing = player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
-            if was_playing:
-                player.pause()
-                audio_player.pause()
-
-            # Set video playback rate
-            player.setPlaybackRate(rate)
-
-            # Set new audio source for the dedicated audio player
-            audio_player.setSource(QUrl.fromLocalFile(temp_sped_up_audio_file))
-
-            # Sync positions
-            player.setPosition(current_pos)
-            audio_player.setPosition(int(current_pos / rate))
-
-            # Sync play/pause state
-            if was_playing:
-                player.play()
-                audio_player.play()
+            self.audio_processing_thread = AudioProcessorThread(original_audio_path, rate, player_type)
+            self.audio_processing_thread.finished.connect(self.on_audio_processing_finished)
+            self.audio_processing_thread.error.connect(self.onProcessError)
+            self.progressDialog.canceled.connect(self.audio_processing_thread.stop)
+            self.audio_processing_thread.start()
+            self.progressDialog.show()
 
         except Exception as e:
             import traceback
@@ -1205,15 +1264,16 @@ class VideoAudioManager(QMainWindow):
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
         self.playerOutput.setPosition(source_position)
-        # We also need to sync the audio player if it's active
-        rate = self.speedSpinBoxOutput.value()
-        if rate > 0 and abs(rate-1.0) > 0.01:
-            if self.audio_player_output.source() and self.audio_player_output.source().isValid():
-                self.audio_player_output.setPosition(int(source_position/rate))
 
-        self.playerOutput.play()
-        if self.audio_player_output.source() and self.audio_player_output.source().isValid():
-            self.audio_player_output.play()
+        rate_output = self.speedSpinBoxOutput.value()
+        if rate_output > 0 and abs(rate_output - 1.0) > 0.01:
+            if self.audio_player_output.source() and self.audio_player_output.source().isValid():
+                self.audio_player_output.setPosition(int(source_position / rate_output))
+
+        if self.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+            self.togglePlayPause()
+        if self.playerOutput.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
+            self.togglePlayPauseOutput()
 
 
     def summarizeMeeting(self):
