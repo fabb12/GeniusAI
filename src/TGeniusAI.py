@@ -101,9 +101,7 @@ class VideoAudioManager(QMainWindow):
 
         self.player.setAudioOutput(self.audioOutput)
         self.audioOutput.setVolume(1.0)
-        self.player.setPitchPreserved(True)
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
-        self.playerOutput.setPitchPreserved(True)
         self.recentFiles = []
 
         # Blinking recording indicator
