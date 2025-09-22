@@ -16,7 +16,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
-    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog
+    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox
 )
 
 # PyQtGraph (docking)
@@ -100,6 +100,9 @@ class VideoAudioManager(QMainWindow):
 
         self.player.setAudioOutput(self.audioOutput)
         self.audioOutput.setVolume(1.0)
+        self.audioOutput.setPitchPreserved(True)
+        self.playerOutput.setAudioOutput(self.audioOutputOutput)
+        self.audioOutputOutput.setPitchPreserved(True)
         self.recentFiles = []
 
         # Blinking recording indicator
@@ -416,11 +419,11 @@ class VideoAudioManager(QMainWindow):
         # Speed control for output player
         speedLayoutOutput = QHBoxLayout()
         speedLayoutOutput.addWidget(QLabel("Velocità:"))
-        self.speedSpinBoxOutput = QSpinBox()
-        self.speedSpinBoxOutput.setRange(-20, 20)
+        self.speedSpinBoxOutput = QDoubleSpinBox()
+        self.speedSpinBoxOutput.setRange(-20.0, 20.0)
         self.speedSpinBoxOutput.setSuffix("x")
-        self.speedSpinBoxOutput.setValue(1)
-        self.speedSpinBoxOutput.setSingleStep(1)
+        self.speedSpinBoxOutput.setValue(1.0)
+        self.speedSpinBoxOutput.setSingleStep(0.1)
         self.speedSpinBoxOutput.valueChanged.connect(self.setPlaybackRateOutput)
         speedLayoutOutput.addWidget(self.speedSpinBoxOutput)
         videoOutputLayout.addLayout(speedLayoutOutput)
@@ -481,11 +484,11 @@ class VideoAudioManager(QMainWindow):
         # Speed control
         speedLayout = QHBoxLayout()
         speedLayout.addWidget(QLabel("Velocità:"))
-        self.speedSpinBox = QSpinBox()
-        self.speedSpinBox.setRange(-20, 20)
+        self.speedSpinBox = QDoubleSpinBox()
+        self.speedSpinBox.setRange(-20.0, 20.0)
         self.speedSpinBox.setSuffix("x")
-        self.speedSpinBox.setValue(1)
-        self.speedSpinBox.setSingleStep(1)
+        self.speedSpinBox.setValue(1.0)
+        self.speedSpinBox.setSingleStep(0.1)
         self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
         speedLayout.addWidget(self.speedSpinBox)
         videoPlayerLayout.addLayout(speedLayout)
