@@ -150,6 +150,8 @@ class VideoAudioManager(QMainWindow):
         self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
         self.original_text = ""
+        self.summaries = {}
+        self.active_summary_type = None
         self.summary_text = ""
         self.text_before_integration = ""
         self.text_after_integration = ""
@@ -1095,22 +1097,18 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.play()
 
     def summarizeMeeting(self):
-        # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
         self.original_text = current_text
-
         if not current_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci la trascrizione della riunione da riassumere.")
             return
 
-        # Mostra un dialogo di progresso
+        self.current_summary_type = 'meeting'
         self.progressDialog = QProgressDialog("Riassunto riunione in corso...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Riassunto Riunione")
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
 
-
-        # Esegui il thread per il processo AI
         self.meeting_summarizer_thread = MeetingSummarizer(
             current_text,
             self.languageComboBox.currentText()
@@ -1121,27 +1119,23 @@ class VideoAudioManager(QMainWindow):
         self.meeting_summarizer_thread.start()
 
     def processTextWithAI(self):
-        # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
         self.original_text = current_text
-
         if not current_text.strip():
             QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
             return
 
-        # Mostra un dialogo di progresso
+        self.current_summary_type = 'text'
+        self.progressDialog = QProgressDialog("Riassunto testo in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Riassunto Testo")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        self.progressDialog.show()
+
         self.text_ai_thread = ProcessTextAI(
             current_text,
             self.languageComboBox.currentText(),
             mode="summary"
         )
-        self.progressDialog = QProgressDialog("Riassunto testo in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
-
-        # Esegui il thread per il processo AI
-        self.text_ai_thread = ProcessTextAI(current_text, self.languageComboBox.currentText())
         self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
         self.text_ai_thread.process_complete.connect(self.onProcessComplete)
         self.text_ai_thread.process_error.connect(self.onProcessError)
@@ -1243,10 +1237,14 @@ class VideoAudioManager(QMainWindow):
 
     def onProcessComplete(self, result):
         self.progressDialog.close()
-        self.summary_text = result
-        self.visualizzaRiassuntoCheckbox.setEnabled(True)
-        self.visualizzaRiassuntoCheckbox.setChecked(True)
-        self.update_transcription_view()
+        if hasattr(self, 'current_summary_type') and self.current_summary_type:
+            self.summaries[self.current_summary_type] = result
+            self.active_summary_type = self.current_summary_type
+            self.summary_text = result  # Keep this for now for compatibility with update_transcription_view
+            self.visualizzaRiassuntoCheckbox.setEnabled(True)
+            self.visualizzaRiassuntoCheckbox.setChecked(True)
+            self.update_transcription_view()
+            self.current_summary_type = None  # Reset after use
 
     def update_transcription_view(self):
         is_markdown = self.markdownViewCheckbox.isChecked()
@@ -1254,8 +1252,8 @@ class VideoAudioManager(QMainWindow):
 
         text_to_display = ""
         # Se è stato generato un riassunto e l'utente vuole visualizzarlo
-        if self.summary_text and show_summary:
-            text_to_display = self.summary_text
+        if self.active_summary_type and self.active_summary_type in self.summaries and show_summary:
+            text_to_display = self.summaries[self.active_summary_type]
         else:
             # Altrimenti, mostra il testo originale
             text_to_display = self.original_text
@@ -2740,33 +2738,47 @@ class VideoAudioManager(QMainWindow):
         self.bitrateLabel.setText(f"Bitrate: {stats.get('bitrate', 'N/A')} kbit/s")
 
     def saveText(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Salva file", "", "Text files (*.txt);;JSON files (*.json);;All files (*.*)")
-        if path:
-            try:
-                # Salva sia il TXT che il JSON
-                txt_path = os.path.splitext(path)[0] + ".txt"
-                json_path = os.path.splitext(path)[0] + ".json"
+        path, selected_filter = QFileDialog.getSaveFileName(self, "Salva file", "", "JSON files (*.json);;Text files (*.txt)")
+        if not path:
+            return
 
-                # Salva il TXT
-                with open(txt_path, 'w', encoding='utf-8') as file:
-                    file.write(self.transcriptionTextArea.toPlainText())
+        try:
+            file_ext = os.path.splitext(path)[1].lower()
 
-                # Crea e salva il JSON
-                if self.videoPathLineEdit:
+            # Se l'utente ha scelto un filtro specifico, usalo. Altrimenti, deduci dall'estensione.
+            if "(*.json)" in selected_filter or file_ext == ".json":
+                if file_ext != ".json": path += ".json"
+
+                metadata = {
+                    "transcription": self.transcriptionTextArea.toPlainText(),
+                    "summaries": self.summaries,
+                    "transcription_date": datetime.datetime.now().isoformat(),
+                    "language": self.languageComboBox.currentData()
+                }
+
+                if self.videoPathLineEdit and os.path.exists(self.videoPathLineEdit):
                     video_clip = VideoFileClip(self.videoPathLineEdit)
-                    metadata = {
-                        "video_path": self.videoPathLineEdit,
-                        "duration": video_clip.duration,
-                        "language": self.languageComboBox.currentData(),
-                        "transcription_date": datetime.datetime.now().isoformat(),
-                        "transcription": self.transcriptionTextArea.toPlainText()
-                    }
-                    with open(json_path, 'w', encoding='utf-8') as f:
-                        json.dump(metadata, f, ensure_ascii=False, indent=4)
+                    metadata["video_path"] = self.videoPathLineEdit
+                    metadata["duration"] = video_clip.duration
 
-                logging.debug("File salvati correttamente!")
-            except Exception as e:
-                logging.error(f"Errore durante il salvataggio del file: {e}")
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=4)
+                logging.debug(f"File JSON salvato correttamente in {path}")
+
+            elif "(*.txt)" in selected_filter or file_ext == ".txt":
+                if file_ext != ".txt": path += ".txt"
+                with open(path, 'w', encoding='utf-8') as file:
+                    file.write(self.transcriptionTextArea.toPlainText())
+                logging.debug(f"File di testo salvato correttamente in {path}")
+
+            else: # Caso di default o estensione non riconosciuta
+                with open(path, 'w', encoding='utf-8') as file:
+                    file.write(self.transcriptionTextArea.toPlainText())
+                logging.debug(f"File salvato come testo semplice in {path}")
+
+        except Exception as e:
+            logging.error(f"Errore durante il salvataggio del file: {e}")
+            QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file:\n{e}")
 
 
     def loadText(self):
@@ -2780,6 +2792,8 @@ class VideoAudioManager(QMainWindow):
                     with open(path, 'r', encoding='utf-8') as file:
                         text_loaded = file.read()
                     self.original_text = text_loaded
+                    self.summaries = {}
+                    self.active_summary_type = None
                     self.summary_text = ""
                     self.visualizzaRiassuntoCheckbox.setEnabled(False)
                     self.visualizzaRiassuntoCheckbox.setChecked(False)
@@ -3220,6 +3234,8 @@ class VideoAudioManager(QMainWindow):
 
         # Quando l'utente modifica il testo, questo diventa il nuovo "original_text"
         # e qualsiasi riassunto precedente viene invalidato.
+        self.summaries = {}
+        self.active_summary_type = None
         self.summary_text = ""
         self.visualizzaRiassuntoCheckbox.setEnabled(False)
         self.visualizzaRiassuntoCheckbox.setChecked(False)
@@ -3338,6 +3354,8 @@ class VideoAudioManager(QMainWindow):
         return update
 
     def completeTranscription(self, progress_dialog):
+        """Returns a closure that handles transcription completion."""
+
         def complete(json_path, temp_files):
             if not progress_dialog.wasCanceled():
                 self.loadTranscription(json_path)
@@ -3353,19 +3371,29 @@ class VideoAudioManager(QMainWindow):
                 metadata = json.load(f)
 
             self.original_text = metadata.get("transcription", "")
-            self.summary_text = ""
-            self.visualizzaRiassuntoCheckbox.setEnabled(False)
+            self.summaries = metadata.get("summaries", {})
+            self.active_summary_type = None
+            self.summary_text = "" # To be deprecated
+
+            if self.summaries:
+                # Select the first summary as the active one by default
+                self.active_summary_type = next(iter(self.summaries))
+                self.summary_text = self.summaries[self.active_summary_type]
+                self.visualizzaRiassuntoCheckbox.setEnabled(True)
+            else:
+                self.visualizzaRiassuntoCheckbox.setEnabled(False)
+
             self.visualizzaRiassuntoCheckbox.setChecked(False)
             self.update_transcription_view()
 
-            # Imposta la lingua nella combobox
+            # Set language in combobox
             language_code = metadata.get("language")
             if language_code:
                 index = self.languageComboBox.findData(language_code)
                 if index != -1:
                     self.languageComboBox.setCurrentIndex(index)
 
-            logging.debug("Trascrizione caricata correttamente dal file JSON!")
+            logging.debug("Trascrizione e riassunti caricati correttamente dal file JSON!")
         except Exception as e:
             logging.error(f"Errore durante il caricamento della trascrizione dal file JSON: {e}")
 
