@@ -518,169 +518,115 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerDock.addWidget(videoPlayerWidget)
 
         #
-        # TRASCRIZIONE: QTabWidget con 2 tab (Strumenti Base e Strumenti Avanzati),
-        # e la transcriptionTextArea sempre visibile sotto i tab
+        # TRASCRIZIONE: Nuovo layout con QTabWidget per i contenuti e una toolbar per i controlli
         #
         transGroupBox = QGroupBox("Gestione Trascrizione")
-        transGroupBox.setToolTip("Strumenti per trascrizione, incolla, salva e modifica testo")
+        transGroupBox.setToolTip("Strumenti per trascrizione, riassunti e analisi")
 
-        # Creiamo un QTabWidget
-        tabWidget = QTabWidget()
+        # Layout principale per il dock di trascrizione
+        transcriptionMainLayout = QVBoxLayout()
 
-        # --- TAB 1: Strumenti Base (usando QGridLayout) ---
-        tabBase = QWidget()
-        gridLayoutBase = QGridLayout()
-        # Posizioniamo la label e la combo per la lingua
-        langLabel = QLabel("Seleziona lingua video:")
-        langLabel.setToolTip("Seleziona la lingua del video per la trascrizione")
+        # --- Toolbar per i controlli ---
+        transcriptionToolbar = QToolBar("Transcription Toolbar")
+        transcriptionMainLayout.addWidget(transcriptionToolbar)
+
+        # Lingua
+        transcriptionToolbar.addWidget(QLabel("Lingua:"))
         self.languageComboBox = QComboBox()
         self.languageComboBox.addItem("Italiano", "it")
         self.languageComboBox.addItem("Inglese", "en")
         self.languageComboBox.addItem("Francese", "fr")
         self.languageComboBox.addItem("Spagnolo", "es")
         self.languageComboBox.addItem("Tedesco", "de")
-        self.languageComboBox.setToolTip("Seleziona la lingua corretta per il video")
-        self.video_download_language = None
+        self.languageComboBox.setToolTip("Seleziona la lingua del video per la trascrizione")
+        transcriptionToolbar.addWidget(self.languageComboBox)
+        self.transcriptionLanguageLabel = QLabel("Rilevata: N/A")
+        transcriptionToolbar.addWidget(self.transcriptionLanguageLabel)
+        transcriptionToolbar.addSeparator()
 
-        gridLayoutBase.addWidget(langLabel, 0, 0)
-        gridLayoutBase.addWidget(self.languageComboBox, 0, 1)
-        # Aggiungiamo la label della lingua rilevata
-        self.transcriptionLanguageLabel = QLabel("Lingua rilevata: Nessuna")
-        gridLayoutBase.addWidget(self.transcriptionLanguageLabel, 0, 2, 1, 2)
-        # Per i pulsanti base, usiamo un QHBoxLayout e lo inseriamo in una cella della griglia
-        buttonsLayoutBase2 = QHBoxLayout()
-        self.resetButton = QPushButton()
-        self.resetButton.setIcon(QIcon(get_resource("reset.png")))
-        self.resetButton.setFixedSize(24, 24)
-        self.resetButton.setToolTip("Ripulisce la trascrizione")
-        self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
-        self.pasteButton = QPushButton()
-        self.pasteButton.setIcon(QIcon(get_resource("paste.png")))
-        self.pasteButton.setFixedSize(24, 24)
-        self.pasteButton.setToolTip("Incolla il testo dagli appunti")
-        self.pasteButton.clicked.connect(lambda: self.transcriptionTextArea.paste())
-        self.saveButton = QPushButton()
-        self.saveButton.setIcon(QIcon(get_resource("save.png")))
-        self.saveButton.setFixedSize(24, 24)
-        self.saveButton.setToolTip("Salva la trascrizione su file")
-        self.saveButton.clicked.connect(self.saveText)
-        self.loadButton = QPushButton()
-        self.loadButton.setIcon(QIcon(get_resource("load.png")))
-        self.loadButton.setFixedSize(24, 24)
-        self.loadButton.setToolTip("Carica una trascrizione da file")
-        self.loadButton.clicked.connect(self.loadText)
-        self.transcribeButton = QPushButton('Trascrivi Video')
+        # Pulsanti di base
+        self.transcribeButton = QPushButton('Trascrivi')
         self.transcribeButton.setToolTip("Avvia la trascrizione del video attualmente caricato")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
+        transcriptionToolbar.addAction(self.transcribeButton)
 
-        self.markdownViewCheckbox = QCheckBox("Visualizza Markdown")
-        self.markdownViewCheckbox.setToolTip("Visualizza la trascrizione come Markdown renderizzato o testo grezzo")
-        self.markdownViewCheckbox.setChecked(False)
+        self.loadButton = QPushButton('Carica')
+        self.loadButton.setIcon(QIcon(get_resource("load.png")))
+        self.loadButton.setToolTip("Carica una trascrizione da file (.json o .txt)")
+        self.loadButton.clicked.connect(self.loadText)
+        transcriptionToolbar.addAction(self.loadButton)
 
-        self.visualizzaRiassuntoCheckbox = QCheckBox("Visualizza Riassunto")
-        self.visualizzaRiassuntoCheckbox.setToolTip("Mostra il testo originale o il riassunto")
-        self.visualizzaRiassuntoCheckbox.setChecked(False)
-        self.visualizzaRiassuntoCheckbox.setEnabled(False) # Disabilitato di default
+        self.saveButton = QPushButton('Salva')
+        self.saveButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveButton.setToolTip("Salva la trascrizione e i riassunti su file (.json)")
+        self.saveButton.clicked.connect(self.saveText)
+        transcriptionToolbar.addAction(self.saveButton)
 
-        buttonsLayoutBase2.addWidget(self.resetButton)
-        buttonsLayoutBase2.addWidget(self.pasteButton)
-        buttonsLayoutBase2.addWidget(self.loadButton)
-        buttonsLayoutBase2.addWidget(self.saveButton)
-        buttonsLayoutBase2.addWidget(self.transcribeButton)
-        buttonsLayoutBase2.addWidget(self.markdownViewCheckbox)
-        buttonsLayoutBase2.addWidget(self.visualizzaRiassuntoCheckbox)
-        gridLayoutBase.addLayout(buttonsLayoutBase2, 2, 0, 1, 2)
-        tabBase.setLayout(gridLayoutBase)
-        tabWidget.addTab(tabBase, "Strumenti Base")
+        transcriptionToolbar.addSeparator()
 
-        # --- TAB 2: Strumenti Avanzati (usando QGridLayout) ---
-        tabAdvanced = QWidget()
-        gridLayoutAdv = QGridLayout()
-        # Row 1: timecodeCheckbox ed syncButton
-        self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
-        self.timecodeCheckbox.setChecked(False)
-        self.timecodeCheckbox.setToolTip("Aggiunge i timecode all'audio durante la trascrizione")
-        self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
-        self.syncButton = QPushButton('Sincronizza Video')
-        self.syncButton.setToolTip("Sincronizza la posizione del video con la trascrizione")
-        self.syncButton.clicked.connect(self.sync_video_to_transcription)
-        gridLayoutAdv.addWidget(self.timecodeCheckbox, 1, 0)
-        gridLayoutAdv.addWidget(self.syncButton, 1, 1)
-        # Row 3: pauseTimeEdit ed insertPauseButton
-        self.pauseTimeEdit = QLineEdit()
-        self.pauseTimeEdit.setPlaceholderText("Inserisci durata pausa (es. 1.0s)")
-        self.pauseTimeEdit.setToolTip("Specifica la durata di una pausa in secondi")
-        self.insertPauseButton = QPushButton('Inserisci Pausa')
-        self.insertPauseButton.setToolTip("Inserisci una pausa nel testo")
-        self.insertPauseButton.clicked.connect(self.insertPause)
-        gridLayoutAdv.addWidget(self.pauseTimeEdit, 3, 0)
-        gridLayoutAdv.addWidget(self.insertPauseButton, 3, 1)
-        tabAdvanced.setLayout(gridLayoutAdv)
-        tabAdvanced.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Minimum)
-        tabWidget.addTab(tabAdvanced, "Strumenti Avanzati")
-
-        # --- TAB 3: Strumenti Estrazione ---
-        self.tabEstrazione = QWidget()
-        layoutEstrazione = QVBoxLayout()
-
-        # Numero di frame da estrarre
-        frameCountLayout = QHBoxLayout()
-        frameCountLayout.addWidget(QLabel("Numero frame da estrarre:"))
-        self.estrazioneFrameCountSpin = QSpinBox()
-        self.estrazioneFrameCountSpin.setMinimum(1)
-        self.estrazioneFrameCountSpin.setMaximum(30)
-        self.estrazioneFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
-        self.estrazioneFrameCountSpin.setToolTip("Imposta il numero di frame da estrarre per l'analisi video")
-        frameCountLayout.addWidget(self.estrazioneFrameCountSpin)
-        layoutEstrazione.addLayout(frameCountLayout)
-
-        # Bottone "Integra info video"
-        self.integraInfoButton = QPushButton("Integra info video")
+        # Pulsanti di analisi
+        self.integraInfoButton = QPushButton("Integra Info Video")
         self.integraInfoButton.setToolTip("Estrae info dal video e le integra nel riassunto")
-        layoutEstrazione.addWidget(self.integraInfoButton)
-
-        # Toggle per visualizzare "prima" e "dopo"
-        self.integrazioneToggle = QCheckBox("Visualizza dopo integrazione")
-        self.integrazioneToggle.setToolTip("Mostra/nasconde le informazioni integrate dal video")
-        self.integrazioneToggle.setEnabled(False) # Disabilitato di default
-        layoutEstrazione.addWidget(self.integrazioneToggle)
-
-        # Connessioni
         self.integraInfoButton.clicked.connect(self.integraInfoVideo)
-        self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
+        transcriptionToolbar.addAction(self.integraInfoButton)
 
-        self.tabEstrazione.setLayout(layoutEstrazione)
-        tabWidget.addTab(self.tabEstrazione, "Strumenti estrazione")
+        # --- Tab Widget per i contenuti ---
+        self.transcriptionTabWidget = QTabWidget()
+        transcriptionMainLayout.addWidget(self.transcriptionTabWidget)
 
-        # Layout finale nella sezione di trascrizione: il QTabWidget in alto e la text area sotto
-        finalTransLayout = QVBoxLayout()
-        tabWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        finalTransLayout.addWidget(tabWidget, 0)
+        # Area di testo per la trascrizione completa
         self.transcriptionTextArea = CustomTextEdit(self)
-        self.transcriptionTextArea.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.transcriptionTextArea.setReadOnly(False)
-        self.transcriptionTextArea.setUndoRedoEnabled(True)
-        self.transcriptionTextArea.setStyleSheet("""
-            QTextEdit {
-                color: white;
-                font-size: 12pt;
-                font-family: 'Arial';
-                background-color: #333;
-            }
-        """)
-        self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
-        self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
-        self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
-        self.markdownViewCheckbox.toggled.connect(self.update_transcription_view)
-        self.visualizzaRiassuntoCheckbox.toggled.connect(self.update_transcription_view)
-        finalTransLayout.addWidget(self.transcriptionTextArea, 1)
+        self.transcriptionTextArea.setPlaceholderText("La trascrizione del video apparirà qui...")
+        self.transcriptionTextArea.wordDoubleClicked.connect(self.onWordDoubleClicked)
+        self.transcriptionTabWidget.addTab(self.transcriptionTextArea, "Trascrizione")
 
-        transGroupBox.setLayout(finalTransLayout)
-        widgetTranscription = QWidget()
-        widgetLayout = QVBoxLayout()
-        widgetLayout.addWidget(transGroupBox)
-        widgetTranscription.setLayout(widgetLayout)
-        self.transcriptionDock.addWidget(widgetTranscription)
+        # Area di testo per il riassunto generato
+        self.summaryTextArea = QTextEdit()
+        self.summaryTextArea.setReadOnly(True)
+        self.summaryTextArea.setPlaceholderText("Il riassunto generato apparirà qui...")
+        self.transcriptionTabWidget.addTab(self.summaryTextArea, "Riassunto")
+
+        # Area di testo per il riassunto integrativo
+        self.integrativeSummaryTextArea = QTextEdit()
+        self.integrativeSummaryTextArea.setReadOnly(True)
+        self.integrativeSummaryTextArea.setPlaceholderText("Il riassunto con le informazioni video integrate apparirà qui...")
+        self.transcriptionTabWidget.addTab(self.integrativeSummaryTextArea, "Riassunto Integrativo")
+
+        # Aggiungere il layout principale al GroupBox e poi al Dock
+        transGroupBox.setLayout(transcriptionMainLayout)
+        self.transcriptionDock.addWidget(transGroupBox)
+
+        # Rimuovere i widget non più necessari
+        if hasattr(self, 'markdownViewCheckbox'):
+            self.markdownViewCheckbox.deleteLater()
+            del self.markdownViewCheckbox
+        if hasattr(self, 'visualizzaRiassuntoCheckbox'):
+            self.visualizzaRiassuntoCheckbox.deleteLater()
+            del self.visualizzaRiassuntoCheckbox
+        if hasattr(self, 'integrazioneToggle'):
+            self.integrazioneToggle.deleteLater()
+            del self.integrazioneToggle
+        if hasattr(self, 'resetButton'):
+            self.resetButton.deleteLater()
+            del self.resetButton
+        if hasattr(self, 'pasteButton'):
+            self.pasteButton.deleteLater()
+            del self.pasteButton
+        if hasattr(self, 'timecodeCheckbox'):
+            self.timecodeCheckbox.deleteLater()
+            del self.timecodeCheckbox
+        if hasattr(self, 'syncButton'):
+            self.syncButton.deleteLater()
+            del self.syncButton
+        if hasattr(self, 'pauseTimeEdit'):
+            self.pauseTimeEdit.deleteLater()
+            del self.pauseTimeEdit
+        if hasattr(self, 'insertPauseButton'):
+            self.insertPauseButton.deleteLater()
+            del self.insertPauseButton
+        if hasattr(self, 'estrazioneFrameCountSpin'):
+            self.estrazioneFrameCountSpin.deleteLater()
+            del self.estrazioneFrameCountSpin
 
         # Impostazioni voce per l'editing audio AI
         voiceSettingsWidget = self.setupVoiceSettingsUI()
@@ -906,8 +852,6 @@ class VideoAudioManager(QMainWindow):
         # Salva il testo corrente come "prima dell'integrazione"
         self.text_before_integration = self.transcriptionTextArea.toPlainText()
         self.text_after_integration = ""
-        self.integrazioneToggle.setChecked(False)
-        self.integrazioneToggle.setEnabled(False)
 
         # Mostra un dialogo di progresso
         self.progressDialog = QProgressDialog("Estrazione informazioni dal video...", "Annulla", 0, 100, self)
@@ -931,29 +875,14 @@ class VideoAudioManager(QMainWindow):
 
     def onIntegrazioneComplete(self, summary):
         self.progressDialog.close()
-
-        # Salva il riassunto integrativo nel dizionario dei riassunti
         self.summaries['integrative_summary'] = summary
-
-        # Combina il testo originale con il nuovo sommario per la visualizzazione
-        self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
-
-        # Aggiorna la text area e il toggle
-        self.transcriptionTextArea.setPlainText(self.text_after_integration)
-        self.integrazioneToggle.setEnabled(True)
-        self.integrazioneToggle.setChecked(True)
+        self.update_transcription_view()
+        self.transcriptionTabWidget.setCurrentWidget(self.integrativeSummaryTextArea)
         QMessageBox.information(self, "Completato", "Integrazione delle informazioni dal video completata.")
 
     def onIntegrazioneError(self, error_message):
         self.progressDialog.close()
         QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'integrazione:\n{error_message}")
-        self.integrazioneToggle.setEnabled(False)
-
-    def toggleIntegrazioneView(self, checked):
-        if checked:
-            self.transcriptionTextArea.setPlainText(self.text_after_integration)
-        else:
-            self.transcriptionTextArea.setPlainText(self.text_before_integration)
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -1241,31 +1170,28 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.close()
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             self.summaries[self.current_summary_type] = result
-            self.active_summary_type = self.current_summary_type
-            self.summary_text = result  # Keep this for now for compatibility with update_transcription_view
-            self.visualizzaRiassuntoCheckbox.setEnabled(True)
-            self.visualizzaRiassuntoCheckbox.setChecked(True)
             self.update_transcription_view()
+            if self.current_summary_type == 'meeting' or self.current_summary_type == 'text':
+                self.transcriptionTabWidget.setCurrentWidget(self.summaryTextArea)
             self.current_summary_type = None  # Reset after use
 
     def update_transcription_view(self):
-        is_markdown = self.markdownViewCheckbox.isChecked()
-        show_summary = self.visualizzaRiassuntoCheckbox.isChecked()
+        # Update original transcription
+        self.transcriptionTextArea.setPlainText(self.original_text)
 
-        text_to_display = ""
-        # Se è stato generato un riassunto e l'utente vuole visualizzarlo
-        if self.active_summary_type and self.active_summary_type in self.summaries and show_summary:
-            text_to_display = self.summaries[self.active_summary_type]
+        # Update standard summary
+        summary = self.summaries.get('meeting') or self.summaries.get('text')
+        if summary:
+            self.summaryTextArea.setPlainText(summary)
         else:
-            # Altrimenti, mostra il testo originale
-            text_to_display = self.original_text
+            self.summaryTextArea.clear()
 
-        self.transcriptionTextArea.blockSignals(True)
-        if is_markdown:
-            self.transcriptionTextArea.setMarkdown(text_to_display)
+        # Update integrative summary
+        integrative_summary = self.summaries.get('integrative_summary')
+        if integrative_summary:
+            self.integrativeSummaryTextArea.setPlainText(integrative_summary)
         else:
-            self.transcriptionTextArea.setPlainText(text_to_display)
-        self.transcriptionTextArea.blockSignals(False)
+            self.integrativeSummaryTextArea.clear()
 
     def onProcessError(self, error_message):
         self.progressDialog.close()
@@ -3233,37 +3159,6 @@ class VideoAudioManager(QMainWindow):
                           <br>
                           Autore: FFA <br>""")
 
-
-    def handleTextChange(self):
-        if self.transcriptionTextArea.signalsBlocked():
-            return
-
-        # Quando l'utente modifica il testo, questo diventa il nuovo "original_text"
-        # e qualsiasi riassunto precedente viene invalidato.
-        self.summaries = {}
-        self.active_summary_type = None
-        self.summary_text = ""
-        self.visualizzaRiassuntoCheckbox.setEnabled(False)
-        self.visualizzaRiassuntoCheckbox.setChecked(False)
-
-        # Aggiorna original_text con il contenuto corrente
-        if self.markdownViewCheckbox.isChecked():
-            self.original_text = self.transcriptionTextArea.toMarkdown()
-        else:
-            self.original_text = self.transcriptionTextArea.toPlainText()
-
-        current_html = self.transcriptionTextArea.toHtml()
-        if current_html.strip():
-            if self.timecodeEnabled:
-                self.transcriptionTextArea.blockSignals(True)
-                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_html)
-                self.transcriptionTextArea.setHtml(updated_html)
-                self.detectAndUpdateLanguage(BeautifulSoup(updated_html, 'html.parser').get_text())
-                self.transcriptionTextArea.blockSignals(False)
-            else:
-                self.detectAndUpdateLanguage(BeautifulSoup(current_html, 'html.parser').get_text())
-                self.original_text_html = current_html
-
     def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
         WPM = 150  # Average words-per-minute rate for spoken language
         words_per_second = WPM / 60
@@ -3376,30 +3271,32 @@ class VideoAudioManager(QMainWindow):
             with open(json_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
 
-            # Gestisce sia il nuovo formato che quello vecchio per retrocompatibilità
-            if 'trascrizione_grezza' in metadata:
-                # Nuovo formato
-                self.original_text = metadata.get('trascrizione_grezza', '')
-                self.summaries = {}
-                riassunto_generato = metadata.get('riassunto_generato')
-                if riassunto_generato:
-                    # Poiché il tipo di riassunto originale (meeting/text) non è salvato,
-                    # ne usiamo uno di default per la visualizzazione.
-                    self.summaries['meeting'] = riassunto_generato
+            self.transcription_data = metadata.get("transcription_data")
+            if self.transcription_data:
+                self.original_text = self.transcription_data.get("text", "")
+            else:
+                # Fallback for old format
+                self.original_text = metadata.get("transcription", "")
+                self.transcription_data = None # Ensure it's reset
 
+            # Handle summaries (new and old format)
+            self.summaries = {}
+            if 'summaries' in metadata: # Old format
+                self.summaries = metadata.get("summaries", {})
+            if 'riassunto_generato' in metadata: # New format
+                 riassunto_generato = metadata.get('riassunto_generato')
+                 if riassunto_generato:
+                    self.summaries['meeting'] = riassunto_generato
+            if 'riassunto_integrativo' in metadata: # New format
                 riassunto_integrativo = metadata.get('riassunto_integrativo')
                 if riassunto_integrativo:
                     self.summaries['integrative_summary'] = riassunto_integrativo
-            else:
-                # Vecchio formato
-                self.original_text = metadata.get("transcription", "")
-                self.summaries = metadata.get("summaries", {})
+
 
             self.active_summary_type = None
-            self.summary_text = "" # Obsoleto
+            self.summary_text = ""  # Obsolete
 
             if self.summaries:
-                # Seleziona il primo riassunto disponibile come attivo
                 self.active_summary_type = next(iter(self.summaries), None)
                 if self.active_summary_type:
                     self.summary_text = self.summaries[self.active_summary_type]
@@ -3410,16 +3307,18 @@ class VideoAudioManager(QMainWindow):
             self.visualizzaRiassuntoCheckbox.setChecked(False)
             self.update_transcription_view()
 
-            # Imposta la lingua nella combobox
+            # Set language in combobox
             language_code = metadata.get("language")
             if language_code:
                 index = self.languageComboBox.findData(language_code)
                 if index != -1:
                     self.languageComboBox.setCurrentIndex(index)
 
-            logging.debug("Trascrizione e riassunti caricati correttamente dal file JSON!")
+            logging.debug("Transcription loaded successfully from JSON.")
+
         except Exception as e:
-            logging.error(f"Errore durante il caricamento della trascrizione dal file JSON: {e}")
+            logging.error(f"Error loading transcription from JSON: {e}", exc_info=True)
+            QMessageBox.critical(self, "Errore di Caricamento", f"Impossibile caricare il file di trascrizione:\n{e}")
 
     def cleanupFiles(self, file_paths):
         """Safely removes temporary files used during transcription."""
@@ -4364,6 +4263,25 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
+
+    def onWordDoubleClicked(self, word):
+        if not hasattr(self, 'transcription_data') or not self.transcription_data:
+            return
+
+        # This is a simplified approach. It will find the first occurrence of the word.
+        # A more robust solution would need to consider the cursor position.
+        for segment in self.transcription_data.get('segments', []):
+            for word_info in segment.get('words', []):
+                # Normalize the word from the text edit to match the transcription data
+                normalized_word = word.strip().lower()
+                transcription_word = word_info.get('text', '').strip().lower()
+
+                # Basic check, might need to be more robust (e.g., handling punctuation)
+                if normalized_word == transcription_word:
+                    start_time = word_info.get('start')
+                    if start_time is not None:
+                        self.player.setPosition(int(start_time * 1000))
+                        return # Stop at the first match
 
 def get_application_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""

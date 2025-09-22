@@ -2,8 +2,7 @@ import os
 import json
 import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
-import pycountry
-import speech_recognition as sr
+import whisper_timestamped as whisper
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip, VideoFileClip
@@ -19,6 +18,7 @@ class TranscriptionThread(QThread):
         self.media_path = media_path
         self._is_running = True
         self.partial_text = ""
+        self.temp_files_to_clean = []
 
     def run(self):
         audio_file = None
@@ -26,44 +26,60 @@ class TranscriptionThread(QThread):
             if os.path.splitext(self.media_path)[1].lower() in ['.wav', '.mp3', '.flac', '.aac']:
                 audio_file = self.media_path
             else:
+                self.update_progress.emit(10, "Converting video to audio...")
                 audio_file = self.convertVideoToAudio(self.media_path)
                 if not audio_file or not os.path.exists(audio_file):
-                    raise Exception("La conversione del video in audio è fallita.")
+                    raise Exception("Video to audio conversion failed.")
+                self.temp_files_to_clean.append(audio_file)
 
-            chunks = self.splitAudio(audio_file)
-            total_chunks = len(chunks)
-            transcription = ""
+            self.update_progress.emit(20, "Loading audio...")
+            audio = whisper.load_audio(audio_file)
+
+            self.update_progress.emit(30, "Loading transcription model...")
+            model = whisper.load_model("tiny", device="cpu")
+
             language_video = self.parent().languageComboBox.currentData()
 
-            for index, (chunk, start_time) in enumerate(chunks):
-                if not self._is_running:
-                    self.save_transcription_to_json(transcription, language_video)
-                    return
+            self.update_progress.emit(50, "Transcribing... (this may take a while)")
+            result = whisper.transcribe(model, audio, language=language_video)
 
-                text, _, _ = self.transcribeAudioChunk(chunk, start_time)
-                current_time_seconds = start_time // 1000
-                start_mins, start_secs = divmod(current_time_seconds, 60)
-                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
-                self.partial_text = transcription
-                progress_percentage = int(((index + 1) / total_chunks) * 100)
-                self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
+            self.update_progress.emit(90, "Saving transcription...")
+            json_path = self.save_transcription_to_json(result, language_video)
 
-            json_path = self.save_transcription_to_json(transcription, language_video)
-            self.transcription_complete.emit(json_path, [])
+            self.transcription_complete.emit(json_path, self.temp_files_to_clean)
+
         except Exception as e:
+            logging.error(f"Transcription failed: {e}", exc_info=True)
             self.error_occurred.emit(str(e))
         finally:
-            if audio_file and audio_file != self.media_path and os.path.exists(audio_file):
-                os.remove(audio_file)
+            # The cleanup is now handled in the main thread after completion or error
+            pass
 
-    def save_transcription_to_json(self, transcription, language_code):
-        video_clip = VideoFileClip(self.media_path)
+    def save_transcription_to_json(self, result, language_code):
+        # MoviePy is used here just to get the duration, which is also in the whisper result.
+        # To reduce dependency, we could use the duration from whisper if it's reliable.
+        # For now, keeping it for consistency.
+        duration = 0
+        try:
+            if os.path.splitext(self.media_path)[1].lower() not in ['.wav', '.mp3', '.flac', '.aac']:
+                 video_clip = VideoFileClip(self.media_path)
+                 duration = video_clip.duration
+            else:
+                 audio_clip = AudioFileClip(self.media_path)
+                 duration = audio_clip.duration
+        except Exception as e:
+            logging.warning(f"Could not get media duration using moviepy: {e}")
+            # Fallback to duration from whisper result if available
+            if result and 'segments' in result and result['segments']:
+                duration = result['segments'][-1]['end']
+
+
         metadata = {
             "video_path": self.media_path,
-            "duration": video_clip.duration,
+            "duration": duration,
             "language": language_code,
             "transcription_date": datetime.datetime.now().isoformat(),
-            "transcription": transcription
+            "transcription_data": result
         }
         json_path = os.path.splitext(self.media_path)[0] + ".json"
         with open(json_path, 'w', encoding='utf-8') as f:
@@ -72,84 +88,30 @@ class TranscriptionThread(QThread):
 
     def stop(self):
         self._is_running = False
+        self.terminate() # Forcefully stop the thread if it's stuck
 
     def get_partial_transcription(self):
-        return self.partial_text
+        # This method might be obsolete now as we get the full transcription at once.
+        # Returning an empty string for now.
+        return ""
 
-    def convertVideoToAudio(self, video_file, audio_format='wav'):
-        """Estrae la traccia audio dal video e la converte in formato WAV mantenendo tutto in memoria."""
-        logging.debug("Checkpoint: Inside convertVideoToAudio")  # Checkpoint
-        # Carica il clip video usando moviepy
-        video = VideoFileClip(video_file)
-        audio = video.audio
+    def convertVideoToAudio(self, video_file):
+        logging.debug("Converting video to audio...")
+        try:
+            video = VideoFileClip(video_file)
+            audio = video.audio
 
-        # Converti l'audio in formato WAV e salvalo in un file temporaneo
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio_file:
-            audio.write_audiofile(temp_audio_file.name, codec='pcm_s16le')
+            # Create a temporary file for the audio
+            temp_audio_file = tempfile.NamedTemporaryFile(suffix='.wav', delete=False)
             temp_audio_file_path = temp_audio_file.name
+            temp_audio_file.close() # Close the file so moviepy can write to it
 
-        # Chiudi i clip per liberare le risorse
-        audio.close()
-        video.close()
+            audio.write_audiofile(temp_audio_file_path, codec='pcm_s16le')
 
-        return temp_audio_file_path
+            audio.close()
+            video.close()
 
-    def splitAudio(self, audio_input, length=30000):  # 30 secondi in millisecondi
-        logging.debug("Checkpoint: Inside splitAudio")  # Checkpoint
-        audio = AudioFileClip(audio_input)
-
-        if audio.duration <= 0:
-            raise ValueError("La durata dell'audio è non valida o negativa.")
-
-        # Dividi l'audio in blocchi di lunghezza fissa
-        chunks = [
-            (audio.subclip(start / 1000, min((start + length) / 1000, audio.duration)), start)
-            for start in range(0, int(audio.duration * 1000), length)
-        ]
-        return chunks
-
-    def get_locale_from_language(self, language_code):
-        """Converte un codice di lingua ISO 639-1 in un locale più specifico."""
-        logging.debug(f"Checkpoint: Converting language code {language_code} to locale")  # Checkpoint
-        try:
-            language = pycountry.languages.get(alpha_2=language_code)
-            logging.debug(f"Checkpoint: Language object obtained - {language}")  # Checkpoint
-            locale = {
-                'en': 'en-US',
-                'es': 'es-ES',
-                'fr': 'fr-FR',
-                'it': 'it-IT',
-                'de': 'de-DE'
-            }.get(language.alpha_2, f"{language.alpha_2}-{language.alpha_2.upper()}")
-            logging.debug(f"Checkpoint: Locale determined - {locale}")  # Checkpoint
-            return locale
+            return temp_audio_file_path
         except Exception as e:
-            logging.debug(f"Checkpoint: Exception in get_locale_from_language - {e}")  # Checkpoint
-            return language_code  # Ritorna il codice originale se la mappatura fallisce
-
-    def transcribeAudioChunk(self, audio_chunk, start_time):
-        logging.debug("Checkpoint: Inside transcribeAudioChunk")  # Checkpoint
-        recognizer = sr.Recognizer()
-
-        try:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio_file:
-                audio_chunk.write_audiofile(temp_audio_file.name, codec='pcm_s16le')
-                temp_audio_file_path = temp_audio_file.name
-
-            with sr.AudioFile(temp_audio_file_path) as source:
-                audio_data = recognizer.record(source)
-                language_video = self.parent().languageComboBox.currentData()  # Ottiene il codice lingua dalla comboBox
-                locale = self.get_locale_from_language(language_video)
-                text = recognizer.recognize_google(audio_data, language=locale)
-
-                return text, start_time, language_video
-
-        except sr.UnknownValueError:
-            return "[Incomprensibile]", start_time, None
-        except sr.RequestError as e:
-            return f"[Errore: {e}]", start_time, None
-        except Exception as e:
-            return f"[Errore: {e}]", start_time, None
-        finally:
-            if os.path.exists(temp_audio_file_path):
-                os.remove(temp_audio_file_path)
+            logging.error(f"Error converting video to audio: {e}", exc_info=True)
+            return None

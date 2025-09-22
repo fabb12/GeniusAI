@@ -16,6 +16,7 @@ class CustomTextEdit(QTextEdit):
     - Tentativo di rendering Markdown su incolla *solo se sostituisce tutto*.
     """
     cursorPositionChanged = pyqtSignal()
+    wordDoubleClicked = pyqtSignal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -74,6 +75,15 @@ class CustomTextEdit(QTextEdit):
         """Gestisce gli eventi di pressione del mouse."""
         super().mousePressEvent(event)
         self.cursorPositionChanged.emit()
+
+    def mouseDoubleClickEvent(self, event):
+        """Gestisce gli eventi di doppio clic del mouse."""
+        cursor = self.cursorForPosition(event.pos())
+        cursor.select(QTextCursor.SelectionType.WordUnderCursor)
+        word = cursor.selectedText()
+        if word:
+            self.wordDoubleClicked.emit(word)
+        super().mouseDoubleClickEvent(event)
 
     def insertFromMimeData(self, source):
         """

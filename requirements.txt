@@ -5,8 +5,11 @@ elevenlabs
 pygetwindow
 screeninfo
 pycountry
-SpeechRecognition
 yt-dlp
+whisper-timestamped
+torch
+torchaudio
+onnxruntime
 anthropic
 python-pptx
 transformers
