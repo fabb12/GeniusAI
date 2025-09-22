@@ -490,7 +490,9 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBoxOutput.setSuffix("x")
         self.speedSpinBoxOutput.setValue(1.0)
         self.speedSpinBoxOutput.setSingleStep(0.1)
-        self.speedSpinBoxOutput.valueChanged.connect(lambda rate: self.set_playback_rate_with_pitch_preservation(rate, 'output'))
+        self.speedSpinBoxOutput.editingFinished.connect(
+            lambda: self.set_playback_rate_with_pitch_preservation(self.speedSpinBoxOutput.value(), 'output')
+        )
         speedLayoutOutput.addWidget(self.speedSpinBoxOutput)
         videoOutputLayout.addLayout(speedLayoutOutput)
 
@@ -555,7 +557,9 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBox.setSuffix("x")
         self.speedSpinBox.setValue(1.0)
         self.speedSpinBox.setSingleStep(0.1)
-        self.speedSpinBox.valueChanged.connect(lambda rate: self.set_playback_rate_with_pitch_preservation(rate, 'input'))
+        self.speedSpinBox.editingFinished.connect(
+            lambda: self.set_playback_rate_with_pitch_preservation(self.speedSpinBox.value(), 'input')
+        )
         speedLayout.addWidget(self.speedSpinBox)
         videoPlayerLayout.addLayout(speedLayout)
 
