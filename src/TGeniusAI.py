@@ -89,27 +89,46 @@ class AudioProcessorThread(QThread):
     def run(self):
         try:
             logging.info(f"AudioProcessorThread started for {self.audio_path} at rate {self.rate}x")
+            if not self.is_running:
+                return
 
-            with AudioFileClip(self.audio_path) as audio_clip:
-                if not self.is_running:
-                    logging.info("AudioProcessorThread cancelled before processing.")
-                    return
+            temp_sped_up_audio_file = tempfile.mktemp(suffix=".mp3")
 
-                logging.info("Applying speedx effect...")
-                sped_up_audio_clip = audio_clip.fx(vfx.speedx, self.rate)
-                temp_sped_up_audio_file = tempfile.mktemp(suffix=".mp3")
+            # Build the atempo filter chain
+            rate = self.rate
+            filters = []
+            while rate > 2.0:
+                filters.append("atempo=2.0")
+                rate /= 2.0
+            if rate != 1.0: # Add the remaining rate if it's not 1.0
+                filters.append(f"atempo={rate}")
 
-                if not self.is_running:
-                    logging.info("AudioProcessorThread cancelled before writing file.")
-                    return
+            filter_chain = ",".join(filters)
 
-                logging.info(f"Writing sped-up audio to {temp_sped_up_audio_file}")
-                # Removing logger=None to see ffmpeg output in console
-                sped_up_audio_clip.write_audiofile(temp_sped_up_audio_file)
+            command = [
+                FFMPEG_PATH,
+                "-i", self.audio_path,
+                "-filter:a", filter_chain,
+                "-vn",  # No video
+                temp_sped_up_audio_file
+            ]
 
-            if self.is_running:
-                logging.info(f"AudioProcessorThread finished successfully. Output: {temp_sped_up_audio_file}")
-                self.finished.emit(temp_sped_up_audio_file, self.player_type, self.rate)
+            logging.info(f"Executing ffmpeg command: {' '.join(command)}")
+
+            # Using subprocess.run to wait for completion
+            result = subprocess.run(command, capture_output=True, text=True)
+
+            if not self.is_running:
+                logging.info("AudioProcessorThread cancelled during ffmpeg processing.")
+                if os.path.exists(temp_sped_up_audio_file):
+                    os.remove(temp_sped_up_audio_file)
+                return
+
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg error: {result.stderr}")
+
+            logging.info(f"AudioProcessorThread finished successfully. Output: {temp_sped_up_audio_file}")
+            self.finished.emit(temp_sped_up_audio_file, self.player_type, self.rate)
 
         except KeyboardInterrupt:
             logging.error("Audio processing was interrupted by the user (KeyboardInterrupt).")
