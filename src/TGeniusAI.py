@@ -693,7 +693,6 @@ class VideoAudioManager(QMainWindow):
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock
-            # 'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -733,11 +732,6 @@ class VideoAudioManager(QMainWindow):
         self.generatePptxAction.triggered.connect(self.openPptxDialog)
         mainToolbar.addAction(self.generatePptxAction)
 
-        # self.extractInfoAction = QAction(QIcon(get_resource("frame_get.png")), 'Estrai Info da Video', self)
-        # self.extractInfoAction.setStatusTip("Apre il dock per l'estrazione di informazioni da video")
-        # self.extractInfoAction.triggered.connect(self.showInfoExtractionDock)
-        # mainToolbar.addAction(self.extractInfoAction)
-
         # --- SECONDA TOOLBAR (Workspace e Impostazioni) ---
         workspaceToolbar = QToolBar("Workspace Toolbar")
         workspaceToolbar.setToolTip("Barra degli strumenti per layout e impostazioni")
@@ -771,7 +765,7 @@ class VideoAudioManager(QMainWindow):
         self.addToolBar(serviceToolbar)
 
         # Aggiungi l'indicatore di registrazione lampeggiante
-        serviceToolbar.addWidget(self.recording_indicator)
+        #serviceToolbar.addWidget(self.recording_indicator)
 
         # Azione di condivisione
         shareAction = QAction(QIcon(get_resource("share.png")), "Condividi Video", self)
