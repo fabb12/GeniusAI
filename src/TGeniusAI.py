@@ -10,7 +10,7 @@ import json
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QThread, pyqtSignal)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
@@ -60,6 +60,7 @@ from src.ui.MonitorPreview import MonitorPreview
 from src.managers.StreamToLogger import setup_logging
 from src.services.FrameExtractor import FrameExtractor
 from src.services.VideoCropping import CropThread
+from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
@@ -74,6 +75,7 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -92,26 +94,17 @@ class VideoAudioManager(QMainWindow):
         self.setWindowTitle(f"GeniusAI - {self.version} (Build Date: {self.build_date})")
 
         self.setGeometry(500, 500, DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
-
-        # Input Player
         self.player = QMediaPlayer()
         self.audioOutput = QAudioOutput()
-        self.player.setAudioOutput(self.audioOutput)
-        self.original_video_for_input_audio = None
-        self.original_audio_path_input = None
-
-        # Output Player
         self.playerOutput = QMediaPlayer()
         self.audioOutputOutput = QAudioOutput()
-        self.playerOutput.setAudioOutput(self.audioOutputOutput)
-        self.original_video_for_output_audio = None
-        self.original_audio_path_output = None
 
+        self.player.setAudioOutput(self.audioOutput)
         self.audioOutput.setVolume(1.0)
-        self.audioOutputOutput.setVolume(1.0)
-
+        self.audioOutput.setPitchPreserved(True)
+        self.playerOutput.setAudioOutput(self.audioOutputOutput)
+        self.audioOutputOutput.setPitchPreserved(True)
         self.recentFiles = []
-        self.audio_processing_thread = None
 
         # Blinking recording indicator
         self.recording_indicator = QLabel(self)
@@ -392,7 +385,7 @@ class VideoAudioManager(QMainWindow):
         syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
         syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
 
-        stopButtonOutput.clicked.connect(self.stopVideoOutput)
+        stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
         playbackControlLayoutOutput = QHBoxLayout()
         playbackControlLayoutOutput.addWidget(self.playButtonOutput)
@@ -403,7 +396,7 @@ class VideoAudioManager(QMainWindow):
         videoSliderOutput = CustomSlider(Qt.Orientation.Horizontal)
         videoSliderOutput.setRange(0, 1000)  # Range di esempio
         videoSliderOutput.setToolTip("Slider per navigare all'interno del video output")
-        videoSliderOutput.sliderMoved.connect(self.setPositionOutput)
+        videoSliderOutput.sliderMoved.connect(lambda position: self.playerOutput.setPosition(position))
 
         self.currentTimeLabelOutput = QLabel('00:00')
         self.currentTimeLabelOutput.setToolTip("Mostra il tempo corrente del video output")
@@ -434,9 +427,7 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBoxOutput.setSuffix("x")
         self.speedSpinBoxOutput.setValue(1.0)
         self.speedSpinBoxOutput.setSingleStep(0.1)
-        self.speedSpinBoxOutput.editingFinished.connect(
-            lambda: self.set_playback_rate_with_pitch_preservation(self.speedSpinBoxOutput.value(), 'output')
-        )
+        self.speedSpinBoxOutput.valueChanged.connect(self.setPlaybackRateOutput)
         speedLayoutOutput.addWidget(self.speedSpinBoxOutput)
         videoOutputLayout.addLayout(speedLayoutOutput)
 
@@ -501,9 +492,7 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBox.setSuffix("x")
         self.speedSpinBox.setValue(1.0)
         self.speedSpinBox.setSingleStep(0.1)
-        self.speedSpinBox.editingFinished.connect(
-            lambda: self.set_playback_rate_with_pitch_preservation(self.speedSpinBox.value(), 'input')
-        )
+        self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
         speedLayout.addWidget(self.speedSpinBox)
         videoPlayerLayout.addLayout(speedLayout)
 
@@ -515,8 +504,6 @@ class VideoAudioManager(QMainWindow):
         self.volumeSlider.setValue(int(self.audioOutput.volume() * 100))
         self.volumeSlider.setToolTip("Regola il volume dell'audio input")
         self.volumeSlider.valueChanged.connect(self.setVolume)
-        videoPlayerLayout.addWidget(QLabel("Volume"))
-        videoPlayerLayout.addWidget(self.volumeSlider)
 
         self.volumeSliderOutput = QSlider(Qt.Orientation.Horizontal)
         self.volumeSliderOutput.setRange(0, 100)
@@ -946,7 +933,11 @@ class VideoAudioManager(QMainWindow):
 
     def onIntegrazioneComplete(self, summary):
         self.progressDialog.close()
-        # Combina il testo originale con il nuovo sommario
+
+        # Salva il riassunto integrativo nel dizionario dei riassunti
+        self.summaries['integrative_summary'] = summary
+
+        # Combina il testo originale con il nuovo sommario per la visualizzazione
         self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
 
         # Aggiorna la text area e il toggle
@@ -1000,6 +991,24 @@ class VideoAudioManager(QMainWindow):
 
         return version, build_date
 
+    def setPlaybackRateInput(self, rate):
+        if rate == 0:
+            rate = 1
+            self.speedSpinBox.setValue(1)
+
+        if rate > 0:
+            self.reverseTimer.stop()
+            self.player.setPlaybackRate(float(rate))
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.player.play()
+        else:  # rate < 0
+            self.player.pause()
+            self.player.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps() * abs(rate)))
+            if interval <= 0:
+                interval = 20
+            self.reverseTimer.start(interval)
+
     def reversePlaybackStep(self):
         current_pos = self.player.position()
         step = 1000 / self.get_current_fps()
@@ -1010,50 +1019,23 @@ class VideoAudioManager(QMainWindow):
             self.playButton.setIcon(QIcon(get_resource("play.png")))
         self.player.setPosition(int(new_pos))
 
-    def set_playback_rate_with_pitch_preservation(self, rate, player_type):
-        if player_type == 'input':
-            player = self.player
-            video_path = self.videoPathLineEdit
-            main_audio_output = self.audioOutput
-            spin_box = self.speedSpinBox
-            reverse_timer = self.reverseTimer
-            get_fps = self.get_current_fps
-        elif player_type == 'output':
-            player = self.playerOutput
-            video_path = self.videoPathLineOutputEdit
-            main_audio_output = self.audioOutputOutput
-            spin_box = self.speedSpinBoxOutput
-            reverse_timer = self.reverseTimerOutput
-            get_fps = self.get_current_fps_output
-        else:
-            return
-
-        if not video_path:
-            return
-
+    def setPlaybackRateOutput(self, rate):
         if rate == 0:
-            spin_box.setValue(1.0)
-            return
+            rate = 1
+            self.speedSpinBoxOutput.setValue(1)
 
-        # Handle reverse playback
-        if rate < 0:
-            player.pause()
-            player.setAudioOutput(main_audio_output)
-            player.setPlaybackRate(1.0) # For frame stepping
-
-            interval = int(1000 / (get_fps() * abs(rate)))
-
+        if rate > 0:
+            self.reverseTimerOutput.stop()
+            self.playerOutput.setPlaybackRate(float(rate))
+            if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.playerOutput.play()
+        else:  # rate < 0
+            self.playerOutput.pause()
+            self.playerOutput.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps_output() * abs(rate)))
             if interval <= 0:
                 interval = 20
-            reverse_timer.start(interval)
-            return
-
-        if reverse_timer.isActive():
-            reverse_timer.stop()
-
-        # For all positive rates, just use the player's native functionality
-        player.setAudioOutput(main_audio_output)
-        player.setPlaybackRate(rate)
+            self.reverseTimerOutput.start(interval)
 
     def reversePlaybackStepOutput(self):
         current_pos = self.playerOutput.position()
@@ -1107,20 +1089,16 @@ class VideoAudioManager(QMainWindow):
         else:
             if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
                 self.player.pause()
-                self.playButton.setIcon(QIcon(get_resource("play.png")))
+                self.playButton.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
             else:
                 self.player.play()
-                self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+                self.playButton.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
 
     def syncOutputWithSourcePosition(self):
         source_position = self.player.position()
         self.playerOutput.setPosition(source_position)
-
-        if self.player.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
-            self.togglePlayPause()
-        if self.playerOutput.playbackState() != QMediaPlayer.PlaybackState.PlayingState:
-            self.togglePlayPauseOutput()
-
+        self.playVideo()
+        self.playerOutput.play()
 
     def summarizeMeeting(self):
         current_text = self.transcriptionTextArea.toPlainText()
@@ -1257,7 +1235,7 @@ class VideoAudioManager(QMainWindow):
 
 
     def updateProgressDialog(self, value, label):
-        if hasattr(self, 'progressDialog') and self.progressDialog and not self.progressDialog.wasCanceled():
+        if not self.progressDialog.wasCanceled():
             self.progressDialog.setValue(value)
             self.progressDialog.setLabelText(label)
 
@@ -1292,8 +1270,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
-        if hasattr(self, 'progressDialog'):
-            self.progressDialog.close()
+        self.progressDialog.close()
         QMessageBox.critical(self, "Errore", error_message)
 
     def openPptxDialog(self):
@@ -1356,10 +1333,10 @@ class VideoAudioManager(QMainWindow):
 
             if start_time > 0:
                 video_clips.append(video.subclip(0, start_time))
-                if video.audio: audio_clips.append(audio.subclip(0, start_time))
+                audio_clips.append(audio.subclip(0, start_time))
             if end_time < video.duration:
                 video_clips.append(video.subclip(end_time))
-                if video.audio: audio_clips.append(audio.subclip(end_time))
+                audio_clips.append(audio.subclip(end_time))
 
             if not video_clips:
                 QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
@@ -1367,9 +1344,10 @@ class VideoAudioManager(QMainWindow):
 
             # Concatenale per creare il video finale senza la parte da eliminare
             final_video = concatenate_videoclips(video_clips)
-            if audio_clips:
-                final_audio = concatenate_audioclips(audio_clips)
-                final_video = final_video.set_audio(final_audio)
+            final_audio = concatenate_audioclips(audio_clips)
+
+            # Sincronizza il video con l'audio
+            final_video = final_video.set_audio(final_audio)
 
             # Genera un nome di file univoco usando un timestamp con precisione al millisecondo
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
@@ -1437,9 +1415,6 @@ class VideoAudioManager(QMainWindow):
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
-        self.original_video_for_input_audio = None
-        self.original_audio_path_input = None
-
     def releaseOutputVideo(self):
         self.playerOutput.stop()
         time.sleep(.01)
@@ -1448,8 +1423,6 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setSource(QUrl())
         self.videoPathLineOutputEdit = ''
         self.fileNameLabelOutput.setText("Nessun video caricato")
-        self.original_video_for_output_audio = None
-        self.original_audio_path_output = None
 
     def get_nearest_timecode(self):
         # Posizione attuale del cursore nella trascrizione
@@ -1486,6 +1459,8 @@ class VideoAudioManager(QMainWindow):
                 return None
 
         logging.debug("Nessun timecode valido trovato.")
+        return None
+
         return None
 
     def sync_video_to_transcription(self):
@@ -1557,12 +1532,10 @@ class VideoAudioManager(QMainWindow):
 
 
     def setVolume(self, value):
-        volume_float = value / 100.0
-        self.audioOutput.setVolume(volume_float)
+        self.audioOutput.setVolume(value / 100.0)
 
     def setVolumeOutput(self, value):
-        volume_float = value / 100.0
-        self.audioOutputOutput.setVolume(volume_float)
+        self.audioOutputOutput.setVolume(value / 100.0)
 
     def updateTimeCodeOutput(self, position):
         # Aggiorna il timecode corrente del video output
@@ -1626,7 +1599,7 @@ class VideoAudioManager(QMainWindow):
             return VideoFileClip(self.videoPathLineEdit).fps
         except Exception as e:
             print(f"Error getting FPS: {e}")
-            return 30
+            return 0
 
     def get_next_frame(self):
         fps = self.get_current_fps()
@@ -2930,14 +2903,6 @@ class VideoAudioManager(QMainWindow):
         self.player.stop()
         self.reset_view()
 
-        # Reset audio cache
-        self.original_video_for_input_audio = None
-        self.original_audio_path_input = None
-
-        # Restore normal audio output and speed
-        self.player.setAudioOutput(self.audioOutput)
-        self.speedSpinBox.setValue(1.0)
-
         if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
 
@@ -2956,15 +2921,8 @@ class VideoAudioManager(QMainWindow):
             self.loadTranscription(json_path)
 
     def loadVideoOutput(self, video_path):
+
         self.playerOutput.stop()
-
-        # Reset audio cache
-        self.original_video_for_output_audio = None
-        self.original_audio_path_output = None
-
-        # Restore normal audio output and speed
-        self.playerOutput.setAudioOutput(self.audioOutputOutput)
-        self.speedSpinBoxOutput.setValue(1.0)
 
         if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetterOutput(video_path))
@@ -4268,9 +4226,6 @@ class VideoAudioManager(QMainWindow):
     def setPosition(self, position):
         self.player.setPosition(position)
 
-    def setPositionOutput(self, position):
-        self.playerOutput.setPosition(position)
-
     def applyDarkMode(self):
         self.setStyleSheet("""
             QWidget {
@@ -4389,9 +4344,6 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
-
-    def stopVideoOutput(self):
-        self.playerOutput.stop()
 
 def get_application_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
