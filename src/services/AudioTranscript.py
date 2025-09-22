@@ -1,4 +1,6 @@
 import os
+import json
+import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
 import pycountry
 import speech_recognition as sr
@@ -15,65 +17,64 @@ class TranscriptionThread(QThread):
     def __init__(self, media_path, parent=None):
         super().__init__(parent)
         self.media_path = media_path
-        self._is_running = True  # Flag to control the running state of the thread
-        self.partial_text = ""  # Initialize partial_text to store partial transcriptions
+        self._is_running = True
+        self.partial_text = ""
 
     def run(self):
         audio_file = None
         try:
-            logging.debug("Checkpoint: Start transcription")  # Checkpoint
             if os.path.splitext(self.media_path)[1].lower() in ['.wav', '.mp3', '.flac', '.aac']:
-                logging.debug(f"Checkpoint: Detected audio file format {os.path.splitext(self.media_path)[1].lower()}")  # Checkpoint
                 audio_file = self.media_path
             else:
-                logging.debug("Checkpoint: Converting video to audio")  # Checkpoint
                 audio_file = self.convertVideoToAudio(self.media_path)
                 if not audio_file or not os.path.exists(audio_file):
                     raise Exception("La conversione del video in audio è fallita.")
 
-            logging.debug("Checkpoint: Splitting audio")  # Checkpoint
             chunks = self.splitAudio(audio_file)
-            total_chunks = len(chunks)  # Total number of chunks for percentage calculation
+            total_chunks = len(chunks)
             transcription = ""
-            last_timestamp = None
+            language_video = self.parent().languageComboBox.currentData()
 
             for index, (chunk, start_time) in enumerate(chunks):
-                if not self._is_running:  # Check if the thread should stop
-                    self.transcription_complete.emit(transcription, [])  # Emit current transcription
+                if not self._is_running:
+                    self.save_transcription_to_json(transcription, language_video)
                     return
 
-                logging.debug(f"Checkpoint: Transcribing chunk {index + 1}/{total_chunks}")  # Checkpoint
-                text, start_time, _ = self.transcribeAudioChunk(chunk, start_time)
-
-                # Calcola il timecode corrente
+                text, _, _ = self.transcribeAudioChunk(chunk, start_time)
                 current_time_seconds = start_time // 1000
                 start_mins, start_secs = divmod(current_time_seconds, 60)
-
-                # Aggiungi il timecode e la trascrizione
-                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n"
-                transcription += f"{text}\n\n"
-
-                self.partial_text = transcription  # Update partial transcription
-
-                # Calcola la percentuale di progresso
+                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
+                self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
                 self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
-            logging.debug("Checkpoint: Transcription complete")  # Checkpoint
-            self.transcription_complete.emit(transcription, [])  # Emit completion with no temp files to clean
+            json_path = self.save_transcription_to_json(transcription, language_video)
+            self.transcription_complete.emit(json_path, [])
         except Exception as e:
-            logging.debug(f"Checkpoint: Error occurred - {str(e)}")  # Checkpoint
             self.error_occurred.emit(str(e))
         finally:
-            if audio_file and not audio_file.endswith(self.media_path):  # Elimina il file temporaneo solo se è stato creato da convertVideoToAudio
-                if os.path.exists(audio_file):
-                    os.remove(audio_file)
+            if audio_file and audio_file != self.media_path and os.path.exists(audio_file):
+                os.remove(audio_file)
+
+    def save_transcription_to_json(self, transcription, language_code):
+        video_clip = VideoFileClip(self.media_path)
+        metadata = {
+            "video_path": self.media_path,
+            "duration": video_clip.duration,
+            "language": language_code,
+            "transcription_date": datetime.datetime.now().isoformat(),
+            "transcription": transcription
+        }
+        json_path = os.path.splitext(self.media_path)[0] + ".json"
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=4)
+        return json_path
 
     def stop(self):
         self._is_running = False
 
     def get_partial_transcription(self):
-        return self.partial_text  # Return the partial transcription text
+        return self.partial_text
 
     def convertVideoToAudio(self, video_file, audio_format='wav'):
         """Estrae la traccia audio dal video e la converte in formato WAV mantenendo tutto in memoria."""
