@@ -6,6 +6,7 @@ import tempfile
 import datetime
 import time
 import logging
+import json
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
@@ -2739,44 +2740,53 @@ class VideoAudioManager(QMainWindow):
         self.bitrateLabel.setText(f"Bitrate: {stats.get('bitrate', 'N/A')} kbit/s")
 
     def saveText(self):
-        # Apri il dialogo di salvataggio file e ottieni il percorso del file e il filtro selezionato dall'utente
-        path, _ = QFileDialog.getSaveFileName(self, "Salva file", "", "Text files (*.txt);;All files (*.*)")
-
-        # Controlla se l'utente ha effettivamente scelto un file
+        path, _ = QFileDialog.getSaveFileName(self, "Salva file", "", "Text files (*.txt);;JSON files (*.json);;All files (*.*)")
         if path:
-            # Salva il contenuto attualmente visualizzato nell'editor
-            if self.markdownViewCheckbox.isChecked():
-                text_to_save = self.transcriptionTextArea.toMarkdown()
-            else:
-                text_to_save = self.transcriptionTextArea.toPlainText()
-
-            # Prova a salvare il testo nel file scelto
             try:
-                with open(path, 'w', encoding='utf-8') as file:
-                    file.write(text_to_save)
-                logging.debug("File salvato correttamente!")
+                # Salva sia il TXT che il JSON
+                txt_path = os.path.splitext(path)[0] + ".txt"
+                json_path = os.path.splitext(path)[0] + ".json"
+
+                # Salva il TXT
+                with open(txt_path, 'w', encoding='utf-8') as file:
+                    file.write(self.transcriptionTextArea.toPlainText())
+
+                # Crea e salva il JSON
+                if self.videoPathLineEdit:
+                    video_clip = VideoFileClip(self.videoPathLineEdit)
+                    metadata = {
+                        "video_path": self.videoPathLineEdit,
+                        "duration": video_clip.duration,
+                        "language": self.languageComboBox.currentData(),
+                        "transcription_date": datetime.datetime.now().isoformat(),
+                        "transcription": self.transcriptionTextArea.toPlainText()
+                    }
+                    with open(json_path, 'w', encoding='utf-8') as f:
+                        json.dump(metadata, f, ensure_ascii=False, indent=4)
+
+                logging.debug("File salvati correttamente!")
             except Exception as e:
-                logging.debug("Errore durante il salvataggio del file:", e)
+                logging.error(f"Errore durante il salvataggio del file: {e}")
+
 
     def loadText(self):
-        # Apri il dialogo per la selezione del file da caricare
-        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "Text files (*.txt);;All files (*.*)")
-
-        # Controlla se l'utente ha effettivamente selezionato un file
+        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "Text files (*.txt);;JSON files (*.json);;All files (*.*)")
         if path:
-            try:
-                # Leggi il contenuto del file
-                with open(path, 'r') as file:
-                    text_loaded = file.read()
-
-                self.original_text = text_loaded
-                self.summary_text = ""
-                self.visualizzaRiassuntoCheckbox.setEnabled(False)
-                self.visualizzaRiassuntoCheckbox.setChecked(False)
-                self.update_transcription_view()
-                logging.debug("File caricato correttamente!")
-            except Exception as e:
-                logging.debug("Errore durante il caricamento del file:", e)
+            json_path = os.path.splitext(path)[0] + ".json"
+            if os.path.exists(json_path):
+                self.loadTranscription(json_path)
+            else:
+                try:
+                    with open(path, 'r', encoding='utf-8') as file:
+                        text_loaded = file.read()
+                    self.original_text = text_loaded
+                    self.summary_text = ""
+                    self.visualizzaRiassuntoCheckbox.setEnabled(False)
+                    self.visualizzaRiassuntoCheckbox.setChecked(False)
+                    self.update_transcription_view()
+                    logging.debug("File di testo caricato correttamente!")
+                except Exception as e:
+                    logging.error(f"Errore durante il caricamento del file di testo: {e}")
 
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""
@@ -2872,7 +2882,6 @@ class VideoAudioManager(QMainWindow):
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
-        # Scarica il video corrente prima di caricarne uno nuovo
         self.player.stop()
         self.reset_view()
 
@@ -2882,11 +2891,16 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineEdit = video_path
 
         if self.isAudioOnly(video_path):
-            self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")  # Display special message for audio files
+            self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")
         else:
-            self.fileNameLabel.setText(os.path.basename(video_path))  # Update label with file name
+            self.fileNameLabel.setText(os.path.basename(video_path))
 
-        self.updateRecentFiles(video_path)  # Update recent files list
+        self.updateRecentFiles(video_path)
+
+        # Carica la trascrizione se esiste un file JSON corrispondente
+        json_path = os.path.splitext(video_path)[0] + ".json"
+        if os.path.exists(json_path):
+            self.loadTranscription(json_path)
 
     def loadVideoOutput(self, video_path):
 
@@ -3324,21 +3338,36 @@ class VideoAudioManager(QMainWindow):
         return update
 
     def completeTranscription(self, progress_dialog):
-        """Returns a closure that handles transcription completion."""
-
-        def complete(text, temp_files):
+        def complete(json_path, temp_files):
             if not progress_dialog.wasCanceled():
-                self.original_text = text
-                self.summary_text = ""
-                self.visualizzaRiassuntoCheckbox.setEnabled(False)
-                self.visualizzaRiassuntoCheckbox.setChecked(False)
-                self.update_transcription_view()
-
+                self.loadTranscription(json_path)
                 progress_dialog.setValue(100)
                 progress_dialog.close()
-                self.cleanupFiles(temp_files)  # Immediately cleanup after transcription
+                self.cleanupFiles(temp_files)
 
         return complete
+
+    def loadTranscription(self, json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+
+            self.original_text = metadata.get("transcription", "")
+            self.summary_text = ""
+            self.visualizzaRiassuntoCheckbox.setEnabled(False)
+            self.visualizzaRiassuntoCheckbox.setChecked(False)
+            self.update_transcription_view()
+
+            # Imposta la lingua nella combobox
+            language_code = metadata.get("language")
+            if language_code:
+                index = self.languageComboBox.findData(language_code)
+                if index != -1:
+                    self.languageComboBox.setCurrentIndex(index)
+
+            logging.debug("Trascrizione caricata correttamente dal file JSON!")
+        except Exception as e:
+            logging.error(f"Errore durante il caricamento della trascrizione dal file JSON: {e}")
 
     def cleanupFiles(self, file_paths):
         """Safely removes temporary files used during transcription."""
