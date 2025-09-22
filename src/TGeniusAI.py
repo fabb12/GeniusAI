@@ -2753,9 +2753,13 @@ class VideoAudioManager(QMainWindow):
             if "(*.json)" in selected_filter or file_ext == ".json":
                 if file_ext != ".json": path += ".json"
 
+                riassunto_generato = self.summaries.get('meeting') or self.summaries.get('text')
+                riassunto_integrativo = self.summaries.get('integrative_summary')
+
                 metadata = {
-                    "transcription": self.transcriptionTextArea.toPlainText(),
-                    "summaries": self.summaries,
+                    "trascrizione_grezza": self.original_text,
+                    "riassunto_generato": riassunto_generato,
+                    "riassunto_integrativo": riassunto_integrativo,
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
                 }
@@ -3374,15 +3378,33 @@ class VideoAudioManager(QMainWindow):
             with open(json_path, 'r', encoding='utf-8') as f:
                 metadata = json.load(f)
 
-            self.original_text = metadata.get("transcription", "")
-            self.summaries = metadata.get("summaries", {})
+            # Gestisce sia il nuovo formato che quello vecchio per retrocompatibilità
+            if 'trascrizione_grezza' in metadata:
+                # Nuovo formato
+                self.original_text = metadata.get('trascrizione_grezza', '')
+                self.summaries = {}
+                riassunto_generato = metadata.get('riassunto_generato')
+                if riassunto_generato:
+                    # Poiché il tipo di riassunto originale (meeting/text) non è salvato,
+                    # ne usiamo uno di default per la visualizzazione.
+                    self.summaries['meeting'] = riassunto_generato
+
+                riassunto_integrativo = metadata.get('riassunto_integrativo')
+                if riassunto_integrativo:
+                    self.summaries['integrative_summary'] = riassunto_integrativo
+            else:
+                # Vecchio formato
+                self.original_text = metadata.get("transcription", "")
+                self.summaries = metadata.get("summaries", {})
+
             self.active_summary_type = None
-            self.summary_text = "" # To be deprecated
+            self.summary_text = "" # Obsoleto
 
             if self.summaries:
-                # Select the first summary as the active one by default
-                self.active_summary_type = next(iter(self.summaries))
-                self.summary_text = self.summaries[self.active_summary_type]
+                # Seleziona il primo riassunto disponibile come attivo
+                self.active_summary_type = next(iter(self.summaries), None)
+                if self.active_summary_type:
+                    self.summary_text = self.summaries[self.active_summary_type]
                 self.visualizzaRiassuntoCheckbox.setEnabled(True)
             else:
                 self.visualizzaRiassuntoCheckbox.setEnabled(False)
@@ -3390,7 +3412,7 @@ class VideoAudioManager(QMainWindow):
             self.visualizzaRiassuntoCheckbox.setChecked(False)
             self.update_transcription_view()
 
-            # Set language in combobox
+            # Imposta la lingua nella combobox
             language_code = metadata.get("language")
             if language_code:
                 index = self.languageComboBox.findData(language_code)
