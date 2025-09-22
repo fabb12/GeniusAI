@@ -3090,7 +3090,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
-        # self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -3101,7 +3100,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
-        # viewMenu.addAction(self.actionToggleInfoExtractionDock)
+
 
 
         # Aggiungi azioni per mostrare/nascondere tutti i docks
@@ -3182,7 +3181,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
-        self.actionToggleInfoExtractionDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -3195,7 +3193,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
-        self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
