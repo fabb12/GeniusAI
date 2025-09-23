@@ -529,6 +529,7 @@ class VideoAudioManager(QMainWindow):
 
         trans_controls_group = QGroupBox("Controlli Trascrizione")
         trans_controls_layout = QGridLayout(trans_controls_group)
+        trans_controls_layout.setSpacing(5)
 
         # Riga 0: Lingua
         trans_controls_layout.addWidget(QLabel("Seleziona lingua video:"), 0, 0)
@@ -584,13 +585,20 @@ class VideoAudioManager(QMainWindow):
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
         trans_controls_layout.addWidget(self.syncButton, 2, 2)
 
-        self.transcriptionMarkdownCheckbox = QCheckBox("Visualizza Markdown")
-        self.transcriptionMarkdownCheckbox.toggled.connect(self.update_transcription_view)
-        trans_controls_layout.addWidget(self.transcriptionMarkdownCheckbox, 2, 3)
+        # The transcription markdown checkbox is no longer needed.
+
+        # Riga 3: Inserimento Pause
+        self.pauseTimeEdit = QLineEdit()
+        self.pauseTimeEdit.setPlaceholderText("Durata pausa (es. 1.0s)")
+        trans_controls_layout.addWidget(self.pauseTimeEdit, 3, 0, 1, 2)
+        self.insertPauseButton = QPushButton("Inserisci Pausa")
+        self.insertPauseButton.clicked.connect(self.insertPause)
+        trans_controls_layout.addWidget(self.insertPauseButton, 3, 2, 1, 2)
 
         transcription_layout.addWidget(trans_controls_group)
 
         self.transcriptionTextArea = CustomTextEdit(self)
+        self.transcriptionTextArea.setStyleSheet("font-size: 14pt; font-family: 'Arial';")
         self.transcriptionTextArea.setPlaceholderText("La trascrizione del video apparirà qui...")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
         self.transcriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
@@ -604,6 +612,7 @@ class VideoAudioManager(QMainWindow):
 
         summary_controls_group = QGroupBox("Controlli Riassunto e AI")
         summary_controls_layout = QGridLayout(summary_controls_group)
+        summary_controls_layout.setSpacing(5)
 
         # Riga 0: Azioni AI
         summarize_button = QPushButton('')
@@ -633,6 +642,7 @@ class VideoAudioManager(QMainWindow):
         self.generatePptxActionBtn.setToolTip("Genera Presentazione")
         self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
         summary_controls_layout.addWidget(self.generatePptxActionBtn, 0, 3)
+        summary_controls_layout.setColumnStretch(4, 1) # Aggiunge uno spazio elastico alla fine della riga
 
         # Riga 1: Controlli di estrazione
         self.integraInfoButton = QPushButton("")
@@ -661,6 +671,7 @@ class VideoAudioManager(QMainWindow):
         summary_layout.addWidget(summary_controls_group)
 
         self.summaryTextArea = CustomTextEdit(self)
+        self.summaryTextArea.setStyleSheet("font-size: 14pt; font-family: 'Arial';")
         self.summaryTextArea.setPlaceholderText("Il riassunto generato dall'AI apparirà qui...")
         summary_layout.addWidget(self.summaryTextArea)
 
@@ -1239,21 +1250,6 @@ class VideoAudioManager(QMainWindow):
             self._save_summary_to_json()
 
             self.current_summary_type = None  # Reset after use
-
-    def update_transcription_view(self):
-        """Aggiorna la visualizzazione dell'area di testo della trascrizione (Markdown/Testo)."""
-        is_markdown = self.transcriptionMarkdownCheckbox.isChecked()
-
-        self.transcriptionTextArea.blockSignals(True)
-        current_text = self.transcriptionTextArea.toPlainText() # Salva il testo corrente
-        if is_markdown:
-            # Per evitare che il testo venga interpretato come Markdown vuoto se non c'è,
-            # usiamo il testo corrente come fallback.
-            self.transcriptionTextArea.setMarkdown(self.original_text or current_text)
-        else:
-            # Se stiamo tornando a PlainText, ripristina il testo originale.
-            self.transcriptionTextArea.setPlainText(self.original_text)
-        self.transcriptionTextArea.blockSignals(False)
 
     def update_summary_view(self):
         """Aggiorna la visualizzazione dell'area di testo del riassunto (Markdown/Testo)."""
@@ -3280,27 +3276,21 @@ class VideoAudioManager(QMainWindow):
         # e qualsiasi riassunto precedente viene invalidato.
         self.summaries = {}
         self.active_summary_type = None
-        self.summary_text = ""
-        self.visualizzaRiassuntoCheckbox.setEnabled(False)
-        self.visualizzaRiassuntoCheckbox.setChecked(False)
 
-        # Aggiorna original_text con il contenuto corrente
-        if self.markdownViewCheckbox.isChecked():
-            self.original_text = self.transcriptionTextArea.toMarkdown()
-        else:
-            self.original_text = self.transcriptionTextArea.toPlainText()
+        self.original_text = self.transcriptionTextArea.toPlainText()
 
-        current_html = self.transcriptionTextArea.toHtml()
-        if current_html.strip():
+        # La logica del timecode e del rilevamento lingua rimane
+        # Usa il testo semplice per il rilevamento della lingua per evitare problemi con l'HTML
+        plain_text = self.transcriptionTextArea.toPlainText()
+        if plain_text.strip():
             if self.timecodeEnabled:
                 self.transcriptionTextArea.blockSignals(True)
-                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(current_html)
+                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(self.transcriptionTextArea.toHtml())
                 self.transcriptionTextArea.setHtml(updated_html)
-                self.detectAndUpdateLanguage(BeautifulSoup(updated_html, 'html.parser').get_text())
+                self.detectAndUpdateLanguage(self.transcriptionTextArea.toPlainText())
                 self.transcriptionTextArea.blockSignals(False)
             else:
-                self.detectAndUpdateLanguage(BeautifulSoup(current_html, 'html.parser').get_text())
-                self.original_text_html = current_html
+                self.detectAndUpdateLanguage(plain_text)
 
     def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
         WPM = 150  # Average words-per-minute rate for spoken language
