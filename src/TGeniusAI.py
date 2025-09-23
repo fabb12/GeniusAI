@@ -671,6 +671,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.setPlaceholderText("Incolla qui la tua trascrizione...")
         self.transcriptionTextArea.setToolTip("Area di testo per la trascrizione")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
+        self.transcriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.markdownViewCheckbox.toggled.connect(self.update_transcription_view)
         self.visualizzaRiassuntoCheckbox.toggled.connect(self.update_transcription_view)
         finalTransLayout.addWidget(self.transcriptionTextArea, 1)
@@ -1474,6 +1475,13 @@ class VideoAudioManager(QMainWindow):
         else:
             logging.warning("Nessun timecode trovato o cursore posizionato in un'area senza timecode.")
             QMessageBox.warning(self, "Attenzione", "Nessun timecode trovato nella trascrizione.")
+
+    def sincronizza_video(self, seconds):
+        """
+        Sincronizza il video al timestamp specificato in secondi.
+        """
+        if self.player:
+            self.player.setPosition(seconds * 1000)
 
     def setStartBookmark(self):
         self.videoSlider.setBookmarkStart(self.player.position())
