@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QShortcut, QPalette) # Aggiunto QShortcut, QPalette
 from PyQt6.QtCore import pyqtSignal, Qt
+import re
 
 class CustomTextEdit(QTextEdit):
     """
@@ -16,6 +17,7 @@ class CustomTextEdit(QTextEdit):
     - Tentativo di rendering Markdown su incolla *solo se sostituisce tutto*.
     """
     cursorPositionChanged = pyqtSignal()
+    timestampDoubleClicked = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -74,6 +76,24 @@ class CustomTextEdit(QTextEdit):
         """Gestisce gli eventi di pressione del mouse."""
         super().mousePressEvent(event)
         self.cursorPositionChanged.emit()
+
+    def mouseDoubleClickEvent(self, event):
+        """
+        Gestisce il doppio clic del mouse per cercare un timestamp e sincronizzare il video.
+        """
+        super().mouseDoubleClickEvent(event)
+
+        cursor = self.cursorForPosition(event.pos())
+        cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+        selected_text = cursor.selectedText()
+
+        # Cerca un timestamp nel formato [MM:SS]
+        match = re.search(r'\[(\d+):(\d+)\]', selected_text)
+        if match:
+            minutes = int(match.group(1))
+            seconds = int(match.group(2))
+            total_seconds = (minutes * 60) + seconds
+            self.timestampDoubleClicked.emit(total_seconds)
 
     def insertFromMimeData(self, source):
         """
