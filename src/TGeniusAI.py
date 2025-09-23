@@ -528,11 +528,10 @@ class VideoAudioManager(QMainWindow):
         transcription_layout = QVBoxLayout(transcription_tab)
 
         trans_controls_group = QGroupBox("Controlli Trascrizione")
-        trans_controls_layout = QVBoxLayout(trans_controls_group)
+        trans_controls_layout = QGridLayout(trans_controls_group)
 
-        # Layout per lingua e stato
-        lang_layout = QHBoxLayout()
-        lang_layout.addWidget(QLabel("Seleziona lingua video:"))
+        # Riga 0: Lingua
+        trans_controls_layout.addWidget(QLabel("Seleziona lingua video:"), 0, 0)
         self.languageComboBox = QComboBox()
         self.languageComboBox.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
         self.languageComboBox.setItemData(0, "it")
@@ -540,44 +539,54 @@ class VideoAudioManager(QMainWindow):
         self.languageComboBox.setItemData(2, "fr")
         self.languageComboBox.setItemData(3, "es")
         self.languageComboBox.setItemData(4, "de")
+        trans_controls_layout.addWidget(self.languageComboBox, 0, 1)
         self.transcriptionLanguageLabel = QLabel("Lingua rilevata: N/A")
-        lang_layout.addWidget(self.languageComboBox)
-        lang_layout.addWidget(self.transcriptionLanguageLabel)
-        lang_layout.addStretch()
-        trans_controls_layout.addLayout(lang_layout)
+        trans_controls_layout.addWidget(self.transcriptionLanguageLabel, 0, 2, 1, 2)
 
-        # Layout per pulsanti di azione
-        action_buttons_layout = QHBoxLayout()
-        self.transcribeButton = QPushButton('Trascrivi Video')
+        # Riga 1: Azioni Principali
+        self.transcribeButton = QPushButton('')
+        self.transcribeButton.setIcon(QIcon(get_resource("script.png")))
+        self.transcribeButton.setFixedSize(32, 32)
+        self.transcribeButton.setToolTip("Trascrivi Video")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
-        self.loadButton = QPushButton('Carica Testo')
-        self.loadButton.setIcon(QIcon(get_resource("load.png")))
-        self.loadButton.clicked.connect(self.loadText)
-        self.saveButton = QPushButton('Salva Testo')
-        self.saveButton.setIcon(QIcon(get_resource("save.png")))
-        self.saveButton.clicked.connect(self.saveText)
-        self.resetButton = QPushButton('Pulisci')
-        self.resetButton.setIcon(QIcon(get_resource("reset.png")))
-        self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
-        action_buttons_layout.addWidget(self.transcribeButton)
-        action_buttons_layout.addWidget(self.loadButton)
-        action_buttons_layout.addWidget(self.saveButton)
-        action_buttons_layout.addWidget(self.resetButton)
-        trans_controls_layout.addLayout(action_buttons_layout)
+        trans_controls_layout.addWidget(self.transcribeButton, 1, 0)
 
-        # Layout per strumenti avanzati
-        advanced_tools_layout = QHBoxLayout()
+        self.loadButton = QPushButton('')
+        self.loadButton.setIcon(QIcon(get_resource("load.png")))
+        self.loadButton.setFixedSize(32, 32)
+        self.loadButton.setToolTip("Carica Testo")
+        self.loadButton.clicked.connect(self.loadText)
+        trans_controls_layout.addWidget(self.loadButton, 1, 1)
+
+        self.saveButton = QPushButton('')
+        self.saveButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveButton.setFixedSize(32, 32)
+        self.saveButton.setToolTip("Salva Testo")
+        self.saveButton.clicked.connect(self.saveText)
+        trans_controls_layout.addWidget(self.saveButton, 1, 2)
+
+        self.resetButton = QPushButton('')
+        self.resetButton.setIcon(QIcon(get_resource("reset.png")))
+        self.resetButton.setFixedSize(32, 32)
+        self.resetButton.setToolTip("Pulisci")
+        self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
+        trans_controls_layout.addWidget(self.resetButton, 1, 3)
+
+        # Riga 2: Strumenti Avanzati
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
-        self.syncButton = QPushButton('Sincronizza Da Testo')
+        trans_controls_layout.addWidget(self.timecodeCheckbox, 2, 0, 1, 2)
+
+        self.syncButton = QPushButton('')
+        self.syncButton.setIcon(QIcon(get_resource("sync.png")))
+        self.syncButton.setFixedSize(32, 32)
+        self.syncButton.setToolTip("Sincronizza Video da Timecode Vicino")
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
+        trans_controls_layout.addWidget(self.syncButton, 2, 2)
+
         self.transcriptionMarkdownCheckbox = QCheckBox("Visualizza Markdown")
         self.transcriptionMarkdownCheckbox.toggled.connect(self.update_transcription_view)
-        advanced_tools_layout.addWidget(self.timecodeCheckbox)
-        advanced_tools_layout.addWidget(self.syncButton)
-        advanced_tools_layout.addWidget(self.transcriptionMarkdownCheckbox)
-        advanced_tools_layout.addStretch()
-        trans_controls_layout.addLayout(advanced_tools_layout)
+        trans_controls_layout.addWidget(self.transcriptionMarkdownCheckbox, 2, 3)
 
         transcription_layout.addWidget(trans_controls_group)
 
@@ -594,23 +603,60 @@ class VideoAudioManager(QMainWindow):
         summary_layout = QVBoxLayout(summary_tab)
 
         summary_controls_group = QGroupBox("Controlli Riassunto e AI")
-        summary_controls_layout = QVBoxLayout(summary_controls_group)
+        summary_controls_layout = QGridLayout(summary_controls_group)
 
-        ai_buttons_layout = QHBoxLayout()
-        summarize_button = QPushButton("Riassumi Testo")
+        # Riga 0: Azioni AI
+        summarize_button = QPushButton('')
+        summarize_button.setIcon(QIcon(get_resource("text_sum.png")))
+        summarize_button.setFixedSize(32, 32)
+        summarize_button.setToolTip("Riassumi Testo")
         summarize_button.clicked.connect(self.processTextWithAI)
-        fix_text_button = QPushButton("Correggi Testo")
+        summary_controls_layout.addWidget(summarize_button, 0, 0)
+
+        fix_text_button = QPushButton('')
+        fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
+        fix_text_button.setFixedSize(32, 32)
+        fix_text_button.setToolTip("Correggi Testo")
         fix_text_button.clicked.connect(self.fixTextWithAI)
-        summarize_meeting_button = QPushButton("Riassumi Riunione")
+        summary_controls_layout.addWidget(fix_text_button, 0, 1)
+
+        summarize_meeting_button = QPushButton('')
+        summarize_meeting_button.setIcon(QIcon(get_resource("meet_sum.png")))
+        summarize_meeting_button.setFixedSize(32, 32)
+        summarize_meeting_button.setToolTip("Riassumi Riunione")
         summarize_meeting_button.clicked.connect(self.summarizeMeeting)
-        ai_buttons_layout.addWidget(summarize_button)
-        ai_buttons_layout.addWidget(fix_text_button)
-        ai_buttons_layout.addWidget(summarize_meeting_button)
-        summary_controls_layout.addLayout(ai_buttons_layout)
+        summary_controls_layout.addWidget(summarize_meeting_button, 0, 2)
+
+        self.generatePptxActionBtn = QPushButton('')
+        self.generatePptxActionBtn.setIcon(QIcon(get_resource("powerpoint.png")))
+        self.generatePptxActionBtn.setFixedSize(32, 32)
+        self.generatePptxActionBtn.setToolTip("Genera Presentazione")
+        self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
+        summary_controls_layout.addWidget(self.generatePptxActionBtn, 0, 3)
+
+        # Riga 1: Controlli di estrazione
+        self.integraInfoButton = QPushButton("")
+        self.integraInfoButton.setIcon(QIcon(get_resource("frame_get.png")))
+        self.integraInfoButton.setFixedSize(32, 32)
+        self.integraInfoButton.setToolTip("Integra info dal video nel riassunto")
+        self.integraInfoButton.clicked.connect(self.integraInfoVideo)
+        summary_controls_layout.addWidget(self.integraInfoButton, 1, 0)
+
+        summary_controls_layout.addWidget(QLabel("Numero Frame:"), 1, 1)
+        self.estrazioneFrameCountSpin = QSpinBox()
+        self.estrazioneFrameCountSpin.setRange(1, 30)
+        self.estrazioneFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
+        summary_controls_layout.addWidget(self.estrazioneFrameCountSpin, 1, 2)
+
+        # Riga 2: Controlli di Visualizzazione
+        self.integrazioneToggle = QCheckBox("Visualizza dopo integrazione")
+        self.integrazioneToggle.setEnabled(False)
+        self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
+        summary_controls_layout.addWidget(self.integrazioneToggle, 2, 0, 1, 2)
 
         self.summaryMarkdownCheckbox = QCheckBox("Visualizza Markdown")
         self.summaryMarkdownCheckbox.toggled.connect(self.update_summary_view)
-        summary_controls_layout.addWidget(self.summaryMarkdownCheckbox)
+        summary_controls_layout.addWidget(self.summaryMarkdownCheckbox, 2, 2, 1, 2)
 
         summary_layout.addWidget(summary_controls_group)
 
