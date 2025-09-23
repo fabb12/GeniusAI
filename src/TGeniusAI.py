@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
-    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox
+    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame
 )
 
 # PyQtGraph (docking)
@@ -611,62 +611,75 @@ class VideoAudioManager(QMainWindow):
         summary_layout = QVBoxLayout(summary_tab)
 
         summary_controls_group = QGroupBox("Controlli Riassunto e AI")
-        summary_controls_layout = QGridLayout(summary_controls_group)
-        summary_controls_layout.setSpacing(5)
+        summary_controls_layout = QVBoxLayout(summary_controls_group)
 
-        # Riga 0: Azioni AI
+        # Layout orizzontale per tutti i pulsanti e controlli in linea
+        top_controls_layout = QHBoxLayout()
+
+        # Pulsanti Azioni AI
         summarize_button = QPushButton('')
         summarize_button.setIcon(QIcon(get_resource("text_sum.png")))
         summarize_button.setFixedSize(32, 32)
         summarize_button.setToolTip("Riassumi Testo")
         summarize_button.clicked.connect(self.processTextWithAI)
-        summary_controls_layout.addWidget(summarize_button, 0, 0)
+        top_controls_layout.addWidget(summarize_button)
 
         fix_text_button = QPushButton('')
         fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
         fix_text_button.setFixedSize(32, 32)
         fix_text_button.setToolTip("Correggi Testo")
         fix_text_button.clicked.connect(self.fixTextWithAI)
-        summary_controls_layout.addWidget(fix_text_button, 0, 1)
+        top_controls_layout.addWidget(fix_text_button)
 
         summarize_meeting_button = QPushButton('')
         summarize_meeting_button.setIcon(QIcon(get_resource("meet_sum.png")))
         summarize_meeting_button.setFixedSize(32, 32)
         summarize_meeting_button.setToolTip("Riassumi Riunione")
         summarize_meeting_button.clicked.connect(self.summarizeMeeting)
-        summary_controls_layout.addWidget(summarize_meeting_button, 0, 2)
+        top_controls_layout.addWidget(summarize_meeting_button)
 
         self.generatePptxActionBtn = QPushButton('')
         self.generatePptxActionBtn.setIcon(QIcon(get_resource("powerpoint.png")))
         self.generatePptxActionBtn.setFixedSize(32, 32)
         self.generatePptxActionBtn.setToolTip("Genera Presentazione")
         self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
-        summary_controls_layout.addWidget(self.generatePptxActionBtn, 0, 3)
-        summary_controls_layout.setColumnStretch(4, 1) # Aggiunge uno spazio elastico alla fine della riga
+        top_controls_layout.addWidget(self.generatePptxActionBtn)
 
-        # Riga 1: Controlli di estrazione
+        # Separatore
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        top_controls_layout.addWidget(separator)
+
+        # Controlli di estrazione
         self.integraInfoButton = QPushButton("")
         self.integraInfoButton.setIcon(QIcon(get_resource("frame_get.png")))
         self.integraInfoButton.setFixedSize(32, 32)
         self.integraInfoButton.setToolTip("Integra info dal video nel riassunto")
         self.integraInfoButton.clicked.connect(self.integraInfoVideo)
-        summary_controls_layout.addWidget(self.integraInfoButton, 1, 0)
+        top_controls_layout.addWidget(self.integraInfoButton)
 
-        summary_controls_layout.addWidget(QLabel("Numero Frame:"), 1, 1)
+        top_controls_layout.addWidget(QLabel("Frame:"))
         self.estrazioneFrameCountSpin = QSpinBox()
         self.estrazioneFrameCountSpin.setRange(1, 30)
         self.estrazioneFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
-        summary_controls_layout.addWidget(self.estrazioneFrameCountSpin, 1, 2)
+        top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
-        # Riga 2: Controlli di Visualizzazione
+        top_controls_layout.addStretch()
+        summary_controls_layout.addLayout(top_controls_layout)
+
+        # Layout orizzontale per le checkbox
+        bottom_controls_layout = QHBoxLayout()
         self.integrazioneToggle = QCheckBox("Visualizza dopo integrazione")
         self.integrazioneToggle.setEnabled(False)
         self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
-        summary_controls_layout.addWidget(self.integrazioneToggle, 2, 0, 1, 2)
+        bottom_controls_layout.addWidget(self.integrazioneToggle)
 
         self.summaryMarkdownCheckbox = QCheckBox("Visualizza Markdown")
         self.summaryMarkdownCheckbox.toggled.connect(self.update_summary_view)
-        summary_controls_layout.addWidget(self.summaryMarkdownCheckbox, 2, 2, 1, 2)
+        bottom_controls_layout.addWidget(self.summaryMarkdownCheckbox)
+        bottom_controls_layout.addStretch()
+        summary_controls_layout.addLayout(bottom_controls_layout)
 
         summary_layout.addWidget(summary_controls_group)
 
