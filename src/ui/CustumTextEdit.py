@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
                              QPushButton, QHBoxLayout, QApplication, QLabel) # Aggiunto QLabel
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QShortcut, QPalette) # Aggiunto QShortcut, QPalette
+                         QTextDocument, QShortcut, QPalette, QFont) # Aggiunto QFont
 from PyQt6.QtCore import pyqtSignal, Qt
 import re
 
@@ -15,9 +15,11 @@ class CustomTextEdit(QTextEdit):
     - Ricerca (Ctrl+F) con dialogo separato, navigazione (F3/Shift+F3) ed evidenziazione.
     - Capacità di impostare ed esportare contenuto Markdown.
     - Tentativo di rendering Markdown su incolla *solo se sostituisce tutto*.
+    - Zoom del testo con Ctrl + rotellina del mouse.
     """
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(int)
+    fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -32,6 +34,30 @@ class CustomTextEdit(QTextEdit):
         self.search_text = None
         self.current_search_index = -1
         self.search_results_cursors = []
+
+    def wheelEvent(self, event):
+        """
+        Gestisce l'evento della rotellina del mouse per lo zoom del testo.
+        """
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            # Ottieni la direzione dello scroll
+            angle = event.angleDelta().y()
+            current_font = self.font()
+            current_size = current_font.pointSize()
+
+            if angle > 0:
+                # Scroll in su, aumenta la dimensione del font
+                current_font.setPointSize(current_size + 1)
+            elif angle < 0:
+                # Scroll in giù, diminuisci la dimensione del font (con un minimo)
+                if current_size > 1:
+                    current_font.setPointSize(current_size - 1)
+
+            self.setFont(current_font)
+            self.fontSizeChanged.emit(current_font.pointSize())
+            event.accept()
+        else:
+            super().wheelEvent(event)
 
     def setMarkdownContent(self, markdown_text):
         """
