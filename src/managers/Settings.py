@@ -28,6 +28,7 @@ class SettingsDialog(QDialog):
         tabs = QTabWidget()
 
         tabs.setUsesScrollButtons(False)
+
         # Tab per le API Keys (Nuovo)
         tabs.addTab(self.createApiKeySettingsTab(), "API Keys")
 
