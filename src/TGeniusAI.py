@@ -2010,14 +2010,12 @@ class VideoAudioManager(QMainWindow):
         self.audioStartTimeLabel = QLabel("Tempo di inizio (es: 00:01:30.5):")
         self.audioStartTimeLineEdit = QLineEdit("00:00:00.0")
         self.audioStartTimeLineEdit.setEnabled(False) # Disabled by default
+
         # Sync toggle
         self.syncAudioVideoToggle = QCheckBox("Sincronizza audio e video")
         self.syncAudioVideoToggle.setChecked(True)
         self.syncAudioVideoToggle.setToolTip("Se attivo, sincronizza l'audio generato con il video, altrimenti lo applica da un tempo specifico.")
         layout.addWidget(self.syncAudioVideoToggle)
-        self.syncAudioVideoToggle.toggled.connect(
-            lambda checked: self.audioStartTimeLineEdit.setEnabled(not checked)
-        )
         # Manual time input
 
         timeLayout = QHBoxLayout()
