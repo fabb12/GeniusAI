@@ -75,11 +75,11 @@ class VideoSaver:
                 while rate < 0.5 and rate > 0:
                     atempo_filters.append("atempo=0.5")
                     rate /= 0.5
-                if rate != 1.0 :
+                if rate != 1.0:
                     atempo_filters.append(f"atempo={rate}")
 
                 if atempo_filters:
-                        audio_filters.append(','.join(atempo_filters))
+                    audio_filters.append(','.join(atempo_filters))
 
             if video_filters:
                 command.extend(['-filter:v', ",".join(video_filters)])
