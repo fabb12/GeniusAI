@@ -997,8 +997,16 @@ class VideoAudioManager(QMainWindow):
         # Salva il riassunto integrativo nel dizionario dei riassunti
         self.summaries['integrative_summary'] = summary
 
-        # Combina il testo originale con il nuovo sommario per la visualizzazione
-        self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
+        # Controlla l'impostazione per decidere come visualizzare il riassunto
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+        integrated_summary_only = settings.value("processing/integratedSummaryOnly", False, type=bool)
+
+        if integrated_summary_only:
+            # Se l'opzione è abilitata, mostra solo il nuovo riassunto
+            self.text_after_integration = summary
+        else:
+            # Altrimenti, combina il testo originale con il nuovo sommario
+            self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
 
         # Aggiorna la text area e il toggle
         self.transcriptionTextArea.setPlainText(self.text_after_integration)
@@ -1254,7 +1262,7 @@ class VideoAudioManager(QMainWindow):
             self.progressDialog.canceled.connect(self.downloadThread.terminate)
             self.downloadThread.start()
 
-    def onYouTubeDownloadFinished(self, audio_path, video_title, video_language):
+    def onYouTubeDownloadFinished(self, audio_path, video_title, video_language, upload_date=None):
         self.progressDialog.close()
         self.progressDialog = QProgressDialog("Trascrizione in corso...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Trascrizione")
@@ -1341,9 +1349,10 @@ class VideoAudioManager(QMainWindow):
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             self.summaries[self.current_summary_type] = result
             self.active_summary_type = self.current_summary_type
+            self.summary_text = result
 
             # Update the summary text area
-            self.summaryTextArea.setPlainText(result)
+            self.update_summary_view()
 
             # Switch to the summary tab
             self.transcriptionTabWidget.setCurrentIndex(1)
@@ -1359,16 +1368,16 @@ class VideoAudioManager(QMainWindow):
 
     def update_summary_view(self):
         """Aggiorna la visualizzazione dell'area di testo del riassunto (Markdown/Testo)."""
+        if not hasattr(self, 'summary_text'):
+            return
+
         is_markdown = self.summaryMarkdownCheckbox.isChecked()
-        summary_text = self.summaryTextArea.toPlainText() # Usa il testo corrente
+        summary_text = self.summary_text
 
         self.summaryTextArea.blockSignals(True)
         if is_markdown:
             self.summaryTextArea.setMarkdown(summary_text)
         else:
-            # Per tornare al testo semplice, potremmo dover ricaricare dal dizionario
-            # o semplicemente rimuovere la formattazione. Per ora, usiamo il testo esistente.
-            # Una logica più robusta potrebbe salvare lo stato "non-markdown".
             self.summaryTextArea.setPlainText(summary_text)
         self.summaryTextArea.blockSignals(False)
 
@@ -2993,12 +3002,20 @@ class VideoAudioManager(QMainWindow):
         if not self.progressDialog.wasCanceled():
             self.progressDialog.setValue(progress)
 
-    def onDownloadFinished(self, file_path, video_title, video_language):
+    def onDownloadFinished(self, file_path, video_title, video_language, upload_date):
         self.progressDialog.close()
         QMessageBox.information(self, "Download Complete", f"File saved to {file_path}.")
         self.video_download_language = video_language
         logging.debug(video_language)
         self.loadVideo(file_path, video_title)
+
+        if upload_date:
+            try:
+                # Il formato della data di yt-dlp è YYYYMMDD
+                video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
+                self._update_json_file(file_path, {"video_date": video_date})
+            except (ValueError, TypeError) as e:
+                logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
 
     def onError(self, error_message):
         self.progressDialog.close()
@@ -3558,7 +3575,8 @@ class VideoAudioManager(QMainWindow):
 
         # Carica il riassunto
         summary = data.get('summary_generated_integrated') or data.get('summary_generated', '')
-        self.summaryTextArea.setPlainText(summary)
+        self.summary_text = summary
+        self.update_summary_view()
 
         # Imposta la lingua nella combobox
         language_code = data.get("language")
