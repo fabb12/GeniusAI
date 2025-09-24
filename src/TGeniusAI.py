@@ -78,6 +78,123 @@ from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
 
+class AudioProcessingThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, video_path, new_audio_path, use_sync, start_time, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.new_audio_path = new_audio_path
+        self.use_sync = use_sync
+        self.start_time = start_time
+        self.running = True
+
+    def run(self):
+        try:
+            if self.use_sync:
+                self.sync_and_apply()
+            else:
+                self.apply_at_time()
+        except Exception as e:
+            if self.running:
+                self.error.emit(str(e))
+
+    def stop(self):
+        self.running = False
+        self.terminate()
+        self.wait()
+
+    def sync_and_apply(self):
+        self.progress.emit(10, "Avvio sincronizzazione...")
+        if not self.running: return
+
+        try:
+            video_clip = VideoFileClip(self.video_path)
+            new_audio_clip = AudioFileClip(self.new_audio_path)
+
+            if not self.running: return
+
+            speed_factor = video_clip.duration / new_audio_clip.duration
+            self.progress.emit(30, f"Fattore di velocità calcolato: {speed_factor:.2f}x")
+
+            if not self.running: return
+
+            video_modificato = video_clip.fx(vfx.speedx, speed_factor)
+            final_video = video_modificato.set_audio(new_audio_clip)
+
+            base_name = os.path.splitext(os.path.basename(self.video_path))[0]
+            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
+            output_path = os.path.join(os.path.dirname(self.video_path), f"{base_name}_GeniusAI_{timestamp}.mp4")
+
+            self.progress.emit(70, "Salvataggio video finale...")
+            if not self.running: return
+
+            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps, logger=None)
+
+            if self.running:
+                self.progress.emit(100, "Completato")
+                self.completed.emit(output_path)
+        finally:
+            if 'video_clip' in locals(): video_clip.close()
+            if 'new_audio_clip' in locals(): new_audio_clip.close()
+
+
+    def apply_at_time(self):
+        self.progress.emit(10, "Avvio applicazione audio...")
+        if not self.running: return
+
+        try:
+            video_clip = VideoFileClip(self.video_path)
+            original_audio = video_clip.audio
+            new_audio_clip = AudioFileClip(self.new_audio_path)
+
+            if not self.running: return
+
+            if self.start_time > video_clip.duration:
+                raise ValueError("Il tempo di inizio supera la durata del video.")
+
+            self.progress.emit(30, "Composizione tracce audio...")
+
+            # Parte 1: Audio originale fino a start_time
+            part1 = original_audio.subclip(0, self.start_time)
+
+            # Parte 3: Audio originale dopo il nuovo audio
+            end_of_new_audio = self.start_time + new_audio_clip.duration
+            part3 = None
+            if end_of_new_audio < video_clip.duration:
+                part3 = original_audio.subclip(end_of_new_audio)
+
+            # Combina le parti
+            final_audio_clips = [part1, new_audio_clip]
+            if part3:
+                final_audio_clips.append(part3)
+
+            final_audio = concatenate_audioclips(final_audio_clips)
+
+            if not self.running: return
+
+            self.progress.emit(60, "Applicazione audio al video...")
+            final_video = video_clip.set_audio(final_audio)
+
+            base_name = os.path.splitext(os.path.basename(self.video_path))[0]
+            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
+            output_path = os.path.join(os.path.dirname(self.video_path), f"{base_name}_manual_audio_{timestamp}.mp4")
+
+            self.progress.emit(80, "Salvataggio video...")
+            if not self.running: return
+
+            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps, logger=None)
+
+            if self.running:
+                self.progress.emit(100, "Completato")
+                self.completed.emit(output_path)
+        finally:
+            if 'video_clip' in locals(): video_clip.close()
+            if 'original_audio' in locals(): original_audio.close()
+            if 'new_audio_clip' in locals(): new_audio_clip.close()
+
 
 class VideoAudioManager(QMainWindow):
     def __init__(self):
@@ -1883,6 +2000,31 @@ class VideoAudioManager(QMainWindow):
         self.speakerBoostCheckBox.setToolTip(
             "Potenzia la somiglianza col parlante originale a costo di maggiori risorse.")
         layout.addWidget(self.speakerBoostCheckBox)
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(separator)
+
+        # Sync toggle
+        self.syncAudioVideoToggle = QCheckBox("Sincronizza audio e video")
+        self.syncAudioVideoToggle.setChecked(True)
+        self.syncAudioVideoToggle.setToolTip("Se attivo, sincronizza l'audio generato con il video, altrimenti lo applica da un tempo specifico.")
+        layout.addWidget(self.syncAudioVideoToggle)
+
+        # Manual time input
+        self.audioStartTimeLabel = QLabel("Tempo di inizio (es: 00:01:30.5):")
+        self.audioStartTimeLineEdit = QLineEdit("00:00:00.0")
+        self.audioStartTimeLineEdit.setEnabled(False) # Disabled by default
+
+        timeLayout = QHBoxLayout()
+        timeLayout.addWidget(self.audioStartTimeLabel)
+        timeLayout.addWidget(self.audioStartTimeLineEdit)
+        layout.addLayout(timeLayout)
+
+        self.syncAudioVideoToggle.toggled.connect(self._update_audio_sync_widgets)
+
 
         # Sincronizzazione labiale
         self.useWav2LipCheckbox = QCheckBox("Sincronizzazione labiale")
@@ -3710,65 +3852,87 @@ class VideoAudioManager(QMainWindow):
             self.browser_agent = BrowserAgent(self)
 
         self.browser_agent.create_guide_agent()
+    def _update_audio_sync_widgets(self, checked):
+        """Enable/disable the manual time input based on the sync toggle."""
+        self.audioStartTimeLineEdit.setEnabled(not checked)
+        self.audioStartTimeLabel.setEnabled(not checked)
+
     def onAudioGenerationCompleted(self, audio_path):
-        timecode = self.timecodePauseLineEdit.text()
-        pause_duration = float(self.pauseAudioDurationLineEdit.text() or 0)
+        """
+        Called when the AI audio generation is complete.
+        This function now decides whether to sync the audio or apply it at a specific time.
+        """
+        use_sync = self.syncAudioVideoToggle.isChecked()
+        start_time_str = self.audioStartTimeLineEdit.text()
 
-        if timecode and pause_duration > 0:
-            # Convert the timecode into seconds
-            hours, minutes, seconds = map(int, timecode.split(':'))
-            start_time = hours * 3600 + minutes * 60 + seconds
-
-            # Load the audio using moviepy
-            original_audio = AudioFileClip(audio_path)
-            total_duration = original_audio.duration
-
-            # Create the silent audio segment for the pause
-            silent_audio_path = tempfile.mktemp(suffix='.mp3')
-            silent_audio = AudioSegment.silent(duration=pause_duration * 1000)  # duration in milliseconds
-            silent_audio.export(silent_audio_path, format="mp3")
-
-            # Load the silent audio segment using moviepy
-            silent_audio_clip = AudioFileClip(silent_audio_path).set_duration(pause_duration)
-
-            # Split the audio and insert the silent segment
-            first_part = original_audio.subclip(0, start_time)
-            second_part = original_audio.subclip(start_time, total_duration)
-            new_audio = concatenate_audioclips([first_part, silent_audio_clip, second_part])
-
-            # Save the modified audio to a temporary path
-            temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            new_audio.write_audiofile(temp_audio_path)
-            audio_path = temp_audio_path
-
-            # Clean up the temporary silent audio file
-            os.remove(silent_audio_path)
-
-        if self.useWav2LipCheckbox.isChecked():
-            base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
-            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
-            output_video_path = os.path.join(os.path.dirname(self.videoPathLineEdit),
-                                             f"{base_name}_Wav2Lip_{timestamp}.mp4")
-            try:
-                self.runWav2Lip(self.videoPathLineEdit, audio_path, output_video_path)
-                QMessageBox.information(self, "Completato",
-                                        f"Video generato con successo! Il video è stato salvato in: {output_video_path}")
-                self.loadVideoOutput(output_video_path)
-            except Exception as e:
-                QMessageBox.critical(self, "Errore", str(e))
-        else:
-            base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
-            timestamp = time.strftime('%Y%m%d%H%M%S', time.localtime())
-            output_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_GeniusAI_{timestamp}.mp4")
-            self.adattaVelocitaVideoAAudio(self.videoPathLineEdit, audio_path, output_path)
-
-            QMessageBox.information(self, "Completato",
-                                    f"Processo completato con successo! L'audio è stato salvato in: {audio_path}")
-            self.loadVideoOutput(output_path)
+        self.apply_generated_audio(
+            new_audio_path=audio_path,
+            use_sync=use_sync,
+            start_time_str=start_time_str
+        )
 
     def onError(self, error_message):
         QMessageBox.critical(self, "Errore", "Errore durante la generazione dell'audio: " + error_message)
 
+    def _parse_time(self, time_str):
+        """Parses a time string HH:MM:SS.ms into seconds."""
+        try:
+            parts = time_str.split(':')
+            if len(parts) != 3:
+                raise ValueError("Invalid time format. Expected HH:MM:SS.ms")
+
+            h = int(parts[0])
+            m = int(parts[1])
+
+            s_ms_part = parts[2].split('.')
+            s = int(s_ms_part[0])
+            ms = int(s_ms_part[1]) if len(s_ms_part) > 1 else 0
+
+            return h * 3600 + m * 60 + s + ms / 1000.0
+        except (ValueError, IndexError) as e:
+            QMessageBox.warning(self, "Errore Formato Orario", f"Formato ora non valido: {time_str}. Usare HH:MM:SS.ms.\nErrore: {e}")
+            return None
+
+    def apply_generated_audio(self, new_audio_path, use_sync, start_time_str):
+        video_path = self.videoPathLineEdit
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            return
+
+        start_time_sec = 0
+        if not use_sync:
+            start_time_sec = self._parse_time(start_time_str)
+            if start_time_sec is None:
+                return # Stop if time format is invalid
+
+        self.progressDialog = QProgressDialog("Applicazione audio al video...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Elaborazione Video")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+
+        # Create and start the processing thread
+        self.audio_processing_thread = AudioProcessingThread(
+            video_path,
+            new_audio_path,
+            use_sync,
+            start_time_sec,
+            parent=self
+        )
+        self.audio_processing_thread.progress.connect(self.updateProgressDialog)
+        self.audio_processing_thread.completed.connect(self.onAudioProcessingCompleted)
+        self.audio_processing_thread.error.connect(self.onAudioProcessingError)
+        self.progressDialog.canceled.connect(self.audio_processing_thread.stop)
+
+        self.audio_processing_thread.start()
+        self.progressDialog.show()
+
+    def onAudioProcessingCompleted(self, output_path):
+        self.progressDialog.close()
+        QMessageBox.information(self, "Successo", f"Il video è stato aggiornato con successo:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def onAudioProcessingError(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore Elaborazione", f"Si è verificato un errore durante l'elaborazione:\n{error_message}")
 
     def browseAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
