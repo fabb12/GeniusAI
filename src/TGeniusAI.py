@@ -528,11 +528,11 @@ class VideoAudioManager(QMainWindow):
         transcription_layout = QVBoxLayout(transcription_tab)
 
         trans_controls_group = QGroupBox("Controlli Trascrizione")
-        trans_controls_layout = QGridLayout(trans_controls_group)
-        trans_controls_layout.setSpacing(2)
+        main_controls_layout = QVBoxLayout(trans_controls_group)
 
-        # Riga 0: Lingua
-        trans_controls_layout.addWidget(QLabel("Seleziona lingua video:"), 0, 0)
+        # --- Riga 1: Lingua ---
+        language_layout = QHBoxLayout()
+        language_layout.addWidget(QLabel("Seleziona lingua video:"))
         self.languageComboBox = QComboBox()
         self.languageComboBox.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
         self.languageComboBox.setItemData(0, "it")
@@ -540,62 +540,82 @@ class VideoAudioManager(QMainWindow):
         self.languageComboBox.setItemData(2, "fr")
         self.languageComboBox.setItemData(3, "es")
         self.languageComboBox.setItemData(4, "de")
-        trans_controls_layout.addWidget(self.languageComboBox, 0, 1)
+        language_layout.addWidget(self.languageComboBox)
+        language_layout.addStretch()
         self.transcriptionLanguageLabel = QLabel("Lingua rilevata: N/A")
-        trans_controls_layout.addWidget(self.transcriptionLanguageLabel, 0, 2, 1, 2)
+        language_layout.addWidget(self.transcriptionLanguageLabel)
+        main_controls_layout.addLayout(language_layout)
 
-        # Riga 1: Azioni Principali
+        # --- Riga 2: Gruppi di Controlli Affiancati ---
+        groups_layout = QHBoxLayout()
+
+        # --- Gruppo 1: Azioni sui File ---
+        file_actions_group = QGroupBox("File")
+        file_actions_layout = QHBoxLayout(file_actions_group)
+
         self.transcribeButton = QPushButton('')
         self.transcribeButton.setIcon(QIcon(get_resource("script.png")))
         self.transcribeButton.setFixedSize(32, 32)
         self.transcribeButton.setToolTip("Trascrivi Video")
         self.transcribeButton.clicked.connect(self.transcribeVideo)
-        trans_controls_layout.addWidget(self.transcribeButton, 1, 0)
+        file_actions_layout.addWidget(self.transcribeButton)
 
         self.loadButton = QPushButton('')
         self.loadButton.setIcon(QIcon(get_resource("load.png")))
         self.loadButton.setFixedSize(32, 32)
         self.loadButton.setToolTip("Carica Testo")
         self.loadButton.clicked.connect(self.loadText)
-        trans_controls_layout.addWidget(self.loadButton, 1, 1)
+        file_actions_layout.addWidget(self.loadButton)
 
         self.saveButton = QPushButton('')
         self.saveButton.setIcon(QIcon(get_resource("save.png")))
         self.saveButton.setFixedSize(32, 32)
         self.saveButton.setToolTip("Salva Testo")
         self.saveButton.clicked.connect(self.saveText)
-        trans_controls_layout.addWidget(self.saveButton, 1, 2)
+        file_actions_layout.addWidget(self.saveButton)
 
         self.resetButton = QPushButton('')
         self.resetButton.setIcon(QIcon(get_resource("reset.png")))
         self.resetButton.setFixedSize(32, 32)
         self.resetButton.setToolTip("Pulisci")
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
-        trans_controls_layout.addWidget(self.resetButton, 1, 3)
+        file_actions_layout.addWidget(self.resetButton)
 
-        # Riga 2: Strumenti Avanzati
+        groups_layout.addWidget(file_actions_group)
+
+        # --- Gruppo 2: Strumenti ---
+        tools_group = QGroupBox("Strumenti")
+        tools_grid_layout = QGridLayout(tools_group)
+
         self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
-        trans_controls_layout.addWidget(self.timecodeCheckbox, 2, 0, 1, 2)
+        tools_grid_layout.addWidget(self.timecodeCheckbox, 0, 0)
 
         self.syncButton = QPushButton('')
         self.syncButton.setIcon(QIcon(get_resource("sync.png")))
         self.syncButton.setFixedSize(32, 32)
         self.syncButton.setToolTip("Sincronizza Video da Timecode Vicino")
         self.syncButton.clicked.connect(self.sync_video_to_transcription)
-        trans_controls_layout.addWidget(self.syncButton, 2, 2)
+        tools_grid_layout.addWidget(self.syncButton, 0, 1)
 
-        # The transcription markdown checkbox is no longer needed.
-
-        # Riga 3: Inserimento Pause
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Durata pausa (es. 1.0s)")
-        trans_controls_layout.addWidget(self.pauseTimeEdit, 3, 0, 1, 2)
+        tools_grid_layout.addWidget(self.pauseTimeEdit, 1, 0)
+
         self.insertPauseButton = QPushButton("Inserisci Pausa")
         self.insertPauseButton.clicked.connect(self.insertPause)
-        trans_controls_layout.addWidget(self.insertPauseButton, 3, 2, 1, 2)
+        tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
+
+        groups_layout.addWidget(tools_group)
+
+        # LA SEGUENTE RIGA È STATA RIMOSSA PER PERMETTERE L'ESPANSIONE
+        # groups_layout.addStretch()
+
+        main_controls_layout.addLayout(groups_layout)
 
         transcription_layout.addWidget(trans_controls_group)
+
+        #--------------------
 
         self.transcriptionTextArea = CustomTextEdit(self)
         self.transcriptionTextArea.setStyleSheet("font-size: 14pt; font-family: 'Arial';")
@@ -2835,7 +2855,7 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio automatico del riassunto: {e}")
 
     def loadText(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "Text files (*.txt);;JSON files (*.json);;All files (*.*)")
+        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
         if path:
             json_path = os.path.splitext(path)[0] + ".json"
             if os.path.exists(json_path):
