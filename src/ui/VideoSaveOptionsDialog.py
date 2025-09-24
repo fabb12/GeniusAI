@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QRadioButton,
-                             QGroupBox, QSlider, QDialogButtonBox, QHBoxLayout)
-from PyQt6.QtCore import Qt
+                             QGroupBox, QSlider, QDialogButtonBox, QHBoxLayout, QCheckBox)
+from PyQt6.QtCore import Qt, QSettings
 import os
 
 
@@ -10,6 +10,7 @@ class VideoSaveOptionsDialog(QDialog):
         self.setWindowTitle("Opzioni Salvataggio Video")
         self.setModal(True)
         self.source_path = source_path
+        self.settings = QSettings("ThemaConsulting", "GeniusAI")
 
         layout = QVBoxLayout(self)
 
@@ -24,6 +25,13 @@ class VideoSaveOptionsDialog(QDialog):
 
         self.compressedRadio = QRadioButton("Formato compresso (per email)")
         layout.addWidget(self.compressedRadio)
+
+        # Playback speed option
+        self.saveWithPlaybackSpeedCheck = QCheckBox("Salva con velocità di riproduzione")
+        self.saveWithPlaybackSpeedCheck.setChecked(
+            self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool)
+        )
+        layout.addWidget(self.saveWithPlaybackSpeedCheck)
 
         # Compression options group
         self.compressionGroup = QGroupBox("Opzioni di compressione")
@@ -60,16 +68,12 @@ class VideoSaveOptionsDialog(QDialog):
         self.compressionGroup.setLayout(compressLayout)
         layout.addWidget(self.compressionGroup)
 
-        # Enable/disable compression options based on selection
-        self.originalRadio.toggled.connect(
-            lambda checked: self.compressionGroup.setEnabled(not checked)
-        )
-        self.compressedRadio.toggled.connect(
-            lambda checked: self.compressionGroup.setEnabled(checked)
-        )
+        # Enable/disable options based on selection
+        self.originalRadio.toggled.connect(self.update_options_state)
+        self.compressedRadio.toggled.connect(self.update_options_state)
 
-        # Initially disable compression options
-        self.compressionGroup.setEnabled(False)
+        # Set initial state
+        self.update_options_state()
 
         # Buttons
         buttonBox = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -77,10 +81,18 @@ class VideoSaveOptionsDialog(QDialog):
         buttonBox.rejected.connect(self.reject)
         layout.addWidget(buttonBox)
 
+    def update_options_state(self):
+        is_compressed = self.compressedRadio.isChecked()
+        self.compressionGroup.setEnabled(is_compressed)
+        self.saveWithPlaybackSpeedCheck.setEnabled(is_compressed)
+        if not is_compressed:
+            self.saveWithPlaybackSpeedCheck.setChecked(False)
+
     def getOptions(self):
         return {
             'use_compression': self.compressedRadio.isChecked(),
-            'compression_quality': self.qualitySlider.value()
+            'compression_quality': self.qualitySlider.value(),
+            'save_with_speed': self.saveWithPlaybackSpeedCheck.isChecked()
         }
 
     def get_file_size_info(self):

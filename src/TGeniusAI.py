@@ -3431,16 +3431,14 @@ class VideoAudioManager(QMainWindow):
 
         # Crea un'istanza di VideoSaver
         video_saver = VideoSaver(self)
+        rate = 1.0
 
         # Salva il video in base alle opzioni selezionate
         if save_options['use_compression']:
-            settings = QSettings("Genius", "GeniusAI")
-            save_with_speed = settings.value("saving/saveWithPlaybackSpeed", False, type=bool)
-            rate = 1.0
-            if save_with_speed:
+            if save_options['save_with_speed']:
                 rate = self.speedSpinBoxOutput.value()
                 if rate == 0:
-                    rate = 1.0
+                    rate = 1.0  # Evita di impostare una velocità nulla
 
             success, error_msg = video_saver.save_compressed(
                 self.videoPathLineOutputEdit,
@@ -3449,6 +3447,7 @@ class VideoAudioManager(QMainWindow):
                 playback_rate=rate
             )
         else:
+            # Se la compressione non è usata, salva il video originale
             success, error_msg = video_saver.save_original(
                 self.videoPathLineOutputEdit,
                 fileName
