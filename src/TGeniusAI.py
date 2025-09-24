@@ -965,11 +965,10 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
             return
 
-        # Salva il testo corrente come "prima dell'integrazione"
-        self.text_before_integration = self.transcriptionTextArea.toPlainText()
-        self.text_after_integration = ""
-        self.integrazioneToggle.setChecked(False)
-        self.integrazioneToggle.setEnabled(False)
+        # Controlla se esiste un riassunto standard
+        if not self.summary_generated or not self.summary_generated.strip():
+            QMessageBox.warning(self, "Attenzione", "È necessario generare un riassunto standard prima di poterlo integrare con le informazioni del video.")
+            return
 
         # Mostra un dialogo di progresso
         self.progressDialog = QProgressDialog("Estrazione informazioni dal video...", "Annulla", 0, 100, self)
@@ -977,12 +976,12 @@ class VideoAudioManager(QMainWindow):
         self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
         self.progressDialog.show()
 
-        # Avvia il thread di integrazione video
+        # Avvia il thread di integrazione video usando il riassunto standard come base
         self.integration_thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            current_summary=self.text_before_integration,
+            current_summary=self.summary_generated,
             parent=self
         )
         self.integration_thread.finished.connect(self.onIntegrazioneComplete)
