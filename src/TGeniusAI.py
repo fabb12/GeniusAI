@@ -2127,15 +2127,23 @@ class VideoAudioManager(QMainWindow):
         browseAudioButton.clicked.connect(self.browseAudio)
 
         self.alignAudioVideoCheckBox = QCheckBox('Allinea video e audio')
+        self.alignAudioVideoCheckBox.setChecked(True)
+
+        # Manual time input
+        self.manualAudioStartTimeLabel = QLabel("Tempo di inizio (es: 00:01:30.5):")
+        self.manualAudioStartTimeLineEdit = QLineEdit("00:00:00.0")
+        self.manualAudioStartTimeLineEdit.setEnabled(False) # Disabled by default
+
+        self.alignAudioVideoCheckBox.toggled.connect(self._update_manual_audio_widgets)
 
         applyAudioButton = QPushButton('Applica Audio Principale')
-        applyAudioButton.clicked.connect(
-            lambda: self.applyNewAudioToVideo(self.videoPathLineEdit, self.audioPathLineEdit.text(),
-                                              self.alignAudioVideoCheckBox.isChecked()))
+        applyAudioButton.clicked.connect(self.handle_apply_main_audio)
 
         layout.addWidget(self.audioPathLineEdit)
         layout.addWidget(browseAudioButton)
         layout.addWidget(self.alignAudioVideoCheckBox)
+        layout.addWidget(self.manualAudioStartTimeLabel)
+        layout.addWidget(self.manualAudioStartTimeLineEdit)
         layout.addWidget(applyAudioButton)
         audioReplacementGroup.setLayout(layout)
 
@@ -3933,6 +3941,52 @@ class VideoAudioManager(QMainWindow):
     def onAudioProcessingError(self, error_message):
         self.progressDialog.close()
         QMessageBox.critical(self, "Errore Elaborazione", f"Si è verificato un errore durante l'elaborazione:\n{error_message}")
+
+    def _update_manual_audio_widgets(self, checked):
+        """Enable/disable the manual time input for the main audio replacement."""
+        self.manualAudioStartTimeLineEdit.setEnabled(not checked)
+        self.manualAudioStartTimeLabel.setEnabled(not checked)
+
+    def handle_apply_main_audio(self):
+        """Handles the 'Applica Audio Principale' button click."""
+        video_path = self.videoPathLineEdit
+        new_audio_path = self.audioPathLineEdit.text()
+        use_sync = self.alignAudioVideoCheckBox.isChecked()
+        start_time_str = self.manualAudioStartTimeLineEdit.text()
+
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            return
+
+        if not new_audio_path or not os.path.exists(new_audio_path):
+            QMessageBox.warning(self, "Attenzione", "Nessun file audio selezionato.")
+            return
+
+        start_time_sec = 0
+        if not use_sync:
+            start_time_sec = self._parse_time(start_time_str)
+            if start_time_sec is None:
+                return  # Stop if time format is invalid
+
+        self.progressDialog = QProgressDialog("Applicazione audio al video...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Elaborazione Video")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+
+        # Use the same processing thread, as the logic is identical
+        self.audio_processing_thread = AudioProcessingThread(
+            video_path,
+            new_audio_path,
+            use_sync,
+            start_time_sec,
+            parent=self
+        )
+        self.audio_processing_thread.progress.connect(self.updateProgressDialog)
+        self.audio_processing_thread.completed.connect(self.onAudioProcessingCompleted)
+        self.audio_processing_thread.error.connect(self.onAudioProcessingError)
+        self.progressDialog.canceled.connect(self.audio_processing_thread.stop)
+
+        self.audio_processing_thread.start()
+        self.progressDialog.show()
 
     def browseAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
