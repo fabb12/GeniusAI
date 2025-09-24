@@ -18,16 +18,16 @@ class SettingsDialog(QDialog):
         super(SettingsDialog, self).__init__(parent)
         self.setWindowTitle("Impostazioni Applicazione") # Titolo più generale
         self.settings = QSettings("ThemaConsulting", "GeniusAI")
-
+        self.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Maximum)
         # Dizionari per tenere traccia dei controlli UI
         self.model_combos = {}
         self.api_key_edits = {} # Per memorizzare i QLineEdit delle API key
 
         layout = QVBoxLayout(self)
-
         # --- Ristrutturazione con QTabWidget ---
         tabs = QTabWidget()
 
+        tabs.setUsesScrollButtons(False)
         # Tab per le API Keys (Nuovo)
         tabs.addTab(self.createApiKeySettingsTab(), "API Keys")
 
@@ -54,6 +54,8 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self.saveSettings)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
+
+        layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetFixedSize)
 
         # Carica tutte le impostazioni salvate (API Keys + Modelli)
         self.loadSettings()
