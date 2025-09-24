@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
+from src.ui.InfoDock import InfoDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
@@ -247,6 +248,11 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(self.styleSheet())
         self.videoMergeDock.setToolTip("Dock per l'unione di più video")
         area.addDock(self.videoMergeDock, 'top')
+
+        self.infoDock = InfoDock()
+        self.infoDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.infoDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.infoDock, 'right', self.transcriptionDock)
 
 
         # self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
@@ -724,7 +730,8 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'videoMergeDock': self.videoMergeDock
+            'videoMergeDock': self.videoMergeDock,
+            'infoDock': self.infoDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -999,6 +1006,13 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.setChecked(True)
         QMessageBox.information(self, "Completato", "Integrazione delle informazioni dal video completata.")
 
+        # Aggiorna il file JSON
+        update_data = {
+            "summary_generated_integrated": summary,
+            "summary_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
     def onIntegrazioneError(self, error_message):
         self.progressDialog.close()
         QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'integrazione:\n{error_message}")
@@ -1271,6 +1285,36 @@ class VideoAudioManager(QMainWindow):
         self.text_ai_thread.process_error.connect(self.onProcessError)
         self.text_ai_thread.start()
 
+    def _update_json_file(self, video_path, update_dict):
+        """
+        Helper function to update specific fields in a video's JSON file.
+        """
+        if not video_path or not os.path.exists(video_path):
+            logging.warning("Aggiornamento JSON saltato: nessun video sorgente caricato.")
+            return
+
+        json_path = os.path.splitext(video_path)[0] + ".json"
+
+        try:
+            # Leggi i dati esistenti
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logging.error(f"Impossibile leggere il file JSON {json_path} per l'aggiornamento: {e}. L'operazione verrà annullata.")
+            return
+
+        # Aggiorna i campi
+        data.update(update_dict)
+
+        # Salva i dati aggiornati
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            logging.info(f"File JSON {json_path} aggiornato con successo.")
+            # Aggiorna il dock informativo
+            self.infoDock.update_info(data)
+        except Exception as e:
+            logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
         self.transcriptionTextArea.setReadOnly(
@@ -1304,8 +1348,12 @@ class VideoAudioManager(QMainWindow):
             # Switch to the summary tab
             self.transcriptionTabWidget.setCurrentIndex(1)
 
-            # Auto-save the summary
-            self._save_summary_to_json()
+            # Aggiorna il file JSON
+            update_data = {
+                "summary_generated": result,
+                "summary_date": datetime.datetime.now().isoformat()
+            }
+            self._update_json_file(self.videoPathLineEdit, update_data)
 
             self.current_summary_type = None  # Reset after use
 
@@ -1714,6 +1762,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
         self.videoMergeDock.setStyleSheet(style)
+        self.infoDock.setStyleSheet(style)
 
     def getDarkStyle(self):
         return """
@@ -2852,51 +2901,29 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file: {e}")
             QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file:\n{e}")
 
-    def _save_summary_to_json(self):
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            logging.warning("Salvataggio automatico saltato: nessun video sorgente caricato.")
-            return
-
-        json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
-
-        metadata = {}
-        if os.path.exists(json_path):
-            try:
-                with open(json_path, 'r', encoding='utf-8') as f:
-                    metadata = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                logging.warning(f"Impossibile leggere il file JSON esistente, verrà sovrascritto: {e}")
-
-        # Aggiorna i campi
-        metadata['trascrizione_grezza'] = self.transcriptionTextArea.toPlainText()
-        metadata['riassunto_generato'] = self.summaryTextArea.toPlainText()
-        metadata['transcription_date'] = datetime.datetime.now().isoformat()
-        metadata['language'] = self.languageComboBox.currentData()
-
-        try:
-            with open(json_path, 'w', encoding='utf-8') as f:
-                json.dump(metadata, f, ensure_ascii=False, indent=4)
-            logging.info(f"Riassunto salvato/aggiornato automaticamente in {json_path}")
-        except Exception as e:
-            logging.error(f"Errore durante il salvataggio automatico del riassunto: {e}")
-
     def loadText(self):
         path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
         if path:
-            json_path = os.path.splitext(path)[0] + ".json"
-            if os.path.exists(json_path):
-                self.loadTranscription(json_path)
+            # Se è un json, lo gestiamo con la nuova logica
+            if path.endswith('.json'):
+                # We need a video path to associate with the json.
+                # For now, let's assume the json has a 'video_path' key.
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    video_path = data.get("video_path")
+                    if video_path and os.path.exists(video_path):
+                        self.loadVideo(video_path)
+                    else:
+                        QMessageBox.warning(self, "Attenzione", "Il file video associato a questo JSON non è stato trovato.")
+                except Exception as e:
+                    QMessageBox.critical(self, "Errore", f"Impossibile caricare il file JSON: {e}")
+            # Se è un txt, lo carichiamo solo nell'area di testo
             else:
                 try:
                     with open(path, 'r', encoding='utf-8') as file:
                         text_loaded = file.read()
-                    self.original_text = text_loaded
-                    self.summaries = {}
-                    self.active_summary_type = None
-                    self.summary_text = ""
-                    self.visualizzaRiassuntoCheckbox.setEnabled(False)
-                    self.visualizzaRiassuntoCheckbox.setChecked(False)
-                    self.update_transcription_view()
+                    self.transcriptionTextArea.setPlainText(text_loaded)
                     logging.debug("File di testo caricato correttamente!")
                 except Exception as e:
                     logging.error(f"Errore durante il caricamento del file di testo: {e}")
@@ -2993,6 +3020,59 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.play()
         self.playerOutput.pause()
 
+    def _manage_video_json(self, video_path):
+        """
+        Crea o carica il file JSON associato a un video.
+        """
+        json_path = os.path.splitext(video_path)[0] + ".json"
+
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                logging.info(f"File JSON esistente caricato per {video_path}")
+            except (json.JSONDecodeError, IOError) as e:
+                logging.error(f"Errore nel caricamento del file JSON {json_path}: {e}. Verrà creato un nuovo file.")
+                data = self._create_new_json_data(video_path)
+        else:
+            logging.info(f"Nessun file JSON trovato per {video_path}. Creazione di un nuovo file.")
+            data = self._create_new_json_data(video_path)
+
+        # Scrivi sempre per assicurarti che il formato sia corretto e aggiornato
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+        self._update_ui_from_json_data(data)
+        return data
+
+    def _create_new_json_data(self, video_path):
+        """
+        Crea la struttura dati di default per un nuovo file JSON.
+        """
+        try:
+            clip = VideoFileClip(video_path)
+            duration = clip.duration
+            clip.close()
+            # Get video creation time
+            creation_time = os.path.getctime(video_path)
+            video_date = datetime.datetime.fromtimestamp(creation_time).isoformat()
+        except Exception as e:
+            logging.error(f"Impossibile leggere i metadati del video {video_path}: {e}")
+            duration = 0
+            video_date = datetime.datetime.now().isoformat()
+
+        return {
+            "video_path": video_path,
+            "duration": duration,
+            "language": "N/A",
+            "video_date": video_date,
+            "transcription_date": None,
+            "transcription_raw": "",
+            "summary_generated": "",
+            "summary_generated_integrated": "",
+            "summary_date": None
+        }
+
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
         self.player.stop()
@@ -3010,10 +3090,16 @@ class VideoAudioManager(QMainWindow):
 
         self.updateRecentFiles(video_path)
 
-        # Carica la trascrizione se esiste un file JSON corrispondente
-        json_path = os.path.splitext(video_path)[0] + ".json"
-        if os.path.exists(json_path):
-            self.loadTranscription(json_path)
+        # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
+        video_metadata = self._manage_video_json(video_path)
+
+        # Carica i dati esistenti nelle aree di testo, se presenti
+        if video_metadata:
+            self.transcriptionTextArea.setPlainText(video_metadata.get("transcription_raw", ""))
+
+            # Decide quale riassunto mostrare
+            summary_to_show = video_metadata.get("summary_generated_integrated") or video_metadata.get("summary_generated", "")
+            self.summaryTextArea.setPlainText(summary_to_show)
 
     def loadVideoOutput(self, video_path):
 
@@ -3215,6 +3301,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
+        self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -3225,6 +3312,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
+        viewMenu.addAction(self.actionToggleInfoDock)
 
 
 
@@ -3306,6 +3394,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
+        self.actionToggleInfoDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -3318,6 +3407,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
+        self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -3451,41 +3541,35 @@ class VideoAudioManager(QMainWindow):
 
         def complete(json_path, temp_files):
             if not progress_dialog.wasCanceled():
-                self.loadTranscription(json_path)
+                self._manage_video_json(self.videoPathLineEdit)
                 progress_dialog.setValue(100)
                 progress_dialog.close()
                 self.cleanupFiles(temp_files)
 
         return complete
 
-    def loadTranscription(self, json_path):
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                metadata = json.load(f)
+    def _update_ui_from_json_data(self, data):
+        """
+        Aggiorna l'interfaccia utente con i dati dal file JSON.
+        """
+        # Carica la trascrizione grezza
+        self.original_text = data.get('transcription_raw', "")
+        self.transcriptionTextArea.setPlainText(self.original_text)
 
-            # Carica la trascrizione grezza
-            self.original_text = metadata.get('trascrizione_grezza', metadata.get("transcription", "")) # Compatibilità
-            self.transcriptionTextArea.setPlainText(self.original_text)
+        # Carica il riassunto
+        summary = data.get('summary_generated_integrated') or data.get('summary_generated', '')
+        self.summaryTextArea.setPlainText(summary)
 
-            # Carica il riassunto
-            summary = metadata.get('riassunto_generato', '')
-            if not summary and "summaries" in metadata and metadata["summaries"]: # Compatibilità
-                summary = next(iter(metadata["summaries"].values()), "")
+        # Imposta la lingua nella combobox
+        language_code = data.get("language")
+        if language_code:
+            index = self.languageComboBox.findData(language_code)
+            if index != -1:
+                self.languageComboBox.setCurrentIndex(index)
 
-            self.summaryTextArea.setPlainText(summary)
-            self.summaries['meeting'] = summary # Salva per usi futuri
-
-            # Imposta la lingua nella combobox
-            language_code = metadata.get("language")
-            if language_code:
-                index = self.languageComboBox.findData(language_code)
-                if index != -1:
-                    self.languageComboBox.setCurrentIndex(index)
-
-            logging.debug("Trascrizione e riassunto caricati correttamente dal file JSON!")
-        except Exception as e:
-            logging.error(f"Errore durante il caricamento della trascrizione dal file JSON: {e}")
-            QMessageBox.critical(self, "Errore di Caricamento", f"Impossibile caricare il file JSON:\n{e}")
+        # Aggiorna il dock informativo
+        self.infoDock.update_info(data)
+        logging.debug("UI aggiornata con i dati JSON!")
 
     def cleanupFiles(self, file_paths):
         """Safely removes temporary files used during transcription."""
