@@ -7,6 +7,7 @@ import datetime
 import time
 import logging
 import json
+import markdown
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
@@ -1378,7 +1379,12 @@ class VideoAudioManager(QMainWindow):
 
         self.summaryTextArea.blockSignals(True)
         if is_markdown:
-            self.summaryTextArea.setMarkdown(summary_text)
+            try:
+                html = markdown.markdown(summary_text)
+                self.summaryTextArea.setHtml(html)
+            except Exception as e:
+                logging.error(f"Errore durante la conversione Markdown in HTML: {e}")
+                self.summaryTextArea.setPlainText(summary_text)
         else:
             self.summaryTextArea.setPlainText(summary_text)
         self.summaryTextArea.blockSignals(False)
