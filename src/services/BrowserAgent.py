@@ -2,6 +2,7 @@
 # Updated to support dynamic LLM selection including Google Gemini
 
 import os
+import sys
 import asyncio
 import logging
 import json
@@ -9,6 +10,35 @@ import traceback
 import time
 from typing import Optional, Dict, List
 import webbrowser # Keep webbrowser for potential future use if needed outside the agent
+
+# --- Inizio Patch per PyInstaller ---
+# Questo blocco di codice imposta il percorso corretto per i browser di Playwright
+# quando l'applicazione viene eseguita come un eseguibile creato da PyInstaller.
+
+# 'sys.frozen' è un attributo impostato da PyInstaller.
+# 'sys._MEIPASS' contiene il percorso della cartella temporanea in cui l'app è scompattata.
+if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
+    # L'applicazione è in esecuzione da un bundle PyInstaller.
+    # Il file .spec è configurato per includere la cartella 'ms-playwright'
+    # nella directory radice dell'output, che corrisponde a sys._MEIPASS.
+    playwright_browsers_path = os.path.join(sys._MEIPASS, 'ms-playwright')
+
+    # Verifica che la cartella dei browser esista nel percorso atteso.
+    if os.path.exists(playwright_browsers_path):
+        # Imposta la variabile d'ambiente 'PLAYWRIGHT_BROWSERS_PATH'.
+        # Questo indica a Playwright dove trovare i file del browser.
+        # Deve essere eseguito prima dell'importazione di 'browser_use' o 'playwright'.
+        os.environ['PLAYWRIGHT_BROWSERS_PATH'] = playwright_browsers_path
+        logging.info(f"Bundle PyInstaller rilevato. Percorso browser Playwright impostato su: {playwright_browsers_path}")
+    else:
+        # Log di avviso se la cartella non viene trovata, utile per il debug.
+        logging.warning(f"Bundle PyInstaller rilevato, ma la cartella dei browser Playwright non è stata trovata in: {playwright_browsers_path}")
+else:
+    # L'applicazione è in esecuzione in un ambiente di sviluppo standard.
+    # Playwright userà la sua cache predefinita, non è necessario fare nulla.
+    logging.info("Esecuzione in ambiente Python standard.")
+# --- Fine Patch per PyInstaller ---
+
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLineEdit,
