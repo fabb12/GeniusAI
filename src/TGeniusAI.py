@@ -220,7 +220,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
 
-        self.editingDock = CustomDock("Generazione Audio AI di Editing", closable=True)
+        self.editingDock = CustomDock("Generazione Audio AI", closable=True)
         self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.editingDock.setStyleSheet(self.styleSheet())
         self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
