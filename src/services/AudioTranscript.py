@@ -57,17 +57,25 @@ class TranscriptionThread(QThread):
                 os.remove(audio_file)
 
     def save_transcription_to_json(self, transcription, language_code):
-        video_clip = VideoFileClip(self.media_path)
-        metadata = {
-            "video_path": self.media_path,
-            "duration": video_clip.duration,
-            "language": language_code,
-            "transcription_date": datetime.datetime.now().isoformat(),
-            "transcription": transcription
-        }
         json_path = os.path.splitext(self.media_path)[0] + ".json"
+
+        # Leggi i dati esistenti
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            # Se il file non esiste o è corrotto, crea un nuovo dizionario
+            data = {}
+
+        # Aggiorna i campi
+        data['language'] = language_code
+        data['transcription_date'] = datetime.datetime.now().isoformat()
+        data['transcription_raw'] = transcription
+
+        # Salva i dati aggiornati
         with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, ensure_ascii=False, indent=4)
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
         return json_path
 
     def stop(self):
