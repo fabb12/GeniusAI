@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import (
     QFontComboBox
 )
 from PyQt6.QtCore import QSettings
+from PyQt6.QtGui import QFont
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE
 
@@ -257,7 +258,8 @@ class SettingsDialog(QDialog):
         self.saveWithPlaybackSpeed.setChecked(self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool))
 
         # --- Carica Impostazioni Editor ---
-        self.fontFamilyComboBox.setCurrentFont(self.settings.value("editor/fontFamily", "Arial"))
+        font_family = self.settings.value("editor/fontFamily", "Arial")
+        self.fontFamilyComboBox.setCurrentFont(QFont(font_family))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
 
 
