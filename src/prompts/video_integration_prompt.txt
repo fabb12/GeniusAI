@@ -9,7 +9,7 @@ Un **Riassunto Finale Integrato** in {language}, che unisce i due contenuti in m
 
 **Linee Guida:**
 
-1.  **Mantieni la Struttura:** Rispetta la struttura logica e la leggibilità del riassunto originale.
+1.  **Mantieni la Struttura:** Rispetta la struttura logica e anche la formattazione e la leggibilità del riassunto originale.
 2.  **Integrazione Coerente:** Inserisci le nuove informazioni nel punto più pertinente del testo. Non aggiungerle semplicemente alla fine in modo artificiale.
 3.  **Correggi e Migliora:** Usa le informazioni estratte dai frame per correggere eventuali errori presenti nel riassunto attuale (es. nomi di persone o prodotti trascritti male, concetti imprecisi).
 4.  **Evita Duplicati:** Se un'informazione è già presente nel riassunto, sostituiscila con la versione più precisa e dettagliata fornita dai frame, oppure scartala se non aggiunge valore.
