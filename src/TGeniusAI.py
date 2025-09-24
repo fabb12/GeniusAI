@@ -152,8 +152,8 @@ class VideoAudioManager(QMainWindow):
         self.summaries = {}
         self.active_summary_type = None
         self.summary_text = ""
-        self.text_before_integration = ""
-        self.text_after_integration = ""
+        self.summary_generated = ""
+        self.summary_generated_integrated = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -994,22 +994,15 @@ class VideoAudioManager(QMainWindow):
     def onIntegrazioneComplete(self, summary):
         self.progressDialog.close()
 
-        # Salva il riassunto integrativo nel dizionario dei riassunti
-        self.summaries['integrative_summary'] = summary
+        # Salva il riassunto integrato
+        self.summary_generated_integrated = summary
+        self.summaries['integrative_summary'] = summary # Mantieni per compatibilità o altre logiche
 
-        # Controlla l'impostazione per decidere come visualizzare il riassunto
-        settings = QSettings("ThemaConsulting", "GeniusAI")
-        integrated_summary_only = settings.value("processing/integratedSummaryOnly", False, type=bool)
+        # Aggiorna la vista del riassunto per mostrare il nuovo riassunto integrato
+        self.summary_text = self.summary_generated_integrated
+        self.update_summary_view()
 
-        if integrated_summary_only:
-            # Se l'opzione è abilitata, mostra solo il nuovo riassunto
-            self.text_after_integration = summary
-        else:
-            # Altrimenti, combina il testo originale con il nuovo sommario
-            self.text_after_integration = f"{self.text_before_integration}\n\n--- Informazioni Integrate dal Video ---\n{summary}"
-
-        # Aggiorna la text area e il toggle
-        self.transcriptionTextArea.setPlainText(self.text_after_integration)
+        # Abilita e seleziona il toggle
         self.integrazioneToggle.setEnabled(True)
         self.integrazioneToggle.setChecked(True)
         QMessageBox.information(self, "Completato", "Integrazione delle informazioni dal video completata.")
@@ -1027,10 +1020,16 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.setEnabled(False)
 
     def toggleIntegrazioneView(self, checked):
+        """
+        Alterna la visualizzazione nell'area del riassunto tra il riassunto standard
+        e quello integrato con le informazioni del video.
+        """
         if checked:
-            self.transcriptionTextArea.setPlainText(self.text_after_integration)
+            self.summary_text = self.summary_generated_integrated
         else:
-            self.transcriptionTextArea.setPlainText(self.text_before_integration)
+            self.summary_text = self.summary_generated
+
+        self.update_summary_view()
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -1349,10 +1348,14 @@ class VideoAudioManager(QMainWindow):
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             self.summaries[self.current_summary_type] = result
             self.active_summary_type = self.current_summary_type
-            self.summary_text = result
 
-            # Update the summary text area
+            # Salva il riassunto standard e aggiorna la vista
+            self.summary_generated = result
+            self.summary_text = result
             self.update_summary_view()
+
+            # Deseleziona il toggle del riassunto integrato
+            self.integrazioneToggle.setChecked(False)
 
             # Switch to the summary tab
             self.transcriptionTabWidget.setCurrentIndex(1)
@@ -3573,9 +3576,20 @@ class VideoAudioManager(QMainWindow):
         self.original_text = data.get('transcription_raw', "")
         self.transcriptionTextArea.setPlainText(self.original_text)
 
-        # Carica il riassunto
-        summary = data.get('summary_generated_integrated') or data.get('summary_generated', '')
-        self.summary_text = summary
+        # Carica entrambi i tipi di riassunto
+        self.summary_generated = data.get('summary_generated', '')
+        self.summary_generated_integrated = data.get('summary_generated_integrated', '')
+
+        # Decide quale riassunto mostrare e imposta lo stato del toggle
+        if self.summary_generated_integrated:
+            self.summary_text = self.summary_generated_integrated
+            self.integrazioneToggle.setEnabled(True)
+            self.integrazioneToggle.setChecked(True)
+        else:
+            self.summary_text = self.summary_generated
+            self.integrazioneToggle.setEnabled(False)
+            self.integrazioneToggle.setChecked(False)
+
         self.update_summary_view()
 
         # Imposta la lingua nella combobox

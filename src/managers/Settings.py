@@ -46,9 +46,6 @@ class SettingsDialog(QDialog):
         # Tab per l'Editor di Testo
         tabs.addTab(self.createEditorSettingsTab(), "Editor")
 
-        # Tab per l'Elaborazione
-        tabs.addTab(self.createProcessingSettingsTab(), "Elaborazione")
-
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -265,9 +262,6 @@ class SettingsDialog(QDialog):
         self.fontFamilyComboBox.setCurrentFont(QFont(font_family))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
 
-        # --- Carica Impostazioni Elaborazione ---
-        self.integratedSummaryOnlyCheckbox.setChecked(self.settings.value("processing/integratedSummaryOnly", False, type=bool))
-
 
     def _setComboBoxValue(self, combo_box, value):
         """Imposta il valore corrente della ComboBox se il valore è presente."""
@@ -278,16 +272,6 @@ class SettingsDialog(QDialog):
             if combo_box.count() > 0:
                 combo_box.setCurrentIndex(0)
                 print(f"Attenzione: Il modello salvato '{value}' non è più disponibile per {combo_box.toolTip()}. Impostato il primo modello disponibile.")
-
-    def createProcessingSettingsTab(self):
-        widget = QWidget()
-        layout = QFormLayout(widget)
-
-        self.integratedSummaryOnlyCheckbox = QCheckBox()
-        self.integratedSummaryOnlyCheckbox.setToolTip("Se abilitato, il riassunto integrato sostituirà il testo esistente invece di essere aggiunto in coda.")
-        layout.addRow("Mostra solo riassunto integrato:", self.integratedSummaryOnlyCheckbox)
-
-        return widget
 
     def saveSettings(self):
         """Salva sia le API Keys che le impostazioni dei modelli."""
@@ -324,9 +308,6 @@ class SettingsDialog(QDialog):
         # --- Salva Impostazioni Editor ---
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
         self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
-
-        # --- Salva Impostazioni Elaborazione ---
-        self.settings.setValue("processing/integratedSummaryOnly", self.integratedSummaryOnlyCheckbox.isChecked())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
