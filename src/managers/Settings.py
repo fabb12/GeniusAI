@@ -5,7 +5,8 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget,
     QDialogButtonBox, QLabel, QComboBox, QGridLayout,
     QLineEdit, QFormLayout, QMessageBox, QCheckBox,
-    QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout
+    QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout,
+    QFontComboBox
 )
 from PyQt6.QtCore import QSettings
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
@@ -40,6 +41,9 @@ class SettingsDialog(QDialog):
 
         # Tab per il Salvataggio
         tabs.addTab(self.createSavingSettingsTab(), "Salvataggio")
+
+        # Tab per l'Editor di Testo
+        tabs.addTab(self.createEditorSettingsTab(), "Editor")
 
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
@@ -197,6 +201,25 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createEditorSettingsTab(self):
+        """Crea il widget per il tab delle impostazioni dell'editor di testo."""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        # Controllo per la famiglia di font
+        self.fontFamilyComboBox = QFontComboBox()
+        self.fontFamilyComboBox.setToolTip("Seleziona la famiglia di caratteri per l'editor di testo.")
+        layout.addRow("Font Family:", self.fontFamilyComboBox)
+
+        # Controllo per la dimensione del font
+        self.fontSizeSpinBox = QSpinBox()
+        self.fontSizeSpinBox.setRange(6, 72)
+        self.fontSizeSpinBox.setSuffix(" pt")
+        self.fontSizeSpinBox.setToolTip("Imposta la dimensione del carattere per l'editor di testo.")
+        layout.addRow("Font Size:", self.fontSizeSpinBox)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -232,6 +255,10 @@ class SettingsDialog(QDialog):
 
         # --- Carica Impostazioni Salvataggio ---
         self.saveWithPlaybackSpeed.setChecked(self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool))
+
+        # --- Carica Impostazioni Editor ---
+        self.fontFamilyComboBox.setCurrentFont(self.settings.value("editor/fontFamily", "Arial"))
+        self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -275,6 +302,10 @@ class SettingsDialog(QDialog):
 
         # --- Salva Impostazioni Salvataggio ---
         self.settings.setValue("saving/saveWithPlaybackSpeed", self.saveWithPlaybackSpeed.isChecked())
+
+        # --- Salva Impostazioni Editor ---
+        self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
+        self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()

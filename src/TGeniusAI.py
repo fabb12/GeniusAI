@@ -11,7 +11,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -618,7 +618,6 @@ class VideoAudioManager(QMainWindow):
         #--------------------
 
         self.transcriptionTextArea = CustomTextEdit(self)
-        self.transcriptionTextArea.setStyleSheet("font-size: 14pt; font-family: 'Arial';")
         self.transcriptionTextArea.setPlaceholderText("La trascrizione del video apparirà qui...")
         self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
         self.transcriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
@@ -704,7 +703,6 @@ class VideoAudioManager(QMainWindow):
         summary_layout.addWidget(summary_controls_group)
 
         self.summaryTextArea = CustomTextEdit(self)
-        self.summaryTextArea.setStyleSheet("font-size: 14pt; font-family: 'Arial';")
         self.summaryTextArea.setPlaceholderText("Il riassunto generato dall'AI apparirà qui...")
         summary_layout.addWidget(self.summaryTextArea)
 
@@ -824,6 +822,33 @@ class VideoAudioManager(QMainWindow):
 
         # Applica lo stile a tutti i dock
         self.applyStyleToAllDocks()
+
+        # Applica le impostazioni del font
+        self.apply_and_save_font_settings()
+
+        # Connetti i segnali per il cambio di font
+        self.transcriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        self.summaryTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+
+    def apply_and_save_font_settings(self, size=None):
+        """
+        Applica le impostazioni del font (famiglia e dimensione) alle aree di testo
+        e salva la dimensione se viene modificata.
+        """
+        settings = QSettings("ThemaConsulting", "GeniusAI")
+
+        font_family = settings.value("editor/fontFamily", "Arial")
+
+        if size is None:
+            font_size = settings.value("editor/fontSize", 14, type=int)
+        else:
+            font_size = size
+            settings.setValue("editor/fontSize", font_size)
+
+        font = QFont(font_family, font_size)
+
+        self.transcriptionTextArea.setFont(font)
+        self.summaryTextArea.setFont(font)
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
@@ -1317,6 +1342,7 @@ class VideoAudioManager(QMainWindow):
         dialog = SettingsDialog(self)
         if dialog.exec():
             self.load_recording_settings()
+            self.apply_and_save_font_settings()
 
     def set_default_dock_layout(self):
 
