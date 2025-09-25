@@ -243,33 +243,34 @@ class CustomTextEdit(QTextEdit):
             self.ensureCursorVisible()
 
     def clear_highlights(self):
-        """Cancella tutte le evidenziazioni di testo create dalla ricerca."""
-        if not self.search_text:
-             return
+        """
+        Cancella tutte le evidenziazioni di testo create dalla ricerca scorrendo
+        l'intero documento e reimpostando il formato del testo.
+        Questo metodo è più robusto e non dipende dallo stato della ricerca.
+        """
+        cursor = QTextCursor(self.document())
+        cursor.select(QTextCursor.SelectionType.Document)
 
-        # Formato di default per rimuovere lo sfondo
+        # Crea un formato di carattere con i colori di default del tema
         default_format = QTextCharFormat()
         palette = self.palette()
-        default_bg_color = palette.color(QPalette.ColorRole.Base) # Colore base del widget
-        default_fg_color = palette.color(QPalette.ColorRole.Text) # Colore testo del widget
+        default_bg_color = palette.color(QPalette.ColorRole.Base)
+        default_fg_color = palette.color(QPalette.ColorRole.Text)
         default_format.setBackground(default_bg_color)
         default_format.setForeground(default_fg_color)
 
-        # Applica il formato di default alle aree precedentemente evidenziate
-        temp_cursor = QTextCursor(self.document())
-        for saved_cursor in self.search_results_cursors:
-            temp_cursor.setPosition(saved_cursor.selectionStart())
-            temp_cursor.setPosition(saved_cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
-            # Applica il formato neutro per rimuovere l'evidenziazione specifica
-            temp_cursor.setCharFormat(default_format)
+        # Applica il formato di default a tutto il documento per rimuovere
+        # qualsiasi formattazione di sfondo precedente.
+        cursor.setCharFormat(default_format)
 
+        # Pulisce lo stato della ricerca
         self.search_results_cursors = []
         self.current_search_index = -1
         self.search_text = None
 
-        # Aggiorna il contatore nel search dialog se è aperto
-        if self.search_dialog_instance and not self.search_dialog_instance.isHidden():
-             self.search_dialog_instance.update_result_count_label()
+        # Aggiorna l'etichetta nel dialogo di ricerca, se esiste
+        if self.search_dialog_instance and self.search_dialog_instance.isVisible():
+            self.search_dialog_instance.update_result_count_label()
 
     # Metodi getter per permettere a SearchDialog di leggere lo stato
     def get_current_search_index(self):
@@ -370,7 +371,7 @@ class SearchDialog(QDialog):
             self.update_result_count_label() # Aggiorna subito dopo la ricerca
             # Aggiorna stile input se non ci sono risultati
             if num_results == 0:
-                self.searchLineEdit.setStyleSheet("background-color: #FFDDDD;") # Rosso chiaro
+                self.searchLineEdit.setStyleSheet("background-color: #FFF3E0;") # Arancione chiaro
             else:
                 self.searchLineEdit.setStyleSheet("") # Stile default
         else:
@@ -381,14 +382,16 @@ class SearchDialog(QDialog):
     def update_result_count_label(self):
         """Aggiorna la label con il numero di risultati trovati."""
         # Legge lo stato direttamente da textEdit usando i metodi getter
-        if self.textEdit.get_active_search_text() is None:
-             self.resultCountLabel.setText("Risultati: N/A")
-        elif self.textEdit.get_search_results_count() == 0:
-             self.resultCountLabel.setText("Risultati: 0")
+        search_text = self.textEdit.get_active_search_text()
+        num_results = self.textEdit.get_search_results_count()
+
+        if not search_text:
+            self.resultCountLabel.setText("Risultati: N/A")
+        elif num_results == 0:
+            self.resultCountLabel.setText("Risultati: 0/0")
         else:
-             current = self.textEdit.get_current_search_index() + 1
-             total = self.textEdit.get_search_results_count()
-             self.resultCountLabel.setText(f"Risultati: {current}/{total}")
+            current = self.textEdit.get_current_search_index() + 1
+            self.resultCountLabel.setText(f"Risultati: {current}/{num_results}")
 
     def closeEvent(self, event):
         """Sovrascrive l'evento di chiusura per garantire la pulizia."""
