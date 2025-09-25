@@ -1,11 +1,11 @@
 # File: src/ui/CustumTextEdit.py (Versione con Dialogo di Ricerca)
 
 from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
-                             QPushButton, QHBoxLayout, QApplication, QLabel) # Aggiunto QLabel
+                             QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox) # Aggiunto QLabel
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QShortcut, QPalette, QFont) # Aggiunto QFont
-from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer
 import re
 
 class CustomTextEdit(QTextEdit):
@@ -167,15 +167,17 @@ class CustomTextEdit(QTextEdit):
             self.search_dialog_instance.raise_()
 
         # In entrambi i casi, imposta il focus e seleziona il testo nel QLineEdit
-        self.search_dialog_instance.searchLineEdit.setFocus()
-        self.search_dialog_instance.searchLineEdit.selectAll()
+        # Usiamo un timer per assicurarci che il focus venga impostato dopo che il dialogo è stato mostrato
+        QTimer.singleShot(0, lambda: self.search_dialog_instance.searchLineEdit.setFocus())
+        QTimer.singleShot(0, lambda: self.search_dialog_instance.searchLineEdit.selectAll())
+
 
     def on_search_dialog_closed(self):
         """Slot chiamato quando il dialogo di ricerca viene chiuso."""
         # Rimuovi le evidenziazioni quando il dialogo viene chiuso
         self.clear_highlights()
-        # Opzionale: resetta l'istanza del dialogo per ricrearlo la prossima volta
-        # self.search_dialog_instance = None
+        # Resetta l'istanza del dialogo per ricrearlo la prossima volta
+        self.search_dialog_instance = None
 
     def highlight_search_results(self, search_text, case_sensitive=False):
         """
@@ -343,23 +345,36 @@ class SearchDialog(QDialog):
 
         layout.addLayout(searchLayout)
 
+        # Layout per opzioni e risultati
+        options_layout = QHBoxLayout()
+
+        # Checkbox per ricerca case-sensitive
+        self.caseSensitiveCheck = QCheckBox("Maiuscole/minuscole")
+        self.caseSensitiveCheck.setToolTip("Attiva per distinguere tra maiuscole e minuscole nella ricerca")
+        options_layout.addWidget(self.caseSensitiveCheck)
+
+        options_layout.addStretch() # Spinge la label a destra
+
         # Label per mostrare il numero di risultati
         self.resultCountLabel = QLabel("Risultati: N/A")
         self.resultCountLabel.setAlignment(Qt.AlignmentFlag.AlignRight)
-        layout.addWidget(self.resultCountLabel)
+        options_layout.addWidget(self.resultCountLabel)
 
-        # Opzione Case Sensitive (Potrebbe essere aggiunta qui se necessaria)
+        layout.addLayout(options_layout)
 
         self.setLayout(layout)
         self.searchLineEdit.setFocus()
         self.adjustSize()
 
+        # Collega la checkbox per rieseguire la ricerca quando cambia stato
+        self.caseSensitiveCheck.stateChanged.connect(self.perform_search)
+
     def perform_search(self):
         """Esegue la ricerca quando viene premuto Invio o il pulsante Cerca."""
         search_text = self.searchLineEdit.text()
-        # case_sensitive = self.caseSensitiveCheck.isChecked() # Se aggiungi checkbox
+        case_sensitive = self.caseSensitiveCheck.isChecked()
         if search_text:
-            num_results = self.textEdit.highlight_search_results(search_text) # case_sensitive)
+            num_results = self.textEdit.highlight_search_results(search_text, case_sensitive)
             self.update_result_count_label() # Aggiorna subito dopo la ricerca
             # Aggiorna stile input se non ci sono risultati
             if num_results == 0:
