@@ -171,7 +171,7 @@ class CustomTextEdit(QTextEdit):
         QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.setFocus)
         QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.selectAll)
 
-    def highlight_search_results(self, search_text, case_sensitive=False):
+    def highlight_search_results(self, search_text, case_sensitive=False, whole_words=False):
         """
         Evidenzia tutte le corrispondenze nel testo e memorizza i cursori.
         Restituisce il numero di risultati trovati.
@@ -191,6 +191,8 @@ class CustomTextEdit(QTextEdit):
         options = QTextDocument.FindFlag(0)
         if case_sensitive:
             options |= QTextDocument.FindFlag.FindCaseSensitively
+        if whole_words:
+            options |= QTextDocument.FindFlag.FindWholeWords
 
         cursor = QTextCursor(self.document())
         while True:
@@ -346,6 +348,11 @@ class SearchDialog(QDialog):
         self.caseSensitiveCheck.setToolTip("Attiva per distinguere tra maiuscole e minuscole nella ricerca")
         options_layout.addWidget(self.caseSensitiveCheck)
 
+        # Checkbox per ricerca parola intera
+        self.wholeWordCheck = QCheckBox("Parola intera")
+        self.wholeWordCheck.setToolTip("Cerca solo parole intere")
+        options_layout.addWidget(self.wholeWordCheck)
+
         options_layout.addStretch() # Spinge la label a destra
 
         # Label per mostrare il numero di risultati
@@ -359,15 +366,17 @@ class SearchDialog(QDialog):
         self.searchLineEdit.setFocus()
         self.adjustSize()
 
-        # Collega la checkbox per rieseguire la ricerca quando cambia stato
+        # Collega le checkbox per rieseguire la ricerca quando il loro stato cambia
         self.caseSensitiveCheck.stateChanged.connect(self.perform_search)
+        self.wholeWordCheck.stateChanged.connect(self.perform_search)
 
     def perform_search(self):
         """Esegue la ricerca quando viene premuto Invio o il pulsante Cerca."""
         search_text = self.searchLineEdit.text()
         case_sensitive = self.caseSensitiveCheck.isChecked()
+        whole_words = self.wholeWordCheck.isChecked()
         if search_text:
-            num_results = self.textEdit.highlight_search_results(search_text, case_sensitive)
+            num_results = self.textEdit.highlight_search_results(search_text, case_sensitive, whole_words)
             self.update_result_count_label() # Aggiorna subito dopo la ricerca
             # Aggiorna stile input se non ci sono risultati
             if num_results == 0:
@@ -386,9 +395,9 @@ class SearchDialog(QDialog):
         num_results = self.textEdit.get_search_results_count()
 
         if not search_text:
-            self.resultCountLabel.setText("Risultati: N/A")
+            self.resultCountLabel.setText("Risultati:")
         elif num_results == 0:
-            self.resultCountLabel.setText("Risultati: 0/0")
+            self.resultCountLabel.setText("Risultati: 0")
         else:
             current = self.textEdit.get_current_search_index() + 1
             self.resultCountLabel.setText(f"Risultati: {current}/{num_results}")
