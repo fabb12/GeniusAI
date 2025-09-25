@@ -158,26 +158,18 @@ class CustomTextEdit(QTextEdit):
             # Crea una nuova istanza se non esiste o non è visibile
             parent_widget = self.parent() # Ottieni il parent (TGeniusAI)
             self.search_dialog_instance = SearchDialog(self, parent_widget)
-            # Collega il segnale `finished` per sapere quando viene chiuso
-            self.search_dialog_instance.finished.connect(self.on_search_dialog_closed)
             self.search_dialog_instance.show()
         else:
             # Se esiste ed è visibile, portalo solo in primo piano
             self.search_dialog_instance.activateWindow()
             self.search_dialog_instance.raise_()
 
-        # In entrambi i casi, imposta il focus e seleziona il testo nel QLineEdit
-        # Usiamo un timer per assicurarci che il focus venga impostato dopo che il dialogo è stato mostrato
-        QTimer.singleShot(0, lambda: self.search_dialog_instance.searchLineEdit.setFocus())
-        QTimer.singleShot(0, lambda: self.search_dialog_instance.searchLineEdit.selectAll())
-
-
-    def on_search_dialog_closed(self):
-        """Slot chiamato quando il dialogo di ricerca viene chiuso."""
-        # Rimuovi le evidenziazioni quando il dialogo viene chiuso
-        self.clear_highlights()
-        # Resetta l'istanza del dialogo per ricrearlo la prossima volta
-        self.search_dialog_instance = None
+        # Forza il focus e seleziona il testo. L'uso del timer aiuta a garantire che
+        # queste operazioni vengano eseguite dopo che il dialogo è completamente visibile.
+        self.search_dialog_instance.activateWindow()
+        self.search_dialog_instance.raise_()
+        QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.setFocus)
+        QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.selectAll)
 
     def highlight_search_results(self, search_text, case_sensitive=False):
         """
@@ -399,8 +391,8 @@ class SearchDialog(QDialog):
              self.resultCountLabel.setText(f"Risultati: {current}/{total}")
 
     def closeEvent(self, event):
-        """Operazioni da eseguire alla chiusura del dialogo."""
-        # La pulizia viene fatta da on_search_dialog_closed in CustomTextEdit
+        """Sovrascrive l'evento di chiusura per garantire la pulizia."""
+        self.textEdit.clear_highlights()
         super().closeEvent(event)
 
     def keyPressEvent(self, event):
