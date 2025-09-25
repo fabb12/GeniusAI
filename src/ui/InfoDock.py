@@ -1,129 +1,155 @@
-import os
 import datetime
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QFormLayout, QSizePolicy
 from PyQt6.QtCore import Qt
+
+# Si presume che CustomDock sia una classe simile a un QWidget con un metodo addWidget,
+# come nel codice originale dell'utente.
 from src.ui.CustomDock import CustomDock
 
+
+# Codice di fallback per testare se CustomDock non è disponibile.
+# Questo fallback non funzionerà se si esegue il codice così com'è a causa della
+# differenza tra setWidget e addWidget. La correzione è nel codice principale.
+# try:
+#     from src.ui.CustomDock import CustomDock
+# except ImportError:
+#     from PyQt6.QtWidgets import QDockWidget as CustomDock
+
+
 class InfoDock(CustomDock):
+    """
+    Un dock informativo che visualizza i metadati di un file multimediale
+    con uno stile moderno, chiaro e facilmente manutenibile.
+    """
+
     def __init__(self, title="Informazioni Video", parent=None):
-        super().__init__(title, parent=parent, closable=True)
-        self.setToolTip("Dock informativo che mostra i metadati del video.")
+        super().__init__(title, parent=parent)
+        self.setToolTip("Mostra i dettagli del video selezionato.")
 
-        # Main widget
-        main_widget = QWidget()
-        main_layout = QVBoxLayout(main_widget)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.DEFAULT_TEXT = "Non disponibile"
+        self.info_labels = {}  # Dizionario per memorizzare le etichette dei valori
 
-        # Create a group box
-        info_group = QGroupBox("Dettagli Media")
+        # Centralizza la definizione dei campi per una facile manutenzione
+        # Formato: "Nome visualizzato": "chiave_dati"
+        self.fields = {
+            "File": "video_path",
+            "Durata": "duration",
+            "Lingua": "language",
+            "Data Video": "video_date",
+            "Data Trascrizione": "transcription_date",
+            "Data Riassunto": "summary_date",
+            "Riassunto Generato": "summary_generated",
+            "Riassunto Integrato": "summary_generated_integrated"
+        }
 
-        # Use QFormLayout for a cleaner key-value presentation
-        form_layout = QFormLayout(info_group)
-        form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
-        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
-        form_layout.setFormAlignment(Qt.AlignmentFlag.AlignLeft)
-
-        # --- Labels to display information ---
-        self.video_path_label = self._create_info_label()
-        self.duration_label = self._create_info_label()
-        self.language_label = self._create_info_label()
-        self.video_date_label = self._create_info_label()
-        self.transcription_date_label = self._create_info_label()
-        self.summary_date_label = self._create_info_label()
-        self.summary_label = self._create_info_label()
-        self.summary_integrated_label = self._create_info_label()
-
-        # Add rows to the form layout
-        form_layout.addRow("<b>Path:</b>", self.video_path_label)
-        form_layout.addRow("<b>Durata:</b>", self.duration_label)
-        form_layout.addRow("<b>Lingua:</b>", self.language_label)
-        form_layout.addRow("<b>Data Video:</b>", self.video_date_label)
-        form_layout.addRow("<b>Data Trascrizione:</b>", self.transcription_date_label)
-        form_layout.addRow("<b>Data Riassunto:</b>", self.summary_date_label)
-        form_layout.addRow("<b>Riassunto:</b>", self.summary_label)
-        form_layout.addRow("<b>Riassunto Integrato:</b>", self.summary_integrated_label)
-
-        main_layout.addWidget(info_group)
-        self.addWidget(main_widget)
-
+        self._setup_ui()
         self._apply_styles()
 
-    def _create_info_label(self):
-        """Helper to create a value label for the form layout."""
-        label = QLabel("N/A")
-        label.setWordWrap(True)
-        label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        return label
+    def _setup_ui(self):
+        """Crea e organizza i widget dell'interfaccia utente."""
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)  # Aggiunge un po' di respiro
+
+        # GroupBox che si espande per riempire lo spazio
+        info_group = QGroupBox("Dettagli del Media")
+        info_group.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        # Layout a form per una presentazione pulita chiave-valore
+        form_layout = QFormLayout(info_group)
+        form_layout.setVerticalSpacing(15)  # Aumenta lo spazio verticale tra le righe
+        form_layout.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapAllRows)
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
+        # Creazione dinamica delle etichette
+        for display_name, data_key in self.fields.items():
+            key_label = QLabel(f"<b>{display_name}</b>")
+            value_label = QLabel(self.DEFAULT_TEXT)
+            value_label.setWordWrap(True)
+            value_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+            form_layout.addRow(key_label, value_label)
+            self.info_labels[data_key] = value_label
+
+        main_layout.addWidget(info_group)
+
+        # --- CORREZIONE QUI ---
+        # Usa addWidget() come definito dalla tua classe base CustomDock,
+        # invece di setWidget() che appartiene a QDockWidget.
+        self.addWidget(main_widget)
 
     def _apply_styles(self):
-        """Applies a modern stylesheet to the widget."""
+        """Applica uno stylesheet per un aspetto più grande, chiaro e moderno."""
         self.setStyleSheet("""
             QGroupBox {
-                font-size: 14px;
+                background-color: #f7f7f7;
+                font-size: 18px;
                 font-weight: bold;
-                border: 1px solid #CCCCCC;
-                border-radius: 5px;
+                border: 1px solid #c0c0c0;
+                border-radius: 8px;
                 margin-top: 10px;
+                padding: 15px;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
                 subcontrol-position: top center;
-                padding: 0 3px;
-                background-color: transparent;
+                padding: 5px 10px;
+                background-color: #e0e0e0;
+                border-radius: 4px;
             }
-            QLabel {
-                font-size: 12px;
-                padding: 2px;
+            /* Stile per le etichette delle chiavi (es. "Durata") */
+            QLabel[text*="<b>"] { /* Selettore alternativo per le etichette in grassetto */
+                font-size: 14px;
+                font-weight: bold;
+                color: #333;
+            }
+            /* Stile per le etichette dei valori */
+            QFormLayout > QLabel:not([text*="<b>"]) {
+                font-size: 14px;
+                color: #555;
+                padding-left: 5px; /* Spazio tra chiave e valore */
             }
         """)
 
     def _format_date(self, date_string):
-        """Formats an ISO date string to a more readable format."""
-        if not date_string or date_string == "N/A":
-            return "N/A"
+        """Formatta una data in formato ISO in un formato leggibile."""
+        if not date_string or date_string == self.DEFAULT_TEXT:
+            return self.DEFAULT_TEXT
         try:
+            # Rimuove la 'Z' se presente, non sempre gestita da fromisoformat
+            if isinstance(date_string, str) and date_string.endswith('Z'):
+                date_string = date_string[:-1] + '+00:00'
             dt = datetime.datetime.fromisoformat(date_string)
-            return dt.strftime("%d/%m/%Y %H:%M:%S")
+            return dt.strftime("%d/%m/%Y, ore %H:%M")
         except (ValueError, TypeError):
-            return date_string
+            return date_string  # Ritorna la stringa originale se il formato non è valido
 
     def update_info(self, info_dict):
-        """
-        Populates the labels with data from a dictionary.
-        """
+        """Popola le etichette con i dati da un dizionario."""
         if not info_dict:
             self.clear_info()
             return
 
-        # Use .get() to avoid errors if a key is missing
-        self.video_path_label.setText(info_dict.get("video_path", "N/A"))
+        for data_key, label in self.info_labels.items():
+            value = info_dict.get(data_key)  # Usa get senza default per distinguere chiave assente da valore None
 
-        duration_sec = info_dict.get("duration")
-        if isinstance(duration_sec, (int, float)):
-            mins, secs = divmod(int(duration_sec), 60)
-            self.duration_label.setText(f"{mins}m {secs}s")
-        else:
-            self.duration_label.setText("N/A")
+            if value is None or value == '':
+                formatted_value = self.DEFAULT_TEXT
+            else:
+                # Formattazione speciale per campi specifici
+                if data_key == "duration" and isinstance(value, (int, float)):
+                    mins, secs = divmod(int(value), 60)
+                    formatted_value = f"{mins} minuti e {secs} secondi"
+                elif "date" in data_key:
+                    formatted_value = self._format_date(value)
+                elif "generated" in data_key:
+                    formatted_value = "Sì" if value else "No"
+                else:
+                    formatted_value = str(value)
 
-        self.language_label.setText(info_dict.get("language", "N/A"))
-
-        self.video_date_label.setText(self._format_date(info_dict.get("video_date")))
-        self.transcription_date_label.setText(self._format_date(info_dict.get("transcription_date")))
-        self.summary_date_label.setText(self._format_date(info_dict.get("summary_date")))
-
-        summary_gen = info_dict.get("summary_generated", "")
-        self.summary_label.setText("Sì" if summary_gen else "No")
-
-        summary_int = info_dict.get("summary_generated_integrated", "")
-        self.summary_integrated_label.setText("Sì" if summary_int else "No")
+            label.setText(formatted_value)
 
     def clear_info(self):
-        """Clears all the labels."""
-        self.video_path_label.setText("N/A")
-        self.duration_label.setText("N/A")
-        self.language_label.setText("N/A")
-        self.video_date_label.setText("N/A")
-        self.transcription_date_label.setText("N/A")
-        self.summary_date_label.setText("N/A")
-        self.summary_label.setText("N/A")
-        self.summary_integrated_label.setText("N/A")
+        """Resetta tutte le etichette al valore predefinito."""
+        for label in self.info_labels.values():
+            label.setText(self.DEFAULT_TEXT)
