@@ -1,4 +1,4 @@
-from PyQt6.QtGui import QPainter, QPen, QColor, QWheelEvent
+from PyQt6.QtGui import QPainter, QPen, QColor, QWheelEvent, QKeyEvent
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtCore import Qt, QRect, QPoint, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QApplication, QVBoxLayout
@@ -11,6 +11,15 @@ class CropVideoWidget(QVideoWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(400)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        if event.key() == Qt.Key.Key_F:
+            if self.isFullScreen():
+                self.setFullScreen(False)
+            else:
+                self.setFullScreen(True)
+        super().keyPressEvent(event)
 
 
 def main():
