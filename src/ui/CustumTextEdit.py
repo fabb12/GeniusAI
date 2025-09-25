@@ -396,11 +396,8 @@ class SearchDialog(QDialog):
 
         if not search_text:
             self.resultCountLabel.setText("Risultati:")
-        elif num_results == 0:
-            self.resultCountLabel.setText("Risultati: 0")
         else:
-            current = self.textEdit.get_current_search_index() + 1
-            self.resultCountLabel.setText(f"Risultati: {current}/{num_results}")
+            self.resultCountLabel.setText(f"Risultati: {num_results}")
 
     def closeEvent(self, event):
         """Sovrascrive l'evento di chiusura per garantire la pulizia."""
