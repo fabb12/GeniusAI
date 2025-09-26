@@ -22,8 +22,8 @@ class InfoDock(CustomDock):
     con uno stile moderno, chiaro e facilmente manutenibile.
     """
 
-    def __init__(self, title="Informazioni Video", parent=None):
-        super().__init__(title, parent=parent)
+    def __init__(self, title="Informazioni Video", closable =True, parent=None):
+        super().__init__(title, closable=closable, parent=parent)
         self.setToolTip("Mostra i dettagli del video selezionato.")
 
         self.DEFAULT_TEXT = "Non disponibile"
