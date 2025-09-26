@@ -3129,18 +3129,12 @@ class VideoAudioManager(QMainWindow):
 
             message = f"Il {'file audio' if is_audio_only else 'video'} finale è stato salvato correttamente:\n{output_path}"
             QMessageBox.information(self, "File Salvato", message)
-            if is_audio_only:
-                self.loadVideo(output_path)
-            else:
-                self.loadVideoOutput(output_path)
+            self.loadVideoOutput(output_path)
         else:
             output_path = self.recording_segments[0]
             message = f"Il {'file audio' if is_audio_only else 'video'} è stato salvato correttamente:\n{output_path}"
             QMessageBox.information(self, "File Salvato", message)
-            if is_audio_only:
-                self.loadVideo(output_path)
-            else:
-                self.loadVideoOutput(output_path)
+            self.loadVideoOutput(output_path)
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""
