@@ -14,8 +14,8 @@ class ScreenRecorder(QThread):
 
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
-                 use_watermark=True, watermark_path=None, watermark_size=10, watermark_position="Bottom Right",
-                 bluetooth_mode=False, audio_volume=1.0):
+                 record_video=True, use_watermark=True, watermark_path=None, watermark_size=10,
+                 watermark_position="Bottom Right", bluetooth_mode=False, audio_volume=1.0):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -23,32 +23,32 @@ class ScreenRecorder(QThread):
         self.audio_inputs = audio_inputs if audio_inputs is not None else []
         self.audio_channels = audio_channels
         self.frame_rate = frames
+        self.record_video = record_video
         self.bluetooth_mode = bluetooth_mode
         self.audio_volume = audio_volume
-        # Correctly determine if audio should be recorded
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
-        self.use_watermark = use_watermark
+        self.use_watermark = use_watermark and self.record_video  # Watermark only for video
         raw_path = watermark_path if watermark_path else WATERMARK_IMAGE
-        # Normalize path for ffmpeg command line
         self.watermark_image = raw_path.replace('\\', '/')
         self.watermark_size = watermark_size
         self.watermark_position = watermark_position
         self.ffmpeg_process = None
 
-        # Check if ffmpeg.exe exists
         if not os.path.isfile(self.ffmpeg_path):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
             self.is_running = False
 
-        # Check if watermark image exists using the original, un-escaped path
         if self.use_watermark and not os.path.isfile(raw_path):
             self.error_signal.emit(f"Watermark image not found at {raw_path}")
             self.use_watermark = False
 
     def get_monitor_offset(self):
-        monitor = get_monitors()[self.monitor_index]
-        return monitor.x, monitor.y, monitor.width, monitor.height
+        monitors = get_monitors()
+        if self.monitor_index < len(monitors):
+            monitor = monitors[self.monitor_index]
+            return monitor.x, monitor.y, monitor.width, monitor.height
+        return 0, 0, 1920, 1080  # Default fallback
 
     def run(self):
         if not self.is_running:
@@ -57,21 +57,20 @@ class ScreenRecorder(QThread):
 
         self.recording_started_signal.emit()
 
-        offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
+        ffmpeg_command = [self.ffmpeg_path]
 
-        # Base command for video input
-        ffmpeg_command = [
-            self.ffmpeg_path,
-            '-f', 'gdigrab',
-            '-framerate', str(self.frame_rate),
-            '-offset_x', str(offset_x),
-            '-offset_y', str(offset_y),
-            '-video_size', f'{screen_width}x{screen_height}',
-            '-i', 'desktop',
-        ]
-
-        if self.use_watermark:
-            ffmpeg_command.extend(['-i', self.watermark_image])
+        if self.record_video:
+            offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
+            ffmpeg_command.extend([
+                '-f', 'gdigrab',
+                '-framerate', str(self.frame_rate),
+                '-offset_x', str(offset_x),
+                '-offset_y', str(offset_y),
+                '-video_size', f'{screen_width}x{screen_height}',
+                '-i', 'desktop',
+            ])
+            if self.use_watermark:
+                ffmpeg_command.extend(['-i', self.watermark_image])
 
         # Add audio inputs if any
         if self.record_audio:
@@ -91,62 +90,56 @@ class ScreenRecorder(QThread):
         map_args = []
         audio_codec_args = []
         num_audio_inputs = len(self.audio_inputs)
+        audio_input_start_index = 0
 
-        if self.use_watermark:
-            # Watermark is input 1, so video is [0:v] and watermark is [1:v]
-            # Scale the watermark to be x% of the video height
-            scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
-            filter_complex_parts.append(scale_filter)
+        if self.record_video:
+            if self.use_watermark:
+                # Watermark is input 1, so video is [0:v] and watermark is [1:v]
+                scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
+                filter_complex_parts.append(scale_filter)
 
-            # Position the watermark
-            if self.watermark_position == "Top Left":
-                overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
-            elif self.watermark_position == "Top Right":
-                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
-            elif self.watermark_position == "Bottom Left":
-                overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
-            else:  # Bottom Right
-                overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
+                # Position the watermark
+                if self.watermark_position == "Top Left":
+                    overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
+                elif self.watermark_position == "Top Right":
+                    overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
+                elif self.watermark_position == "Bottom Left":
+                    overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
+                else:  # Bottom Right
+                    overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
 
-            filter_complex_parts.append(overlay_filter)
-            map_args.extend(['-map', '[v_out]'])
-            audio_input_start_index = 2  # Audio inputs start after video and watermark
+                filter_complex_parts.append(overlay_filter)
+                map_args.extend(['-map', '[v_out]'])
+                audio_input_start_index = 2  # Audio inputs start after video and watermark
+            else:
+                # No watermark, just map the video directly
+                map_args.extend(['-map', '0:v'])
+                audio_input_start_index = 1  # Audio inputs start after video
         else:
-            # No watermark, just map the video directly
-            map_args.extend(['-map', '0:v'])
-            audio_input_start_index = 1  # Audio inputs start after video
+            audio_input_start_index = 0
 
         if self.record_audio:
-            # Determine if the volume filter needs to be applied
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
 
             if num_audio_inputs == 1:
                 audio_input_stream = f"[{audio_input_start_index}:a]"
                 if apply_volume_filter:
-                    # Apply volume filter to the single audio stream
                     volume_filter = f"{audio_input_stream}volume={self.audio_volume}[a_out]"
                     filter_complex_parts.append(volume_filter)
                     map_args.extend(['-map', '[a_out]'])
                 else:
-                    # No volume adjustment, map directly
                     map_args.extend(['-map', audio_input_stream])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
 
             elif num_audio_inputs > 1:
                 audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
                 if apply_volume_filter:
-                    # Merge audio inputs and then apply the volume filter
                     audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_merged];[a_merged]volume={self.audio_volume}[a_out]"
                 else:
-                    # Just merge the audio inputs
                     audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
                 filter_complex_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
                 audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
-
-            # The -ac and -ar options have been moved to the dshow input options for bluetooth mode
-            # if self.bluetooth_mode:
-            #     audio_codec_args.extend(['-ac', '1', '-ar', '8000'])
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)
@@ -154,15 +147,14 @@ class ScreenRecorder(QThread):
 
         ffmpeg_command.extend(map_args)
 
-        # Add final video output options
-        ffmpeg_command.extend([
-            '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-pix_fmt', 'yuv420p',
-            '-movflags', '+faststart', # Add faststart flag for robustness
-        ])
+        if self.record_video:
+            ffmpeg_command.extend([
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-pix_fmt', 'yuv420p',
+                '-movflags', '+faststart',
+            ])
 
-        # Add audio codec options if audio is recorded
         if self.record_audio:
             ffmpeg_command.extend(audio_codec_args)
 
