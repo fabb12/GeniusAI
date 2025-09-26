@@ -34,6 +34,7 @@ from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 
 import numpy as np
+import proglog
 import pyaudio
 from screeninfo import get_monitors
 from bs4 import BeautifulSoup
@@ -77,6 +78,95 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+
+class MergeProgressLogger(proglog.ProgressBarLogger):
+    def __init__(self, progress_signal_emitter):
+        super().__init__()
+        self.progress_signal_emitter = progress_signal_emitter
+        self.duration = 0
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        super().bars_callback(bar, attr, value, old_value)
+        if attr == 'duration':
+            self.duration = value
+        elif attr == 't' and self.duration > 0:
+            percent = int((value / self.duration) * 100)
+            # Map rendering progress (0-100%) to the 60-95% range
+            progress_value = 60 + int(percent * 0.35)
+            self.progress_signal_emitter.emit(progress_value, f"Rendering: {percent}%")
+
+class VideoMergeThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, base_path, merge_path, timecode_str, adapt_resolution, parent=None):
+        super().__init__(parent)
+        self.base_path = base_path
+        self.merge_path = merge_path
+        self.timecode_str = timecode_str
+        self.adapt_resolution = adapt_resolution
+        self.running = True
+
+    def run(self):
+        base_clip = None
+        merge_clip = None
+        try:
+            self.progress.emit(5, "Caricamento video...")
+            base_clip = VideoFileClip(self.base_path)
+            merge_clip = VideoFileClip(self.merge_path)
+
+            if not self.running: return
+
+            if self.adapt_resolution:
+                self.progress.emit(15, "Adattamento risoluzioni...")
+                max_width = max(base_clip.w, merge_clip.w)
+                max_height = max(base_clip.h, merge_clip.h)
+                target_resolution = (max_width, max_height)
+                if base_clip.size != target_resolution:
+                    base_clip = base_clip.resize(target_resolution)
+                if merge_clip.size != target_resolution:
+                    merge_clip = merge_clip.resize(target_resolution)
+
+            self.progress.emit(25, "Calcolo timecode...")
+            tc_parts = list(map(int, self.timecode_str.split(':')))
+            if len(tc_parts) != 3: raise ValueError("Formato timecode non valido.")
+            tc_seconds_total = tc_parts[0] * 3600 + tc_parts[1] * 60 + tc_parts[2]
+
+            if tc_seconds_total > base_clip.duration:
+                raise ValueError("Il timecode supera la durata del video di base.")
+
+            if not self.running: return
+
+            self.progress.emit(40, "Composizione video...")
+            final_clip = concatenate_videoclips([
+                base_clip.subclip(0, tc_seconds_total),
+                merge_clip,
+                base_clip.subclip(tc_seconds_total)
+            ], method='compose')
+
+            base_dir = os.path.dirname(self.base_path)
+            base_name = os.path.splitext(os.path.basename(self.base_path))[0]
+            output_path = os.path.join(base_dir, f"{base_name}_merged_{int(time.time())}.mp4")
+
+            if not self.running: return
+
+            logger = MergeProgressLogger(self.progress)
+            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger)
+
+            if self.running:
+                self.progress.emit(100, "Completato")
+                self.completed.emit(output_path)
+
+        except Exception as e:
+            if self.running: self.error.emit(str(e))
+        finally:
+            if base_clip: base_clip.close()
+            if merge_clip: merge_clip.close()
+
+    def stop(self):
+        self.running = False
+        self.progress.emit(0, "Annullamento in corso...")
 
 class AudioProcessingThread(QThread):
     progress = pyqtSignal(int, str)
@@ -2342,72 +2432,41 @@ class VideoAudioManager(QMainWindow):
         if not base_video_path or not os.path.exists(base_video_path):
             QMessageBox.warning(self, "Errore", "Carica il video principale prima di unirne un altro.")
             return
-
         if not merge_video_path or not os.path.exists(merge_video_path):
             QMessageBox.warning(self, "Errore", "Seleziona un video da unire.")
             return
-
         if not timecode:
             QMessageBox.warning(self, "Errore", "Inserisci un timecode valido.")
             return
 
-        try:
-            base_clip = VideoFileClip(base_video_path)
-            merge_clip = VideoFileClip(merge_video_path)
+        self.progressDialog = QProgressDialog("Unione video in corso...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Unione Video")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
 
-            # Gestione della risoluzione
-            if self.adaptResolutionRadio.isChecked():
-                # Trova la risoluzione più alta
-                max_width = max(base_clip.w, merge_clip.w)
-                max_height = max(base_clip.h, merge_clip.h)
-                target_resolution = (max_width, max_height)
+        self.merge_thread = VideoMergeThread(
+            base_path=base_video_path,
+            merge_path=merge_video_path,
+            timecode_str=timecode,
+            adapt_resolution=self.adaptResolutionRadio.isChecked(),
+            parent=self
+        )
 
-                # Ridimensiona i video se necessario
-                if base_clip.size != target_resolution:
-                    base_clip = base_clip.resize(target_resolution)
-                if merge_clip.size != target_resolution:
-                    merge_clip = merge_clip.resize(target_resolution)
+        self.merge_thread.progress.connect(self.updateProgressDialog)
+        self.merge_thread.completed.connect(self.onMergeCompleted)
+        self.merge_thread.error.connect(self.onMergeError)
+        self.progressDialog.canceled.connect(self.merge_thread.stop)
 
-            # Converti il timecode in secondi
-            try:
-                tc_parts = list(map(int, timecode.split(':')))
-                if len(tc_parts) == 3:
-                    tc_hours, tc_minutes, tc_seconds = tc_parts
-                    tc_seconds_total = tc_hours * 3600 + tc_minutes * 60 + tc_seconds
-                else:
-                    raise ValueError("Formato timecode non valido.")
-            except ValueError:
-                QMessageBox.warning(self, "Errore", "Formato timecode non valido. Usa hh:mm:ss.")
-                return
+        self.merge_thread.start()
+        self.progressDialog.show()
 
-            if tc_seconds_total > base_clip.duration:
-                QMessageBox.warning(self, "Errore", "Il timecode supera la durata del video di base.")
-                return
+    def onMergeCompleted(self, output_path):
+        self.progressDialog.close()
+        QMessageBox.information(self, "Successo", f"Il video unito è stato salvato in {output_path}")
+        self.loadVideoOutput(output_path)
 
-            # Unisci i video
-            final_clip = concatenate_videoclips([
-                base_clip.subclip(0, tc_seconds_total),
-                merge_clip,
-                base_clip.subclip(tc_seconds_total)
-            ], method='compose')
-
-            # Genera il percorso del file di output
-            base_dir = os.path.dirname(base_video_path)
-            base_name = os.path.splitext(os.path.basename(base_video_path))[0]
-            output_path = os.path.join(base_dir, f"{base_name}_merged.mp4")
-
-            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
-            QMessageBox.information(self, "Successo", f"Il video unito è stato salvato in {output_path}")
-
-            self.loadVideoOutput(output_path)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'unione dei video: {e}")
-        finally:
-            if 'base_clip' in locals():
-                base_clip.close()
-            if 'merge_clip' in locals():
-                merge_clip.close()
+    def onMergeError(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'unione: {error_message}")
 
     def browseMergeVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
