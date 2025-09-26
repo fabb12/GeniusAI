@@ -120,6 +120,7 @@ class ScreenRecorder(QThread):
 
         if self.record_audio:
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
+            audio_codec = 'libmp3lame' if not self.record_video else 'aac'
 
             if num_audio_inputs == 1:
                 audio_input_stream = f"[{audio_input_start_index}:a]"
@@ -129,7 +130,7 @@ class ScreenRecorder(QThread):
                     map_args.extend(['-map', '[a_out]'])
                 else:
                     map_args.extend(['-map', audio_input_stream])
-                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k']
+                audio_codec_args = ['-c:a', audio_codec, '-b:a', '192k']
 
             elif num_audio_inputs > 1:
                 audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
@@ -139,7 +140,7 @@ class ScreenRecorder(QThread):
                     audio_filter = f"{audio_merge_inputs}amerge=inputs={num_audio_inputs}[a_out]"
                 filter_complex_parts.append(audio_filter)
                 map_args.extend(['-map', '[a_out]'])
-                audio_codec_args = ['-c:a', 'aac', '-b:a', '192k', '-ac', '2']
+                audio_codec_args = ['-c:a', audio_codec, '-b:a', '192k', '-ac', '2']
 
         if filter_complex_parts:
             combined_filter = ";".join(filter_complex_parts)
