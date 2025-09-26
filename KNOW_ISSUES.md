@@ -2,9 +2,9 @@
 
 Tutti i problemi noti e le funzionalità pianificate saranno documentati in questo file.
 ## [1.6.0] - ?? 
-- [ ] aggiungere lo scopo durante l'estrazione dell info dal video 
+- [x] aggiungere lo scopo durante l'estrazione dell info dal video 
 - [ ] aggiungere selezione range temporale per trascrizione testo
-- [ ] aggiungere ctrl-f nel text edit 
+- [x] aggiungere ctrl-f nel text edit 
 - [ ] sistemare i dock quando vengono sganciati
 - [ ] aggiungere dock per inserire copertina iniziale
 - [ ] sistemare inserimento pausa nel audio 
@@ -13,13 +13,17 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere registrazione solo audio
 - [x] aggiungere tasto condividi via what app , teams ecc...
 - [x] aggiungere splash screen
-- [ ] aggiungere sync trascrizione video originali  
-- [ ] aggiungere caricamento metadati video e trascrizione
+- [x] aggiungere sync trascrizione video originali  
+- [x] aggiungere caricamento metadati video e trascrizione
 - [ ] aggiungere scrorrimento trascrizione evidenziandola mentre e' il video e' riproduzione
-- [ ] aggiungere zoom testo in area trascrizione con rotella + / -
-- [ ] non funziona generaxion powerpoint 
+- [x] aggiungere zoom testo in area trascrizione con rotella + / -
+- [x] non funziona generazione powerpoint 
 - [ ] sistemare cuffie
-- metter webcam in pip'
+- [ ] mettere webcam in pip'
+- [ ] mettere strumenti evidenziazione del testo 
+- [ ] sistemare watermark e puntatore cerchio
+- [ ] togliere video e mettere in file
+- 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
