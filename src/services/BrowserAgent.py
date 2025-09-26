@@ -84,7 +84,7 @@ class AgentConfig:
     """Classe per gestire la configurazione dell'agente"""
 
     def __init__(self):
-        self.settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.settings = QSettings("Genius", "GeniusAI")
 
         # --- Load API Keys using the centralized get_api_key function ---
         self.anthropic_api_key = get_api_key('anthropic')
@@ -877,7 +877,7 @@ class BrowserAgent:
         vision_model_config = ACTION_MODELS_CONFIG.get('frame_extractor', {})
         vision_model_key = vision_model_config.get('setting_key', 'models/frame_extractor')
         vision_default = vision_model_config.get('default', '')
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
         vision_model_name = settings.value(vision_model_key, vision_default)
 
         logging.info(f"Inizio generazione guida operativa (Vision model: {vision_model_name})")

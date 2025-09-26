@@ -58,7 +58,7 @@ def get_api_key(service_name: str) -> str:
     Returns:
         str: La API key trovata.
     """
-    settings = QSettings("ThemaConsulting", "GeniusAI")
+    settings = QSettings("Genius", "GeniusAI")
 
     # 1. Prova a leggere da QSettings
     settings_key = f"api_keys_dialog/{service_name.lower()}"

@@ -41,7 +41,7 @@ class MeetingSummarizer(QThread):
         self.result = None
 
         # Recupera le impostazioni e le chiavi API
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
         config_summary = ACTION_MODELS_CONFIG.get('summary') # Usa la chiave 'summary'
         if not config_summary:
             raise ValueError("Configurazione 'summary' non trovata in config.py")

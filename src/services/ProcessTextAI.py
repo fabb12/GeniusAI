@@ -46,7 +46,7 @@ class ProcessTextAI(QThread):
         self.mode = mode
 
         # Recupera le impostazioni e le chiavi API
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Thema", "GeniusAI")
         config_text_proc = ACTION_MODELS_CONFIG.get('text_processing')
         if not config_text_proc:
             raise ValueError("Configurazione 'text_processing' non trovata in config.py")

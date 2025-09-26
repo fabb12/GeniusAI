@@ -48,7 +48,7 @@ class FrameExtractor:
         # self.ollama_endpoint = OLLAMA_ENDPOINT # Aggiungi se usi Ollama Vision
 
         # Recupera il modello selezionato per l'estrazione frame dalle impostazioni
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
         config_frame_ext = ACTION_MODELS_CONFIG.get('frame_extractor')
         if not config_frame_ext:
             raise ValueError("Configurazione 'frame_extractor' non trovata in config.py")

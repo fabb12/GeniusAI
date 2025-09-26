@@ -23,6 +23,8 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] mettere strumenti evidenziazione del testo 
 - [ ] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
+- [ ] mettere tasto di esportazione word
+- [ ] metter sincro video nel riassunto
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate

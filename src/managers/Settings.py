@@ -17,7 +17,7 @@ class SettingsDialog(QDialog):
     def __init__(self, parent=None):
         super(SettingsDialog, self).__init__(parent)
         self.setWindowTitle("Impostazioni Applicazione") # Titolo più generale
-        self.settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.settings = QSettings("Genius", "GeniusAI")
         self.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Maximum)
         # Dizionari per tenere traccia dei controlli UI
         self.model_combos = {}

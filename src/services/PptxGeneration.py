@@ -82,7 +82,7 @@ class PptxGeneration:
         Restituisce una tupla (testo_generato, input_tokens, output_tokens) o una stringa di errore.
         """
         # 1. Leggi le impostazioni per ottenere il modello selezionato
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
         config_pptx = ACTION_MODELS_CONFIG.get('pptx_generation')
         if not config_pptx:
             logging.error("Configurazione 'pptx_generation' non trovata in config.py")

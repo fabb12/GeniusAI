@@ -10,7 +10,7 @@ class VideoSaveOptionsDialog(QDialog):
         self.setWindowTitle("Opzioni Salvataggio Video")
         self.setModal(True)
         self.source_path = source_path
-        self.settings = QSettings("ThemaConsulting", "GeniusAI")
+        self.settings = QSettings("Genius", "GeniusAI")
 
         layout = QVBoxLayout(self)
 

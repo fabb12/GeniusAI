@@ -1050,7 +1050,7 @@ class VideoAudioManager(QMainWindow):
         Applica le impostazioni del font (famiglia e dimensione) alle aree di testo
         e salva la dimensione se viene modificata.
         """
-        settings = QSettings("ThemaConsulting", "GeniusAI")
+        settings = QSettings("Genius", "GeniusAI")
 
         font_family = settings.value("editor/fontFamily", "Arial")
 
