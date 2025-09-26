@@ -2860,7 +2860,17 @@ class VideoAudioManager(QMainWindow):
         self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
 
         self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")
+        self.saveAudioOnlyCheckBox = QCheckBox("Registra solo audio")
+
+        self.saveVideoOnlyCheckBox.toggled.connect(
+            lambda checked: self.saveAudioOnlyCheckBox.setEnabled(not checked)
+        )
+        self.saveAudioOnlyCheckBox.toggled.connect(
+            lambda checked: self.saveVideoOnlyCheckBox.setEnabled(not checked)
+        )
+
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
+        saveOptionsLayout.addWidget(self.saveAudioOnlyCheckBox)
         saveOptionsLayout.addWidget(QLabel("Percorso File:"))
 
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
@@ -2951,6 +2961,7 @@ class VideoAudioManager(QMainWindow):
 
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
+        save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
         self.timecodeLabel.setStyleSheet("""
             QLabel {
                 font-family: "Courier New", Courier, monospace;
@@ -2977,11 +2988,12 @@ class VideoAudioManager(QMainWindow):
             default_folder = folder_path
         os.makedirs(default_folder, exist_ok=True)
 
-        segment_file_path = os.path.join(default_folder, f"{recording_name}.mp4")
+        file_extension = ".mp3" if save_audio_only else ".mp4"
+        segment_file_path = os.path.join(default_folder, f"{recording_name}{file_extension}")
 
         while os.path.exists(segment_file_path):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}.mp4")
+            segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}{file_extension}")
 
         ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
@@ -3003,6 +3015,7 @@ class VideoAudioManager(QMainWindow):
             ffmpeg_path=ffmpeg_path,
             monitor_index=monitor_index,
             audio_inputs=selected_audio_devices if not save_video_only else [],
+            record_video=not save_audio_only,
             audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
             frames=DEFAULT_FRAME_RATE,
             use_watermark=self.enableWatermark,
@@ -3088,9 +3101,22 @@ class VideoAudioManager(QMainWindow):
     import datetime
 
     def _mergeSegments(self):
+        if not self.recording_segments:
+            return
+
+        first_segment = self.recording_segments[0]
+        is_audio_only = first_segment.lower().endswith('.mp3')
+        file_extension = ".mp3" if is_audio_only else ".mp4"
+
         if len(self.recording_segments) > 1:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            output_path = self.recording_segments[0].rsplit('_', 1)[0] + f'_final_{timestamp}.mp4'
+            base_name = os.path.splitext(os.path.basename(first_segment))[0]
+            if '_' in base_name:
+                base_name = base_name.rsplit('_', 1)[0]
+
+            output_dir = os.path.dirname(first_segment)
+            output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
+
             ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
 
             segments_file = "segments.txt"
@@ -3101,14 +3127,20 @@ class VideoAudioManager(QMainWindow):
             merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
             subprocess.run(merge_command)
 
-            QMessageBox.information(self, "File Salvato",
-                                    f"Il video finale è stato salvato correttamente:\nVideo: {output_path}")
-            self.loadVideoOutput(output_path)
+            message = f"Il {'file audio' if is_audio_only else 'video'} finale è stato salvato correttamente:\n{output_path}"
+            QMessageBox.information(self, "File Salvato", message)
+            if is_audio_only:
+                self.loadVideo(output_path)
+            else:
+                self.loadVideoOutput(output_path)
         else:
             output_path = self.recording_segments[0]
-            QMessageBox.information(self, "File Salvato",
-                                    f"Il video è stato salvato correttamente:\nVideo: {output_path}")
-            self.loadVideoOutput(output_path)
+            message = f"Il {'file audio' if is_audio_only else 'video'} è stato salvato correttamente:\n{output_path}"
+            QMessageBox.information(self, "File Salvato", message)
+            if is_audio_only:
+                self.loadVideo(output_path)
+            else:
+                self.loadVideoOutput(output_path)
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""
@@ -3447,7 +3479,13 @@ class VideoAudioManager(QMainWindow):
         openActionOutput.setStatusTip('Open Video Output')
         openActionOutput.triggered.connect(self.browseVideoOutput)
 
+        openAudioAction = QAction('&Apri file audio', self)
+        openAudioAction.setShortcut('Ctrl+A')
+        openAudioAction.setStatusTip('Apri file audio')
+        openAudioAction.triggered.connect(self.browseAudioFile)
+
         fileMenu.addAction(openAction)
+        fileMenu.addAction(openAudioAction)
         fileMenu.addAction(openActionOutput)
 
         # New Save As action
@@ -4830,6 +4868,11 @@ class VideoAudioManager(QMainWindow):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
         if fileName:
            self.loadVideoOutput(fileName)
+
+    def browseAudioFile(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona File Audio", "", "Audio Files (*.mp3 *.wav *.aac *.ogg *.flac)")
+        if fileName:
+            self.loadVideo(fileName)
 
     def updateRecentFiles(self, newFile):
         if newFile not in self.recentFiles:
