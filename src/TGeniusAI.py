@@ -75,11 +75,12 @@ import os
 AudioSegment.converter = FFMPEG_PATH
 from src.ui.VideoOverlay import VideoOverlay
 
-# Importa la classe MeetingSummarizer
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
 import docx
+
+class MergeProgressLogger(proglog.ProgressBarLogger):
     def __init__(self, progress_signal_emitter):
         super().__init__()
         self.progress_signal_emitter = progress_signal_emitter
