@@ -1641,53 +1641,58 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di eliminare.")
             return
 
-        video_path = self.videoPathLineEdit
-        if not video_path:
+        media_path = self.videoPathLineEdit
+        if not media_path:
             QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di eliminarne una parte.")
             return
 
+        is_audio_only = self.isAudioOnly(media_path)
+        start_time = self.videoSlider.bookmarkStart / 1000.0
+        end_time = self.videoSlider.bookmarkEnd / 1000.0
+
         try:
-            video = VideoFileClip(video_path)
-            audio = video.audio
+            if is_audio_only:
+                audio_clip = AudioFileClip(media_path)
+                end_time = min(end_time, audio_clip.duration)
 
-            # Calcola i tempi di inizio e fine per la parte da eliminare
-            start_time = self.videoSlider.bookmarkStart / 1000.0
-            end_time = self.videoSlider.bookmarkEnd / 1000.0
+                clips_to_keep = []
+                if start_time > 0:
+                    clips_to_keep.append(audio_clip.subclip(0, start_time))
+                if end_time < audio_clip.duration:
+                    clips_to_keep.append(audio_clip.subclip(end_time))
 
-            # Assicurati che il tempo di fine non sia oltre la durata del video
-            end_time = min(end_time, video.duration)
+                if not clips_to_keep:
+                    QMessageBox.warning(self, "Errore", "Impossibile creare il file audio finale. Verifica i bookmark.")
+                    return
 
-            # Crea due parti: prima e dopo la parte da eliminare
-            video_clips = []
-            audio_clips = []
+                final_audio = concatenate_audioclips(clips_to_keep)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+                output_dir = os.path.dirname(media_path)
+                output_name = f"audio_modified_{timestamp}.mp3"
+                output_path = os.path.join(output_dir, output_name)
+                final_audio.write_audiofile(output_path)
+                QMessageBox.information(self, "Successo", f"Parte del file audio eliminata. File salvato in: {output_path}")
+            else:
+                video = VideoFileClip(media_path)
+                end_time = min(end_time, video.duration)
 
-            if start_time > 0:
-                video_clips.append(video.subclip(0, start_time))
-                audio_clips.append(audio.subclip(0, start_time))
-            if end_time < video.duration:
-                video_clips.append(video.subclip(end_time))
-                audio_clips.append(audio.subclip(end_time))
+                video_clips = []
+                if start_time > 0:
+                    video_clips.append(video.subclip(0, start_time))
+                if end_time < video.duration:
+                    video_clips.append(video.subclip(end_time))
 
-            if not video_clips:
-                QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
-                return
+                if not video_clips:
+                    QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
+                    return
 
-            # Concatenale per creare il video finale senza la parte da eliminare
-            final_video = concatenate_videoclips(video_clips)
-            final_audio = concatenate_audioclips(audio_clips)
-
-            # Sincronizza il video con l'audio
-            final_video = final_video.set_audio(final_audio)
-
-            # Genera un nome di file univoco usando un timestamp con precisione al millisecondo
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
-            output_dir = os.path.dirname(video_path)
-            output_name = f"video_modified_{timestamp}.mp4"
-            output_path = os.path.join(output_dir, output_name)
-
-            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
+                final_video = concatenate_videoclips(video_clips)
+                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+                output_dir = os.path.dirname(media_path)
+                output_name = f"video_modified_{timestamp}.mp4"
+                output_path = os.path.join(output_dir, output_name)
+                final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
+                QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
 
             self.loadVideoOutput(output_path)
         except Exception as e:
@@ -1830,21 +1835,14 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
             return
 
-        if media_path.lower().endswith(('.mp4', '.mov', '.avi')):
-            is_audio = False
-        elif media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac')):
-            is_audio = True
-        else:
-            QMessageBox.warning(self, "Errore", "Formato file non supportato.")
-            return
-
-        start_time = self.videoSlider.bookmarkStart / 1000.0  # Converti in secondi
-        end_time = self.videoSlider.bookmarkEnd / 1000.0  # Converti in secondi
+        is_audio_only = self.isAudioOnly(media_path)
+        start_time = self.videoSlider.bookmarkStart / 1000.0
+        end_time = self.videoSlider.bookmarkEnd / 1000.0
 
         base_name = os.path.splitext(os.path.basename(media_path))[0]
         directory = os.path.dirname(media_path)
-        ext = 'mp4' if not is_audio else 'mp3'
-        output_path = os.path.join(directory, f"{base_name}_cut.{ext}")
+        ext = ".mp3" if is_audio_only else ".mp4"
+        output_path = os.path.join(directory, f"{base_name}_cut{ext}")
 
         self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
         self.progressDialog.setWindowTitle("Progresso Taglio")
@@ -3407,7 +3405,10 @@ class VideoAudioManager(QMainWindow):
 
         self.videoPathLineEdit = video_path
 
-        if self.isAudioOnly(video_path):
+        is_audio_only = self.isAudioOnly(video_path)
+        self.cropButton.setEnabled(not is_audio_only)
+
+        if is_audio_only:
             self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")
         else:
             self.fileNameLabel.setText(os.path.basename(video_path))
