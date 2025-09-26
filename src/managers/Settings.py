@@ -149,7 +149,7 @@ class SettingsDialog(QDialog):
         layout.addRow("Mostra Punto Rosso:", self.showRedDot)
 
         self.showYellowTriangle = QCheckBox()
-        layout.addRow("Mostra Triangolo Giallo:", self.showYellowTriangle)
+        #layout.addRow("Mostra Triangolo Giallo:", self.showYellowTriangle)
 
         return widget
 
