@@ -12,11 +12,10 @@ import sys
 import time # Per eventuali pause tra richieste API
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm # Barra di progresso
-from PyQt6.QtCore import QSettings
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
+    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY # Assicurati che i percorsi siano corretti
 )
 
@@ -47,18 +46,8 @@ class FrameExtractor:
         self.google_api_key = api_keys.get('google', get_api_key('google'))
         # self.ollama_endpoint = OLLAMA_ENDPOINT # Aggiungi se usi Ollama Vision
 
-        # Recupera il modello selezionato per l'estrazione frame dalle impostazioni
-        settings = QSettings("Genius", "GeniusAI")
-        config_frame_ext = ACTION_MODELS_CONFIG.get('frame_extractor')
-        if not config_frame_ext:
-            raise ValueError("Configurazione 'frame_extractor' non trovata in config.py")
-
-        setting_key = config_frame_ext.get('setting_key')
-        default_model = config_frame_ext.get('default')
-        if not setting_key or not default_model:
-            raise ValueError("Configurazione 'frame_extractor' incompleta.")
-
-        self.selected_model = settings.value(setting_key, default_model)
+        # Recupera il modello selezionato per l'azione 'frame_extractor'
+        self.selected_model = get_model_for_action('frame_extractor')
         logging.info(f"FrameExtractor inizializzato con modello: {self.selected_model}")
 
         # Inizializza il client corretto (verrà fatto nei metodi specifici)

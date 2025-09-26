@@ -5,7 +5,7 @@ from PyQt6.QtCore import QObject, pyqtSignal, QThread
 
 from src.services.FrameExtractor import FrameExtractor
 from src.services.AudioTranscript import TranscriptionThread
-from src.config import PROMPT_COMBINED_ANALYSIS, get_api_key
+from src.config import PROMPT_COMBINED_ANALYSIS, get_api_key, get_model_for_action
 
 class FrameAnalysisThread(QThread):
     finished = pyqtSignal(str)
@@ -70,7 +70,8 @@ class CombinedAnalysisThread(QThread):
             raise ValueError("Google API Key not found for combined analysis.")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model_name = get_model_for_action('summary')
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         return response.text.strip()
 

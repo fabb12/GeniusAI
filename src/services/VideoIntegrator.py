@@ -4,7 +4,7 @@ import logging
 from PyQt6.QtCore import QThread, pyqtSignal
 
 from src.services.FrameExtractor import FrameExtractor
-from src.config import PROMPT_VIDEO_INTEGRATION, get_api_key
+from src.config import PROMPT_VIDEO_INTEGRATION, get_api_key, get_model_for_action
 
 class VideoIntegrationThread(QThread):
     finished = pyqtSignal(str)
@@ -66,6 +66,7 @@ class VideoIntegrationThread(QThread):
             raise ValueError("Google API Key non trovata per l'integrazione video.")
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        model_name = get_model_for_action('summary')
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         return response.text.strip()

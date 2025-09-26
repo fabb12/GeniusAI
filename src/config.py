@@ -89,7 +89,7 @@ MODEL_3_HAIKU = "claude-3-5-haiku-latest"
 
 # Gemini (Google Cloud)
 GEMINI_15_PRO = "gemini-1.5-pro-latest"
-GEMINI_15_FLASH = "gemini-1.5-flash-latest"
+GEMINI_15_FLASH = "gemini-2.0-flash-001"
 #GEMINI_25_PRO_EXP = "gemini-2.5-pro-exp-03-25" # Mantenuto come esempio sperimentale
 GEMINI_25_PRO = "gemini-2.5-pro"
 GEMINI_20_FLASH = "gemini-2.0-flash"
@@ -261,6 +261,35 @@ DEFAULT_VOICES = {
     "Tosca": "fNmw8sukfGuvWVOp33Ge"
     # Aggiungere altre voci predefinite se necessario
 }
+
+# --- Funzione per recuperare il modello per un'azione specifica ---
+def get_model_for_action(action_name: str) -> str:
+    """
+    Recupera il modello configurato per una specifica azione, con fallback al default.
+
+    Args:
+        action_name (str): L'identificatore dell'azione (es. 'summary', 'frame_extractor').
+
+    Returns:
+        str: Il nome del modello da utilizzare.
+    """
+    if action_name not in ACTION_MODELS_CONFIG:
+        logging.error(f"Azione '{action_name}' non trovata in ACTION_MODELS_CONFIG.")
+        # Fallback di emergenza se l'azione non è definita
+        return GEMINI_15_FLASH
+
+    config = ACTION_MODELS_CONFIG[action_name]
+    settings_key = config['setting_key']
+    default_model = config['default']
+
+    settings = QSettings("Genius", "GeniusAI")
+
+    # Legge il valore dalle impostazioni; se non c'è, usa il default
+    model = settings.value(settings_key, defaultValue=default_model)
+
+    logging.debug(f"Modello per l'azione '{action_name}': {model} (Default: {default_model})")
+
+    return model
 
 # --- Funzione di Diagnostica ---
 def debug_config():
