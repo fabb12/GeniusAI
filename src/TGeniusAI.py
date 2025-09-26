@@ -2304,7 +2304,7 @@ class VideoAudioManager(QMainWindow):
         resolution_group = QGroupBox("Gestione Risoluzione")
         resolution_layout = QVBoxLayout(resolution_group)
 
-        self.adaptResolutionRadio = QRadioButton("Adatta le risoluzioni (consigliato)")
+        self.adaptResolutionRadio = QRadioButton("Adatta le risoluzioni")
         self.adaptResolutionRadio.setChecked(True)
         self.maintainResolutionRadio = QRadioButton("Mantieni le risoluzioni originali")
 
