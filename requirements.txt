@@ -26,3 +26,4 @@ playwright
 google-generativeai==0.8.0
 langchain_google_genai
 Markdown
+python-docx
