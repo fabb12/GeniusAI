@@ -10,7 +10,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare inserimento pausa nel audio 
 - [x] implementare un sistema di auto apprendimento della dinamica del video 
 - [ ] implementare integrazione della webcam
-- [ ] aggiungere registrazione solo audio
+- [x] aggiungere registrazione solo audio
 - [x] aggiungere tasto condividi via what app , teams ecc...
 - [x] aggiungere splash screen
 - [x] aggiungere sync trascrizione video originali  
@@ -21,7 +21,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare cuffie
 - [ ] mettere webcam in pip'
 - [ ] mettere strumenti evidenziazione del testo 
-- [ ] sistemare watermark e puntatore cerchio
+- [x] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
 - [ ] mettere tasto di esportazione word
 - [ ] metter sincro video nel riassunto
