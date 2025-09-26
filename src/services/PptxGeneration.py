@@ -6,7 +6,7 @@ import requests
 import json
 import logging
 from PyQt6.QtWidgets import QFileDialog, QMessageBox, QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QApplication
-from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtCore import Qt
 from pptx import Presentation
 from pptx.enum.shapes import PP_PLACEHOLDER
 from pptx.util import Pt, Inches
@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
+    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_PPTX_GENERATION # Assicurati che questo percorso sia corretto e il file esista
 )
 
@@ -81,20 +81,8 @@ class PptxGeneration:
         Genera il testo strutturato per le slide usando il modello AI selezionato.
         Restituisce una tupla (testo_generato, input_tokens, output_tokens) o una stringa di errore.
         """
-        # 1. Leggi le impostazioni per ottenere il modello selezionato
-        settings = QSettings("Genius", "GeniusAI")
-        config_pptx = ACTION_MODELS_CONFIG.get('pptx_generation')
-        if not config_pptx:
-            logging.error("Configurazione 'pptx_generation' non trovata in config.py")
-            return "Errore di configurazione: 'pptx_generation' mancante."
-
-        setting_key = config_pptx.get('setting_key')
-        default_model = config_pptx.get('default')
-        if not setting_key or not default_model:
-             logging.error("Configurazione 'pptx_generation' incompleta in config.py (manca setting_key o default).")
-             return "Errore di configurazione: 'pptx_generation' incompleta."
-
-        selected_model = settings.value(setting_key, default_model)
+        # Recupera il modello selezionato per l'azione 'pptx_generation'
+        selected_model = get_model_for_action('pptx_generation')
         logging.info(f"Generazione PPTX: Utilizzo del modello '{selected_model}'")
 
         # 2. Leggi e formatta il prompt

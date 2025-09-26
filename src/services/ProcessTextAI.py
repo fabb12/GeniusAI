@@ -6,12 +6,12 @@ import requests
 import json
 import logging
 import os
-from PyQt6.QtCore import QThread, pyqtSignal, QSettings
+from PyQt6.QtCore import QThread, pyqtSignal
 from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
+    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY
 )
 
@@ -45,18 +45,8 @@ class ProcessTextAI(QThread):
             raise ValueError("La modalità deve essere 'summary', 'fix' o 'youtube_summary'")
         self.mode = mode
 
-        # Recupera le impostazioni e le chiavi API
-        settings = QSettings("Thema", "GeniusAI")
-        config_text_proc = ACTION_MODELS_CONFIG.get('text_processing')
-        if not config_text_proc:
-            raise ValueError("Configurazione 'text_processing' non trovata in config.py")
-
-        setting_key = config_text_proc.get('setting_key')
-        default_model = config_text_proc.get('default')
-        if not setting_key or not default_model:
-            raise ValueError("Configurazione 'text_processing' incompleta (manca setting_key o default).")
-
-        self.selected_model = settings.value(setting_key, default_model)
+        # Recupera il modello selezionato per l'azione 'text_processing'
+        self.selected_model = get_model_for_action('text_processing')
         self.anthropic_api_key = get_api_key('anthropic')
         self.google_api_key = get_api_key('google')
         self.ollama_endpoint = OLLAMA_ENDPOINT

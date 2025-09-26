@@ -6,12 +6,12 @@ import requests
 import json
 import logging
 import os
-from PyQt6.QtCore import QThread, pyqtSignal, QSettings
+from PyQt6.QtCore import QThread, pyqtSignal
 from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, get_api_key,
+    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_MEETING_SUMMARY # Assicurati che questo percorso sia corretto
 )
 
@@ -40,18 +40,8 @@ class MeetingSummarizer(QThread):
         self.language = language
         self.result = None
 
-        # Recupera le impostazioni e le chiavi API
-        settings = QSettings("Genius", "GeniusAI")
-        config_summary = ACTION_MODELS_CONFIG.get('summary') # Usa la chiave 'summary'
-        if not config_summary:
-            raise ValueError("Configurazione 'summary' non trovata in config.py")
-
-        setting_key = config_summary.get('setting_key')
-        default_model = config_summary.get('default')
-        if not setting_key or not default_model:
-            raise ValueError("Configurazione 'summary' incompleta (manca setting_key o default).")
-
-        self.selected_model = settings.value(setting_key, default_model)
+        # Recupera il modello selezionato per l'azione 'summary'
+        self.selected_model = get_model_for_action('summary')
         self.anthropic_api_key = get_api_key('anthropic')
         self.google_api_key = get_api_key('google')
         self.ollama_endpoint = OLLAMA_ENDPOINT

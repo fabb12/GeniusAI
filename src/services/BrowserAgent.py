@@ -75,7 +75,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 from src.services.FrameExtractor import FrameExtractor # Used for guide generation
 # Import configuration constants and structures
 from src.config import (
-    OLLAMA_ENDPOINT, get_api_key, # API Keys/Endpoints
+    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     ACTION_MODELS_CONFIG, # Dictionary defining models per action
     PROMPT_BROWSER_GUIDE # Prompt for guide generation
 )
@@ -95,27 +95,16 @@ class AgentConfig:
         # --- Load Browser Agent specific settings ---
         agent_config_details = ACTION_MODELS_CONFIG.get('browser_agent', {})
         self.setting_key_model = agent_config_details.get('setting_key', 'models/browser_agent')
-        self.default_model = agent_config_details.get('default', '') # Get default model for browser agent
 
-        # Load the actual model name from QSettings, fallback to config default
-        self.model_name = self.settings.value(self.setting_key_model, self.default_model)
-
-        # Other agent settings with defaults
-        self.headless = False
-        self.use_vision = True # Vision capability often needed for browser agents
-        self.max_steps = 25
-
-        # Load saved values for these settings
+        # Load settings from QSettings or use defaults
         self.load_from_settings()
 
     def load_from_settings(self):
         """Carica la configurazione dalle impostazioni salvate"""
-        # API Keys are loaded from environment by config.py, no need to load from QSettings usually
-        # self.anthropic_api_key = self.settings.value("api_keys/anthropic", self.anthropic_api_key) # Example if storing keys
-        self.model_name = self.settings.value(self.setting_key_model, self.default_model)
-        self.headless = self.settings.value("agent/headless", self.headless, type=bool)
-        self.use_vision = self.settings.value("agent/use_vision", self.use_vision, type=bool)
-        self.max_steps = self.settings.value("agent/max_steps", self.max_steps, type=int)
+        self.model_name = get_model_for_action('browser_agent')
+        self.headless = self.settings.value("agent/headless", False, type=bool)
+        self.use_vision = self.settings.value("agent/use_vision", True, type=bool)
+        self.max_steps = self.settings.value("agent/max_steps", 25, type=int)
         logging.debug(f"AgentConfig loaded: model={self.model_name}, headless={self.headless}, vision={self.use_vision}, steps={self.max_steps}")
 
 
@@ -873,18 +862,7 @@ class BrowserAgent:
         guida testuale usando il modello BROWSER AGENT configurato, e la
         inserisce nella transcriptionTextArea.
         """
-        # Get the currently selected vision model from settings
-        vision_model_config = ACTION_MODELS_CONFIG.get('frame_extractor', {})
-        vision_model_key = vision_model_config.get('setting_key', 'models/frame_extractor')
-        vision_default = vision_model_config.get('default', '')
-        settings = QSettings("Genius", "GeniusAI")
-        vision_model_name = settings.value(vision_model_key, vision_default)
-
-        logging.info(f"Inizio generazione guida operativa (Vision model: {vision_model_name})")
-
-        if not vision_model_name:
-             QMessageBox.critical(self.parent, "Errore Configurazione", "Nessun modello AI configurato per l'estrazione frame (visione).")
-             return False
+        logging.info(f"Inizio generazione guida operativa...")
 
         # Use the main window's video path if not provided
         if not video_path:
