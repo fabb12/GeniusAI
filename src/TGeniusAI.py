@@ -65,6 +65,7 @@ from src.services.FrameExtractor import FrameExtractor
 from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
+from src.ui.CursorOverlay import CursorOverlay
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
@@ -368,6 +369,7 @@ class VideoAudioManager(QMainWindow):
         #self.teams_call_recorder.start()
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.monitor_preview = None
+        self.cursor_overlay = CursorOverlay()
 
     def load_recording_settings(self):
         """Carica le impostazioni per il cursore e il watermark e le salva come attributi dell'istanza."""
@@ -2922,6 +2924,8 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def startScreenRecording(self):
+        if self.show_red_dot:
+            self.cursor_overlay.show()
         self.is_recording = True
         self.indicator_timer.start(500)  # Blink every 500ms
 
@@ -3040,6 +3044,8 @@ class VideoAudioManager(QMainWindow):
         self.is_paused = False
 
     def stopScreenRecording(self):
+        if self.cursor_overlay.isVisible():
+            self.cursor_overlay.hide()
         self.is_recording = False
         self.indicator_timer.stop()
         self.recording_indicator.setVisible(False)
