@@ -79,8 +79,7 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
-
-class MergeProgressLogger(proglog.ProgressBarLogger):
+import docx
     def __init__(self, progress_signal_emitter):
         super().__init__()
         self.progress_signal_emitter = progress_signal_emitter
@@ -3215,6 +3214,30 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file: {e}")
             QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file:\n{e}")
 
+    def exportSummaryToWord(self):
+        """
+        Exports the summary text to a Word document.
+        """
+        summary_text = self.summaryTextArea.toPlainText()
+        if not summary_text.strip():
+            QMessageBox.warning(self, "Attenzione", "Il riassunto è vuoto. Non c'è nulla da esportare.")
+            return
+
+        # Ask user for save location
+        path, _ = QFileDialog.getSaveFileName(self, "Esporta Riassunto", "", "Word Document (*.docx)")
+
+        if path:
+            if not path.endswith('.docx'):
+                path += '.docx'
+
+            try:
+                document = docx.Document()
+                document.add_paragraph(summary_text)
+                document.save(path)
+                QMessageBox.information(self, "Successo", f"Riassunto esportato con successo in:\n{path}")
+            except Exception as e:
+                QMessageBox.critical(self, "Errore", f"Impossibile esportare il riassunto:\n{e}")
+
     def loadText(self):
         path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
         if path:
@@ -3497,6 +3520,18 @@ class VideoAudioManager(QMainWindow):
         openRootFolderAction.triggered.connect(self.openRootFolder)
         fileMenu.addAction(openRootFolderAction)
 
+        fileMenu.addSeparator()
+
+        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Source", self)
+        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
+        fileMenu.addAction(releaseSourceAction)
+
+        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Output", self)
+        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
+        fileMenu.addAction(releaseOutputAction)
+
+        fileMenu.addSeparator()
+
         exitAction = QAction('&Exit', self)
         exitAction.setShortcut('Ctrl+Q')
         exitAction.setStatusTip('Exit application')
@@ -3506,6 +3541,12 @@ class VideoAudioManager(QMainWindow):
         fileMenu.addSeparator()
         self.recentMenu = fileMenu.addMenu("Recenti")  # Aggiunge il menu dei file recenti
         self.updateRecentFilesMenu()
+
+        # Creazione del menu Export
+        exportMenu = menuBar.addMenu('&Export')
+        exportWordAction = QAction('Esporta riassunto in Word', self)
+        exportWordAction.triggered.connect(self.exportSummaryToWord)
+        exportMenu.addAction(exportWordAction)
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
@@ -3540,15 +3581,6 @@ class VideoAudioManager(QMainWindow):
         createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti')
         createGuideAction.triggered.connect(self.createGuideAndRunAgent)
         agentAIsMenu.addAction(createGuideAction)
-
-        videoMenu = menuBar.addMenu('&Video')
-        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Source", self)
-        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
-        videoMenu.addAction(releaseSourceAction)
-
-        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Output", self)
-        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
-        videoMenu.addAction(releaseOutputAction)
 
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
