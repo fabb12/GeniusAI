@@ -78,6 +78,7 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+from src.services.VideoCompositing import VideoCompositingThread
 import docx
 
 class MergeProgressLogger(proglog.ProgressBarLogger):
@@ -541,6 +542,12 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(self.styleSheet())
         self.videoMergeDock.setToolTip("Dock per l'unione di più video")
         area.addDock(self.videoMergeDock, 'top')
+
+        self.videoEffectsDock = self.createVideoEffectsDock()
+        self.videoEffectsDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoEffectsDock.setStyleSheet(self.styleSheet())
+        self.videoEffectsDock.setToolTip("Dock per effetti video (PiP, Overlay)")
+        area.addDock(self.videoEffectsDock, 'right', self.audioDock)
 
         self.infoDock = InfoDock()
         self.infoDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -1050,6 +1057,7 @@ class VideoAudioManager(QMainWindow):
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock,
+            'videoEffectsDock': self.videoEffectsDock,
             'infoDock': self.infoDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
@@ -2132,6 +2140,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
         self.videoMergeDock.setStyleSheet(style)
+        self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
 
     def getDarkStyle(self):
@@ -2568,6 +2577,166 @@ class VideoAudioManager(QMainWindow):
     def setTimecodeMergeFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
+
+    def createVideoEffectsDock(self):
+        """Crea e restituisce il dock per gli effetti video (PiP e Overlay)."""
+        dock = CustomDock("Effetti Video", closable=True)
+
+        tab_widget = QTabWidget()
+
+        # --- Tab Picture-in-Picture (PiP) ---
+        pip_tab = QWidget()
+        pip_layout = QVBoxLayout(pip_tab)
+        pip_group = QGroupBox("Aggiungi Video Picture-in-Picture (PiP)")
+        pip_group_layout = QVBoxLayout(pip_group)
+
+        # File selection
+        pip_file_layout = QHBoxLayout()
+        self.pipVideoPathLineEdit = QLineEdit()
+        self.pipVideoPathLineEdit.setReadOnly(True)
+        self.pipVideoPathLineEdit.setPlaceholderText("Seleziona il video per il PiP...")
+        browsePipVideoButton = QPushButton("Sfoglia...")
+        browsePipVideoButton.clicked.connect(self.browsePipVideo)
+        pip_file_layout.addWidget(self.pipVideoPathLineEdit)
+        pip_file_layout.addWidget(browsePipVideoButton)
+        pip_group_layout.addLayout(pip_file_layout)
+
+        # Position and Size
+        pip_options_layout = QHBoxLayout()
+        pip_group_layout.addWidget(QLabel("Posizione e Dimensione:"))
+        self.pipPositionComboBox = QComboBox()
+        self.pipPositionComboBox.addItems(["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Center"])
+        pip_options_layout.addWidget(self.pipPositionComboBox)
+
+        self.pipSizeSpinBox = QSpinBox()
+        self.pipSizeSpinBox.setRange(5, 75)
+        self.pipSizeSpinBox.setValue(25)
+        self.pipSizeSpinBox.setSuffix("%")
+        pip_options_layout.addWidget(self.pipSizeSpinBox)
+        pip_group_layout.addLayout(pip_options_layout)
+
+        applyPipButton = QPushButton("Applica Effetto PiP")
+        applyPipButton.clicked.connect(self.apply_pip_effect)
+        pip_group_layout.addWidget(applyPipButton)
+
+        pip_layout.addWidget(pip_group)
+        pip_layout.addStretch()
+        tab_widget.addTab(pip_tab, "Video PiP")
+
+        # --- Tab Image Overlay ---
+        image_tab = QWidget()
+        image_layout = QVBoxLayout(image_tab)
+        image_group = QGroupBox("Aggiungi Immagine in Sovraimpressione")
+        image_group_layout = QVBoxLayout(image_group)
+
+        # File selection
+        image_file_layout = QHBoxLayout()
+        self.imageOverlayPathLineEdit = QLineEdit()
+        self.imageOverlayPathLineEdit.setReadOnly(True)
+        self.imageOverlayPathLineEdit.setPlaceholderText("Seleziona l'immagine da sovrapporre...")
+        browseImageOverlayButton = QPushButton("Sfoglia...")
+        browseImageOverlayButton.clicked.connect(self.browseImageOverlay)
+        image_file_layout.addWidget(self.imageOverlayPathLineEdit)
+        image_file_layout.addWidget(browseImageOverlayButton)
+        image_group_layout.addLayout(image_file_layout)
+
+        # Position and Size
+        image_options_layout = QHBoxLayout()
+        image_group_layout.addWidget(QLabel("Posizione e Dimensione:"))
+        self.imagePositionComboBox = QComboBox()
+        self.imagePositionComboBox.addItems(["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Center"])
+        image_options_layout.addWidget(self.imagePositionComboBox)
+
+        self.imageSizeSpinBox = QSpinBox()
+        self.imageSizeSpinBox.setRange(5, 100)
+        self.imageSizeSpinBox.setValue(20)
+        self.imageSizeSpinBox.setSuffix("%")
+        image_options_layout.addWidget(self.imageSizeSpinBox)
+        image_group_layout.addLayout(image_options_layout)
+
+        applyImageButton = QPushButton("Applica Immagine Overlay")
+        applyImageButton.clicked.connect(self.apply_image_overlay_effect)
+        image_group_layout.addWidget(applyImageButton)
+
+        image_layout.addWidget(image_group)
+        image_layout.addStretch()
+        tab_widget.addTab(image_tab, "Immagine Overlay")
+
+        dock.addWidget(tab_widget)
+        return dock
+
+    def browsePipVideo(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video per PiP", "", "Video Files (*.mp4 *.mov *.avi)")
+        if fileName:
+            self.pipVideoPathLineEdit.setText(fileName)
+
+    def browseImageOverlay(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Immagine Overlay", "", "Image Files (*.png *.jpg *.jpeg)")
+        if fileName:
+            self.imageOverlayPathLineEdit.setText(fileName)
+
+    def apply_pip_effect(self):
+        base_video_path = self.videoPathLineOutputEdit
+        overlay_video_path = self.pipVideoPathLineEdit.text()
+
+        if not base_video_path or not os.path.exists(base_video_path):
+            QMessageBox.warning(self, "Errore", "Carica il video principale nel player di Output prima di applicare un effetto.")
+            return
+        if not overlay_video_path or not os.path.exists(overlay_video_path):
+            QMessageBox.warning(self, "Errore", "Seleziona un video per l'effetto Picture-in-Picture.")
+            return
+
+        position = self.pipPositionComboBox.currentText()
+        size = self.pipSizeSpinBox.value()
+
+        self.run_compositing_thread('video', base_video_path, overlay_video_path, position, size)
+
+    def apply_image_overlay_effect(self):
+        base_video_path = self.videoPathLineOutputEdit
+        overlay_image_path = self.imageOverlayPathLineEdit.text()
+
+        if not base_video_path or not os.path.exists(base_video_path):
+            QMessageBox.warning(self, "Errore", "Carica il video principale nel player di Output prima di applicare un effetto.")
+            return
+        if not overlay_image_path or not os.path.exists(overlay_image_path):
+            QMessageBox.warning(self, "Errore", "Seleziona un'immagine per l'effetto overlay.")
+            return
+
+        position = self.imagePositionComboBox.currentText()
+        size = self.imageSizeSpinBox.value()
+
+        self.run_compositing_thread('image', base_video_path, overlay_image_path, position, size)
+
+    def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size):
+        self.progressDialog = QProgressDialog(f"Applicazione {overlay_type} overlay...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Effetto Video")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+
+        self.compositing_thread = VideoCompositingThread(
+            base_video_path=base_path,
+            overlay_path=overlay_path,
+            overlay_type=overlay_type,
+            position=position,
+            size=size,
+            parent=self
+        )
+
+        self.compositing_thread.progress.connect(self.updateProgressDialog)
+        self.compositing_thread.completed.connect(self.on_compositing_completed)
+        self.compositing_thread.error.connect(self.on_compositing_error)
+        self.progressDialog.canceled.connect(self.compositing_thread.stop)
+
+        self.compositing_thread.start()
+        self.progressDialog.show()
+
+    def on_compositing_completed(self, output_path):
+        self.progressDialog.close()
+        QMessageBox.information(self, "Successo", f"L'effetto video è stato applicato. File salvato in:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def on_compositing_error(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'applicazione dell'effetto:\n{error_message}")
 
     def formatTimecode(self, position_ms):
         hours, remainder = divmod(position_ms // 1000, 3600)
@@ -3706,6 +3875,10 @@ class VideoAudioManager(QMainWindow):
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
+        # Creazione del menu Effetti
+        effectsMenu = menuBar.addMenu('&Effetti')
+        self.setupEffectsMenuActions(effectsMenu)
+
         # Creazione del menu Workspace per i layout preimpostati
         workspaceMenu = menuBar.addMenu('&Workspace')
         workspaceMenu.addAction(self.defaultLayoutAction)
@@ -3747,6 +3920,26 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
+
+    def setupEffectsMenuActions(self, effectsMenu):
+        addPipAction = QAction('Aggiungi Video Picture-in-Picture', self)
+        addPipAction.setStatusTip('Apre il pannello per aggiungere un video in PiP')
+        addPipAction.triggered.connect(lambda: self.showEffectsDock(0))
+        effectsMenu.addAction(addPipAction)
+
+        addImageOverlayAction = QAction('Aggiungi Immagine Overlay', self)
+        addImageOverlayAction.setStatusTip("Apre il pannello per aggiungere un'immagine in sovraimpressione")
+        addImageOverlayAction.triggered.connect(lambda: self.showEffectsDock(1))
+        effectsMenu.addAction(addImageOverlayAction)
+
+    def showEffectsDock(self, tab_index=0):
+        """Mostra il dock degli effetti e seleziona il tab specificato."""
+        if not self.videoEffectsDock.isVisible():
+            self.videoEffectsDock.show()
+        # Assicurati che il dock sia portato in primo piano
+        self.videoEffectsDock.raise_()
+        # Seleziona il tab corretto
+        self.videoEffectsDock.widget().setCurrentIndex(tab_index)
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
@@ -3819,6 +4012,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
+        self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
@@ -3830,6 +4024,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
+        viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
 
 
@@ -3873,6 +4068,7 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
+        self.videoEffectsDock.setVisible(True)
         self.infoExtractionDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
@@ -3886,6 +4082,7 @@ class VideoAudioManager(QMainWindow):
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
+        self.videoEffectsDock.setVisible(False)
         self.infoExtractionDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
@@ -3912,6 +4109,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
+        self.actionToggleVideoEffectsDock.setChecked(True)
         self.actionToggleInfoDock.setChecked(True)
 
     def updateViewMenu(self):
@@ -3925,6 +4123,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
+        self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
 
     def about(self):
