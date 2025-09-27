@@ -5,8 +5,8 @@ from PyQt6.QtCore import Qt
 class CustomSlider(QSlider):
     def __init__(self, orientation, parent=None):
         super().__init__(orientation, parent)
-        self.bookmarkStart = None
-        self.bookmarkEnd = None
+        self.bookmarks = []
+        self.pending_bookmark_start = None
         self.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #bbb;
@@ -44,17 +44,28 @@ class CustomSlider(QSlider):
             }
         """)
 
-    def setBookmarkStart(self, position):
-        self.bookmarkStart = position
+    def setPendingBookmarkStart(self, position):
+        self.pending_bookmark_start = position
         self.update()
 
-    def setBookmarkEnd(self, position):
-        self.bookmarkEnd = position
+    def addBookmark(self, start, end):
+        if start >= end:
+            self.pending_bookmark_start = None
+            self.update()
+            return
+        self.bookmarks.append((start, end))
+        self.bookmarks.sort()
+        self.pending_bookmark_start = None
         self.update()
+
+    def removeBookmark(self, index):
+        if 0 <= index < len(self.bookmarks):
+            del self.bookmarks[index]
+            self.update()
 
     def resetBookmarks(self):
-        self.bookmarkStart = None
-        self.bookmarkEnd = None
+        self.bookmarks = []
+        self.pending_bookmark_start = None
         self.update()
 
     def mousePressEvent(self, event):
@@ -64,7 +75,7 @@ class CustomSlider(QSlider):
             value = self.style().sliderValueFromPosition(self.minimum(), self.maximum(), int(event.position().x()), self.width())
             self.setValue(value)
             self.sliderMoved.emit(value)
-            self.sliderPressed.emit()  # Emit the signal to trigger the slot
+            self.sliderPressed.emit()
         super().mousePressEvent(event)
 
     def paintEvent(self, event):
@@ -72,32 +83,49 @@ class CustomSlider(QSlider):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        if self.bookmarkStart is not None:
+        if self.maximum() == 0: # Avoid division by zero
+            return
+
+        # Draw existing bookmarks
+        for start, end in self.bookmarks:
             painter.setPen(Qt.PenStyle.NoPen)
+
+            # Draw filled region
+            painter.setBrush(QBrush(QColor(0, 100, 255, 60)))
+            x_start_region = int(start / self.maximum() * self.width())
+            x_end_region = int(end / self.maximum() * self.width())
+            painter.drawRect(x_start_region, 0, x_end_region - x_start_region, self.height())
+
+            # Draw start marker
             painter.setBrush(QBrush(QColor(255, 0, 0, 128)))
-            x_start = int(self.bookmarkStart / self.maximum() * self.width())
+            x_start = int(start / self.maximum() * self.width())
             painter.drawRect(x_start - 2, 0, 4, self.height())
 
-        if self.bookmarkEnd is not None:
-            painter.setPen(Qt.PenStyle.NoPen)
+            # Draw end marker
             painter.setBrush(QBrush(QColor(0, 0, 255, 128)))
-            x_end = int(self.bookmarkEnd / self.maximum() * self.width())
+            x_end = int(end / self.maximum() * self.width())
             painter.drawRect(x_end - 2, 0, 4, self.height())
 
-            if self.bookmarkStart is not None:
-                duration_ms = self.bookmarkEnd - self.bookmarkStart
-                total_seconds = duration_ms // 1000
-                milliseconds = duration_ms % 1000
-                minutes = total_seconds // 60
-                seconds = total_seconds % 60
-                duration_text = f"{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}"
+            # Draw duration text
+            duration_ms = end - start
+            total_seconds = duration_ms // 1000
+            milliseconds = duration_ms % 1000
+            minutes = total_seconds // 60
+            seconds = total_seconds % 60
+            duration_text = f"{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}"
 
-                painter.setPen(QColor(0, 0, 0))
-                painter.setFont(QFont("Arial", 10))
+            painter.setPen(QColor(0, 0, 0))
+            painter.setFont(QFont("Arial", 10))
 
-                # Calcola la posizione del testo vicino ai bookmark
-                text_x = (x_start + x_end) / 2 - painter.fontMetrics().horizontalAdvance(duration_text) / 2
-                text_y = self.height() // 2 + painter.fontMetrics().ascent() / 2
-                painter.drawText(int(text_x), int(text_y), duration_text)
+            text_x = (x_start + x_end) / 2 - painter.fontMetrics().horizontalAdvance(duration_text) / 2
+            text_y = self.height() // 2 + painter.fontMetrics().ascent() / 2
+            painter.drawText(int(text_x), int(text_y), duration_text)
+
+        # Draw pending bookmark start
+        if self.pending_bookmark_start is not None:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(QBrush(QColor(255, 165, 0, 200)))
+            x_start = int(self.pending_bookmark_start / self.maximum() * self.width())
+            painter.drawRect(x_start - 2, 0, 4, self.height())
 
         painter.end()

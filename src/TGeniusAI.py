@@ -190,11 +190,12 @@ class BackgroundAudioThread(QThread):
     completed = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, video_path, audio_path, volume, parent=None):
+    def __init__(self, video_path, audio_path, volume, loop_audio=True, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.audio_path = audio_path
         self.volume = volume
+        self.loop_audio = loop_audio
         self.running = True
 
     def run(self):
@@ -206,8 +207,8 @@ class BackgroundAudioThread(QThread):
             background_audio_clip = AudioFileClip(self.audio_path).volumex(self.volume)
             if not self.running: return
 
-            self.progress.emit(20, "Looping audio di sottofondo...")
-            if background_audio_clip.duration < video_clip.duration:
+            if self.loop_audio and background_audio_clip.duration < video_clip.duration:
+                self.progress.emit(20, "Looping audio di sottofondo...")
                 background_audio_clip = background_audio_clip.loop(duration=video_clip.duration)
             if not self.running: return
 
@@ -608,6 +609,10 @@ class VideoAudioManager(QMainWindow):
         self.setEndBookmarkButton.setIcon(QIcon(get_resource("bookmark_2.png")))
         self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine sul video input")
 
+        self.clearBookmarksButton = QPushButton('')
+        self.clearBookmarksButton.setIcon(QIcon(get_resource("reset.png")))
+        self.clearBookmarksButton.setToolTip("Cancella tutti i segnalibri")
+
         self.cutButton = QPushButton('')
         self.cutButton.setIcon(QIcon(get_resource("taglia.png")))
         self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
@@ -645,6 +650,7 @@ class VideoAudioManager(QMainWindow):
         self.stopButton.clicked.connect(self.stopVideo)
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
+        self.clearBookmarksButton.clicked.connect(self.clearBookmarks)
         self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
         self.cropButton.clicked.connect(self.open_crop_dialog)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
@@ -774,6 +780,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.frameForwardButton)
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
+        playbackControlLayout.addWidget(self.clearBookmarksButton)
         playbackControlLayout.addWidget(self.cutButton)
         playbackControlLayout.addWidget(self.cropButton)
         playbackControlLayout.addWidget(self.deleteButton)
@@ -1739,8 +1746,8 @@ class VideoAudioManager(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
 
     def deleteVideoSegment(self):
-        if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
-            QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di eliminare.")
+        if not self.videoSlider.bookmarks:
+            QMessageBox.warning(self, "Errore", "Per favore, imposta almeno un bookmark prima di eliminare.")
             return
 
         media_path = self.videoPathLineEdit
@@ -1749,56 +1756,63 @@ class VideoAudioManager(QMainWindow):
             return
 
         is_audio_only = self.isAudioOnly(media_path)
-        start_time = self.videoSlider.bookmarkStart / 1000.0
-        end_time = self.videoSlider.bookmarkEnd / 1000.0
 
         try:
             if is_audio_only:
-                audio_clip = AudioFileClip(media_path)
-                end_time = min(end_time, audio_clip.duration)
-
-                clips_to_keep = []
-                if start_time > 0:
-                    clips_to_keep.append(audio_clip.subclip(0, start_time))
-                if end_time < audio_clip.duration:
-                    clips_to_keep.append(audio_clip.subclip(end_time))
-
-                if not clips_to_keep:
-                    QMessageBox.warning(self, "Errore", "Impossibile creare il file audio finale. Verifica i bookmark.")
-                    return
-
-                final_audio = concatenate_audioclips(clips_to_keep)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
-                output_dir = os.path.dirname(media_path)
-                output_name = f"audio_modified_{timestamp}.mp3"
-                output_path = os.path.join(output_dir, output_name)
-                final_audio.write_audiofile(output_path)
-                QMessageBox.information(self, "Successo", f"Parte del file audio eliminata. File salvato in: {output_path}")
+                media_clip = AudioFileClip(media_path)
             else:
-                video = VideoFileClip(media_path)
-                end_time = min(end_time, video.duration)
+                media_clip = VideoFileClip(media_path)
 
-                video_clips = []
-                if start_time > 0:
-                    video_clips.append(video.subclip(0, start_time))
-                if end_time < video.duration:
-                    video_clips.append(video.subclip(end_time))
+            # The logic here is to keep the segments *outside* of the bookmarks,
+            # effectively deleting the bookmarked segments.
+            clips_to_keep = []
+            last_end_time = 0.0 # Start from the beginning of the media
 
-                if not video_clips:
-                    QMessageBox.warning(self, "Errore", "Impossibile creare il video finale. Verifica i bookmark.")
-                    return
+            # Iterate through sorted bookmarks to identify segments to keep
+            for start_ms, end_ms in sorted(self.videoSlider.bookmarks):
+                start_time = start_ms / 1000.0
+                end_time = end_ms / 1000.0
 
-                final_video = concatenate_videoclips(video_clips)
-                timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
-                output_dir = os.path.dirname(media_path)
-                output_name = f"video_modified_{timestamp}.mp4"
-                output_path = os.path.join(output_dir, output_name)
-                final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
-                QMessageBox.information(self, "Successo", f"Parte del video eliminata. Video salvato in: {output_path}")
+                # Keep the segment between the end of the last bookmark and the start of this one
+                if start_time > last_end_time:
+                    clips_to_keep.append(media_clip.subclip(last_end_time, start_time))
 
+                # Update the end time to the end of the current bookmarked segment
+                last_end_time = end_time
+
+            # Keep the final segment from the end of the last bookmark to the end of the media
+            if last_end_time < media_clip.duration:
+                clips_to_keep.append(media_clip.subclip(last_end_time))
+
+            if not clips_to_keep:
+                QMessageBox.warning(self, "Errore", "Nessuna parte del video da conservare. L'operazione cancellerebbe l'intero file.")
+                return
+
+            if is_audio_only:
+                final_media = concatenate_audioclips(clips_to_keep)
+                ext = ".mp3"
+            else:
+                final_media = concatenate_videoclips(clips_to_keep)
+                ext = ".mp4"
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
+            output_dir = os.path.dirname(media_path)
+            output_name = f"modified_{timestamp}{ext}"
+            output_path = os.path.join(output_dir, output_name)
+
+            if is_audio_only:
+                final_media.write_audiofile(output_path)
+            else:
+                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            QMessageBox.information(self, "Successo", f"Parti del file eliminate. File salvato in: {output_path}")
             self.loadVideoOutput(output_path)
+
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'eliminazione", str(e))
+        finally:
+            if 'media_clip' in locals():
+                media_clip.close()
     def insertPause(self):
         cursor = self.transcriptionTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
@@ -1922,14 +1936,22 @@ class VideoAudioManager(QMainWindow):
             self.player.setPosition(seconds * 1000)
 
     def setStartBookmark(self):
-        self.videoSlider.setBookmarkStart(self.player.position())
+        self.videoSlider.setPendingBookmarkStart(self.player.position())
 
     def setEndBookmark(self):
-        self.videoSlider.setBookmarkEnd(self.player.position())
+        if self.videoSlider.pending_bookmark_start is not None:
+            start_pos = self.videoSlider.pending_bookmark_start
+            end_pos = self.player.position()
+            self.videoSlider.addBookmark(start_pos, end_pos)
+        else:
+            QMessageBox.warning(self, "Attenzione", "Imposta prima un segnalibro di inizio.")
+
+    def clearBookmarks(self):
+        self.videoSlider.resetBookmarks()
 
     def cutVideoBetweenBookmarks(self):
-        if self.videoSlider.bookmarkStart is None or self.videoSlider.bookmarkEnd is None:
-            QMessageBox.warning(self, "Errore", "Per favore, imposta entrambi i bookmark prima di tagliare.")
+        if not self.videoSlider.bookmarks:
+            QMessageBox.warning(self, "Errore", "Per favore, imposta almeno un bookmark prima di tagliare.")
             return
 
         media_path = self.videoPathLineEdit
@@ -1938,34 +1960,56 @@ class VideoAudioManager(QMainWindow):
             return
 
         is_audio_only = self.isAudioOnly(media_path)
-        start_time = self.videoSlider.bookmarkStart / 1000.0
-        end_time = self.videoSlider.bookmarkEnd / 1000.0
 
-        base_name = os.path.splitext(os.path.basename(media_path))[0]
-        directory = os.path.dirname(media_path)
-        ext = ".mp3" if is_audio_only else ".mp4"
-        output_path = os.path.join(directory, f"{base_name}_cut{ext}")
+        clips = []
+        final_media = None
+        try:
+            if is_audio_only:
+                media_clip = AudioFileClip(media_path)
+            else:
+                media_clip = VideoFileClip(media_path)
 
-        self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Taglio")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
+            for start_ms, end_ms in self.videoSlider.bookmarks:
+                start_time = start_ms / 1000.0
+                end_time = end_ms / 1000.0
+                clips.append(media_clip.subclip(start_time, end_time))
 
-        self.cutting_thread = VideoCuttingThread(
-            media_path,
-            start_time,
-            end_time,
-            output_path,
-            use_watermark=self.enableWatermark,
-            watermark_path=self.watermarkPath,
-            watermark_size=self.watermarkSize,
-            watermark_position=self.watermarkPosition
-        )
-        self.cutting_thread.progress.connect(self.progressDialog.setValue)
-        self.cutting_thread.completed.connect(self.onCutCompleted)
-        self.cutting_thread.error.connect(self.onCutError)
+            if not clips:
+                QMessageBox.warning(self, "Errore", "Nessun clip valido da tagliare.")
+                return
 
-        self.cutting_thread.start()
+            if is_audio_only:
+                final_media = concatenate_audioclips(clips)
+            else:
+                final_media = concatenate_videoclips(clips)
+
+            base_name = os.path.splitext(os.path.basename(media_path))[0]
+            directory = os.path.dirname(media_path)
+            ext = ".mp3" if is_audio_only else ".mp4"
+            output_path = os.path.join(directory, f"{base_name}_cut{ext}")
+
+            if is_audio_only:
+                final_media.write_audiofile(output_path)
+            else:
+                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            QMessageBox.information(self, "Successo", f"File tagliato salvato in: {output_path}.")
+            self.loadVideoOutput(output_path)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Errore durante il taglio", str(e))
+            return
+        finally:
+            if 'media_clip' in locals():
+                media_clip.close()
+            if final_media:
+                if is_audio_only:
+                    final_media.close()
+                else: # Video
+                    if hasattr(final_media, 'audio') and final_media.audio:
+                        final_media.audio.close()
+                    if hasattr(final_media, 'mask') and final_media.mask:
+                        final_media.mask.close()
 
 
     def setVolume(self, value):
@@ -2442,6 +2486,10 @@ class VideoAudioManager(QMainWindow):
         volume_layout.addWidget(self.volumeLabelBack)
         layout.addLayout(volume_layout)
 
+        self.loopBackgroundAudioCheckBox = QCheckBox("Loop Sottofondo se più corto del video")
+        self.loopBackgroundAudioCheckBox.setChecked(True)
+        layout.addWidget(self.loopBackgroundAudioCheckBox)
+
         applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
         applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
         layout.addWidget(applyBackgroundButton)
@@ -2683,6 +2731,7 @@ class VideoAudioManager(QMainWindow):
             video_path=video_path,
             audio_path=background_audio_path,
             volume=background_volume,
+            loop_audio=self.loopBackgroundAudioCheckBox.isChecked(),
             parent=self
         )
 
@@ -3723,15 +3772,16 @@ class VideoAudioManager(QMainWindow):
 
         # Crea un'istanza di VideoSaver
         video_saver = VideoSaver(self)
+
+        # Determine playback rate
         rate = 1.0
+        if save_options['save_with_speed']:
+            rate = self.speedSpinBoxOutput.value()
+            if rate == 0:
+                rate = 1.0 # Avoid zero playback rate
 
         # Salva il video in base alle opzioni selezionate
         if save_options['use_compression']:
-            if save_options['save_with_speed']:
-                rate = self.speedSpinBoxOutput.value()
-                if rate == 0:
-                    rate = 1.0  # Evita di impostare una velocità nulla
-
             success, error_msg = video_saver.save_compressed(
                 self.videoPathLineOutputEdit,
                 fileName,
@@ -3739,10 +3789,10 @@ class VideoAudioManager(QMainWindow):
                 playback_rate=rate
             )
         else:
-            # Se la compressione non è usata, salva il video originale
             success, error_msg = video_saver.save_original(
                 self.videoPathLineOutputEdit,
-                fileName
+                fileName,
+                playback_rate=rate
             )
 
         # Mostra il messaggio del risultato
