@@ -9,7 +9,6 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungere dock per inserire copertina iniziale
 - [ ] sistemare inserimento pausa nel audio 
 - [x] implementare un sistema di auto apprendimento della dinamica del video 
-- [ ] implementare integrazione della webcam
 - [x] aggiungere registrazione solo audio
 - [x] aggiungere tasto condividi via what app , teams ecc...
 - [x] aggiungere splash screen
@@ -20,6 +19,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] non funziona generazione powerpoint 
 - [ ] sistemare cuffie
 - [ ] mettere webcam in pip'
+
 - [ ] mettere strumenti evidenziazione del testo 
 - [x] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
@@ -35,15 +35,19 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] salvare il json appena viene modificata la trascrizione 
 - [x] resettare i bookmark quando carico nuovo video
 - [x] aumentare la precisione 00:00:000 quando selezione porzione con bookmark
-- [ ] metti la possibilità di mettere piu ritagli con i bookmark
-- [ ] quando salvo il video cambiando la velocità di riproduzione deve essere salvato anche con risoluzione originale non solo compressa
+- [x] metti la possibilità di mettere piu ritagli con i bookmark
+- [x] quando salvo il video cambiando la velocità di riproduzione deve essere salvato anche con risoluzione originale non solo compressa
   gestisci un solo parametro per salvare con la velocità di riproduzione desiderata, tiene solo quella nella finestra di salvataggio,
   togli quella nelle impostazioni.
-- [ ] aggiungi metti in loop la musica di sottofondo se video>audio
-- [ ] aggiungere possibilità di mettere video in picture in picture, scegliendo la posizione da avere nel video finale 
-- [ ] aggiungere la possibilità di poter inserire un immagine, scegliendo la posizione e dimensione 
-- [ ] crea un nuovo menu con dentro , inserimento video pip e inserimento immagine 
+- [x] aggiungi metti in loop la musica di sottofondo se video>audio
+- [x] aggiungere possibilità di mettere video in picture in picture, scegliendo la posizione da avere nel video finale 
+- [x] aggiungere la possibilità di poter inserire un immagine, scegliendo la posizione e dimensione 
+- [x] crea un nuovo menu con dentro , inserimento video pip e inserimento immagine 
+- 
 - [ ] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
+- [ ] aggiugne barra di progresso quando taglio cancellazione
+-  [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
+- [ ] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
