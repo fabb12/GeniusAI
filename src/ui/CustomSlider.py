@@ -52,6 +52,11 @@ class CustomSlider(QSlider):
         self.bookmarkEnd = position
         self.update()
 
+    def resetBookmarks(self):
+        self.bookmarkStart = None
+        self.bookmarkEnd = None
+        self.update()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             opt = QStyleOptionSlider()
@@ -80,10 +85,12 @@ class CustomSlider(QSlider):
             painter.drawRect(x_end - 2, 0, 4, self.height())
 
             if self.bookmarkStart is not None:
-                duration = (self.bookmarkEnd - self.bookmarkStart) / 1000.0  # Calcola la durata in secondi
-                minutes = int(duration // 60)
-                seconds = int(duration % 60)
-                duration_text = f"{minutes:02d}:{seconds:02d}"  # Testo della durata in formato MM:SS
+                duration_ms = self.bookmarkEnd - self.bookmarkStart
+                total_seconds = duration_ms // 1000
+                milliseconds = duration_ms % 1000
+                minutes = total_seconds // 60
+                seconds = total_seconds % 60
+                duration_text = f"{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}"
 
                 painter.setPen(QColor(0, 0, 0))
                 painter.setFont(QFont("Arial", 10))
