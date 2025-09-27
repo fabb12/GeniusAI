@@ -28,9 +28,7 @@ class VideoSaveOptionsDialog(QDialog):
 
         # Playback speed option
         self.saveWithPlaybackSpeedCheck = QCheckBox("Salva con velocità di riproduzione")
-        self.saveWithPlaybackSpeedCheck.setChecked(
-            self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool)
-        )
+        self.saveWithPlaybackSpeedCheck.setChecked(False)
         layout.addWidget(self.saveWithPlaybackSpeedCheck)
 
         # Compression options group
@@ -84,9 +82,6 @@ class VideoSaveOptionsDialog(QDialog):
     def update_options_state(self):
         is_compressed = self.compressedRadio.isChecked()
         self.compressionGroup.setEnabled(is_compressed)
-        self.saveWithPlaybackSpeedCheck.setEnabled(is_compressed)
-        if not is_compressed:
-            self.saveWithPlaybackSpeedCheck.setChecked(False)
 
     def getOptions(self):
         return {

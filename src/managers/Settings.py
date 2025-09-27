@@ -199,9 +199,8 @@ class SettingsDialog(QDialog):
         widget = QWidget()
         layout = QFormLayout(widget)
 
-        self.saveWithPlaybackSpeed = QCheckBox()
-        self.saveWithPlaybackSpeed.setToolTip("Se abilitato, il video verrà salvato con la velocità di riproduzione corrente.")
-        layout.addRow("Salva video con la velocità di riproduzione:", self.saveWithPlaybackSpeed)
+        # Rimosso: self.saveWithPlaybackSpeed = QCheckBox()
+        # Rimosso: layout.addRow("Salva video con la velocità di riproduzione:", self.saveWithPlaybackSpeed)
 
         return widget
 
@@ -258,7 +257,7 @@ class SettingsDialog(QDialog):
         self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))
 
         # --- Carica Impostazioni Salvataggio ---
-        self.saveWithPlaybackSpeed.setChecked(self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool))
+        # Rimosso: self.saveWithPlaybackSpeed.setChecked(self.settings.value("saving/saveWithPlaybackSpeed", False, type=bool))
 
         # --- Carica Impostazioni Editor ---
         font_family = self.settings.value("editor/fontFamily", "Arial")
@@ -306,7 +305,7 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/useVBCable", self.useVBCableCheckBox.isChecked())
 
         # --- Salva Impostazioni Salvataggio ---
-        self.settings.setValue("saving/saveWithPlaybackSpeed", self.saveWithPlaybackSpeed.isChecked())
+        # Rimosso: self.settings.setValue("saving/saveWithPlaybackSpeed", self.saveWithPlaybackSpeed.isChecked())
 
         # --- Salva Impostazioni Editor ---
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
