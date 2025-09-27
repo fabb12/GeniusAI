@@ -169,6 +169,84 @@ class VideoMergeThread(QThread):
         self.running = False
         self.progress.emit(0, "Annullamento in corso...")
 
+
+class BackgroundAudioProgressLogger(proglog.ProgressBarLogger):
+    def __init__(self, progress_signal_emitter):
+        super().__init__()
+        self.progress_signal_emitter = progress_signal_emitter
+        self.duration = 0
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        super().bars_callback(bar, attr, value, old_value)
+        if attr == 'duration':
+            self.duration = value
+        elif attr == 't' and self.duration > 0:
+            percent = int((value / self.duration) * 100)
+            progress_value = 50 + int(percent * 0.45)
+            self.progress_signal_emitter.emit(progress_value, f"Rendering video: {percent}%")
+
+class BackgroundAudioThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, video_path, audio_path, volume, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.audio_path = audio_path
+        self.volume = volume
+        self.running = True
+
+    def run(self):
+        video_clip = None
+        background_audio_clip = None
+        try:
+            self.progress.emit(5, "Caricamento file...")
+            video_clip = VideoFileClip(self.video_path)
+            background_audio_clip = AudioFileClip(self.audio_path).volumex(self.volume)
+            if not self.running: return
+
+            self.progress.emit(20, "Looping audio di sottofondo...")
+            if background_audio_clip.duration < video_clip.duration:
+                background_audio_clip = background_audio_clip.loop(duration=video_clip.duration)
+            if not self.running: return
+
+            self.progress.emit(35, "Composizione audio...")
+            if video_clip.audio:
+                combined_audio = CompositeAudioClip(
+                    [video_clip.audio, background_audio_clip.set_duration(video_clip.duration)])
+            else:
+                combined_audio = background_audio_clip.set_duration(video_clip.duration)
+            if not self.running: return
+
+            self.progress.emit(50, "Applicazione audio al video...")
+            final_clip = video_clip.set_audio(combined_audio)
+
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            base_name = os.path.splitext(os.path.basename(self.video_path))[0]
+            output_dir = os.path.dirname(self.video_path)
+            output_path = os.path.join(output_dir, f"{base_name}_background_audio_{timestamp}.mp4")
+
+            if not self.running: return
+
+            logger = BackgroundAudioProgressLogger(self.progress)
+            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger)
+
+            if self.running:
+                self.progress.emit(100, "Completato")
+                self.completed.emit(output_path)
+
+        except Exception as e:
+            if self.running: self.error.emit(str(e))
+        finally:
+            if video_clip: video_clip.close()
+            if background_audio_clip: background_audio_clip.close()
+
+    def stop(self):
+        self.running = False
+        self.progress.emit(0, "Annullamento in corso...")
+
+
 class AudioProcessingThread(QThread):
     progress = pyqtSignal(int, str)
     completed = pyqtSignal(str)
@@ -326,6 +404,10 @@ class VideoAudioManager(QMainWindow):
         self.reverseTimer.timeout.connect(self.reversePlaybackStep)
         self.reverseTimerOutput = QTimer(self)
         self.reverseTimerOutput.timeout.connect(self.reversePlaybackStepOutput)
+
+        self.autosave_timer = QTimer(self)
+        self.autosave_timer.setSingleShot(True)
+        self.autosave_timer.timeout.connect(self.autosave_transcription)
 
         # Initialize attributes before UI
         self.use_vb_cable = False
@@ -504,6 +586,11 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
         self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
 
+        self.openFileInputButton = QPushButton('')
+        self.openFileInputButton.setIcon(QIcon(get_resource("load.png")))
+        self.openFileInputButton.setToolTip("Apri un nuovo video nell'input player")
+        self.openFileInputButton.clicked.connect(self.browseVideo)
+
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon(get_resource("play.png")))
         self.playButton.setToolTip("Riproduci/Pausa il video input")
@@ -548,6 +635,13 @@ class VideoAudioManager(QMainWindow):
         self.deleteButton.setIcon(QIcon(get_resource("trash-bin.png")))
         self.deleteButton.setToolTip("Cancella la parte selezionata del video")
 
+        self.transferToOutputButton = QPushButton('')
+        self.transferToOutputButton.setIcon(QIcon(get_resource("change.png")))
+        self.transferToOutputButton.setToolTip("Sposta il video dall'input all'output")
+        self.transferToOutputButton.clicked.connect(
+            lambda: self.loadVideoOutput(self.videoPathLineEdit) if self.videoPathLineEdit else None
+        )
+
         self.stopButton.clicked.connect(self.stopVideo)
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
@@ -578,6 +672,11 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
+        self.openFileOutputButton = QPushButton('')
+        self.openFileOutputButton.setIcon(QIcon(get_resource("load.png")))
+        self.openFileOutputButton.setToolTip("Apri un nuovo video nell'output player")
+        self.openFileOutputButton.clicked.connect(self.browseVideoOutput)
+
         self.playButtonOutput = QPushButton('')
         self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
         self.playButtonOutput.setToolTip("Riproduci/Pausa il video output")
@@ -602,6 +701,7 @@ class VideoAudioManager(QMainWindow):
         stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
         playbackControlLayoutOutput = QHBoxLayout()
+        playbackControlLayoutOutput.addWidget(self.openFileOutputButton)
         playbackControlLayoutOutput.addWidget(self.playButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
@@ -665,6 +765,7 @@ class VideoAudioManager(QMainWindow):
 
         # Layout di playback del Player Input
         playbackControlLayout = QHBoxLayout()
+        playbackControlLayout.addWidget(self.openFileInputButton)
         playbackControlLayout.addWidget(self.rewindButton)
         playbackControlLayout.addWidget(self.frameBackwardButton)
         playbackControlLayout.addWidget(self.playButton)
@@ -676,6 +777,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.cutButton)
         playbackControlLayout.addWidget(self.cropButton)
         playbackControlLayout.addWidget(self.deleteButton)
+        playbackControlLayout.addWidget(self.transferToOutputButton)
 
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
@@ -2561,45 +2663,45 @@ class VideoAudioManager(QMainWindow):
             self.audio_buttons[0].setChecked(True)
 
     def applyBackgroundAudioToVideo(self):
-        video_path = self.videoPathLineEdit  # Percorso del video attualmente caricato
-        background_audio_path = self.backgroundAudioPathLineEdit.text()  # Percorso dell'audio di sottofondo scelto
+        video_path = self.videoPathLineEdit
+        background_audio_path = self.backgroundAudioPathLineEdit.text()
         slider_value = self.volumeSliderBack.value()
-        background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1  # Normalizza e usa una scala logaritmica
+        background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
 
         if not video_path or not os.path.exists(video_path):
             QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
             return
-
         if not background_audio_path or not os.path.exists(background_audio_path):
-            QMessageBox.warning(self, "Errore", "Carica un audio di sottofondo prima di applicarlo.")
+            QMessageBox.warning(self, "Errore", "Seleziona un file audio di sottofondo valido.")
             return
 
-        try:
-            # Carica video e audio di sottofondo
-            video_clip = VideoFileClip(video_path)
-            background_audio_clip = AudioFileClip(background_audio_path).volumex(background_volume)
+        self.progressDialog = QProgressDialog("Applicazione audio di sottofondo...", "Annulla", 0, 100, self)
+        self.progressDialog.setWindowTitle("Progresso Audio Sottofondo")
+        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
 
-            # Verifica che la durata dell'audio di sottofondo sia sufficiente
-            if background_audio_clip.duration < video_clip.duration:
-                background_audio_clip = background_audio_clip.loop(duration=video_clip.duration)
+        self.background_audio_thread = BackgroundAudioThread(
+            video_path=video_path,
+            audio_path=background_audio_path,
+            volume=background_volume,
+            parent=self
+        )
 
-            # Combina l'audio di sottofondo con l'audio originale del video, se presente
-            if video_clip.audio:
-                combined_audio = CompositeAudioClip(
-                    [video_clip.audio, background_audio_clip.set_duration(video_clip.duration)])
-            else:
-                combined_audio = background_audio_clip.set_duration(video_clip.duration)
+        self.background_audio_thread.progress.connect(self.updateProgressDialog)
+        self.background_audio_thread.completed.connect(self.onBackgroundAudioCompleted)
+        self.background_audio_thread.error.connect(self.onBackgroundAudioError)
+        self.progressDialog.canceled.connect(self.background_audio_thread.stop)
 
-            # Imposta l'audio combinato nel video e salva il nuovo file
-            final_clip = video_clip.set_audio(combined_audio)
-            output_path = tempfile.mktemp(suffix='.mp4')
-            final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+        self.background_audio_thread.start()
+        self.progressDialog.show()
 
-            QMessageBox.information(self, "Successo",
-                                    f"Il video con audio di sottofondo è stato salvato in {output_path}")
-            self.loadVideoOutput(output_path)  # Carica il video aggiornato nell'interfaccia
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'applicazione dell'audio di sottofondo", str(e))
+    def onBackgroundAudioCompleted(self, output_path):
+        self.progressDialog.close()
+        QMessageBox.information(self, "Successo", f"Il video con audio di sottofondo è stato salvato in:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def onBackgroundAudioError(self, error_message):
+        self.progressDialog.close()
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'applicazione dell'audio:\n{error_message}")
 
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
@@ -2857,7 +2959,7 @@ class VideoAudioManager(QMainWindow):
         self.folderPathLineEdit = QLineEdit()
         self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
 
-        self.saveVideoOnlyCheckBox = QCheckBox("Salva solo il video")
+        self.saveVideoOnlyCheckBox = QCheckBox("Registra solo video")
         self.saveAudioOnlyCheckBox = QCheckBox("Registra solo audio")
 
         self.saveVideoOnlyCheckBox.toggled.connect(
@@ -3423,6 +3525,8 @@ class VideoAudioManager(QMainWindow):
         """Load and play video or audio, updating UI based on file type."""
         self.player.stop()
         self.reset_view()
+        self.speedSpinBox.setValue(1.0)
+        self.videoSlider.resetBookmarks()
 
         if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
@@ -3453,6 +3557,7 @@ class VideoAudioManager(QMainWindow):
     def loadVideoOutput(self, video_path):
 
         self.playerOutput.stop()
+        self.speedSpinBoxOutput.setValue(1.0)
 
         if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
             QTimer.singleShot(1, lambda: self.sourceSetterOutput(video_path))
@@ -3784,6 +3889,9 @@ class VideoAudioManager(QMainWindow):
         if self.transcriptionTextArea.signalsBlocked():
             return
 
+        # Avvia il timer di salvataggio automatico
+        self.autosave_timer.start(2500)  # 2.5 secondi
+
         # Quando l'utente modifica il testo, questo diventa il nuovo "original_text"
         # e qualsiasi riassunto precedente viene invalidato.
         self.summaries = {}
@@ -3803,6 +3911,22 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionTextArea.blockSignals(False)
             else:
                 self.detectAndUpdateLanguage(plain_text)
+
+    def autosave_transcription(self):
+        """
+        Salva automaticamente la trascrizione nel file JSON associato al video.
+        """
+        if not self.videoPathLineEdit:
+            logging.debug("Salvataggio automatico saltato: nessun video caricato.")
+            return
+
+        logging.info("Salvataggio automatico della trascrizione...")
+        current_text = self.transcriptionTextArea.toPlainText()
+        update_data = {
+            "transcription_raw": current_text,
+            "transcription_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
 
     def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
         WPM = 150  # Average words-per-minute rate for spoken language
