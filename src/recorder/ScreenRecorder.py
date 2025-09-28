@@ -219,7 +219,7 @@ class ScreenRecorder(QThread):
                 self.ffmpeg_path,
                 '-f', 'dshow',
                 '-r', '25',
-                '-i', f'video={self.webcam_device}',
+                '-i', f'video="{self.webcam_device}"',
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',
                 '-pix_fmt', 'yuv420p',
