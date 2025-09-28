@@ -3401,13 +3401,11 @@ class VideoAudioManager(QMainWindow):
             merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
             subprocess.run(merge_command)
 
-            message = f"Il {'file audio' if is_audio_only else 'video'} finale è stato salvato correttamente:\n{output_path}"
-            QMessageBox.information(self, "File Salvato", message)
+            self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
             self.loadVideoOutput(output_path)
         else:
             output_path = self.recording_segments[0]
-            message = f"Il {'file audio' if is_audio_only else 'video'} è stato salvato correttamente:\n{output_path}"
-            QMessageBox.information(self, "File Salvato", message)
+            self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
             self.loadVideoOutput(output_path)
 
     def _is_bluetooth_mode_active(self):

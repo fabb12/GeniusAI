@@ -51,7 +51,8 @@ class PptxGeneration:
                 testo = file.read()
 
             if not testo.strip():
-                QMessageBox.warning(parent, "File Vuoto", "Il file selezionato è vuoto.")
+                if hasattr(parent, 'show_status_message'):
+                    parent.show_status_message("Il file selezionato è vuoto.", error=True)
                 return
 
             result_tuple = PptxGeneration.generaTestoPerSlide(testo, num_slide, company_name, language)
@@ -67,7 +68,8 @@ class PptxGeneration:
             if save_path:
                 PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, num_slides=num_slide)
             else:
-                QMessageBox.warning(parent, "Attenzione", "Salvataggio annullato.")
+                if hasattr(parent, 'show_status_message'):
+                    parent.show_status_message("Salvataggio annullato.", error=True)
         except FileNotFoundError:
              logging.error(f"File non trovato: {file_path}")
              QMessageBox.critical(parent, "Errore", f"File non trovato: {file_path}")
@@ -216,12 +218,14 @@ class PptxGeneration:
         """Metodo principale chiamato dall'UI per creare la presentazione."""
         testo_attuale = transcriptionTextArea.toPlainText()
         if not testo_attuale.strip():
-            QMessageBox.warning(parent, "Testo Mancante", "Inserisci del testo prima di generare.")
+            if hasattr(parent, 'show_status_message'):
+                parent.show_status_message("Inserisci del testo prima di generare.", error=True)
             return
 
         save_path, _ = QFileDialog.getSaveFileName(parent, "Salva Presentazione Come", "", "PowerPoint Presentation (*.pptx)")
         if not save_path:
-            QMessageBox.information(parent, "Annullato", "Salvataggio annullato.")
+            if hasattr(parent, 'show_status_message'):
+                parent.show_status_message("Salvataggio annullato.", error=True)
             return
 
         wait_msg = QMessageBox(QMessageBox.Icon.Information, "Elaborazione", "Generazione del testo AI in corso...", QMessageBox.StandardButton.NoButton, parent)
@@ -362,39 +366,33 @@ class PptxGeneration:
             if current_slide: slides_data.append(current_slide)
 
             if not slides_data:
-                QMessageBox.warning(parent, "Errore di Parsing", "Impossibile estrarre dati strutturati dal testo dell'AI.")
+                if hasattr(parent, 'show_status_message'):
+                    parent.show_status_message("Impossibile estrarre dati strutturati dal testo dell'AI.", error=True)
                 return
 
             if num_slides is not None:
                 slides_data = PptxGeneration._truncate_slides(slides_data, num_slides)
 
-            # --- Creazione delle slide ---
             if not slides_data:
                 return
 
-            # Aggiungi la slide titolo
             title_slide_data = slides_data.pop(0)
             slide = prs.slides.add_slide(title_slide_layout)
             if slide.shapes.title:
                 slide.shapes.title.text = title_slide_data.get('titolo', '').strip()
-
             subtitle_text = title_slide_data.get('sottotitolo', '').strip()
             subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
             if subtitle_text and subtitle_shape:
                 subtitle_shape.text = subtitle_text
 
-            # Aggiungi le slide di contenuto
             for slide_data in slides_data:
                 slide = prs.slides.add_slide(content_slide_layout)
-
                 if slide.shapes.title:
                     slide.shapes.title.text = slide_data.get('titolo', '').strip()
-
                 subtitle_text = slide_data.get('sottotitolo', '').strip()
                 subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
                 if subtitle_text and subtitle_shape:
                     subtitle_shape.text = subtitle_text
-
                 content_text = slide_data.get('contenuto', '').strip()
                 if content_text:
                     PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
@@ -402,8 +400,8 @@ class PptxGeneration:
             if prs.slides:
                 prs.save(output_file)
                 logging.info(f"Presentazione salvata con successo: {output_file}")
-                if parent:
-                    QMessageBox.information(parent, "Successo", f"Presentazione generata e salvata:\n{output_file}")
+                if parent and hasattr(parent, 'show_status_message'):
+                    parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
                     reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
                     if reply == QMessageBox.StandardButton.Yes:
                         try:
@@ -412,7 +410,7 @@ class PptxGeneration:
                             else: subprocess.call(['xdg-open', output_file])
                         except Exception as e:
                             logging.error(f"Impossibile aprire il file '{output_file}': {e}")
-                            QMessageBox.warning(parent, "Impossibile Aprire", f"Non è stato possibile aprire il file.\n{output_file}")
+                            parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
             else:
                 logging.warning("Nessuna slide è stata generata.")
 
