@@ -46,7 +46,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - 
 - [ ] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
 - [ ] aggiugne barra di progresso quando taglio cancellazione
--  [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
+- [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
 - [ ] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
 - 
 ## [1.2.2] - 2024-06-30
