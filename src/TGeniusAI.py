@@ -1148,6 +1148,7 @@ class VideoAudioManager(QMainWindow):
         # --- STATUS BAR ---
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
+        self.statusBar.setStyleSheet("QStatusBar { padding: 1px; } QStatusBar::item { border: none; }")
         self.statusLabel = QLabel("Pronto")
         self.statusLabel.setToolTip("Mostra lo stato corrente dell'applicazione")
         self.statusBar.addWidget(self.statusLabel, 1) # Il secondo argomento è lo stretch factor

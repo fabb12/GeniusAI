@@ -10,9 +10,9 @@ from moviepy.editor import AudioFileClip, VideoFileClip
 
 
 class TranscriptionThread(QThread):
-    update_progress = pyqtSignal(int, str)  # Signal for updating progress with an index and message
-    transcription_complete = pyqtSignal(str, list)  # Signal when transcription is complete, including temporary files to clean
-    error_occurred = pyqtSignal(str)  # Signal for reporting errors
+    progress = pyqtSignal(int, str)  # Signal for updating progress with an index and message
+    completed = pyqtSignal(tuple)  # Signal when transcription is complete, including temporary files to clean
+    error = pyqtSignal(str)  # Signal for reporting errors
 
     def __init__(self, media_path, parent=None):
         super().__init__(parent)
@@ -46,12 +46,12 @@ class TranscriptionThread(QThread):
                 transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
-                self.update_progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
+                self.progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
             json_path = self.save_transcription_to_json(transcription, language_video)
-            self.transcription_complete.emit(json_path, [])
+            self.completed.emit((json_path, []))
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            self.error.emit(str(e))
         finally:
             if audio_file and audio_file != self.media_path and os.path.exists(audio_file):
                 os.remove(audio_file)
