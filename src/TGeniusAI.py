@@ -3105,6 +3105,13 @@ class VideoAudioManager(QMainWindow):
         options_layout.addWidget(self.recordWebcamCheckBox)
         saveOptionsLayout.addLayout(options_layout)
 
+        # Webcam selection
+        self.webcamComboBox = QComboBox()
+        self.update_webcam_list()
+        self.recordWebcamCheckBox.toggled.connect(self.webcamComboBox.setEnabled)
+        self.webcamComboBox.setEnabled(self.recordWebcamCheckBox.isChecked())
+        saveOptionsLayout.addWidget(self.webcamComboBox)
+
         saveOptionsLayout.addWidget(QLabel("Percorso File:"))
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
 
@@ -3165,6 +3172,18 @@ class VideoAudioManager(QMainWindow):
 
         self.selectDefaultScreen()
         return dock
+
+    def update_webcam_list(self):
+        self.webcamComboBox.clear()
+        ffmpeg_path = FFMPEG_PATH
+        video_devices = ScreenRecorder.get_video_devices(ffmpeg_path)
+        if video_devices:
+            self.webcamComboBox.addItems(video_devices)
+        else:
+            self.webcamComboBox.addItem("Nessuna webcam trovata")
+            self.webcamComboBox.setEnabled(False)
+            self.recordWebcamCheckBox.setEnabled(False)
+            self.recordWebcamCheckBox.setChecked(False)
 
     def startScreenRecording(self):
         if self.show_red_dot:

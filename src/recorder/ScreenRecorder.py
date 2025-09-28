@@ -42,12 +42,8 @@ class ScreenRecorder(QThread):
         self.webcam_output_path = None
 
         if self.record_webcam:
-            if not self.webcam_device:
-                self.error_signal.emit("Nessun dispositivo webcam specificato.")
-                self.is_running = False
-            else:
-                base, ext = os.path.splitext(self.output_path)
-                self.webcam_output_path = f"{base}_webcam.mp4"
+            base, ext = os.path.splitext(self.output_path)
+            self.webcam_output_path = f"{base}_webcam.mp4"
 
         if not os.path.isfile(self.ffmpeg_path):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
@@ -59,35 +55,6 @@ class ScreenRecorder(QThread):
 
     def get_webcam_output_path(self):
         return self.webcam_output_path
-
-    @staticmethod
-    def get_video_devices(ffmpeg_path):
-        if not os.path.isfile(ffmpeg_path):
-            return []
-
-        command = [ffmpeg_path, '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
-        try:
-            # CREATE_NO_WINDOW flag to hide the console window
-            creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-            result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='ignore', creationflags=creationflags)
-            output = result.stderr
-
-            devices = []
-            video_device_section = False
-            for line in output.splitlines():
-                if "DirectShow video devices" in line:
-                    video_device_section = True
-                elif "DirectShow audio devices" in line:
-                    break
-
-                if video_device_section:
-                    match = re.search(r'\]\s+"([^"]+)"\s+\(video\)', line)
-                    if match:
-                        devices.append(match.group(1))
-            return list(dict.fromkeys(devices))
-        except Exception as e:
-            print(f"Error getting video devices: {e}")
-            return []
 
     def get_monitor_offset(self):
         monitors = get_monitors()
@@ -219,10 +186,7 @@ class ScreenRecorder(QThread):
                 self.ffmpeg_path,
                 '-f', 'vfwcap',
                 '-r', '25',
-                '-i', '0', # Using device index 0 as suggested
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',
-                '-pix_fmt', 'yuv420p',
+                '-i', '0',
                 '-y', self.webcam_output_path
             ]
             self.webcam_process = subprocess.Popen(webcam_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
