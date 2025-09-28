@@ -1,5 +1,5 @@
-from PyQt6.QtWidgets import QSlider, QStyleOptionSlider
-from PyQt6.QtGui import QPainter, QColor, QBrush, QFont
+from PyQt6.QtWidgets import QSlider, QStyleOptionSlider, QMenu
+from PyQt6.QtGui import QPainter, QColor, QBrush, QFont, QAction
 from PyQt6.QtCore import Qt
 
 class CustomSlider(QSlider):
@@ -77,6 +77,37 @@ class CustomSlider(QSlider):
             self.sliderMoved.emit(value)
             self.sliderPressed.emit()
         super().mousePressEvent(event)
+
+    def get_bookmark_at(self, pos):
+        """Restituisce l'indice del bookmark alla posizione data."""
+        if self.maximum() == 0:
+            return None
+        for i, (start, end) in enumerate(self.bookmarks):
+            x_start = int(start / self.maximum() * self.width())
+            x_end = int(end / self.maximum() * self.width())
+            if x_start <= pos.x() <= x_end:
+                return i
+        return None
+
+    def contextMenuEvent(self, event):
+        """Gestisce il menu contestuale per i bookmark."""
+        context_menu = QMenu(self)
+
+        # Azione per resettare tutti i bookmark
+        reset_all_action = QAction("Resetta tutti i bookmark", self)
+        reset_all_action.triggered.connect(self.resetBookmarks)
+        context_menu.addAction(reset_all_action)
+
+        # Azione per rimuovere un bookmark singolo
+        bookmark_index = self.get_bookmark_at(event.pos())
+        remove_single_action = QAction("Rimuovi bookmark singolo", self)
+        if bookmark_index is not None:
+            remove_single_action.triggered.connect(lambda: self.removeBookmark(bookmark_index))
+        else:
+            remove_single_action.setEnabled(False)
+        context_menu.addAction(remove_single_action)
+
+        context_menu.exec(event.globalPos())
 
     def paintEvent(self, event):
         super().paintEvent(event)

@@ -394,6 +394,7 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput.setVolume(1.0)
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.recentFiles = []
+        self.recording_segments = []
 
         # Blinking recording indicator
         self.recording_indicator = QLabel(self)
@@ -2743,6 +2744,25 @@ class VideoAudioManager(QMainWindow):
         self.dockSettingsManager.save_settings()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
             self.monitor_preview.close()
+
+        # Pulizia dei file temporanei
+        logging.info("Pulizia dei file temporanei...")
+        for segment_path in self.recording_segments:
+            try:
+                if os.path.exists(segment_path):
+                    os.remove(segment_path)
+                    logging.info(f"Rimosso file temporaneo: {segment_path}")
+            except Exception as e:
+                logging.error(f"Impossibile rimuovere il file temporaneo {segment_path}: {e}")
+
+        try:
+            segments_file = "segments.txt"
+            if os.path.exists(segments_file):
+                os.remove(segments_file)
+                logging.info(f"Rimosso file: {segments_file}")
+        except Exception as e:
+            logging.error(f"Impossibile rimuovere il file {segments_file}: {e}")
+
         event.accept()
 
     def selectDefaultScreen(self):
@@ -3151,7 +3171,7 @@ class VideoAudioManager(QMainWindow):
         self.startRecordingButton.setEnabled(False)
         self.pauseRecordingButton.setEnabled(True)
         self.stopRecordingButton.setEnabled(True)
-        self.recording_segments = []  # Initialize the list to store recording segments
+        self.recording_segments.clear()  # Pulisce i segmenti precedenti
         self.is_paused = False
 
         self.recordingTime = QTime(0, 0, 0)
@@ -3749,9 +3769,9 @@ class VideoAudioManager(QMainWindow):
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
-        # Creazione del menu Effetti
-        effectsMenu = menuBar.addMenu('&Effetti')
-        self.setupEffectsMenuActions(effectsMenu)
+        # Creazione del menu Effetti (Rimosso)
+        # effectsMenu = menuBar.addMenu('&Effetti')
+        # self.setupEffectsMenuActions(effectsMenu)
 
         # Creazione del menu Workspace per i layout preimpostati
         workspaceMenu = menuBar.addMenu('&Workspace')
