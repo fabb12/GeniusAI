@@ -25,13 +25,14 @@ class VideoCompositingThread(QThread):
     completed = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, base_video_path, overlay_path, overlay_type, position, size, parent=None):
+    def __init__(self, base_video_path, overlay_path, overlay_type, position, size, start_time, parent=None):
         super().__init__(parent)
         self.base_video_path = base_video_path
         self.overlay_path = overlay_path
         self.overlay_type = overlay_type
         self.position = position
         self.size_percent = size
+        self.start_time = start_time
         self.running = True
 
     def run(self):
@@ -42,9 +43,12 @@ class VideoCompositingThread(QThread):
             base_clip = VideoFileClip(self.base_video_path)
 
             if self.overlay_type == 'video':
-                overlay_clip = VideoFileClip(self.overlay_path).set_duration(base_clip.duration)
+                overlay_clip = VideoFileClip(self.overlay_path).set_start(self.start_time)
             elif self.overlay_type == 'image':
-                overlay_clip = ImageClip(self.overlay_path).set_duration(base_clip.duration)
+                duration = base_clip.duration - self.start_time
+                if duration < 0:
+                    duration = 0
+                overlay_clip = ImageClip(self.overlay_path).set_duration(duration).set_start(self.start_time)
             else:
                 raise ValueError("Tipo di overlay non supportato.")
 
