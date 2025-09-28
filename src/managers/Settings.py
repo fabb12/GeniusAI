@@ -254,8 +254,18 @@ class SettingsDialog(QDialog):
         else:
             self.webcamComboBox.addItem("Nessuna webcam trovata")
             self.webcamComboBox.setEnabled(False)
-
         layout.addRow("Seleziona Webcam:", self.webcamComboBox)
+
+        # Aggiungi controlli per posizione e dimensione
+        self.webcamPositionComboBox = QComboBox()
+        self.webcamPositionComboBox.addItems(["In alto a destra", "In alto a sinistra", "In basso a destra", "In basso a sinistra"])
+        layout.addRow("Posizione Webcam:", self.webcamPositionComboBox)
+
+        self.webcamSizeSpinBox = QSpinBox()
+        self.webcamSizeSpinBox.setRange(10, 50)
+        self.webcamSizeSpinBox.setSuffix(" %")
+        layout.addRow("Dimensione Webcam:", self.webcamSizeSpinBox)
+
         return widget
 
     def loadSettings(self):
@@ -303,6 +313,9 @@ class SettingsDialog(QDialog):
         saved_webcam_index = self.settings.value("webcam/device_index", 0, type=int)
         if hasattr(self, 'webcams') and self.webcams and saved_webcam_index < self.webcamComboBox.count():
             self.webcamComboBox.setCurrentIndex(saved_webcam_index)
+
+        self.webcamPositionComboBox.setCurrentText(self.settings.value("webcam/position", "In alto a destra"))
+        self.webcamSizeSpinBox.setValue(self.settings.value("webcam/size", 25, type=int))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -356,6 +369,8 @@ class SettingsDialog(QDialog):
             selected_webcam_name = self.webcamComboBox.currentText()
             selected_webcam_index = self.webcams.get(selected_webcam_name, 0)
             self.settings.setValue("webcam/device_index", selected_webcam_index)
+            self.settings.setValue("webcam/position", self.webcamPositionComboBox.currentText())
+            self.settings.setValue("webcam/size", self.webcamSizeSpinBox.value())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
