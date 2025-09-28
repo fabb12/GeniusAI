@@ -9,38 +9,38 @@ class CustomSlider(QSlider):
         self.pending_bookmark_start = None
         self.setStyleSheet("""
             QSlider::groove:horizontal {
-                border: 1px solid #3c3c3c;
-                background: #343434;
-                height: 16px;
-                border-radius: 8px;
+                border: 1px solid #2a2a2a;
+                background: #3c3c3c;
+                height: 22px;
+                border-radius: 11px;
             }
             QSlider::sub-page:horizontal {
                 background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #0078d7, stop:1 #005a9e);
-                border: 1px solid #3c3c3c;
-                height: 16px;
-                border-radius: 8px;
+                border: 1px solid #2a2a2a;
+                height: 22px;
+                border-radius: 11px;
             }
             QSlider::add-page:horizontal {
                 background: #5a5a5a;
-                border: 1px solid #3c3c3c;
-                height: 16px;
-                border-radius: 8px;
+                border: 1px solid #2a2a2a;
+                height: 22px;
+                border-radius: 11px;
             }
             QSlider::handle:horizontal {
-                background: #0078d7;
-                border: 2px solid #ffffff;
-                width: 20px;
-                height: 20px;
+                background: #0099e0;
+                border: 1px solid #ffffff;
+                width: 12px;
+                height: 28px;
                 margin: -4px 0;
-                border-radius: 12px;
+                border-radius: 7px;
             }
             QSlider::handle:horizontal:hover {
-                background: #0099cc;
-                border: 2px solid #e0e0e0;
+                background: #00aaff;
+                border: 1px solid #f0f0f0;
             }
             QSlider::handle:horizontal:pressed {
-                background: #005a9e;
-                border: 2px solid #d0d0d0;
+                background: #0078d7;
+                border: 1px solid #e0e0e0;
             }
         """)
 
