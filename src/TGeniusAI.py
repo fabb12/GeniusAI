@@ -3955,8 +3955,10 @@ class VideoAudioManager(QMainWindow):
             self.videoEffectsDock.show()
         # Assicurati che il dock sia portato in primo piano
         self.videoEffectsDock.raise_()
-        # Seleziona il tab corretto
-        self.videoEffectsDock.widget().setCurrentIndex(tab_index)
+        # Trova il QTabWidget all'interno del dock e imposta l'indice
+        tab_widget = self.videoEffectsDock.findChild(QTabWidget)
+        if tab_widget:
+            tab_widget.setCurrentIndex(tab_index)
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
@@ -5316,6 +5318,61 @@ class VideoAudioManager(QMainWindow):
 
     def pauseVideo(self):
         self.player.pause()
+
+    def toggle_webcam(self, checked):
+        if checked:
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.player.pause()
+                self.was_playing_before_webcam = True
+            else:
+                self.was_playing_before_webcam = False
+
+            self.webcam_capture = cv2.VideoCapture(self.webcam_device_index, cv2.CAP_DSHOW)
+            if not self.webcam_capture.isOpened():
+                QMessageBox.critical(self, "Errore Webcam", "Impossibile aprire la webcam selezionata.")
+                self.webcamButton.setChecked(False)
+                return
+
+            self.videoCropWidget.hide()
+            self.webcam_display_label.show()
+            self.webcam_active = True
+            self.webcam_timer.start(30)
+        else:
+            self.webcam_active = False
+            if self.webcam_capture:
+                self.webcam_timer.stop()
+                self.webcam_capture.release()
+                self.webcam_capture = None
+
+            self.webcam_display_label.hide()
+            self.videoCropWidget.show()
+
+            if self.was_playing_before_webcam:
+                self.player.play()
+
+    def update_webcam_frame(self):
+        if not self.webcam_active or not self.webcam_capture or not self.webcam_capture.isOpened():
+            return
+
+        ret, frame = self.webcam_capture.read()
+        if ret:
+            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame = cv2.flip(frame, 1)
+            h, w, ch = frame.shape
+            bytes_per_line = ch * w
+            q_image = QImage(frame.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+
+            pixmap = QPixmap.fromImage(q_image)
+            self.webcam_display_label.setPixmap(pixmap.scaled(
+                self.webcam_display_label.size(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            ))
+
+    def load_webcam_settings(self):
+        """Carica le impostazioni della webcam."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.webcam_device_index = settings.value("webcam/device_index", 0, type=int)
 
     def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
         try:
