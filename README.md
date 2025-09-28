@@ -19,7 +19,7 @@ Questo programma offre un’interfaccia avanzata per la gestione di **video** e 
 - [Installazione delle Dipendenze con install_requirements.py](#installazione-delle-dipendenze-con-install_requirementspy)
 - [Generazione dell'Eseguibile (.exe) con PyInstaller](#generazione-delleseguibile-exe-con-pyinstaller)
 - [Creazione dell’Installer Windows con Inno Setup (.iss)](#creazione-dellinstaller-windows-con-inno-setup-iss)
- 
+  
 ---
 
 ## 🚀 **Funzionalità Principali**
