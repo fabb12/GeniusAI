@@ -3215,7 +3215,7 @@ class VideoAudioManager(QMainWindow):
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
         record_webcam = self.recordWebcamCheckBox.isChecked()
-        selected_webcam = "0" if record_webcam else None
+        selected_webcam = self.webcamComboBox.currentText() if record_webcam else None
 
         self.timecodeLabel.setStyleSheet("""
             QLabel {

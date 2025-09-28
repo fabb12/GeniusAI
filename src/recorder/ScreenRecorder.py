@@ -42,8 +42,12 @@ class ScreenRecorder(QThread):
         self.webcam_output_path = None
 
         if self.record_webcam:
-            base, ext = os.path.splitext(self.output_path)
-            self.webcam_output_path = f"{base}_webcam.mp4"
+            if not self.webcam_device:
+                self.error_signal.emit("Nessun dispositivo webcam specificato.")
+                self.is_running = False
+            else:
+                base, ext = os.path.splitext(self.output_path)
+                self.webcam_output_path = f"{base}_webcam.mp4"
 
         if not os.path.isfile(self.ffmpeg_path):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
@@ -55,6 +59,35 @@ class ScreenRecorder(QThread):
 
     def get_webcam_output_path(self):
         return self.webcam_output_path
+
+    @staticmethod
+    def get_video_devices(ffmpeg_path):
+        if not os.path.isfile(ffmpeg_path):
+            return []
+
+        command = [ffmpeg_path, '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
+        try:
+            creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='ignore', creationflags=creationflags)
+            output = result.stderr
+
+            devices = []
+            video_device_section = False
+            for line in output.splitlines():
+                if "DirectShow video devices" in line:
+                    video_device_section = True
+                elif "DirectShow audio devices" in line:
+                    break
+
+                if video_device_section:
+                    match = re.search(r'\]\s+"([^"]+)"', line)
+                    if match:
+                        devices.append(match.group(1))
+            # Remove duplicates that may appear
+            return list(dict.fromkeys(devices))
+        except Exception as e:
+            print(f"Error getting video devices: {e}")
+            return []
 
     def get_monitor_offset(self):
         monitors = get_monitors()
@@ -85,20 +118,13 @@ class ScreenRecorder(QThread):
             if self.use_watermark:
                 ffmpeg_command.extend(['-i', self.watermark_image])
 
-        # Add audio inputs if any
         if self.record_audio:
             for audio_device in self.audio_inputs:
                 ffmpeg_command.extend(['-f', 'dshow'])
-                # For Bluetooth, set device options for compatibility
                 if self.bluetooth_mode:
                     ffmpeg_command.extend(['-audio_buffer_size', '100'])
-
-                # Let ffmpeg use the default sample rate and channels from the device
-                # ffmpeg_command.extend(['-sample_rate', '44100'])
-                # ffmpeg_command.extend(['-channels', '2'])
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
 
-        # --- Build the filter_complex string and map arguments ---
         filter_complex_parts = []
         map_args = []
         audio_codec_args = []
@@ -107,27 +133,24 @@ class ScreenRecorder(QThread):
 
         if self.record_video:
             if self.use_watermark:
-                # Watermark is input 1, so video is [0:v] and watermark is [1:v]
                 scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
                 filter_complex_parts.append(scale_filter)
 
-                # Position the watermark
                 if self.watermark_position == "Top Left":
                     overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
                 elif self.watermark_position == "Top Right":
                     overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
                 elif self.watermark_position == "Bottom Left":
                     overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
-                else:  # Bottom Right
+                else:
                     overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
 
                 filter_complex_parts.append(overlay_filter)
                 map_args.extend(['-map', '[v_out]'])
-                audio_input_start_index = 2  # Audio inputs start after video and watermark
+                audio_input_start_index = 2
             else:
-                # No watermark, just map the video directly
                 map_args.extend(['-map', '0:v'])
-                audio_input_start_index = 1  # Audio inputs start after video
+                audio_input_start_index = 1
         else:
             audio_input_start_index = 0
 
@@ -144,7 +167,6 @@ class ScreenRecorder(QThread):
                 else:
                     map_args.extend(['-map', audio_input_stream])
                 audio_codec_args = ['-c:a', audio_codec, '-b:a', '192k']
-
             elif num_audio_inputs > 1:
                 audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
                 if apply_volume_filter:
@@ -173,25 +195,21 @@ class ScreenRecorder(QThread):
             ffmpeg_command.extend(audio_codec_args)
 
         ffmpeg_command.extend(['-y', self.output_path])
-
-        # Use CREATE_NO_WINDOW to hide the console window
         creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
-
-        # Start the ffmpeg process for screen recording
         self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
-        # Start the ffmpeg process for webcam recording if enabled
         if self.record_webcam and self.is_running:
             webcam_command = [
                 self.ffmpeg_path,
-                '-f', 'vfwcap',
-                '-r', '25',
-                '-i', '0',
+                '-f', 'dshow',
+                '-i', f'video={self.webcam_device}',
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-pix_fmt', 'yuv420p',
                 '-y', self.webcam_output_path
             ]
             self.webcam_process = subprocess.Popen(webcam_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
-        # Regex to parse ffmpeg's progress output
         stats_regex = re.compile(
             r"frame=\s*(?P<frame>\d+)\s+"
             r"fps=\s*(?P<fps>[\d.]+)\s+"
@@ -204,7 +222,6 @@ class ScreenRecorder(QThread):
         while self.is_running:
             if self.ffmpeg_process.poll() is not None:
                 break
-
             line = self.ffmpeg_process.stderr.readline()
             if line:
                 line_str = line.decode('utf-8', errors='ignore').strip()
@@ -212,21 +229,18 @@ class ScreenRecorder(QThread):
                 if match:
                     stats = match.groupdict()
                     self.stats_updated.emit(stats)
-                print(line_str) # for debugging
 
-        # Ensure recording is stopped cleanly
         if self.ffmpeg_process.poll() is None:
             self.stop_recording()
 
     def stop_recording(self):
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             try:
-                # Write binary 'q' to stdin
                 self.ffmpeg_process.stdin.write(b'q')
                 self.ffmpeg_process.stdin.flush()
                 self.ffmpeg_process.wait(timeout=5)
             except (OSError, ValueError, BrokenPipeError, subprocess.TimeoutExpired) as e:
-                self.error_signal.emit(f"ffmpeg did not terminate gracefully, killing process. Error: {str(e)}")
+                self.error_signal.emit(f"ffmpeg (screen) did not terminate gracefully, killing process. Error: {str(e)}")
                 self.ffmpeg_process.kill()
                 self.ffmpeg_process.wait()
 
