@@ -217,9 +217,9 @@ class ScreenRecorder(QThread):
         if self.record_webcam and self.is_running:
             webcam_command = [
                 self.ffmpeg_path,
-                '-f', 'vfwcap',
+                '-f', 'dshow',
                 '-r', '25',
-                '-i', '0', # Using device index 0 as suggested
+                '-i', f'video={self.webcam_device}',
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',
                 '-pix_fmt', 'yuv420p',

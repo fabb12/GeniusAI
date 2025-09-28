@@ -443,6 +443,7 @@ class VideoAudioManager(QMainWindow):
 
         self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
+        self.update_webcam_device_list()
         self.original_text = ""
         self.summaries = {}
         self.active_summary_type = None
@@ -2989,6 +2990,27 @@ class VideoAudioManager(QMainWindow):
 
         self.setDefaultAudioDevice()
 
+    def update_webcam_device_list(self):
+        """Populates the webcam selection combobox with available devices."""
+        self.webcamComboBox.clear()
+        try:
+            ffmpeg_path = FFMPEG_PATH
+            video_devices = ScreenRecorder.get_video_devices(ffmpeg_path)
+            if video_devices:
+                self.webcamComboBox.addItems(video_devices)
+                if self.webcamComboBox.count() > 0:
+                    self.webcamComboBox.setCurrentIndex(0)
+                self.recordWebcamCheckBox.setEnabled(True)
+            else:
+                self.webcamComboBox.addItem("Nessuna webcam trovata")
+                self.recordWebcamCheckBox.setChecked(False)
+                self.recordWebcamCheckBox.setEnabled(False)
+        except Exception as e:
+            logging.error(f"Errore durante il recupero dei dispositivi webcam: {e}")
+            self.webcamComboBox.addItem("Errore nel recupero dispositivi")
+            self.recordWebcamCheckBox.setChecked(False)
+            self.recordWebcamCheckBox.setEnabled(False)
+
     def createRecordingDock(self):
         dock =CustomDock("Registrazione", closable=True)
         self.rec_timer = QTimer()
@@ -3091,6 +3113,10 @@ class VideoAudioManager(QMainWindow):
         self.saveVideoOnlyCheckBox = QCheckBox("Registra solo video")
         self.saveAudioOnlyCheckBox = QCheckBox("Registra solo audio")
         self.recordWebcamCheckBox = QCheckBox("Registra webcam")
+        self.webcamComboBox = QComboBox()
+        self.webcamComboBox.setVisible(False) # Initially hidden
+
+        self.recordWebcamCheckBox.toggled.connect(self.webcamComboBox.setVisible)
 
         self.saveVideoOnlyCheckBox.toggled.connect(
             lambda checked: self.saveAudioOnlyCheckBox.setEnabled(not checked)
@@ -3104,6 +3130,7 @@ class VideoAudioManager(QMainWindow):
         options_layout.addWidget(self.saveAudioOnlyCheckBox)
         options_layout.addWidget(self.recordWebcamCheckBox)
         saveOptionsLayout.addLayout(options_layout)
+        saveOptionsLayout.addWidget(self.webcamComboBox)
 
         saveOptionsLayout.addWidget(QLabel("Percorso File:"))
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
@@ -3196,7 +3223,7 @@ class VideoAudioManager(QMainWindow):
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
         record_webcam = self.recordWebcamCheckBox.isChecked()
-        selected_webcam = "0" if record_webcam else None
+        selected_webcam = self.webcamComboBox.currentText() if record_webcam else None
 
         self.timecodeLabel.setStyleSheet("""
             QLabel {
@@ -3409,7 +3436,7 @@ class VideoAudioManager(QMainWindow):
         return False
 
     def showError(self, message):
-        logging.error("Error recording thread:",message)
+        logging.error("Error recording thread: %s", message)
         #QMessageBox.critical(self, "Errore", message)
 
     def updateRecordingStats(self, stats):
