@@ -3875,10 +3875,14 @@ class VideoAudioManager(QMainWindow):
         """Mostra il dock degli effetti e seleziona il tab specificato."""
         if not self.videoEffectsDock.isVisible():
             self.videoEffectsDock.show()
-        # Assicurati che il dock sia portato in primo piano
         self.videoEffectsDock.raise_()
-        # Seleziona il tab corretto
-        self.videoEffectsDock.widget().setCurrentIndex(tab_index)
+
+        # Accedi al QTabWidget, che è il primo (e unico) widget nel dock
+        widgets_in_dock = self.videoEffectsDock.widgets()
+        if widgets_in_dock:
+            tab_widget = widgets_in_dock[0]
+            if isinstance(tab_widget, QTabWidget):
+                tab_widget.setCurrentIndex(tab_index)
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
