@@ -10,8 +10,23 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import QSettings
 from PyQt6.QtGui import QFont
+import cv2
 # Importa la configurazione delle azioni e, se necessario, l'endpoint di Ollama per info
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE
+
+def get_available_webcams():
+    """Restituisce un dizionario di webcam disponibili."""
+    webcams = {}
+    index = 0
+    while True:
+        cap = cv2.VideoCapture(index, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap.release()
+            break
+        webcams[f"Webcam {index}"] = index
+        cap.release()
+        index += 1
+    return webcams
 
 class SettingsDialog(QDialog):
     def __init__(self, parent=None):
@@ -46,6 +61,9 @@ class SettingsDialog(QDialog):
 
         # Tab per l'Editor di Testo
         tabs.addTab(self.createEditorSettingsTab(), "Editor")
+
+        # Tab per la Webcam
+        tabs.addTab(self.createWebcamSettingsTab(), "Webcam")
 
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
@@ -223,6 +241,23 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createWebcamSettingsTab(self):
+        """Crea il widget per il tab delle impostazioni della webcam."""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.webcamComboBox = QComboBox()
+        self.webcams = get_available_webcams()
+        if self.webcams:
+            for name in self.webcams.keys():
+                self.webcamComboBox.addItem(name)
+        else:
+            self.webcamComboBox.addItem("Nessuna webcam trovata")
+            self.webcamComboBox.setEnabled(False)
+
+        layout.addRow("Seleziona Webcam:", self.webcamComboBox)
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -263,6 +298,11 @@ class SettingsDialog(QDialog):
         font_family = self.settings.value("editor/fontFamily", "Arial")
         self.fontFamilyComboBox.setCurrentFont(QFont(font_family))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
+
+        # --- Carica Impostazioni Webcam ---
+        saved_webcam_index = self.settings.value("webcam/device_index", 0, type=int)
+        if hasattr(self, 'webcams') and self.webcams and saved_webcam_index < self.webcamComboBox.count():
+            self.webcamComboBox.setCurrentIndex(saved_webcam_index)
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -310,6 +350,12 @@ class SettingsDialog(QDialog):
         # --- Salva Impostazioni Editor ---
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
         self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
+
+        # --- Salva Impostazioni Webcam ---
+        if hasattr(self, 'webcams') and self.webcams:
+            selected_webcam_name = self.webcamComboBox.currentText()
+            selected_webcam_index = self.webcams.get(selected_webcam_name, 0)
+            self.settings.setValue("webcam/device_index", selected_webcam_index)
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
