@@ -15,7 +15,9 @@ class ScreenRecorder(QThread):
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  record_video=True, use_watermark=True, watermark_path=None, watermark_size=10,
-                 watermark_position="Bottom Right", bluetooth_mode=False, audio_volume=1.0):
+                 watermark_position="Bottom Right", bluetooth_mode=False, audio_volume=1.0,
+                 record_webcam=False, webcam_device_name=None, webcam_resolution="640x480",
+                 webcam_position="Bottom Right", webcam_size=25):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -28,7 +30,14 @@ class ScreenRecorder(QThread):
         self.audio_volume = audio_volume
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
-        self.use_watermark = use_watermark and self.record_video  # Watermark only for video
+
+        self.record_webcam = record_webcam and self.record_video
+        self.webcam_device_name = webcam_device_name
+        self.webcam_resolution = webcam_resolution
+        self.webcam_position = webcam_position
+        self.webcam_size = webcam_size
+
+        self.use_watermark = use_watermark and self.record_video
         raw_path = watermark_path if watermark_path else WATERMARK_IMAGE
         self.watermark_image = raw_path.replace('\\', '/')
         self.watermark_size = watermark_size
@@ -57,10 +66,16 @@ class ScreenRecorder(QThread):
 
         self.recording_started_signal.emit()
 
-        ffmpeg_command = [self.ffmpeg_path]
+        ffmpeg_command = [self.ffmpeg_path, '-hwaccel', 'auto']
 
+        input_count = 0
+        video_input_index = -1
+        webcam_input_index = -1
+        watermark_input_index = -1
+        audio_input_start_index = -1
+
+        offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
         if self.record_video:
-            offset_x, offset_y, screen_width, screen_height = self.get_monitor_offset()
             ffmpeg_command.extend([
                 '-f', 'gdigrab',
                 '-framerate', str(self.frame_rate),
@@ -69,56 +84,80 @@ class ScreenRecorder(QThread):
                 '-video_size', f'{screen_width}x{screen_height}',
                 '-i', 'desktop',
             ])
+            video_input_index = input_count
+            input_count += 1
+
+            if self.record_webcam and self.webcam_device_name:
+                ffmpeg_command.extend([
+                    '-f', 'dshow',
+                    '-s', self.webcam_resolution,
+                    '-i', f'video={self.webcam_device_name}'
+                ])
+                webcam_input_index = input_count
+                input_count += 1
+
             if self.use_watermark:
                 ffmpeg_command.extend(['-i', self.watermark_image])
+                watermark_input_index = input_count
+                input_count += 1
 
-        # Add audio inputs if any
         if self.record_audio:
+            audio_input_start_index = input_count
             for audio_device in self.audio_inputs:
                 ffmpeg_command.extend(['-f', 'dshow'])
-                # For Bluetooth, set device options for compatibility
                 if self.bluetooth_mode:
                     ffmpeg_command.extend(['-audio_buffer_size', '100'])
-
-                # Let ffmpeg use the default sample rate and channels from the device
-                # ffmpeg_command.extend(['-sample_rate', '44100'])
-                # ffmpeg_command.extend(['-channels', '2'])
                 ffmpeg_command.extend(['-i', f'audio={audio_device}'])
+                input_count += 1
 
-        # --- Build the filter_complex string and map arguments ---
         filter_complex_parts = []
         map_args = []
         audio_codec_args = []
-        num_audio_inputs = len(self.audio_inputs)
-        audio_input_start_index = 0
+
+        video_chain = f"[{video_input_index}:v]" if self.record_video else ""
+
+        if self.record_webcam and webcam_input_index != -1:
+            webcam_stream = f"[{webcam_input_index}:v]"
+
+            webcam_scale_filter = f"{webcam_stream}scale=-1:{screen_height}*({self.webcam_size}/100)[scaled_wc]"
+            filter_complex_parts.append(webcam_scale_filter)
+
+            if self.webcam_position == "Top Left":
+                overlay_pos = "10:10"
+            elif self.webcam_position == "Top Right":
+                overlay_pos = "W-w-10:10"
+            elif self.webcam_position == "Bottom Left":
+                overlay_pos = "10:H-h-10"
+            else:
+                overlay_pos = "W-w-10:H-h-10"
+
+            webcam_overlay_filter = f"{video_chain}[scaled_wc]overlay={overlay_pos}[v_with_wc]"
+            filter_complex_parts.append(webcam_overlay_filter)
+            video_chain = "[v_with_wc]"
+
+        if self.use_watermark and watermark_input_index != -1:
+            watermark_stream = f"[{watermark_input_index}:v]"
+            scale_filter = f"{watermark_stream}scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
+            filter_complex_parts.append(scale_filter)
+
+            if self.watermark_position == "Top Left":
+                overlay_pos = "10:10"
+            elif self.watermark_position == "Top Right":
+                overlay_pos = "W-w-10:10"
+            elif self.watermark_position == "Bottom Left":
+                overlay_pos = "10:H-h-10"
+            else:
+                overlay_pos = "W-w-10:H-h-10"
+
+            overlay_filter = f"{video_chain}[scaled_wm]overlay={overlay_pos}[v_out]"
+            filter_complex_parts.append(overlay_filter)
+            video_chain = "[v_out]"
 
         if self.record_video:
-            if self.use_watermark:
-                # Watermark is input 1, so video is [0:v] and watermark is [1:v]
-                scale_filter = f"[1:v]scale=-1:ih*{self.watermark_size/100}[scaled_wm]"
-                filter_complex_parts.append(scale_filter)
-
-                # Position the watermark
-                if self.watermark_position == "Top Left":
-                    overlay_filter = "[0:v][scaled_wm]overlay=10:10[v_out]"
-                elif self.watermark_position == "Top Right":
-                    overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:10[v_out]"
-                elif self.watermark_position == "Bottom Left":
-                    overlay_filter = "[0:v][scaled_wm]overlay=10:H-h-10[v_out]"
-                else:  # Bottom Right
-                    overlay_filter = "[0:v][scaled_wm]overlay=W-w-10:H-h-10[v_out]"
-
-                filter_complex_parts.append(overlay_filter)
-                map_args.extend(['-map', '[v_out]'])
-                audio_input_start_index = 2  # Audio inputs start after video and watermark
-            else:
-                # No watermark, just map the video directly
-                map_args.extend(['-map', '0:v'])
-                audio_input_start_index = 1  # Audio inputs start after video
-        else:
-            audio_input_start_index = 0
+            map_args.extend(['-map', video_chain])
 
         if self.record_audio:
+            num_audio_inputs = len(self.audio_inputs)
             apply_volume_filter = self.audio_volume and self.audio_volume != 1.0
             audio_codec = 'libmp3lame' if not self.record_video else 'aac'
 
@@ -131,7 +170,6 @@ class ScreenRecorder(QThread):
                 else:
                     map_args.extend(['-map', audio_input_stream])
                 audio_codec_args = ['-c:a', audio_codec, '-b:a', '192k']
-
             elif num_audio_inputs > 1:
                 audio_merge_inputs = "".join([f"[{i + audio_input_start_index}:a]" for i in range(num_audio_inputs)])
                 if apply_volume_filter:
@@ -161,13 +199,9 @@ class ScreenRecorder(QThread):
 
         ffmpeg_command.extend(['-y', self.output_path])
 
-        # Use CREATE_NO_WINDOW to hide the console window
         creationflags = subprocess.CREATE_NO_WINDOW
-
-        # Start the ffmpeg process in binary mode (remove text=True)
         self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
-        # Regex to parse ffmpeg's progress output
         stats_regex = re.compile(
             r"frame=\s*(?P<frame>\d+)\s+"
             r"fps=\s*(?P<fps>[\d.]+)\s+"
@@ -188,16 +222,14 @@ class ScreenRecorder(QThread):
                 if match:
                     stats = match.groupdict()
                     self.stats_updated.emit(stats)
-                print(line_str) # for debugging
+                print(line_str)
 
-        # Ensure recording is stopped cleanly
         if self.ffmpeg_process.poll() is None:
             self.stop_recording()
 
     def stop_recording(self):
         if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
             try:
-                # Write binary 'q' to stdin
                 self.ffmpeg_process.stdin.write(b'q')
                 self.ffmpeg_process.stdin.flush()
                 self.ffmpeg_process.wait(timeout=5)

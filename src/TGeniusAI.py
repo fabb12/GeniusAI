@@ -3019,6 +3019,40 @@ class VideoAudioManager(QMainWindow):
         else:
             self.selectedAudioLabel.setText("Audio: N/A")
 
+    def get_webcam_device_names(self):
+        """Returns a list of available webcam device names using ffmpeg."""
+        try:
+            ffmpeg_path = FFMPEG_PATH
+            if not os.path.exists(ffmpeg_path):
+                logging.error(f"FFmpeg not found at {ffmpeg_path}")
+                return []
+
+            command = [ffmpeg_path, '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
+            creationflags = subprocess.CREATE_NO_WINDOW
+            result = subprocess.run(command, capture_output=True, text=True, stderr=subprocess.PIPE, creationflags=creationflags)
+
+            output = result.stderr
+            lines = output.splitlines()
+
+            devices = []
+            in_video_devices_section = False
+            for line in lines:
+                if "DirectShow video devices" in line:
+                    in_video_devices_section = True
+                    continue
+                if "DirectShow audio devices" in line:
+                    in_video_devices_section = False
+                    break
+
+                if in_video_devices_section and "(video)" in line:
+                    match = re.search(r'"([^"]+)"', line)
+                    if match:
+                        devices.append(match.group(1))
+            return devices
+        except Exception as e:
+            logging.error(f"Error getting webcam device names: {e}")
+            return []
+
     def test_audio_device(self, device_index):
         p = pyaudio.PyAudio()
         try:
@@ -3204,8 +3238,12 @@ class VideoAudioManager(QMainWindow):
             lambda checked: self.saveVideoOnlyCheckBox.setEnabled(not checked)
         )
 
+        self.recordWebcamCheckBox = QCheckBox("Registra anche la webcam")
+        self.recordWebcamCheckBox.setToolTip("Include il feed della webcam come overlay nella registrazione dello schermo.")
+
         saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
         saveOptionsLayout.addWidget(self.saveAudioOnlyCheckBox)
+        saveOptionsLayout.addWidget(self.recordWebcamCheckBox)
         saveOptionsLayout.addWidget(QLabel("Percorso File:"))
 
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
@@ -3297,6 +3335,8 @@ class VideoAudioManager(QMainWindow):
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
+        record_webcam = self.recordWebcamCheckBox.isChecked()
+
         self.timecodeLabel.setStyleSheet("""
             QLabel {
                 font-family: "Courier New", Courier, monospace;
@@ -3345,6 +3385,14 @@ class VideoAudioManager(QMainWindow):
 
         bluetooth_mode = self._is_bluetooth_mode_active()
 
+        settings = QSettings("Genius", "GeniusAI")
+        webcam_device_index = settings.value("webcam/device_index", 0, type=int)
+        webcam_device_names = self.get_webcam_device_names()
+        webcam_device_name = webcam_device_names[webcam_device_index] if webcam_device_index < len(webcam_device_names) else None
+
+        webcam_position = settings.value("webcam/position", "Bottom Right")
+        webcam_size = settings.value("webcam/size", 25, type=int)
+
         self.recorder_thread = ScreenRecorder(
             output_path=segment_file_path,
             ffmpeg_path=ffmpeg_path,
@@ -3358,7 +3406,11 @@ class VideoAudioManager(QMainWindow):
             watermark_size=self.watermarkSize,
             watermark_position=self.watermarkPosition,
             bluetooth_mode=bluetooth_mode,
-            audio_volume=4.0
+            audio_volume=4.0,
+            record_webcam=record_webcam,
+            webcam_device_name=webcam_device_name,
+            webcam_position=webcam_position,
+            webcam_size=webcam_size
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
