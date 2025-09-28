@@ -377,14 +377,22 @@ class BrowserAgentWorker(QObject):
 class AgentRunThread(QThread):
     """Thread wrapper for executing the BrowserAgentWorker"""
 
-    finished = pyqtSignal() # Signals when the thread itself has finished execution
+    # Signals for the main window's task manager
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)  # Forwards the worker's finished signal
+    error = pyqtSignal(str)      # Forwards the worker's error signal
+
+    finished = pyqtSignal()      # Signals when the thread itself has finished execution
     log_message = pyqtSignal(str) # Forwards log messages
 
     def __init__(self, worker: BrowserAgentWorker):
         super().__init__()
         self.worker = worker
-        # Forward log messages from worker to the main thread via this thread's signal
+        # Forward signals from worker to this thread's signals
         self.worker.log_message.connect(self.log_message)
+        self.worker.progress.connect(self.progress)
+        self.worker.finished.connect(self.completed)
+        self.worker.error.connect(self.error)
         self.terminated_cleanly = False
 
     def run(self):
@@ -399,8 +407,6 @@ class AgentRunThread(QThread):
             self.terminated_cleanly = False
             error_details = traceback.format_exc()
             self.log_message.emit(f"Errore critico nel thread dell'agente: {str(e)}\n{error_details}")
-            # Optionally emit an error signal from the thread itself if needed
-            # self.error.emit(f"Errore thread: {str(e)}")
         finally:
             self.log_message.emit(f"Thread dell'agente terminato (pulito: {self.terminated_cleanly}).")
             self.finished.emit() # Signal that the thread object has finished
@@ -420,17 +426,11 @@ class UnifiedBrowserAgentDialog(QDialog):
         self.setWindowTitle("Browser Agent - Configurazione ed Esecuzione")
         self.setMinimumWidth(800)
         self.setMinimumHeight(600)
-        # Use provided config or create a new one
         self.agent_config = agent_config if agent_config else AgentConfig()
         self.transcription_text = transcription_text or ""
         self.agent_thread = None
         self.worker = None # Hold reference to worker for stopping
         self.result = None
-        self.progressDialog = None # Hold reference to progress dialog
-
-        # Timer to check if the thread finished unexpectedly
-        self.cleanup_timer = QTimer(self)
-        self.cleanup_timer.timeout.connect(self.checkThreadStatus)
 
         self.initUI()
 
@@ -635,30 +635,13 @@ class UnifiedBrowserAgentDialog(QDialog):
 
 
     def runAgent(self):
-        """Prepara e avvia l'esecuzione dell'agente."""
-        self.saveConfiguration() # Save current settings before running
+        """Prepara e avvia l'esecuzione dell'agente tramite il gestore di task della finestra principale."""
+        self.saveConfiguration()
 
         task = self.taskEdit.toPlainText().strip()
         if not task:
-            QMessageBox.warning(self, "Task Mancante", "Inserisci un task o seleziona l'opzione per usare la trascrizione.")
+            self.parent().show_status_message("Task per l'agente non specificato.", error=True)
             return
-
-        # Basic check if the selected model likely requires a key that isn't set
-        model_lower = self.agent_config.model_name.lower()
-        key_missing = False
-        if model_lower.startswith("claude") and not self.agent_config.anthropic_api_key:
-            key_missing = True
-            provider = "Anthropic"
-        elif model_lower.startswith("gemini") and not self.agent_config.google_api_key:
-            key_missing = True
-            provider = "Google"
-        elif model_lower.startswith("gpt") and not self.agent_config.openai_api_key:
-            key_missing = True
-            provider = "OpenAI"
-
-        if key_missing:
-             QMessageBox.warning(self, "API Key Mancante", f"La API key per {provider} non sembra essere configurata nell'ambiente (.env). L'agente potrebbe non funzionare.")
-             # Allow proceeding, but warn the user.
 
         # --- UI State Update ---
         self.runButton.setEnabled(False)
@@ -668,126 +651,59 @@ class UnifiedBrowserAgentDialog(QDialog):
 
         # --- Logging Start ---
         self.addLogMessage("=== AVVIO AGENTE BROWSER ===")
-        self.addLogMessage(f"Task: {task[:100]}...") # Log truncated task
+        self.addLogMessage(f"Task: {task[:100]}...")
         self.addLogMessage(f"Configurazione: {self.agent_config.to_dict()}")
-        self.addLogMessage("Inizializzazione in corso...")
-
-        # --- Progress Dialog ---
-        if self.progressDialog: # Close previous if exists
-             self.progressDialog.close()
-        self.progressDialog = QProgressDialog("Esecuzione browser agent...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Agent")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.setMinimumDuration(0)
-        self.progressDialog.canceled.connect(self.stopAgent)
-        self.progressDialog.show()
-        self.progressDialog.raise_()
-        self.progressDialog.activateWindow()
-
-        # --- Stop Existing Thread ---
-        if self.agent_thread and self.agent_thread.isRunning():
-            self.addLogMessage("Tentativo di fermare un thread agente precedente...")
-            self.stopAgent() # Gracefully stop previous run
 
         # --- Create Worker and Thread ---
         try:
             self.worker = BrowserAgentWorker(task=task, config=self.agent_config)
-            # Connect signals from worker
-            self.worker.progress.connect(self.updateProgress)
-            self.worker.finished.connect(self.onAgentFinished)
-            self.worker.error.connect(self.onAgentError)
-            # log_message signal is connected within AgentRunThread constructor
-
             self.agent_thread = AgentRunThread(self.worker)
-            # Connect signals from thread
-            self.agent_thread.finished.connect(self.onThreadFinished) # Handles UI reset
-            self.agent_thread.log_message.connect(self.addLogMessage) # Forward logs
 
-            self.agent_thread.start() # Start the thread
-            self.cleanup_timer.start(500) # Start checking thread status
-            self.addLogMessage("Thread agente avviato.")
+            # Connetti i log del thread al dialogo
+            self.agent_thread.log_message.connect(self.addLogMessage)
+
+            # Usa il gestore di task della finestra principale
+            self.parent().start_task(
+                self.agent_thread,
+                on_complete=self.onAgentFinished,
+                on_error=self.onAgentError,
+                on_progress=self.parent().update_status_progress # Usa il metodo del parent
+            )
+            self.addLogMessage("Thread agente avviato tramite il gestore centrale.")
 
         except Exception as init_error:
             self.addLogMessage(f"Errore durante l'inizializzazione del worker/thread: {init_error}")
-            QMessageBox.critical(self, "Errore Inizializzazione", f"Impossibile avviare l'agente: {init_error}")
-            self.onThreadFinished() # Reset UI
-
-
-    def checkThreadStatus(self):
-        """Verifica se il thread è terminato inaspettatamente."""
-        if self.agent_thread and not self.agent_thread.isRunning() and self.stopButton.isEnabled():
-            # Thread finished, but stop button is still enabled (meaning it wasn't a clean stop triggered by UI)
-            self.addLogMessage("ATTENZIONE: Thread terminato inaspettatamente o completato senza disabilitare il pulsante stop.")
-            self.onThreadFinished() # Reset UI state
-
+            self.parent().show_status_message(f"Impossibile avviare l'agente: {init_error}", error=True)
+            self.resetUiState()
 
     def stopAgent(self):
-        """Inizia il processo di arresto dell'agente."""
-        self.addLogMessage("\n=== ARRESTO RICHIESTO DALL'UTENTE ===")
-        if not self.agent_thread or not self.agent_thread.isRunning():
-            self.addLogMessage("Nessun agente in esecuzione da fermare.")
-            self.onThreadFinished() # Ensure UI is reset even if nothing was running
-            return
-
-        if self.progressDialog:
-            self.progressDialog.setLabelText("Arresto agente in corso...")
-            self.progressDialog.setEnabled(False) # Disable cancel button during stop process
-
-        # Signal the thread/worker to stop
-        try:
-            self.agent_thread.stop() # This signals the worker via its stop() method
-            self.addLogMessage("Segnale di stop inviato al worker.")
-        except Exception as e:
-            self.addLogMessage(f"Errore durante l'invio del segnale di stop: {e}")
-
-        # Non bloccare l'UI qui aspettando. onThreadFinished gestirà il reset.
-        # Il worker.stop() imposta self.running = False, che dovrebbe interrompere il ciclo async.
-
-
-    def updateProgress(self, value, message):
-        """Aggiorna il dialog di progresso."""
-        if self.progressDialog and not self.progressDialog.wasCanceled():
-            self.progressDialog.setValue(value)
-            self.progressDialog.setLabelText(f"Agente: {message}")
-        # Log message is handled separately by addLogMessage
-
+        """Richiede l'annullamento del task tramite il gestore della finestra principale."""
+        self.addLogMessage("\n=== RICHIESTA DI ARRESTO AGENTE ===")
+        if self.parent() and hasattr(self.parent(), 'cancel_task'):
+            self.parent().cancel_task()
+        # Il reset della UI verrà gestito dal callback `finish_task` del parent
 
     def onAgentFinished(self, result):
-        """Chiamato quando il worker emette il segnale 'finished'."""
-        # Questo viene chiamato dal worker thread, prima che AgentRunThread finisca.
+        """Callback per il completamento con successo del task."""
         self.addLogMessage(f"Agente ha completato l'esecuzione con successo.")
         self.result = result
         if hasattr(self, 'resultEdit'):
             self.resultEdit.setPlainText(str(result))
-        # Non chiudere il progress dialog qui, onThreadFinished lo farà.
-
+        self.resetUiState()
 
     def onAgentError(self, error_message):
-        """Chiamato quando il worker emette il segnale 'error'."""
+        """Callback per l'errore del task."""
         self.addLogMessage(f"ERRORE dall'agente: {error_message}")
         if hasattr(self, 'resultEdit'):
             self.resultEdit.setPlainText(f"Si è verificato un errore:\n\n{error_message}")
-        # Non chiudere il progress dialog qui, onThreadFinished lo farà.
+        self.resetUiState()
 
-
-    def onThreadFinished(self):
-        """Chiamato quando AgentRunThread emette il segnale 'finished'."""
-        self.addLogMessage("Thread agente terminato. Pulizia UI...")
-        # Reset UI state regardless of success/failure/cancel
+    def resetUiState(self):
+        """Resetta lo stato della UI del dialogo."""
         self.runButton.setEnabled(True)
         self.stopButton.setEnabled(False)
-
-        if self.progressDialog:
-            self.progressDialog.close()
-            self.progressDialog = None
-
-        # Stop the cleanup timer
-        self.cleanup_timer.stop()
-
-        # Clean up references
-        self.worker = None
         self.agent_thread = None
-
+        self.worker = None
         self.addLogMessage("=== OPERAZIONE TERMINATA ===")
 
 

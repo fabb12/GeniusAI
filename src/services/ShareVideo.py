@@ -8,46 +8,36 @@ class VideoSharingManager:
         self.parent = parent  # Riferimento alla finestra principale per mostrare i messaggi
 
     def shareVideo(self, video_path):
-        # Verifica se il video esiste
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self.parent, "Errore", "Non c'è nessun video caricato da condividere.")
+            if self.parent and hasattr(self.parent, 'show_status_message'):
+                self.parent.show_status_message("Non c'è nessun video caricato da condividere.", error=True)
             return
 
         try:
-            # Condivisione su Teams
             self.shareOnTeams(video_path)
-
-            # Condivisione su WhatsApp
-            # self.shareOnWhatsApp(video_path)
-
         except Exception as e:
             QMessageBox.critical(self.parent, "Errore durante la condivisione", str(e))
 
     def shareOnTeams(self, file_path):
         try:
-            # Carica i contatti dal file .txt
             contacts = self.get_contacts_from_txt('../contatti_teams.txt')
+            if not contacts:
+                if self.parent and hasattr(self.parent, 'show_status_message'):
+                    self.parent.show_status_message("Elenco contatti non trovato o vuoto.", error=True)
+                return
 
-            # Mostra la finestra di dialogo per la selezione dei contatti
             dialog = ContactSelectionDialog(contacts, self.parent)
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 selected_contact = dialog.get_selected_contact()
                 if selected_contact:
-                    # Estrai l'email dal contatto selezionato
-                    contact_email = selected_contact.split('(')[-1][:-1]  # Ottiene l'email tra parentesi
-
-                    # Costruisci l'URL per Teams
+                    contact_email = selected_contact.split('(')[-1][:-1]
                     file_message = f"Ti condivido questo video --> {file_path}"
                     teams_url = f"msteams://teams.microsoft.com/l/chat/0/0?users={contact_email}&message={file_message}"
-
-                    # Usa os.startfile per aprire Teams con il messaggio precompilato
                     os.startfile(teams_url)
-
-                    # Apri automaticamente il file explorer con il file video selezionato
                     self.open_file_explorer_at_file(file_path)
-
                 else:
-                    QMessageBox.warning(self.parent, "Errore", "Nessun contatto selezionato.")
+                    if self.parent and hasattr(self.parent, 'show_status_message'):
+                        self.parent.show_status_message("Nessun contatto selezionato.", error=True)
         except Exception as e:
             QMessageBox.critical(self.parent, "Errore", f"Errore durante la condivisione su Teams: {str(e)}")
 

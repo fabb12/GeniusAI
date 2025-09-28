@@ -107,12 +107,13 @@ class PptxDialog(QDialog):
     def handle_get_ai_content(self):
         """Genera il contenuto testuale tramite AI e lo mostra nell'editor."""
         if not self.transcription_text.strip():
-            QMessageBox.warning(self, "Testo Mancante", "Il testo di origine è vuoto.")
+            self.parent().show_status_message("Il testo di origine è vuoto.", error=True)
             return
 
         settings = self.get_settings()
         self.get_ai_content_button.setEnabled(False)
         self.get_ai_content_button.setText("Generazione in corso...")
+        QApplication.processEvents()
 
         try:
             result = PptxGeneration.generaTestoPerSlide(
@@ -131,7 +132,7 @@ class PptxDialog(QDialog):
                 self.ai_content_input.setReadOnly(False)
                 self.preview_button.setEnabled(True)
                 self.generate_button.setEnabled(True)
-                QMessageBox.information(self, "Successo", "Contenuto generato. Ora puoi modificarlo e procedere.")
+                self.parent().show_status_message("Contenuto generato. Ora puoi modificarlo e procedere.")
 
         finally:
             self.get_ai_content_button.setEnabled(True)
@@ -141,7 +142,7 @@ class PptxDialog(QDialog):
         """Gestisce la richiesta di anteprima usando il testo dall'editor."""
         ai_text = self.get_ai_text()
         if not ai_text.strip():
-            QMessageBox.warning(self, "Contenuto Mancante", "Il campo del contenuto AI è vuoto.")
+            self.parent().show_status_message("Il campo del contenuto AI è vuoto.", error=True)
             return
 
         settings = self.get_settings()
@@ -154,7 +155,6 @@ class PptxDialog(QDialog):
         if image_paths:
             preview_dialog = PreviewDialog(image_paths, self)
             if preview_dialog.exec():
-                # Se l'utente clicca "Salva" nell'anteprima, procedi con la generazione
                 self.handle_generate()
             preview_dialog.cleanup()
 
@@ -162,12 +162,12 @@ class PptxDialog(QDialog):
         """Gestisce la generazione della presentazione finale."""
         ai_text = self.get_ai_text()
         if not ai_text.strip():
-            QMessageBox.warning(self, "Contenuto Mancante", "Il campo del contenuto AI è vuoto.")
+            self.parent().show_status_message("Il campo del contenuto AI è vuoto.", error=True)
             return
 
         save_path, _ = QFileDialog.getSaveFileName(self, "Salva Presentazione", "", "PowerPoint Presentation (*.pptx)")
         if not save_path:
-            QMessageBox.warning(self, "Salvataggio Annullato", "Nessun percorso di salvataggio selezionato.")
+            self.parent().show_status_message("Salvataggio annullato.", error=True)
             return
 
         settings = self.get_settings()
@@ -177,8 +177,6 @@ class PptxDialog(QDialog):
             save_path,
             settings["template_path"]
         )
-        # Se la creazione va a buon fine, il metodo sopra mostra già un messaggio.
-        # Chiudiamo il dialogo dopo la generazione.
         self.accept()
 
     def get_ai_text(self):

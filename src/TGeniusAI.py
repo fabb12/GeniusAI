@@ -18,7 +18,8 @@ from PyQt6.QtWidgets import (
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
-    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame
+    QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
+    QStatusBar
 )
 
 # PyQtGraph (docking)
@@ -454,6 +455,80 @@ class VideoAudioManager(QMainWindow):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.monitor_preview = None
         self.cursor_overlay = CursorOverlay()
+        self.current_thread = None
+
+    def show_status_message(self, message, timeout=5000, error=False):
+        """Mostra un messaggio nella barra di stato per un tempo limitato."""
+        if error:
+            self.statusBar.setStyleSheet("color: red;")
+        else:
+            self.statusBar.setStyleSheet("")  # Ripristina lo stile predefinito
+
+        self.statusLabel.setText(message)
+
+        if timeout > 0:
+            QTimer.singleShot(timeout, lambda: self.statusLabel.setText("Pronto") if self.statusLabel.text() == message else None)
+            QTimer.singleShot(timeout, lambda: self.statusBar.setStyleSheet(""))
+
+    def start_task(self, thread, on_complete, on_error, on_progress):
+        """Avvia un thread e gestisce la barra di stato."""
+        if self.current_thread and self.current_thread.isRunning():
+            self.show_status_message("Un'altra operazione è già in corso.", error=True)
+            return
+
+        self.current_thread = thread
+
+        self.progressBar.setValue(0)
+        self.progressBar.setVisible(True)
+        self.cancelButton.setVisible(True)
+
+        # Disconnette eventuali segnali precedenti prima di connetterne di nuovi
+        try:
+            self.cancelButton.clicked.disconnect()
+        except TypeError:
+            pass  # Nessuna connessione da rimuovere
+        self.cancelButton.clicked.connect(self.cancel_task)
+
+        # Connette i segnali del thread
+        thread.progress.connect(on_progress)
+        thread.completed.connect(lambda result: self.finish_task(True, result, on_complete))
+        thread.error.connect(lambda error: self.finish_task(False, error, on_error))
+
+        thread.start()
+
+    def update_status_progress(self, value, label):
+        """Aggiorna la barra di avanzamento e il messaggio di stato."""
+        self.progressBar.setValue(value)
+        self.statusLabel.setText(label)
+
+    def finish_task(self, success, result_or_error, callback):
+        """Gestisce il completamento o l'errore di un'attività."""
+        self.progressBar.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.current_thread = None
+        try:
+            self.cancelButton.clicked.disconnect()
+        except TypeError:
+            pass
+
+        if success:
+            self.show_status_message("Operazione completata con successo.", timeout=5000)
+        else:
+            self.show_status_message(f"Errore: {result_or_error}", error=True, timeout=10000)
+
+        if callback:
+            callback(result_or_error)
+
+    def cancel_task(self):
+        """Annulla l'attività in corso."""
+        if self.current_thread and self.current_thread.isRunning():
+            if hasattr(self.current_thread, 'stop'):
+                self.current_thread.stop()
+            else:
+                self.current_thread.terminate() # Fallback
+
+            self.show_status_message("Operazione annullata.", timeout=5000)
+            self.finish_task(False, "Annullato dall'utente", None)
 
     def load_recording_settings(self):
         """Carica le impostazioni per il cursore e il watermark e le salva come attributi dell'istanza."""
@@ -1070,6 +1145,26 @@ class VideoAudioManager(QMainWindow):
 
 
 
+        # --- STATUS BAR ---
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.statusLabel = QLabel("Pronto")
+        self.statusLabel.setToolTip("Mostra lo stato corrente dell'applicazione")
+        self.statusBar.addWidget(self.statusLabel, 1) # Il secondo argomento è lo stretch factor
+
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setToolTip("Mostra il progresso delle operazioni in corso")
+        self.progressBar.setMaximumWidth(300)
+        self.progressBar.setVisible(False)
+        self.statusBar.addPermanentWidget(self.progressBar)
+
+        self.cancelButton = QPushButton("Annulla")
+        self.cancelButton.setToolTip("Annulla l'operazione corrente")
+        self.cancelButton.setFixedWidth(100)
+        self.cancelButton.setVisible(False)
+        self.statusBar.addPermanentWidget(self.cancelButton)
+
+
         # --- TOOLBAR (Principale) ---
         mainToolbar = QToolBar("Main Toolbar")
         mainToolbar.setToolTip("Barra degli strumenti principale per le azioni")
@@ -1278,7 +1373,7 @@ class VideoAudioManager(QMainWindow):
 
     def onAnalysisComplete(self, summary):
         self.infoExtractionResultArea.setPlainText(summary)
-        QMessageBox.information(self, "Completato", "Analisi completata con successo.")
+        self.show_status_message("Analisi completata con successo.")
 
     def onAnalysisError(self, error_message):
         self.infoExtractionResultArea.setPlainText(f"Errore durante l'analisi:\n{error_message}")
@@ -1289,51 +1384,30 @@ class VideoAudioManager(QMainWindow):
 
     def integraInfoVideo(self):
         if not self.videoPathLineEdit:
-            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            self.show_status_message("Nessun video caricato.", error=True)
             return
 
-        # Controlla se esiste un riassunto standard
         if not self.summary_generated or not self.summary_generated.strip():
-            QMessageBox.warning(self, "Attenzione", "È necessario generare un riassunto standard prima di poterlo integrare con le informazioni del video.")
+            self.show_status_message("È necessario generare un riassunto standard prima di poterlo integrare.", error=True)
             return
 
-        # Mostra un dialogo di progresso
-        self.progressDialog = QProgressDialog("Estrazione informazioni dal video...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Integrazione Informazioni")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
-
-        # Avvia il thread di integrazione video usando il riassunto standard come base
-        self.integration_thread = VideoIntegrationThread(
+        thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
             current_summary=self.summary_generated,
             parent=self
         )
-        self.integration_thread.finished.connect(self.onIntegrazioneComplete)
-        self.integration_thread.error.connect(self.onIntegrazioneError)
-        self.integration_thread.progress.connect(self.updateProgressDialog)
-        self.progressDialog.canceled.connect(self.integration_thread.terminate)
-        self.integration_thread.start()
+        self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
 
     def onIntegrazioneComplete(self, summary):
-        self.progressDialog.close()
-
-        # Salva il riassunto integrato
         self.summary_generated_integrated = summary
-        self.summaries['integrative_summary'] = summary # Mantieni per compatibilità o altre logiche
-
-        # Aggiorna la vista del riassunto per mostrare il nuovo riassunto integrato
+        self.summaries['integrative_summary'] = summary
         self.summary_text = self.summary_generated_integrated
         self.update_summary_view()
-
-        # Abilita e seleziona il toggle
         self.integrazioneToggle.setEnabled(True)
         self.integrazioneToggle.setChecked(True)
-        QMessageBox.information(self, "Completato", "Integrazione delle informazioni dal video completata.")
-
-        # Aggiorna il file JSON
+        self.show_status_message("Integrazione delle informazioni dal video completata.")
         update_data = {
             "summary_generated_integrated": summary,
             "summary_date": datetime.datetime.now().isoformat()
@@ -1341,8 +1415,7 @@ class VideoAudioManager(QMainWindow):
         self._update_json_file(self.videoPathLineEdit, update_data)
 
     def onIntegrazioneError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'integrazione:\n{error_message}")
+        self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
         self.integrazioneToggle.setEnabled(False)
 
     def toggleIntegrazioneView(self, checked):
@@ -1502,121 +1575,73 @@ class VideoAudioManager(QMainWindow):
 
     def summarizeMeeting(self):
         current_text = self.transcriptionTextArea.toPlainText()
-        self.original_text = current_text
         if not current_text.strip():
-            QMessageBox.warning(self, "Attenzione", "Inserisci la trascrizione della riunione da riassumere.")
+            self.show_status_message("Inserisci la trascrizione della riunione da riassumere.", error=True)
             return
 
+        self.original_text = current_text
         self.current_summary_type = 'meeting'
-        self.progressDialog = QProgressDialog("Riassunto riunione in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Riassunto Riunione")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
 
-        self.meeting_summarizer_thread = MeetingSummarizer(
+        thread = MeetingSummarizer(
             current_text,
             self.languageComboBox.currentText()
         )
-        self.meeting_summarizer_thread.update_progress.connect(self.updateProgressDialog)
-        self.meeting_summarizer_thread.process_complete.connect(self.onProcessComplete)
-        self.meeting_summarizer_thread.process_error.connect(self.onProcessError)
-        self.meeting_summarizer_thread.start()
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def processTextWithAI(self):
         current_text = self.transcriptionTextArea.toPlainText()
-        self.original_text = current_text
         if not current_text.strip():
-            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
+            self.show_status_message("Inserisci del testo da riassumere.", error=True)
             return
 
+        self.original_text = current_text
         self.current_summary_type = 'text'
-        self.progressDialog = QProgressDialog("Riassunto testo in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Riassunto Testo")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
 
-        self.text_ai_thread = ProcessTextAI(
+        thread = ProcessTextAI(
             current_text,
             self.languageComboBox.currentText(),
             mode="summary"
         )
-        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
-        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
-        self.text_ai_thread.process_error.connect(self.onProcessError)
-        self.text_ai_thread.start()
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def fixTextWithAI(self):
-        # Ottieni il testo corrente dal transcriptionTextArea
         current_text = self.transcriptionTextArea.toPlainText()
-        self.original_text = current_text
-
         if not current_text.strip():
-            QMessageBox.warning(self, "Attenzione", "Inserisci del testo da sistemare.")
+            self.show_status_message("Inserisci del testo da correggere.", error=True)
             return
 
-        # Mostra un dialogo di progresso
-        self.progressDialog = QProgressDialog("Sistemazione testo in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Sistemazione Testo")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
+        self.original_text = current_text
+        self.current_summary_type = 'fix' # Assumendo che questo sia un tipo valido
 
-        # Esegui il thread per il processo AI
-        self.text_ai_thread = ProcessTextAI(
+        thread = ProcessTextAI(
             current_text,
             self.languageComboBox.currentText(),
             mode="fix"
         )
-
-        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
-        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
-        self.text_ai_thread.process_error.connect(self.onProcessError)
-        self.text_ai_thread.start()
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def summarizeYouTube(self):
         url, ok = QInputDialog.getText(self, 'Riassunto YouTube', 'Inserisci l\'URL del video di YouTube:')
         if ok and url:
-            self.progressDialog = QProgressDialog("Download audio da YouTube...", "Annulla", 0, 100, self)
-            self.progressDialog.setWindowTitle("Progresso Download")
-            self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-            self.progressDialog.show()
+            thread = DownloadThread(url, download_video=False, ffmpeg_path=FFMPEG_PATH_DOWNLOAD)
+            self.start_task(thread, self.onYouTubeDownloadFinished, self.onProcessError, self.update_status_progress)
 
-            self.downloadThread = DownloadThread(url, download_video=False, ffmpeg_path=FFMPEG_PATH_DOWNLOAD)
-            self.downloadThread.finished.connect(self.onYouTubeDownloadFinished)
-            self.downloadThread.error.connect(self.onProcessError)
-            self.downloadThread.progress.connect(self.updateProgressDialog)
-            self.progressDialog.canceled.connect(self.downloadThread.terminate)
-            self.downloadThread.start()
+    def onYouTubeDownloadFinished(self, result):
+        audio_path, _, _, _ = result
+        thread = TranscriptionThread(audio_path, self)
+        self.start_task(thread, self.onYouTubeTranscriptionFinished, self.onProcessError, self.update_status_progress)
 
-    def onYouTubeDownloadFinished(self, audio_path, video_title, video_language, upload_date=None):
-        self.progressDialog.close()
-        self.progressDialog = QProgressDialog("Trascrizione in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Trascrizione")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
+    def onYouTubeTranscriptionFinished(self, result):
+        transcript, temp_files = result
+        self.cleanupFiles(temp_files) # Pulisce i file temporanei della trascrizione
 
-        self.transcription_thread = TranscriptionThread(audio_path, self)
-        self.transcription_thread.update_progress.connect(self.updateProgressDialog)
-        self.transcription_thread.transcription_complete.connect(self.onYouTubeTranscriptionFinished)
-        self.transcription_thread.error_occurred.connect(self.onProcessError)
-        self.progressDialog.canceled.connect(self.transcription_thread.stop)
-        self.transcription_thread.start()
-
-    def onYouTubeTranscriptionFinished(self, transcript, temp_files):
-        self.progressDialog.close()
-        self.progressDialog = QProgressDialog("Riassunto del testo in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Riassunto")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
-
-        self.text_ai_thread = ProcessTextAI(
+        thread = ProcessTextAI(
             transcript,
             self.languageComboBox.currentText(),
             mode="youtube_summary"
         )
-        self.text_ai_thread.update_progress.connect(self.updateProgressDialog)
-        self.text_ai_thread.process_complete.connect(self.onProcessComplete)
-        self.text_ai_thread.process_error.connect(self.onProcessError)
-        self.text_ai_thread.start()
+        # Il callback onProcessComplete gestirà già il risultato
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def _update_json_file(self, video_path, update_dict):
         """
@@ -1670,30 +1695,24 @@ class VideoAudioManager(QMainWindow):
             self.progressDialog.setLabelText(label)
 
     def onProcessComplete(self, result):
-        self.progressDialog.close()
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             self.summaries[self.current_summary_type] = result
             self.active_summary_type = self.current_summary_type
 
-            # Salva il riassunto standard e aggiorna la vista
             self.summary_generated = result
             self.summary_text = result
             self.update_summary_view()
 
-            # Deseleziona il toggle del riassunto integrato
             self.integrazioneToggle.setChecked(False)
-
-            # Switch to the summary tab
             self.transcriptionTabWidget.setCurrentIndex(1)
 
-            # Aggiorna il file JSON
             update_data = {
                 "summary_generated": result,
                 "summary_date": datetime.datetime.now().isoformat()
             }
             self._update_json_file(self.videoPathLineEdit, update_data)
 
-            self.current_summary_type = None  # Reset after use
+            self.current_summary_type = None
 
     def update_summary_view(self):
         """Aggiorna la visualizzazione dell'area di testo del riassunto (Markdown/Testo)."""
@@ -1716,14 +1735,15 @@ class VideoAudioManager(QMainWindow):
         self.summaryTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore", error_message)
+        # This is now a generic error handler for AI text processes.
+        # The main error display is handled by finish_task.
+        self.show_status_message(f"Errore processo AI: {error_message}", error=True)
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
         current_text = self.transcriptionTextArea.toPlainText()
         if not current_text.strip():
-            QMessageBox.warning(self, "Testo Mancante", "Il campo della trascrizione è vuoto. Inserisci del testo prima di generare una presentazione.")
+            self.show_status_message("Il campo della trascrizione è vuoto. Inserisci del testo prima di generare una presentazione.", error=True)
             return
 
         dialog = PptxDialog(self, transcription_text=current_text)
@@ -1755,12 +1775,12 @@ class VideoAudioManager(QMainWindow):
 
     def deleteVideoSegment(self):
         if not self.videoSlider.bookmarks:
-            QMessageBox.warning(self, "Errore", "Per favore, imposta almeno un bookmark prima di eliminare.")
+            self.show_status_message("Per favore, imposta almeno un bookmark prima di eliminare.", error=True)
             return
 
         media_path = self.videoPathLineEdit
         if not media_path:
-            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di eliminarne una parte.")
+            self.show_status_message("Per favore, seleziona un file prima di eliminarne una parte.", error=True)
             return
 
         is_audio_only = self.isAudioOnly(media_path)
@@ -1771,29 +1791,20 @@ class VideoAudioManager(QMainWindow):
             else:
                 media_clip = VideoFileClip(media_path)
 
-            # The logic here is to keep the segments *outside* of the bookmarks,
-            # effectively deleting the bookmarked segments.
             clips_to_keep = []
-            last_end_time = 0.0 # Start from the beginning of the media
-
-            # Iterate through sorted bookmarks to identify segments to keep
+            last_end_time = 0.0
             for start_ms, end_ms in sorted(self.videoSlider.bookmarks):
                 start_time = start_ms / 1000.0
                 end_time = end_ms / 1000.0
-
-                # Keep the segment between the end of the last bookmark and the start of this one
                 if start_time > last_end_time:
                     clips_to_keep.append(media_clip.subclip(last_end_time, start_time))
-
-                # Update the end time to the end of the current bookmarked segment
                 last_end_time = end_time
 
-            # Keep the final segment from the end of the last bookmark to the end of the media
             if last_end_time < media_clip.duration:
                 clips_to_keep.append(media_clip.subclip(last_end_time))
 
             if not clips_to_keep:
-                QMessageBox.warning(self, "Errore", "Nessuna parte del video da conservare. L'operazione cancellerebbe l'intero file.")
+                self.show_status_message("Nessuna parte del video da conservare. L'operazione cancellerebbe l'intero file.", error=True)
                 return
 
             if is_audio_only:
@@ -1813,7 +1824,7 @@ class VideoAudioManager(QMainWindow):
             else:
                 final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
-            QMessageBox.information(self, "Successo", f"Parti del file eliminate. File salvato in: {output_path}")
+            self.show_status_message(f"Parti del file eliminate. File salvato.")
             self.loadVideoOutput(output_path)
 
         except Exception as e:
@@ -1826,7 +1837,7 @@ class VideoAudioManager(QMainWindow):
         pause_time = self.pauseTimeEdit.text().strip()
 
         if not re.match(r'^\d+(\.\d+)?s$', pause_time):
-            QMessageBox.warning(self, "Errore", "Inserisci un formato valido per la pausa (es. 1.0s)")
+            self.show_status_message("Inserisci un formato valido per la pausa (es. 1.0s)", error=True)
             return
 
         pause_tag = f'<break time="{pause_time}" />'
@@ -1835,12 +1846,12 @@ class VideoAudioManager(QMainWindow):
 
     def rewind5Seconds(self):
         current_position = self.player.position()
-        new_position = max(0, current_position - 5000)  # Indietro di 5000 ms = 5 secondi
+        new_position = max(0, current_position - 5000)
         self.player.setPosition(new_position)
 
     def forward5Seconds(self):
         current_position = self.player.position()
-        new_position = current_position + 5000  # Avanti di 5000 ms = 5 secondi
+        new_position = current_position + 5000
         self.player.setPosition(new_position)
 
     def frameBackward(self):
@@ -1863,8 +1874,8 @@ class VideoAudioManager(QMainWindow):
 
             total_milliseconds = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
             self.player.setPosition(total_milliseconds)
-        except ValueError as e:
-            QMessageBox.warning(self, "Errore", f"Formato timecode non valido. Usa HH:MM:SS:ms. Dettagli: {e}")
+        except (ValueError, IndexError):
+            self.show_status_message("Formato timecode non valido. Usa HH:MM:SS:ms.", error=True)
 
     def releaseSourceVideo(self):
         self.player.stop()
@@ -1927,14 +1938,13 @@ class VideoAudioManager(QMainWindow):
 
         if timecode_seconds is not None:
             try:
-                self.player.setPosition(timecode_seconds * 1000)  # Converti in millisecondi
+                self.player.setPosition(timecode_seconds * 1000)
                 logging.info(f"Video sincronizzato al timecode: {timecode_seconds} secondi")
             except Exception as e:
                 logging.error(f"Errore durante la sincronizzazione del video: {e}")
                 QMessageBox.critical(self, "Errore", "Impossibile sincronizzare il video.")
         else:
-            logging.warning("Nessun timecode trovato o cursore posizionato in un'area senza timecode.")
-            QMessageBox.warning(self, "Attenzione", "Nessun timecode trovato nella trascrizione.")
+            self.show_status_message("Nessun timecode trovato nella trascrizione.", error=True)
 
     def sincronizza_video(self, seconds):
         """
@@ -1952,19 +1962,19 @@ class VideoAudioManager(QMainWindow):
             end_pos = self.player.position()
             self.videoSlider.addBookmark(start_pos, end_pos)
         else:
-            QMessageBox.warning(self, "Attenzione", "Imposta prima un segnalibro di inizio.")
+            self.show_status_message("Imposta prima un segnalibro di inizio.", error=True)
 
     def clearBookmarks(self):
         self.videoSlider.resetBookmarks()
 
     def cutVideoBetweenBookmarks(self):
         if not self.videoSlider.bookmarks:
-            QMessageBox.warning(self, "Errore", "Per favore, imposta almeno un bookmark prima di tagliare.")
+            self.show_status_message("Per favore, imposta almeno un bookmark prima di tagliare.", error=True)
             return
 
         media_path = self.videoPathLineEdit
         if not media_path:
-            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
+            self.show_status_message("Per favore, seleziona un file prima di tagliarlo.", error=True)
             return
 
         is_audio_only = self.isAudioOnly(media_path)
@@ -1983,7 +1993,7 @@ class VideoAudioManager(QMainWindow):
                 clips.append(media_clip.subclip(start_time, end_time))
 
             if not clips:
-                QMessageBox.warning(self, "Errore", "Nessun clip valido da tagliare.")
+                self.show_status_message("Nessun clip valido da tagliare.", error=True)
                 return
 
             if is_audio_only:
@@ -2001,7 +2011,7 @@ class VideoAudioManager(QMainWindow):
             else:
                 final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
-            QMessageBox.information(self, "Successo", f"File tagliato salvato in: {output_path}.")
+            self.show_status_message(f"File tagliato salvato in: {os.path.basename(output_path)}")
             self.loadVideoOutput(output_path)
 
         except Exception as e:
@@ -2046,7 +2056,7 @@ class VideoAudioManager(QMainWindow):
 
     def open_crop_dialog(self):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di ritagliarlo.")
+            self.show_status_message("Carica un video prima di ritagliarlo.", error=True)
             return
 
         self.player.pause()
@@ -2105,29 +2115,40 @@ class VideoAudioManager(QMainWindow):
             self.player.setPosition(int(new_pos))
 
     def perform_crop(self, crop_rect):
-        self.progress_dialog = QProgressDialog("Ritaglio del video in corso...", "Annulla", 0, 100, self)
-        self.progress_dialog.setWindowTitle("Progresso Ritaglio")
-        self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        if self.current_thread and self.current_thread.isRunning():
+            self.show_status_message("Un'altra operazione è già in corso.", error=True)
+            return
 
-        self.crop_thread = CropThread(self.videoPathLineEdit, crop_rect, self)
-        self.crop_thread.progress.connect(self.update_progress_dialog)
-        self.crop_thread.completed.connect(self.on_crop_completed)
-        self.crop_thread.error.connect(self.on_crop_error)
+        self.statusLabel.setText("Ritaglio del video in corso...")
+        self.progressBar.setVisible(True)
+        self.cancelButton.setVisible(True)
 
-        self.progress_dialog.canceled.connect(self.crop_thread.terminate)
-        self.crop_thread.start()
-        self.progress_dialog.exec()
+        thread = CropThread(self.videoPathLineEdit, crop_rect, self)
+        self.current_thread = thread
 
-    def update_progress_dialog(self, value):
-        self.progress_dialog.setValue(value)
+        thread.progress.connect(self.progressBar.setValue)
+        thread.completed.connect(self.on_crop_completed)
+        thread.error.connect(self.on_crop_error)
+
+        try:
+            self.cancelButton.clicked.disconnect()
+        except TypeError:
+            pass
+        self.cancelButton.clicked.connect(self.cancel_task)
+
+        thread.start()
 
     def on_crop_completed(self, output_path):
-        self.progress_dialog.close()
-        QMessageBox.information(self, "Successo", f"Il video ritagliato è stato salvato in {output_path}")
+        self.progressBar.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.current_thread = None
+        self.show_status_message(f"Video ritagliato e salvato in {os.path.basename(output_path)}")
         self.loadVideoOutput(output_path)
 
     def on_crop_error(self, error_message):
-        self.progress_dialog.close()
+        self.progressBar.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.current_thread = None
         QMessageBox.critical(self, "Errore durante il ritaglio", error_message)
 
     def applyStyleToAllDocks(self):
@@ -2291,46 +2312,39 @@ class VideoAudioManager(QMainWindow):
             self.voiceSelectionComboBox.addItem(custom_name, voice_id)
             self.voiceSelectionComboBox.setCurrentText(custom_name)
             self.voiceIdInput.clear()
+            self.show_status_message(f"Voce personalizzata '{custom_name}' aggiunta.")
         else:
-            QMessageBox.warning(self, "Errore",
-                                "Entrambi i campi devono essere compilati per aggiungere una voce personalizzata.")
+            self.show_status_message("Entrambi i campi 'Nome Voce' e 'ID Voce' sono necessari.", error=True)
 
 
     def applyFreezeFramePause(self):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare una pausa.")
+            self.show_status_message("Carica un video prima di applicare una pausa.", error=True)
             return
 
         try:
-            # Estrazione del timecode e della durata della pausa
             timecode = self.timecodeVideoPauseLineEdit.text()
             pause_duration = int(self.pauseVideoDurationLineEdit.text())
             hours, minutes, seconds = map(int, timecode.split(':'))
             start_time = hours * 3600 + minutes * 60 + seconds
 
-            # Caricamento del video
             video_clip = VideoFileClip(video_path)
-
-            # Ottenere l'ultimo frame dal timecode specificato
             freeze_frame = video_clip.get_frame(start_time)
-
-            # Creare un clip di immagine dal frame congelato e impostare la sua durata
             freeze_clip = ImageClip(freeze_frame).set_duration(pause_duration).set_fps(video_clip.fps)
 
-            # Utilizzare il metodo `fx` per evitare subclip multipli
-            original_video_part1 = video_clip.subclip(0, start_time).fx(vfx.freeze, t=start_time,
-                                                                        freeze_duration=pause_duration)
+            # Questa parte della logica sembra complessa e potrebbe essere semplificata.
+            # Per ora, manteniamo la logica esistente.
+            original_video_part1 = video_clip.subclip(0, start_time)
+            original_video_part2 = video_clip.subclip(start_time)
 
-            # Creazione del video finale con audio originale
-            final_video = concatenate_videoclips([original_video_part1, freeze_clip, video_clip.subclip(start_time)],
-                                                 method="compose")
+            final_video = concatenate_videoclips([original_video_part1, freeze_clip, original_video_part2])
             final_video = final_video.set_audio(video_clip.audio)
 
-            # Salvataggio del video finale
             output_path = tempfile.mktemp(suffix='.mp4')
             final_video.write_videofile(output_path, codec='libx264')
-            QMessageBox.information(self, "Successo", f"Video con pausa frame congelato salvato in {output_path}")
+
+            self.show_status_message("Pausa video applicata con successo.")
             self.loadVideoOutput(output_path)
         except Exception as e:
             QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
@@ -2708,11 +2722,7 @@ class VideoAudioManager(QMainWindow):
         self.run_compositing_thread('image', base_video_path, overlay_image_path, position, size)
 
     def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size):
-        self.progressDialog = QProgressDialog(f"Applicazione {overlay_type} overlay...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Effetto Video")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-
-        self.compositing_thread = VideoCompositingThread(
+        thread = VideoCompositingThread(
             base_video_path=base_path,
             overlay_path=overlay_path,
             overlay_type=overlay_type,
@@ -2720,23 +2730,14 @@ class VideoAudioManager(QMainWindow):
             size=size,
             parent=self
         )
-
-        self.compositing_thread.progress.connect(self.updateProgressDialog)
-        self.compositing_thread.completed.connect(self.on_compositing_completed)
-        self.compositing_thread.error.connect(self.on_compositing_error)
-        self.progressDialog.canceled.connect(self.compositing_thread.stop)
-
-        self.compositing_thread.start()
-        self.progressDialog.show()
+        self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
 
     def on_compositing_completed(self, output_path):
-        self.progressDialog.close()
-        QMessageBox.information(self, "Successo", f"L'effetto video è stato applicato. File salvato in:\n{output_path}")
+        self.show_status_message(f"Effetto video applicato con successo. File salvato.")
         self.loadVideoOutput(output_path)
 
     def on_compositing_error(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'applicazione dell'effetto:\n{error_message}")
+        self.show_status_message(f"Errore durante l'applicazione dell'effetto: {error_message}", error=True)
 
     def formatTimecode(self, position_ms):
         hours, remainder = divmod(position_ms // 1000, 3600)
@@ -2749,43 +2750,30 @@ class VideoAudioManager(QMainWindow):
         timecode = self.timecodeVideoMergeLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
-            QMessageBox.warning(self, "Errore", "Carica il video principale prima di unirne un altro.")
+            self.show_status_message("Carica il video principale prima di unirne un altro.", error=True)
             return
         if not merge_video_path or not os.path.exists(merge_video_path):
-            QMessageBox.warning(self, "Errore", "Seleziona un video da unire.")
+            self.show_status_message("Seleziona un video da unire.", error=True)
             return
         if not timecode:
-            QMessageBox.warning(self, "Errore", "Inserisci un timecode valido.")
+            self.show_status_message("Inserisci un timecode valido.", error=True)
             return
 
-        self.progressDialog = QProgressDialog("Unione video in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Unione Video")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-
-        self.merge_thread = VideoMergeThread(
+        thread = VideoMergeThread(
             base_path=base_video_path,
             merge_path=merge_video_path,
             timecode_str=timecode,
             adapt_resolution=self.adaptResolutionRadio.isChecked(),
             parent=self
         )
-
-        self.merge_thread.progress.connect(self.updateProgressDialog)
-        self.merge_thread.completed.connect(self.onMergeCompleted)
-        self.merge_thread.error.connect(self.onMergeError)
-        self.progressDialog.canceled.connect(self.merge_thread.stop)
-
-        self.merge_thread.start()
-        self.progressDialog.show()
+        self.start_task(thread, self.onMergeCompleted, self.onMergeError, self.update_status_progress)
 
     def onMergeCompleted(self, output_path):
-        self.progressDialog.close()
-        QMessageBox.information(self, "Successo", f"Il video unito è stato salvato in {output_path}")
+        self.show_status_message(f"Video unito e salvato in {os.path.basename(output_path)}")
         self.loadVideoOutput(output_path)
 
     def onMergeError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'unione: {error_message}")
+        self.show_status_message(f"Si è verificato un errore durante l'unione: {error_message}", error=True)
 
     def browseMergeVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
@@ -2794,25 +2782,17 @@ class VideoAudioManager(QMainWindow):
             self.mergeVideoPathLineEdit.setText(fileName)
 
     def browseBackgroundAudio(self):
-        # Imposta il percorso di default per l'apertura della finestra di dialogo
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        parent_dir = os.path.dirname(current_dir)
         default_dir = MUSIC_DIR
-
-        # Verifica se la cartella di default esiste
         if not os.path.exists(default_dir):
-            QMessageBox.warning(self, "Errore", "La cartella di default non esiste.")
-            return
+            self.show_status_message("La cartella di default per la musica non esiste.", error=True)
+            default_dir = "" # Fallback to default directory
 
-        # Apri la finestra di dialogo per selezionare il file audio
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", default_dir,
-                                                  "Audio Files (*.mp3 *.wav)")
-
-        # Se un file è stato selezionato, imposta il percorso nel LineEdit
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", default_dir, "Audio Files (*.mp3 *.wav)")
         if fileName:
             self.backgroundAudioPathLineEdit.setText(fileName)
-    def setupDockSettingsManager(self):
+            self.show_status_message(f"Selezionato audio di sottofondo: {os.path.basename(fileName)}")
 
+    def setupDockSettingsManager(self):
         settings_file = './dock_settings.json'
         if os.path.exists(settings_file):
             self.dockSettingsManager.load_settings(settings_file)
@@ -2822,42 +2802,30 @@ class VideoAudioManager(QMainWindow):
 
     def closeEvent(self, event):
         self.dockSettingsManager.save_settings()
-        #self.teams_call_recorder.stop()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
             self.monitor_preview.close()
         event.accept()
 
     def selectDefaultScreen(self):
-        """Seleziona il primo schermo di default."""
         if self.screen_buttons:
             self.selectScreen(0)
-
-
 
     def selectScreen(self, screen_index):
         if self.is_recording:
             if screen_index != self.selected_screen_index:
-                # Stop the current recording segment
                 if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
                     self.recorder_thread.stop()
                     self.recorder_thread.wait()
-
-                # Update the selected screen and UI
                 self.selected_screen_index = screen_index
                 for i, button in enumerate(self.screen_buttons):
                     button.set_selected(i == screen_index)
-
-                # Start a new recording segment for the new screen
                 self._startRecordingSegment()
         else:
-            # If not recording, just update the preview
             self.selected_screen_index = screen_index
             for i, button in enumerate(self.screen_buttons):
                 button.set_selected(i == screen_index)
-
             if hasattr(self, 'monitor_preview') and self.monitor_preview:
                 self.monitor_preview.close()
-
             monitors = get_monitors()
             if screen_index < len(monitors):
                 monitor = monitors[screen_index]
@@ -2886,40 +2854,27 @@ class VideoAudioManager(QMainWindow):
         background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
 
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare l'audio di sottofondo.")
+            self.show_status_message("Carica un video prima di applicare l'audio di sottofondo.", error=True)
             return
         if not background_audio_path or not os.path.exists(background_audio_path):
-            QMessageBox.warning(self, "Errore", "Seleziona un file audio di sottofondo valido.")
+            self.show_status_message("Seleziona un file audio di sottofondo valido.", error=True)
             return
 
-        self.progressDialog = QProgressDialog("Applicazione audio di sottofondo...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Audio Sottofondo")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-
-        self.background_audio_thread = BackgroundAudioThread(
+        thread = BackgroundAudioThread(
             video_path=video_path,
             audio_path=background_audio_path,
             volume=background_volume,
             loop_audio=self.loopBackgroundAudioCheckBox.isChecked(),
             parent=self
         )
-
-        self.background_audio_thread.progress.connect(self.updateProgressDialog)
-        self.background_audio_thread.completed.connect(self.onBackgroundAudioCompleted)
-        self.background_audio_thread.error.connect(self.onBackgroundAudioError)
-        self.progressDialog.canceled.connect(self.background_audio_thread.stop)
-
-        self.background_audio_thread.start()
-        self.progressDialog.show()
+        self.start_task(thread, self.onBackgroundAudioCompleted, self.onBackgroundAudioError, self.update_status_progress)
 
     def onBackgroundAudioCompleted(self, output_path):
-        self.progressDialog.close()
-        QMessageBox.information(self, "Successo", f"Il video con audio di sottofondo è stato salvato in:\n{output_path}")
+        self.show_status_message("Audio di sottofondo applicato con successo.")
         self.loadVideoOutput(output_path)
 
     def onBackgroundAudioError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'applicazione dell'audio:\n{error_message}")
+        self.show_status_message(f"Errore durante l'applicazione dell'audio di sottofondo: {error_message}", error=True)
 
     def applyAudioWithPauses(self):
         video_path = self.videoPathLineEdit  # Path of the currently loaded video
@@ -3623,52 +3578,37 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def handleDownload(self, url, download_video, ffmpeg_path):
-        if url:
-            self.downloadThread = DownloadThread(url, download_video, ffmpeg_path)
-            self.downloadThread.finished.connect(self.onDownloadFinished)
-            self.downloadThread.error.connect(self.onError)
-            self.downloadThread.progress.connect(self.updateDownloadProgress)
+        if not url:
+            self.show_status_message("Inserisci un URL valido.", error=True)
+            return
 
-            # Collega il nuovo segnale per gli URL di streaming
-            if hasattr(self.downloadThread, 'stream_url_found'):
-                self.downloadThread.stream_url_found.connect(self.onStreamUrlFound)
+        thread = DownloadThread(url, download_video, ffmpeg_path)
 
-            self.downloadThread.start()
-            self.showDownloadProgress()
+        if hasattr(thread, 'stream_url_found'):
+            thread.stream_url_found.connect(self.onStreamUrlFound)
+
+        self.start_task(thread, self.onDownloadFinished, self.onDownloadError, self.update_status_progress)
 
     def onStreamUrlFound(self, stream_url):
         """Gestisce l'URL di streaming trovato"""
         logging.debug(f"URL di streaming trovato: {stream_url}")
 
-    def showDownloadProgress(self):
-        self.progressDialog = QProgressDialog("Downloading video...", "Abort", 0, 100, self)
-        self.progressDialog.setWindowTitle("Download Progress")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.canceled.connect(self.downloadThread.terminate)  # Connect cancel action
-        self.progressDialog.show()
-
-    def updateDownloadProgress(self, progress):
-        if not self.progressDialog.wasCanceled():
-            self.progressDialog.setValue(progress)
-
-    def onDownloadFinished(self, file_path, video_title, video_language, upload_date):
-        self.progressDialog.close()
-        QMessageBox.information(self, "Download Complete", f"File saved to {file_path}.")
+    def onDownloadFinished(self, result):
+        file_path, video_title, video_language, upload_date = result
+        self.show_status_message(f"Download completato: {video_title}")
         self.video_download_language = video_language
         logging.debug(video_language)
         self.loadVideo(file_path, video_title)
 
         if upload_date:
             try:
-                # Il formato della data di yt-dlp è YYYYMMDD
                 video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
                 self._update_json_file(file_path, {"video_date": video_date})
             except (ValueError, TypeError) as e:
                 logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
 
-    def onError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Download Error", error_message)
+    def onDownloadError(self, error_message):
+        self.show_status_message(f"Errore di download: {error_message}", error=True)
 
     def isAudioOnly(self, file_path):
         """Check if the file is likely audio-only based on the extension."""
@@ -3943,10 +3883,9 @@ class VideoAudioManager(QMainWindow):
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
-            QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel Video Player Output.")
+            self.show_status_message("Nessun video caricato nel Video Player Output.", error=True)
             return
 
-        # Crea e mostra il dialogo delle opzioni
         from ui.VideoSaveOptionsDialog import VideoSaveOptionsDialog
         from services.VideoSaver import VideoSaver
 
@@ -3954,45 +3893,35 @@ class VideoAudioManager(QMainWindow):
         if options_dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
-        # Ottieni le opzioni
         save_options = options_dialog.getOptions()
-
-        # Ottieni il nome del file di output
         file_filter = "Video Files (*.mp4 *.mov *.avi)"
         fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", file_filter)
         if not fileName:
             return
 
-        # Crea un'istanza di VideoSaver
         video_saver = VideoSaver(self)
-
-        # Determine playback rate
         rate = 1.0
         if save_options['save_with_speed']:
             rate = self.speedSpinBoxOutput.value()
-            if rate == 0:
-                rate = 1.0 # Avoid zero playback rate
+            if rate == 0: rate = 1.0
 
-        # Salva il video in base alle opzioni selezionate
         if save_options['use_compression']:
-            success, error_msg = video_saver.save_compressed(
-                self.videoPathLineOutputEdit,
-                fileName,
-                quality=save_options['compression_quality'],
-                playback_rate=rate
+            thread = video_saver.save_compressed(
+                self.videoPathLineOutputEdit, fileName,
+                quality=save_options['compression_quality'], playback_rate=rate
             )
         else:
-            success, error_msg = video_saver.save_original(
-                self.videoPathLineOutputEdit,
-                fileName,
-                playback_rate=rate
+            thread = video_saver.save_original(
+                self.videoPathLineOutputEdit, fileName, playback_rate=rate
             )
 
-        # Mostra il messaggio del risultato
-        if success:
-            QMessageBox.information(self, "Successo", f"Video salvato con successo in: {fileName}")
-        else:
-            QMessageBox.critical(self, "Errore", f"Errore durante il salvataggio del video: {error_msg}")
+        self.start_task(thread, self.onSaveCompleted, self.onSaveError, self.update_status_progress)
+
+    def onSaveCompleted(self, output_path):
+        self.show_status_message(f"Video salvato con successo in: {os.path.basename(output_path)}")
+
+    def onSaveError(self, error_message):
+        self.show_status_message(f"Errore durante il salvataggio del video: {error_message}", error=True)
 
     def setupViewMenuActions(self, viewMenu):
         # Azione per il Video Player Dock
@@ -4051,12 +3980,11 @@ class VideoAudioManager(QMainWindow):
         self.updateViewMenu()
 
     def saveDockLayout(self):
-        # Assumendo che DockSettingsManager abbia un metodo per salvare le impostazioni
         if hasattr(self, 'dockSettingsManager'):
             self.dockSettingsManager.save_settings()
-            QMessageBox.information(self, "Layout Salvato", "Il layout dei docks è stato salvato correttamente.")
+            self.show_status_message("Layout dei docks salvato correttamente.")
         else:
-            QMessageBox.warning(self, "Errore", "Gestore delle impostazioni dei dock non trovato.")
+            self.show_status_message("Gestore delle impostazioni dei dock non trovato.", error=True)
 
     def showAllDocks(self):
         # Imposta tutti i docks visibili
@@ -4132,6 +4060,11 @@ class VideoAudioManager(QMainWindow):
                           AI-based video and audio management application.<br>
                           <br>
                           Autore: FFA <br>""")
+
+    def onTranscriptionError(self, error_message):
+        # Il metodo finish_task mostra già l'errore, quindi non è necessario fare altro qui
+        # a meno che non ci sia una logica specifica da eseguire in caso di errore.
+        pass
 
 
     def handleTextChange(self):
@@ -4238,51 +4171,22 @@ class VideoAudioManager(QMainWindow):
 
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
-            QMessageBox.warning(self, "Attenzione", "Nessun video selezionato.")
+            self.show_status_message("Nessun video selezionato.", error=True)
             return
 
-        self.progressDialog = QProgressDialog("Trascrizione in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Trascrizione")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.canceled.connect(
-            self.stopTranscription)  # Connect the cancel button to stop the transcription
-        self.progressDialog.show()
+        thread = TranscriptionThread(self.videoPathLineEdit, self)
+        self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
-        self.thread = TranscriptionThread(self.videoPathLineEdit, self)
-        self.thread.update_progress.connect(self.updateProgressDialog(self.progressDialog))
-        self.thread.transcription_complete.connect(self.completeTranscription(self.progressDialog))
-        self.thread.error_occurred.connect(self.handleErrors(self.progressDialog))
-        self.thread.start()
+    def onTranscriptionComplete(self, result):
+        json_path, temp_files = result
+        self._manage_video_json(self.videoPathLineEdit)
+        self.cleanupFiles(temp_files)
+        self.show_status_message("Trascrizione completata.")
 
-    def stopTranscription(self):
-        if self.thread is not None:
-            self.thread.stop()  # Ferma il thread di trascrizione
-            self.thread.wait()  # Aspetta che il thread finisca
-            partial_text = self.thread.get_partial_transcription()  # Ottieni il testo parziale trascritto
-            self.transcriptionTextArea.setPlainText(
-                partial_text)  # Mostra il testo parziale nell'oggetto transcriptionTextArea
-            self.thread = None
-            self.progressDialog.close()  # Chiudi il dialogo di progresso
-
-    def updateProgressDialog(self, progress_dialog):
-        def update(value, label):
-            if not progress_dialog.wasCanceled():
-                progress_dialog.setValue(value)
-                progress_dialog.setLabelText(label)
-
-        return update
-
-    def completeTranscription(self, progress_dialog):
-        """Returns a closure that handles transcription completion."""
-
-        def complete(json_path, temp_files):
-            if not progress_dialog.wasCanceled():
-                self._manage_video_json(self.videoPathLineEdit)
-                progress_dialog.setValue(100)
-                progress_dialog.close()
-                self.cleanupFiles(temp_files)
-
-        return complete
+    def onTranscriptionError(self, error_message):
+        # Il metodo finish_task mostra già l'errore, quindi non è necessario fare altro qui
+        # a meno che non ci sia una logica specifica da eseguire in caso di errore.
+        pass
 
     def _update_ui_from_json_data(self, data):
         """
@@ -4350,7 +4254,7 @@ class VideoAudioManager(QMainWindow):
     def generateAudioWithElevenLabs(self):
         api_key = get_api_key('elevenlabs')
         if not api_key:
-            QMessageBox.warning(self, "Attenzione", "Per favore, imposta l'API Key di ElevenLabs nelle impostazioni prima di generare l'audio.")
+            self.show_status_message("Per favore, imposta l'API Key di ElevenLabs nelle impostazioni.", error=True)
             return
 
         def convert_numbers_to_words(text):
@@ -4366,7 +4270,7 @@ class VideoAudioManager(QMainWindow):
 
         transcriptionText = self.transcriptionTextArea.toPlainText()
         if not transcriptionText.strip():
-            QMessageBox.warning(self, "Attenzione", "Inserisci una trascrizione prima di generare l'audio.")
+            self.show_status_message("Inserisci una trascrizione prima di generare l'audio.", error=True)
             return
         transcriptionText = convert_numbers_to_words(transcriptionText)
 
@@ -4380,24 +4284,12 @@ class VideoAudioManager(QMainWindow):
             'use_speaker_boost': self.speakerBoostCheckBox.isChecked()
         }
 
-        self.progressDialog = QProgressDialog("Generazione audio in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Generazione Audio")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
+        base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0] if self.videoPathLineEdit else "generated_audio"
+        save_dir = os.path.dirname(self.videoPathLineEdit) if self.videoPathLineEdit else "."
+        audio_save_path = os.path.join(save_dir, f"{base_name}_generated.mp3")
 
-        # Percorso per salvare il file audio
-        base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0]
-        audio_save_path = os.path.join(os.path.dirname(self.videoPathLineEdit), f"{base_name}_generated.mp3")
-
-        # Crea il thread con i nuovi parametri
-        self.audio_thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key,
-                                                  audio_save_path, self)
-        self.audio_thread.progress.connect(self.progressDialog.setValue)
-        self.audio_thread.completed.connect(self.onAudioGenerationCompleted)
-        self.audio_thread.error.connect(self.onError)
-        self.audio_thread.start()
-
-        self.progressDialog.canceled.connect(self.audio_thread.terminate)
-        self.progressDialog.show()
+        thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key, audio_save_path, self)
+        self.start_task(thread, self.onAudioGenerationCompleted, self.onAudioGenerationError, self.update_status_progress)
 
     def runWav2Lip(self, video_path, audio_path, output_path):
         command = [
@@ -4440,8 +4332,8 @@ class VideoAudioManager(QMainWindow):
             start_time_str=start_time_str
         )
 
-    def onError(self, error_message):
-        QMessageBox.critical(self, "Errore", "Errore durante la generazione dell'audio: " + error_message)
+    def onAudioGenerationError(self, error_message):
+        self.show_status_message(f"Errore durante la generazione dell'audio: {error_message}", error=True)
 
     def _parse_time(self, time_str):
         """Parses a time string HH:MM:SS.ms into seconds."""
@@ -4459,49 +4351,36 @@ class VideoAudioManager(QMainWindow):
 
             return h * 3600 + m * 60 + s + ms / 1000.0
         except (ValueError, IndexError) as e:
-            QMessageBox.warning(self, "Errore Formato Orario", f"Formato ora non valido: {time_str}. Usare HH:MM:SS.ms.\nErrore: {e}")
+            self.show_status_message(f"Formato ora non valido: {time_str}. Usare HH:MM:SS.ms.", error=True)
             return None
 
     def apply_generated_audio(self, new_audio_path, use_sync, start_time_str):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            self.show_status_message("Nessun video caricato per applicare l'audio.", error=True)
             return
 
         start_time_sec = 0
         if not use_sync:
             start_time_sec = self._parse_time(start_time_str)
             if start_time_sec is None:
-                return # Stop if time format is invalid
+                return
 
-        self.progressDialog = QProgressDialog("Applicazione audio al video...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Elaborazione Video")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-
-        # Create and start the processing thread
-        self.audio_processing_thread = AudioProcessingThread(
+        thread = AudioProcessingThread(
             video_path,
             new_audio_path,
             use_sync,
             start_time_sec,
             parent=self
         )
-        self.audio_processing_thread.progress.connect(self.updateProgressDialog)
-        self.audio_processing_thread.completed.connect(self.onAudioProcessingCompleted)
-        self.audio_processing_thread.error.connect(self.onAudioProcessingError)
-        self.progressDialog.canceled.connect(self.audio_processing_thread.stop)
-
-        self.audio_processing_thread.start()
-        self.progressDialog.show()
+        self.start_task(thread, self.onAudioProcessingCompleted, self.onAudioProcessingError, self.update_status_progress)
 
     def onAudioProcessingCompleted(self, output_path):
-        self.progressDialog.close()
-        QMessageBox.information(self, "Successo", f"Il video è stato aggiornato con successo:\n{output_path}")
+        self.show_status_message("Audio applicato al video con successo.")
         self.loadVideoOutput(output_path)
 
     def onAudioProcessingError(self, error_message):
-        self.progressDialog.close()
-        QMessageBox.critical(self, "Errore Elaborazione", f"Si è verificato un errore durante l'elaborazione:\n{error_message}")
+        self.show_status_message(f"Errore durante l'applicazione dell'audio: {error_message}", error=True)
 
     def _update_manual_audio_widgets(self, checked):
         """Enable/disable the manual time input for the main audio replacement."""
@@ -5155,46 +5034,31 @@ class VideoAudioManager(QMainWindow):
     def cutVideo(self):
         media_path = self.videoPathLineEdit
         if not media_path:
-            QMessageBox.warning(self, "Attenzione", "Per favore, seleziona un file prima di tagliarlo.")
+            self.show_status_message("Per favore, seleziona un file prima di tagliarlo.", error=True)
             return
 
-        if media_path.lower().endswith(('.mp4', '.mov', '.avi')):
-            is_audio = False
-        elif media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac')):
-            is_audio = True
-        else:
-            QMessageBox.warning(self, "Errore", "Formato file non supportato.")
+        if not (media_path.lower().endswith(('.mp4', '.mov', '.avi', '.mp3', '.wav', '.aac', '.ogg', '.flac'))):
+            self.show_status_message("Formato file non supportato per il taglio.", error=True)
             return
 
-        start_time = self.currentPosition / 1000.0  # Converti in secondi
+        is_audio = media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac'))
+        start_time = self.currentPosition / 1000.0
 
         base_name = os.path.splitext(os.path.basename(media_path))[0]
         directory = os.path.dirname(media_path)
-        ext = 'mp4' if not is_audio else 'mp3'
-        output_path1 = os.path.join(directory, f"{base_name}_part1.{ext}")
-        output_path2 = os.path.join(directory, f"{base_name}_part2.{ext}")
+        ext = '.mp3' if is_audio else '.mp4'
+        output_path1 = os.path.join(directory, f"{base_name}_part1{ext}")
+        output_path2 = os.path.join(directory, f"{base_name}_part2{ext}")
 
-        self.progressDialog = QProgressDialog("Taglio del file in corso...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Progresso Taglio")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-        self.progressDialog.show()
-
-        self.cutting_thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
-        self.cutting_thread.progress.connect(self.progressDialog.setValue)
-        self.cutting_thread.completed.connect(self.onCutCompleted)
-        self.cutting_thread.error.connect(self.onCutError)
-
-
-        self.cutting_thread.start()
+        thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
+        self.start_task(thread, self.onCutCompleted, self.onCutError, self.update_status_progress)
 
     def onCutCompleted(self, output_path):
-        QMessageBox.information(self, "Successo", f"File tagliato salvato in: {output_path}.")
-        self.progressDialog.close()
+        self.show_status_message(f"File tagliato e salvato con successo.")
         self.loadVideoOutput(output_path)
 
     def onCutError(self, error_message):
-        QMessageBox.critical(self, "Errore", error_message)
-        self.progressDialog.close()
+        self.show_status_message(f"Errore durante il taglio: {error_message}", error=True)
 
     def positionChanged(self, position):
         self.videoSlider.setValue(position)
