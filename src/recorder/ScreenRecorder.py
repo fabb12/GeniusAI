@@ -15,7 +15,8 @@ class ScreenRecorder(QThread):
     def __init__(self, output_path, ffmpeg_path='ffmpeg.exe', monitor_index=0, audio_inputs=None,
                  audio_channels=DEFAULT_AUDIO_CHANNELS, frames=DEFAULT_FRAME_RATE, record_audio=True,
                  record_video=True, use_watermark=True, watermark_path=None, watermark_size=10,
-                 watermark_position="Bottom Right", bluetooth_mode=False, audio_volume=1.0):
+                 watermark_position="Bottom Right", bluetooth_mode=False, audio_volume=1.0,
+                 record_webcam=False, webcam_device=None):
         super().__init__()
         self.output_path = output_path
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
@@ -28,12 +29,25 @@ class ScreenRecorder(QThread):
         self.audio_volume = audio_volume
         self.record_audio = record_audio and bool(self.audio_inputs)
         self.is_running = True
-        self.use_watermark = use_watermark and self.record_video  # Watermark only for video
+        self.use_watermark = use_watermark and self.record_video
         raw_path = watermark_path if watermark_path else WATERMARK_IMAGE
         self.watermark_image = raw_path.replace('\\', '/')
         self.watermark_size = watermark_size
         self.watermark_position = watermark_position
         self.ffmpeg_process = None
+        self.webcam_process = None
+
+        self.record_webcam = record_webcam and self.record_video
+        self.webcam_device = webcam_device
+        self.webcam_output_path = None
+
+        if self.record_webcam:
+            if not self.webcam_device:
+                self.error_signal.emit("Nessun dispositivo webcam specificato.")
+                self.is_running = False
+            else:
+                base, ext = os.path.splitext(self.output_path)
+                self.webcam_output_path = f"{base}_webcam.mp4"
 
         if not os.path.isfile(self.ffmpeg_path):
             self.error_signal.emit(f"ffmpeg.exe not found at {self.ffmpeg_path}")
@@ -42,6 +56,38 @@ class ScreenRecorder(QThread):
         if self.use_watermark and not os.path.isfile(raw_path):
             self.error_signal.emit(f"Watermark image not found at {raw_path}")
             self.use_watermark = False
+
+    def get_webcam_output_path(self):
+        return self.webcam_output_path
+
+    @staticmethod
+    def get_video_devices(ffmpeg_path):
+        if not os.path.isfile(ffmpeg_path):
+            return []
+
+        command = [ffmpeg_path, '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy']
+        try:
+            # CREATE_NO_WINDOW flag to hide the console window
+            creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            result = subprocess.run(command, capture_output=True, text=True, encoding='utf-8', errors='ignore', creationflags=creationflags)
+            output = result.stderr
+
+            devices = []
+            video_device_section = False
+            for line in output.splitlines():
+                if "DirectShow video devices" in line:
+                    video_device_section = True
+                elif "DirectShow audio devices" in line:
+                    break
+
+                if video_device_section:
+                    match = re.search(r'\]\s+"([^"]+)"\s+\(video\)', line)
+                    if match:
+                        devices.append(match.group(1))
+            return list(dict.fromkeys(devices))
+        except Exception as e:
+            print(f"Error getting video devices: {e}")
+            return []
 
     def get_monitor_offset(self):
         monitors = get_monitors()
@@ -162,10 +208,24 @@ class ScreenRecorder(QThread):
         ffmpeg_command.extend(['-y', self.output_path])
 
         # Use CREATE_NO_WINDOW to hide the console window
-        creationflags = subprocess.CREATE_NO_WINDOW
+        creationflags = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
 
-        # Start the ffmpeg process in binary mode (remove text=True)
+        # Start the ffmpeg process for screen recording
         self.ffmpeg_process = subprocess.Popen(ffmpeg_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
+
+        # Start the ffmpeg process for webcam recording if enabled
+        if self.record_webcam and self.is_running:
+            webcam_command = [
+                self.ffmpeg_path,
+                '-f', 'vfwcap',
+                '-r', '25',
+                '-i', '0', # Using device index 0 as suggested
+                '-c:v', 'libx264',
+                '-preset', 'ultrafast',
+                '-pix_fmt', 'yuv420p',
+                '-y', self.webcam_output_path
+            ]
+            self.webcam_process = subprocess.Popen(webcam_command, stdin=subprocess.PIPE, stderr=subprocess.PIPE, stdout=subprocess.PIPE, creationflags=creationflags)
 
         # Regex to parse ffmpeg's progress output
         stats_regex = re.compile(
@@ -206,12 +266,23 @@ class ScreenRecorder(QThread):
                 self.ffmpeg_process.kill()
                 self.ffmpeg_process.wait()
 
+        if self.webcam_process and self.webcam_process.poll() is None:
+            try:
+                self.webcam_process.stdin.write(b'q')
+                self.webcam_process.stdin.flush()
+                self.webcam_process.wait(timeout=5)
+            except (OSError, ValueError, BrokenPipeError, subprocess.TimeoutExpired) as e:
+                self.error_signal.emit(f"ffmpeg (webcam) did not terminate gracefully, killing process. Error: {str(e)}")
+                self.webcam_process.kill()
+                self.webcam_process.wait()
+
         self.is_running = False
         self.recording_stopped_signal.emit()
 
     def stop(self):
         self.is_running = False
-        if self.ffmpeg_process and self.ffmpeg_process.poll() is None:
-             self.stop_recording()
+        if (self.ffmpeg_process and self.ffmpeg_process.poll() is None) or \
+           (self.webcam_process and self.webcam_process.poll() is None):
+            self.stop_recording()
         else:
             self.recording_stopped_signal.emit()

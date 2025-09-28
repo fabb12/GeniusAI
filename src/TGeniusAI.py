@@ -3090,6 +3090,7 @@ class VideoAudioManager(QMainWindow):
 
         self.saveVideoOnlyCheckBox = QCheckBox("Registra solo video")
         self.saveAudioOnlyCheckBox = QCheckBox("Registra solo audio")
+        self.recordWebcamCheckBox = QCheckBox("Registra webcam")
 
         self.saveVideoOnlyCheckBox.toggled.connect(
             lambda checked: self.saveAudioOnlyCheckBox.setEnabled(not checked)
@@ -3098,10 +3099,13 @@ class VideoAudioManager(QMainWindow):
             lambda checked: self.saveVideoOnlyCheckBox.setEnabled(not checked)
         )
 
-        saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
-        saveOptionsLayout.addWidget(self.saveAudioOnlyCheckBox)
-        saveOptionsLayout.addWidget(QLabel("Percorso File:"))
+        options_layout = QHBoxLayout()
+        options_layout.addWidget(self.saveVideoOnlyCheckBox)
+        options_layout.addWidget(self.saveAudioOnlyCheckBox)
+        options_layout.addWidget(self.recordWebcamCheckBox)
+        saveOptionsLayout.addLayout(options_layout)
 
+        saveOptionsLayout.addWidget(QLabel("Percorso File:"))
         saveOptionsLayout.addWidget(self.folderPathLineEdit)
 
         buttonsLayout = QHBoxLayout()
@@ -3191,6 +3195,9 @@ class VideoAudioManager(QMainWindow):
         folder_path = self.folderPathLineEdit.text().strip()
         save_video_only = self.saveVideoOnlyCheckBox.isChecked()
         save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
+        record_webcam = self.recordWebcamCheckBox.isChecked()
+        selected_webcam = "0" if record_webcam else None
+
         self.timecodeLabel.setStyleSheet("""
             QLabel {
                 font-family: "Courier New", Courier, monospace;
@@ -3224,7 +3231,7 @@ class VideoAudioManager(QMainWindow):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}{file_extension}")
 
-        ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+        ffmpeg_path = FFMPEG_PATH
         if not os.path.exists(ffmpeg_path):
             QMessageBox.critical(self, "Errore",
                                  "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")
@@ -3236,6 +3243,7 @@ class VideoAudioManager(QMainWindow):
                                  "Nessun dispositivo audio selezionato. Seleziona un dispositivo audio o abilita l'opzione 'Salva solo il video'.")
             self.startRecordingButton.setEnabled(True)
             return
+
 
         bluetooth_mode = self._is_bluetooth_mode_active()
 
@@ -3252,7 +3260,9 @@ class VideoAudioManager(QMainWindow):
             watermark_size=self.watermarkSize,
             watermark_position=self.watermarkPosition,
             bluetooth_mode=bluetooth_mode,
-            audio_volume=4.0
+            audio_volume=4.0,
+            record_webcam=record_webcam,
+            webcam_device=selected_webcam
         )
 
         self.recorder_thread.error_signal.connect(self.showError)
@@ -3336,6 +3346,7 @@ class VideoAudioManager(QMainWindow):
         first_segment = self.recording_segments[0]
         is_audio_only = first_segment.lower().endswith('.mp3')
         file_extension = ".mp3" if is_audio_only else ".mp4"
+        final_output_path = ""
 
         if len(self.recording_segments) > 1:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -3345,8 +3356,9 @@ class VideoAudioManager(QMainWindow):
 
             output_dir = os.path.dirname(first_segment)
             output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
+            final_output_path = output_path
 
-            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+            ffmpeg_path = FFMPEG_PATH
 
             segments_file = "segments.txt"
             with open(segments_file, "w") as file:
@@ -3354,14 +3366,32 @@ class VideoAudioManager(QMainWindow):
                     file.write(f"file '{segment}'\n")
 
             merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
-            subprocess.run(merge_command)
+            subprocess.run(merge_command, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
             self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
             self.loadVideoOutput(output_path)
         else:
             output_path = self.recording_segments[0]
+            final_output_path = output_path
             self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
             self.loadVideoOutput(output_path)
+
+        # Handle webcam recording file
+        if hasattr(self, 'recorder_thread') and self.recorder_thread.record_webcam:
+            webcam_output_path = self.recorder_thread.get_webcam_output_path()
+            if webcam_output_path and os.path.exists(webcam_output_path):
+                final_base_name = os.path.splitext(os.path.basename(final_output_path))[0]
+                final_dir = os.path.dirname(final_output_path)
+                new_webcam_path = os.path.join(final_dir, f"{final_base_name}_webcam.mp4")
+
+                try:
+                    # Rename the webcam file to match the main recording
+                    if os.path.exists(new_webcam_path):
+                        os.remove(new_webcam_path) # remove if it exists
+                    shutil.move(webcam_output_path, new_webcam_path)
+                    self.show_status_message(f"Registrazione webcam salvata: {os.path.basename(new_webcam_path)}", timeout=7000)
+                except Exception as e:
+                    self.showError(f"Errore rinominando il file della webcam: {e}")
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""
