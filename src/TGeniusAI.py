@@ -2274,32 +2274,13 @@ class VideoAudioManager(QMainWindow):
         separator.setFrameShadow(QFrame.Shadow.Sunken)
         layout.addWidget(separator)
 
-        self.audioStartTimeLabel = QLabel("Tempo di inizio (es: 00:01:30.5):")
-        self.audioStartTimeLineEdit = QLineEdit("00:00:00.0")
-        self.audioStartTimeLineEdit.setEnabled(False) # Disabled by default
-
-        # Sync toggle
-        self.syncAudioVideoToggle = QCheckBox("Sincronizza audio e video")
-        self.syncAudioVideoToggle.setChecked(True)
-        self.syncAudioVideoToggle.setToolTip("Se attivo, sincronizza l'audio generato con il video, altrimenti lo applica da un tempo specifico.")
-        layout.addWidget(self.syncAudioVideoToggle)
-        # Manual time input
-
-        timeLayout = QHBoxLayout()
-        timeLayout.addWidget(self.audioStartTimeLabel)
-        timeLayout.addWidget(self.audioStartTimeLineEdit)
-        layout.addLayout(timeLayout)
-
-        self.syncAudioVideoToggle.toggled.connect(self._update_audio_sync_widgets)
-
-
         # Sincronizzazione labiale
         self.useWav2LipCheckbox = QCheckBox("Sincronizzazione labiale")
         layout.addWidget(self.useWav2LipCheckbox)
         self.useWav2LipCheckbox.setVisible(False)
 
         # Pulsanti per le diverse funzionalità
-        self.generateAudioButton = QPushButton('Genera Audio con AI')
+        self.generateAudioButton = QPushButton('Genera e Applica Audio con AI')
         self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
         layout.addWidget(self.generateAudioButton)
 
@@ -2325,30 +2306,36 @@ class VideoAudioManager(QMainWindow):
             return
 
         try:
-            timecode = self.timecodeVideoPauseLineEdit.text()
             pause_duration = int(self.pauseVideoDurationLineEdit.text())
-            hours, minutes, seconds = map(int, timecode.split(':'))
-            start_time = hours * 3600 + minutes * 60 + seconds
+            start_time = self.player.position() / 1000.0
 
             video_clip = VideoFileClip(video_path)
             freeze_frame = video_clip.get_frame(start_time)
             freeze_clip = ImageClip(freeze_frame).set_duration(pause_duration).set_fps(video_clip.fps)
 
-            # Questa parte della logica sembra complessa e potrebbe essere semplificata.
-            # Per ora, manteniamo la logica esistente.
             original_video_part1 = video_clip.subclip(0, start_time)
             original_video_part2 = video_clip.subclip(start_time)
 
             final_video = concatenate_videoclips([original_video_part1, freeze_clip, original_video_part2])
-            final_video = final_video.set_audio(video_clip.audio)
+
+            if video_clip.audio:
+                final_video.audio = video_clip.audio
 
             output_path = tempfile.mktemp(suffix='.mp4')
-            final_video.write_videofile(output_path, codec='libx264')
+            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
             self.show_status_message("Pausa video applicata con successo.")
             self.loadVideoOutput(output_path)
+        except ValueError:
+            self.show_status_message("La durata della pausa deve essere un numero intero.", error=True)
         except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'applicazione della pausa frame congelato", str(e))
+            QMessageBox.critical(self, "Errore", f"Errore durante l'applicazione della pausa: {e}")
+        finally:
+            if 'video_clip' in locals():
+                video_clip.close()
+            if 'final_video' in locals():
+                if hasattr(final_video, 'audio') and final_video.audio:
+                    final_video.audio.close()
 
     def createAudioDock(self):
         dock = CustomDock("Gestione Audio", closable=True)
@@ -2386,7 +2373,7 @@ class VideoAudioManager(QMainWindow):
         return dock
 
     def createAudioReplacementGroup(self):
-        audioReplacementGroup = QGroupBox("Sostituzione Audio Principale")
+        audioReplacementGroup = QGroupBox("Sostituzione audio principale")
         layout = QVBoxLayout()
 
         # Layout orizzontale per la selezione del file
@@ -2399,21 +2386,6 @@ class VideoAudioManager(QMainWindow):
         file_layout.addWidget(browseAudioButton)
         layout.addLayout(file_layout)
 
-        self.alignAudioVideoCheckBox = QCheckBox('Allinea video e audio')
-        self.alignAudioVideoCheckBox.setChecked(True)
-        layout.addWidget(self.alignAudioVideoCheckBox)
-
-        # Layout orizzontale per l'input manuale del tempo
-        time_layout = QHBoxLayout()
-        self.manualAudioStartTimeLabel = QLabel("Tempo di inizio (es: 00:01:30.5):")
-        self.manualAudioStartTimeLineEdit = QLineEdit("00:00:00.0")
-        self.manualAudioStartTimeLineEdit.setEnabled(False) # Disabled by default
-        time_layout.addWidget(self.manualAudioStartTimeLabel)
-        time_layout.addWidget(self.manualAudioStartTimeLineEdit)
-        layout.addLayout(time_layout)
-
-        self.alignAudioVideoCheckBox.toggled.connect(self._update_manual_audio_widgets)
-
         applyAudioButton = QPushButton('Applica Audio Principale')
         applyAudioButton.clicked.connect(self.handle_apply_main_audio)
         layout.addWidget(applyAudioButton)
@@ -2422,19 +2394,8 @@ class VideoAudioManager(QMainWindow):
         return audioReplacementGroup
 
     def createAudioPauseGroup(self):
-        audioPauseGroup = QGroupBox("Applica Pause Audio")
+        audioPauseGroup = QGroupBox("Aggiungi pausa")
         layout = QVBoxLayout()
-
-        # Layout orizzontale per il timecode
-        timecode_layout = QHBoxLayout()
-        self.timecodePauseLineEdit = QLineEdit()
-        self.timecodePauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
-        getTimecodeButton = QPushButton("Preleva Timecode")
-        getTimecodeButton.clicked.connect(self.setTimecodePauseFromSlider)
-        timecode_layout.addWidget(self.timecodePauseLineEdit)
-        timecode_layout.addWidget(getTimecodeButton)
-        layout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        layout.addLayout(timecode_layout)
 
         # Layout orizzontale per la durata della pausa
         duration_layout = QHBoxLayout()
@@ -2445,7 +2406,7 @@ class VideoAudioManager(QMainWindow):
         duration_layout.addWidget(self.pauseAudioDurationLineEdit)
         layout.addLayout(duration_layout)
 
-        applyPauseButton = QPushButton('Applica Pause Audio')
+        applyPauseButton = QPushButton('Applica Pausa Audio')
         applyPauseButton.clicked.connect(self.applyAudioWithPauses)
         layout.addWidget(applyPauseButton)
 
@@ -2453,19 +2414,8 @@ class VideoAudioManager(QMainWindow):
         return audioPauseGroup
 
     def createVideoPauseGroup(self):
-        videoPauseGroup = QGroupBox("Applica Pausa Video")
+        videoPauseGroup = QGroupBox("Applica pausa video")
         layout = QVBoxLayout()
-
-        # Layout orizzontale per il timecode
-        timecode_layout = QHBoxLayout()
-        self.timecodeVideoPauseLineEdit = QLineEdit()
-        self.timecodeVideoPauseLineEdit.setPlaceholderText("Inserisci Timecode (hh:mm:ss)")
-        getTimecodeButton = QPushButton("Preleva Timecode")
-        getTimecodeButton.clicked.connect(self.setTimecodeVideoFromSlider)
-        timecode_layout.addWidget(self.timecodeVideoPauseLineEdit)
-        timecode_layout.addWidget(getTimecodeButton)
-        layout.addWidget(QLabel("Timecode Inizio Pausa:"))
-        layout.addLayout(timecode_layout)
 
         # Layout orizzontale per la durata della pausa
         duration_layout = QHBoxLayout()
@@ -2534,7 +2484,7 @@ class VideoAudioManager(QMainWindow):
 
     def createVideoMergeDock(self):
         """Crea e restituisce il dock per la gestione dell'unione di video."""
-        dock = CustomDock("Unione Video", closable=True)
+        dock = CustomDock("Unione video", closable=True)
         widget = QWidget()
         main_layout = QVBoxLayout(widget)
 
@@ -2554,16 +2504,6 @@ class VideoAudioManager(QMainWindow):
         grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1, 1, 2)
         grid_layout.addWidget(browseMergeVideoButton, 0, 3)
 
-        # --- Riga 1: Timecode ---
-        self.timecodeVideoMergeLineEdit = QLineEdit()
-        self.timecodeVideoMergeLineEdit.setPlaceholderText("hh:mm:ss")
-        getTimecodeButton = QPushButton("Preleva Timecode")
-        getTimecodeButton.clicked.connect(self.setTimecodeMergeFromSlider)
-
-        grid_layout.addWidget(QLabel("Timecode inserimento:"), 1, 0)
-        grid_layout.addWidget(self.timecodeVideoMergeLineEdit, 1, 1)
-        grid_layout.addWidget(getTimecodeButton, 1, 2, 1, 2)
-
         # --- Riga 2: Opzioni Risoluzione ---
         resolution_group = QGroupBox("Gestione Risoluzione")
         resolution_layout = QVBoxLayout(resolution_group)
@@ -2574,13 +2514,13 @@ class VideoAudioManager(QMainWindow):
 
         resolution_layout.addWidget(self.adaptResolutionRadio)
         resolution_layout.addWidget(self.maintainResolutionRadio)
-        grid_layout.addWidget(resolution_group, 2, 0, 1, 4)
+        grid_layout.addWidget(resolution_group, 1, 0, 1, 4)
 
         # --- Riga 3: Pulsante di Unione ---
         mergeButton = QPushButton('Unisci Video')
         mergeButton.setStyleSheet("padding: 10px; font-weight: bold;")
         mergeButton.clicked.connect(self.mergeVideo)
-        grid_layout.addWidget(mergeButton, 3, 0, 1, 4)
+        grid_layout.addWidget(mergeButton, 2, 0, 1, 4)
 
         # --- Impostazione Layout ---
         main_layout.addWidget(mergeGroup)
@@ -2588,10 +2528,6 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
-
-    def setTimecodeMergeFromSlider(self):
-        current_position = self.player.position()
-        self.timecodeVideoMergeLineEdit.setText(self.formatTimecode(current_position))
 
     def createVideoEffectsDock(self):
         """Crea e restituisce il dock per gli effetti video (PiP e Overlay)."""
@@ -2691,44 +2627,47 @@ class VideoAudioManager(QMainWindow):
             self.imageOverlayPathLineEdit.setText(fileName)
 
     def apply_pip_effect(self):
-        base_video_path = self.videoPathLineOutputEdit
+        base_video_path = self.videoPathLineEdit
         overlay_video_path = self.pipVideoPathLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
-            QMessageBox.warning(self, "Errore", "Carica il video principale nel player di Output prima di applicare un effetto.")
+            self.show_status_message("Carica un video nel player di input prima di applicare un effetto.", error=True)
             return
         if not overlay_video_path or not os.path.exists(overlay_video_path):
-            QMessageBox.warning(self, "Errore", "Seleziona un video per l'effetto Picture-in-Picture.")
+            self.show_status_message("Seleziona un video per l'effetto Picture-in-Picture.", error=True)
             return
 
         position = self.pipPositionComboBox.currentText()
         size = self.pipSizeSpinBox.value()
+        start_time = self.player.position() / 1000.0
 
-        self.run_compositing_thread('video', base_video_path, overlay_video_path, position, size)
+        self.run_compositing_thread('video', base_video_path, overlay_video_path, position, size, start_time)
 
     def apply_image_overlay_effect(self):
-        base_video_path = self.videoPathLineOutputEdit
+        base_video_path = self.videoPathLineEdit
         overlay_image_path = self.imageOverlayPathLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
-            QMessageBox.warning(self, "Errore", "Carica il video principale nel player di Output prima di applicare un effetto.")
+            self.show_status_message("Carica un video nel player di input prima di applicare un effetto.", error=True)
             return
         if not overlay_image_path or not os.path.exists(overlay_image_path):
-            QMessageBox.warning(self, "Errore", "Seleziona un'immagine per l'effetto overlay.")
+            self.show_status_message("Seleziona un'immagine per l'effetto overlay.", error=True)
             return
 
         position = self.imagePositionComboBox.currentText()
         size = self.imageSizeSpinBox.value()
+        start_time = self.player.position() / 1000.0
 
-        self.run_compositing_thread('image', base_video_path, overlay_image_path, position, size)
+        self.run_compositing_thread('image', base_video_path, overlay_image_path, position, size, start_time)
 
-    def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size):
+    def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size, start_time):
         thread = VideoCompositingThread(
             base_video_path=base_path,
             overlay_path=overlay_path,
             overlay_type=overlay_type,
             position=position,
             size=size,
+            start_time=start_time,
             parent=self
         )
         self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
@@ -2748,7 +2687,6 @@ class VideoAudioManager(QMainWindow):
     def mergeVideo(self):
         base_video_path = self.videoPathLineEdit
         merge_video_path = self.mergeVideoPathLineEdit.text()
-        timecode = self.timecodeVideoMergeLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
             self.show_status_message("Carica il video principale prima di unirne un altro.", error=True)
@@ -2756,9 +2694,9 @@ class VideoAudioManager(QMainWindow):
         if not merge_video_path or not os.path.exists(merge_video_path):
             self.show_status_message("Seleziona un video da unire.", error=True)
             return
-        if not timecode:
-            self.show_status_message("Inserisci un timecode valido.", error=True)
-            return
+
+        position_ms = self.player.position()
+        timecode = self.formatTimecode(position_ms)
 
         thread = VideoMergeThread(
             base_path=base_video_path,
@@ -2878,61 +2816,58 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore durante l'applicazione dell'audio di sottofondo: {error_message}", error=True)
 
     def applyAudioWithPauses(self):
-        video_path = self.videoPathLineEdit  # Path of the currently loaded video
-
-        # Retrieve the timecode and pause duration from user input
-        timecode = self.timecodePauseLineEdit.text()
-        pause_duration = float(self.pauseAudioDurationLineEdit.text() or 0)
+        video_path = self.videoPathLineEdit
+        pause_duration_str = self.pauseAudioDurationLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Errore", "Carica un video prima di applicare la pausa audio.")
+            self.show_status_message("Carica un video prima di applicare una pausa audio.", error=True)
+            return
+
+        if not pause_duration_str:
+            self.show_status_message("Inserisci una durata per la pausa.", error=True)
             return
 
         try:
-            # Estrai l'audio dal video
+            pause_duration = float(pause_duration_str)
+            start_time = self.player.position() / 1000.0
+
             video_clip = VideoFileClip(video_path)
-            audio_clip = video_clip.audio
-            original_audio_path = tempfile.mktemp(suffix='.mp3')  # Temporary path for the audio
-            audio_clip.write_audiofile(original_audio_path)  # Save the extracted audio
 
-            # Convert the timecode into seconds
-            hours, minutes, seconds = map(int, timecode.split(':'))
-            start_time = hours * 3600 + minutes * 60 + seconds
+            # Create a silent audio clip for the pause
+            pause_audio = AudioSegment.silent(duration=pause_duration * 1000)
+            temp_pause_path = tempfile.mktemp(suffix=".mp3")
+            pause_audio.export(temp_pause_path, format="mp3")
+            pause_clip = AudioFileClip(temp_pause_path)
 
-            # Load the audio using moviepy
-            original_audio = AudioFileClip(original_audio_path)
-            total_duration = original_audio.duration
+            # Concatenate audio clips
+            original_audio = video_clip.audio
+            part1 = original_audio.subclip(0, start_time)
+            part2 = original_audio.subclip(start_time)
+            final_audio = concatenate_audioclips([part1, pause_clip, part2])
 
-            # Create the silent audio segment for the pause
-            silent_audio_path = tempfile.mktemp(suffix='.mp3')
-            silent_audio = AudioSegment.silent(duration=pause_duration * 1000)  # duration in milliseconds
-            silent_audio.export(silent_audio_path, format="mp3")
+            # Set the new audio to the video
+            video_clip.audio = final_audio
 
-            # Load the silent audio segment using moviepy
-            silent_audio_clip = AudioFileClip(silent_audio_path).set_duration(pause_duration)
+            # Save the result
+            output_path = tempfile.mktemp(suffix=".mp4")
+            video_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
-            # Split the audio and insert the silent segment
-            first_part = original_audio.subclip(0, start_time)
-            second_part = original_audio.subclip(start_time, total_duration)
-            new_audio = concatenate_audioclips([first_part, silent_audio_clip, second_part])
-
-            # Save the modified audio to a temporary path
-            temp_audio_path = tempfile.mktemp(suffix='.mp3')
-            new_audio.write_audiofile(temp_audio_path)
-
-            # Adapt the speed of the video to match the new audio duration
-            output_path = tempfile.mktemp(suffix='.mp4')
-            self.adattaVelocitaVideoAAudio(video_path, temp_audio_path, output_path)
-
-            QMessageBox.information(self, "Successo", f"Video con pausa audio salvato in {output_path}")
             self.loadVideoOutput(output_path)
+            self.show_status_message("Pausa audio applicata con successo.")
 
-            # Clean up the temporary audio file
-            os.remove(temp_audio_path)
-            os.remove(original_audio_path)
-            os.remove(silent_audio_path)
+        except ValueError:
+            self.show_status_message("La durata della pausa non è un numero valido.", error=True)
         except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'applicazione della pausa audio", str(e))
+            QMessageBox.critical(self, "Errore", f"Errore durante l'applicazione della pausa audio: {e}")
+        finally:
+            if 'video_clip' in locals():
+                video_clip.close()
+            if 'pause_clip' in locals():
+                pause_clip.close()
+            if 'final_audio' in locals():
+                final_audio.close()
+            if 'temp_pause_path' in locals() and os.path.exists(temp_pause_path):
+                os.remove(temp_pause_path)
 
     def updateTimecodeRec(self):
         if self.recordingTime is not None:
@@ -4312,23 +4247,14 @@ class VideoAudioManager(QMainWindow):
             self.browser_agent = BrowserAgent(self)
 
         self.browser_agent.create_guide_agent()
-    def _update_audio_sync_widgets(self, checked):
-        """Enable/disable the manual time input based on the sync toggle."""
-        self.audioStartTimeLineEdit.setEnabled(not checked)
-        self.audioStartTimeLabel.setEnabled(not checked)
 
     def onAudioGenerationCompleted(self, audio_path):
         """
         Called when the AI audio generation is complete.
         This function now decides whether to sync the audio or apply it at a specific time.
         """
-        use_sync = self.syncAudioVideoToggle.isChecked()
-        start_time_str = self.audioStartTimeLineEdit.text()
-
         self.apply_generated_audio(
-            new_audio_path=audio_path,
-            use_sync=use_sync,
-            start_time_str=start_time_str
+            new_audio_path=audio_path
         )
 
     def onAudioGenerationError(self, error_message):
@@ -4353,22 +4279,18 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message(f"Formato ora non valido: {time_str}. Usare HH:MM:SS.ms.", error=True)
             return None
 
-    def apply_generated_audio(self, new_audio_path, use_sync, start_time_str):
+    def apply_generated_audio(self, new_audio_path):
         video_path = self.videoPathLineEdit
         if not video_path or not os.path.exists(video_path):
             self.show_status_message("Nessun video caricato per applicare l'audio.", error=True)
             return
 
-        start_time_sec = 0
-        if not use_sync:
-            start_time_sec = self._parse_time(start_time_str)
-            if start_time_sec is None:
-                return
+        start_time_sec = self.player.position() / 1000.0
 
         thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            use_sync,
+            False, # use_sync is False to apply at a specific time
             start_time_sec,
             parent=self
         )
@@ -4381,51 +4303,29 @@ class VideoAudioManager(QMainWindow):
     def onAudioProcessingError(self, error_message):
         self.show_status_message(f"Errore durante l'applicazione dell'audio: {error_message}", error=True)
 
-    def _update_manual_audio_widgets(self, checked):
-        """Enable/disable the manual time input for the main audio replacement."""
-        self.manualAudioStartTimeLineEdit.setEnabled(not checked)
-        self.manualAudioStartTimeLabel.setEnabled(not checked)
-
     def handle_apply_main_audio(self):
         """Handles the 'Applica Audio Principale' button click."""
         video_path = self.videoPathLineEdit
         new_audio_path = self.audioPathLineEdit.text()
-        use_sync = self.alignAudioVideoCheckBox.isChecked()
-        start_time_str = self.manualAudioStartTimeLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
-            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            self.show_status_message("Nessun video caricato.", error=True)
             return
 
         if not new_audio_path or not os.path.exists(new_audio_path):
-            QMessageBox.warning(self, "Attenzione", "Nessun file audio selezionato.")
+            self.show_status_message("Nessun file audio selezionato.", error=True)
             return
 
-        start_time_sec = 0
-        if not use_sync:
-            start_time_sec = self._parse_time(start_time_str)
-            if start_time_sec is None:
-                return  # Stop if time format is invalid
+        start_time_sec = self.player.position() / 1000.0
 
-        self.progressDialog = QProgressDialog("Applicazione audio al video...", "Annulla", 0, 100, self)
-        self.progressDialog.setWindowTitle("Elaborazione Video")
-        self.progressDialog.setWindowModality(Qt.WindowModality.WindowModal)
-
-        # Use the same processing thread, as the logic is identical
-        self.audio_processing_thread = AudioProcessingThread(
+        thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            use_sync,
+            False, # use_sync is false to apply at a specific time
             start_time_sec,
             parent=self
         )
-        self.audio_processing_thread.progress.connect(self.updateProgressDialog)
-        self.audio_processing_thread.completed.connect(self.onAudioProcessingCompleted)
-        self.audio_processing_thread.error.connect(self.onAudioProcessingError)
-        self.progressDialog.canceled.connect(self.audio_processing_thread.stop)
-
-        self.audio_processing_thread.start()
-        self.progressDialog.show()
+        self.start_task(thread, self.onAudioProcessingCompleted, self.onAudioProcessingError, self.update_status_progress)
 
     def browseAudio(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
