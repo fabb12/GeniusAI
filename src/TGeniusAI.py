@@ -1165,15 +1165,6 @@ class VideoAudioManager(QMainWindow):
 
         self.transcriptionDock.addWidget(self.transcriptionTabWidget)
 
-    def paste_to_audio_ai(self, source_text_edit):
-        """
-        Copia il testo dall'area di testo sorgente all'area di testo della tab Audio AI.
-        """
-        text_to_paste = source_text_edit.toPlainText()
-        self.audioAiTextArea.setPlainText(text_to_paste)
-        self.transcriptionTabWidget.setCurrentWidget(self.audio_ai_tab)
-        self.show_status_message("Testo incollato nella tab Audio AI.")
-
         # Impostazioni voce per l'editing audio AI
         voiceSettingsWidget = self.setupVoiceSettingsUI()
         voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
@@ -1676,6 +1667,15 @@ class VideoAudioManager(QMainWindow):
             mode="summary"
         )
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def paste_to_audio_ai(self, source_text_edit):
+        """
+        Copia il testo dall'area di testo sorgente all'area di testo della tab Audio AI.
+        """
+        text_to_paste = source_text_edit.toPlainText()
+        self.audioAiTextArea.setPlainText(text_to_paste)
+        self.transcriptionTabWidget.setCurrentWidget(self.audio_ai_tab)
+        self.show_status_message("Testo incollato nella tab Audio AI.")
 
     def fixTranscriptionWithAI(self):
         """
