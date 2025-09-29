@@ -6,6 +6,7 @@ pygetwindow
 screeninfo
 pycountry
 SpeechRecognition
+openai-whisper
 yt-dlp
 anthropic
 python-pptx

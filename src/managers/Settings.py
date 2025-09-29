@@ -47,6 +47,9 @@ class SettingsDialog(QDialog):
         # Tab per l'Editor di Testo
         tabs.addTab(self.createEditorSettingsTab(), "Editor")
 
+        # Tab per la Trascrizione
+        tabs.addTab(self.createTranscriptionSettingsTab(), "Trascrizione")
+
         layout.addWidget(tabs)
         # --- Fine Ristrutturazione con QTabWidget ---
 
@@ -223,6 +226,18 @@ class SettingsDialog(QDialog):
 
         return widget
 
+    def createTranscriptionSettingsTab(self):
+        """Crea il widget per il tab delle impostazioni di trascrizione."""
+        widget = QWidget()
+        layout = QFormLayout(widget)
+
+        self.sttEngineComboBox = QComboBox()
+        self.sttEngineComboBox.addItems(["Google Speech Recognition", "OpenAI Whisper"])
+        self.sttEngineComboBox.setToolTip("Seleziona il motore di riconoscimento vocale da utilizzare.")
+        layout.addRow("Motore STT:", self.sttEngineComboBox)
+
+        return widget
+
     def loadSettings(self):
         """Carica sia le API Keys che le impostazioni dei modelli."""
 
@@ -263,6 +278,9 @@ class SettingsDialog(QDialog):
         font_family = self.settings.value("editor/fontFamily", "Arial")
         self.fontFamilyComboBox.setCurrentFont(QFont(font_family))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
+
+        # --- Carica Impostazioni Trascrizione ---
+        self.sttEngineComboBox.setCurrentText(self.settings.value("transcription/sttEngine", "Google Speech Recognition"))
 
 
     def _setComboBoxValue(self, combo_box, value):
@@ -310,6 +328,9 @@ class SettingsDialog(QDialog):
         # --- Salva Impostazioni Editor ---
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
         self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
+
+        # --- Salva Impostazioni Trascrizione ---
+        self.settings.setValue("transcription/sttEngine", self.sttEngineComboBox.currentText())
 
         # --- Accetta e chiudi dialogo ---
         self.accept()
