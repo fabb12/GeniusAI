@@ -20,7 +20,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare cuffie
 - [ ] mettere webcam in pip'
 
-- [ ] mettere strumenti evidenziazione del testo 
+- [ ] mettere strumenti evidenziazione del testo nel riassunto
 - [x] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
 - [x] mettere tasto di esportazione word
@@ -51,6 +51,9 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] scritta tempo diff in bianco nella timeline
 - [ ] salvare posizone finestrre anche quando sono floating
 - [ ] salvare word con formattazione markdown  
+- [ ] quando incollo testo ai rimuovi timecode
+- [ ] usare whisper 
+- [ ] salvare su disco i file recenti 
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
