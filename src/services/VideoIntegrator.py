@@ -7,7 +7,7 @@ from src.services.FrameExtractor import FrameExtractor
 from src.config import PROMPT_VIDEO_INTEGRATION, get_api_key, get_model_for_action
 
 class VideoIntegrationThread(QThread):
-    finished = pyqtSignal(str)
+    completed = pyqtSignal(str)
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
@@ -52,7 +52,7 @@ class VideoIntegrationThread(QThread):
             integrated_summary = self.generate_integrated_summary(prompt)
 
             self.progress.emit(100, "Completato.")
-            self.finished.emit(integrated_summary)
+            self.completed.emit(integrated_summary)
 
         except Exception as e:
             logging.exception("Errore in VideoIntegrationThread")

@@ -10,7 +10,7 @@ from src.config import FFMPEG_PATH
 
 
 class DownloadThread(QThread):
-    finished = pyqtSignal(str, str, str, str)  # Emits path of file, video title, language and date
+    completed = pyqtSignal(list)  # Emits [path, title, language, date]
     error = pyqtSignal(str)
     progress = pyqtSignal(int)  # Signal for download progress
     stream_url_found = pyqtSignal(str)  # Nuovo segnale per l'URL del flusso trovato
@@ -185,7 +185,7 @@ class DownloadThread(QThread):
                 ydl.download([stream_url])
 
             # Emetti il segnale di completamento
-            self.finished.emit(output_path, base_name, "it", None)  # Lingua predefinita: italiano
+            self.completed.emit([output_path, base_name, "it", None])  # Lingua predefinita: italiano
 
         except Exception as e:
             self.error.emit(f"Errore durante il download del video: {str(e)}")
@@ -213,7 +213,7 @@ class DownloadThread(QThread):
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
                     upload_date = info.get('upload_date', None)
-                    self.finished.emit(audio_file_path, video_title, video_language, upload_date)
+                    self.completed.emit([audio_file_path, video_title, video_language, upload_date])
                 else:
                     self.error.emit("Video ID not found.")
         except Exception as e:
@@ -241,7 +241,7 @@ class DownloadThread(QThread):
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
                     upload_date = info.get('upload_date', None)
-                    self.finished.emit(video_file_path, video_title, video_language, upload_date)
+                    self.completed.emit([video_file_path, video_title, video_language, upload_date])
                 else:
                     self.error.emit("Video ID not found.")
         except Exception as e:

@@ -22,9 +22,9 @@ class MeetingSummarizer(QThread):
     Thread per generare un riassunto strutturato di una trascrizione di riunione
     utilizzando il modello AI selezionato (Claude, Gemini, Ollama).
     """
-    update_progress = pyqtSignal(int, str) # Segnale (percentuale, messaggio)
-    process_complete = pyqtSignal(str)     # Segnale con il riassunto completato
-    process_error = pyqtSignal(str)        # Segnale in caso di errore
+    progress = pyqtSignal(int, str) # Segnale (percentuale, messaggio)
+    completed = pyqtSignal(str)     # Segnale con il riassunto completato
+    error = pyqtSignal(str)        # Segnale in caso di errore
 
     def __init__(self, text, language, parent=None):
         """
@@ -51,7 +51,7 @@ class MeetingSummarizer(QThread):
     def run(self):
         """Esegue la generazione del riassunto nel thread."""
         try:
-            self.update_progress.emit(10, f"Avvio riassunto meeting ({self.selected_model})...")
+            self.progress.emit(10, f"Avvio riassunto meeting ({self.selected_model})...")
 
             # Chiama il metodo unificato per l'elaborazione
             result_data = self._summarize_with_selected_model(self.text)
@@ -59,19 +59,19 @@ class MeetingSummarizer(QThread):
             # Controlla il risultato
             if isinstance(result_data, tuple) and len(result_data) == 3:
                 self.result, input_tokens, output_tokens = result_data
-                self.update_progress.emit(100, "Riassunto completato!")
-                self.process_complete.emit(self.result)
+                self.progress.emit(100, "Riassunto completato!")
+                self.completed.emit(self.result)
                 logging.info(f"Riassunto Meeting - Token Input: {input_tokens}, Token Output: {output_tokens}")
             else:
                 # Se il metodo ritorna un errore (stringa)
                 error_msg = f"Errore durante la generazione del riassunto: {result_data}"
                 logging.error(error_msg)
-                self.process_error.emit(error_msg)
+                self.error.emit(error_msg)
 
         except Exception as e:
             error_msg = f"Errore imprevisto durante il riassunto meeting: {str(e)}"
             logging.exception(error_msg) # Logga l'intero traceback
-            self.process_error.emit(error_msg)
+            self.error.emit(error_msg)
 
     def _summarize_with_selected_model(self, text_to_summarize):
         """
@@ -99,13 +99,13 @@ class MeetingSummarizer(QThread):
         # 3. Selezione e chiamata API
         model_name_lower = self.selected_model.lower()
         logging.debug(f"Tentativo riassunto meeting con modello: {self.selected_model}")
-        self.update_progress.emit(20, f"Preparazione richiesta per {self.selected_model}...")
+        self.progress.emit(20, f"Preparazione richiesta per {self.selected_model}...")
 
         try:
             if "ollama:" in model_name_lower:
                 # --- Logica per Ollama ---
                 logging.info(f"Usando Ollama ({self.selected_model}) per riassunto meeting.")
-                self.update_progress.emit(40, f"Invio a Ollama...")
+                self.progress.emit(40, f"Invio a Ollama...")
                 ollama_model_name = self.selected_model.split(":", 1)[1]
                 api_url = f"{self.ollama_endpoint}/api/generate"
                 # Combina system e user prompt per Ollama
@@ -115,7 +115,7 @@ class MeetingSummarizer(QThread):
                 response = requests.post(api_url, json=payload, timeout=300) # Timeout 5 min
                 response.raise_for_status()
                 response_data = response.json()
-                self.update_progress.emit(85, f"Ricevuta risposta da Ollama...")
+                self.progress.emit(85, f"Ricevuta risposta da Ollama...")
                 result_text = response_data.get("response", "").strip()
                 if not result_text:
                     error_details = response_data.get("error", "Risposta vuota.")
@@ -127,13 +127,13 @@ class MeetingSummarizer(QThread):
                 # --- Logica per Google Gemini ---
                 logging.info(f"Usando Gemini ({self.selected_model}) per riassunto meeting.")
                 if not self.google_api_key: raise ValueError("API Key Google non configurata.")
-                self.update_progress.emit(40, f"Invio a Gemini...")
+                self.progress.emit(40, f"Invio a Gemini...")
                 genai.configure(api_key=self.google_api_key)
                 # Passa le istruzioni di sistema direttamente al modello
                 model = genai.GenerativeModel(self.selected_model, system_instruction=system_prompt_content)
                 # Invia solo il prompt dell'utente
                 response = model.generate_content(user_prompt)
-                self.update_progress.emit(85, f"Ricevuta risposta da Gemini...")
+                self.progress.emit(85, f"Ricevuta risposta da Gemini...")
                 try:
                     result_text = response.text.strip()
                 except ValueError as ve:
@@ -150,7 +150,7 @@ class MeetingSummarizer(QThread):
                 # --- Logica per Anthropic Claude ---
                 logging.info(f"Usando Claude ({self.selected_model}) per riassunto meeting.")
                 if not self.anthropic_api_key: raise ValueError("API Key Anthropic non configurata.")
-                self.update_progress.emit(40, f"Invio a Claude...")
+                self.progress.emit(40, f"Invio a Claude...")
                 client = anthropic.Anthropic(api_key=self.anthropic_api_key)
                 message = client.messages.create(
                     model=self.selected_model,
@@ -159,7 +159,7 @@ class MeetingSummarizer(QThread):
                     system=system_prompt_content, # Usa prompt di sistema
                     messages=[{"role": "user", "content": [{"type": "text", "text": user_prompt}]}] # Passa testo come user
                 )
-                self.update_progress.emit(85, f"Ricevuta risposta da Claude...")
+                self.progress.emit(85, f"Ricevuta risposta da Claude...")
                 if message.stop_reason == 'max_tokens':
                      logging.warning(f"Risposta Claude (riassunto) troncata per max_tokens.")
 

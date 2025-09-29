@@ -22,9 +22,9 @@ class ProcessTextAI(QThread):
     Thread per elaborare testo (riassumere o correggere) utilizzando
     il modello AI selezionato nelle impostazioni (Claude, Gemini, Ollama).
     """
-    update_progress = pyqtSignal(int, str) # Segnale per aggiornamenti di progresso (percentuale, messaggio)
-    process_complete = pyqtSignal(str)     # Segnale emesso con il testo elaborato al completamento
-    process_error = pyqtSignal(str)        # Segnale emesso in caso di errore
+    progress = pyqtSignal(int, str) # Segnale per aggiornamenti di progresso (percentuale, messaggio)
+    completed = pyqtSignal(str)     # Segnale emesso con il testo elaborato al completamento
+    error = pyqtSignal(str)        # Segnale emesso in caso di errore
 
     def __init__(self, text, language, mode="summary", parent=None):
         """
@@ -56,7 +56,7 @@ class ProcessTextAI(QThread):
     def run(self):
         """Esegue l'elaborazione del testo nel thread."""
         try:
-            self.update_progress.emit(10, f"Avvio elaborazione testo ({self.mode}) con {self.selected_model}...")
+            self.progress.emit(10, f"Avvio elaborazione testo ({self.mode}) con {self.selected_model}...")
 
             # Chiama il metodo unificato per l'elaborazione
             result_data = self._process_text_with_selected_model(self.text)
@@ -64,19 +64,19 @@ class ProcessTextAI(QThread):
             # Controlla il risultato
             if isinstance(result_data, tuple) and len(result_data) == 3:
                 self.result, input_tokens, output_tokens = result_data
-                self.update_progress.emit(100, "Elaborazione completata!")
-                self.process_complete.emit(self.result)
+                self.progress.emit(100, "Elaborazione completata!")
+                self.completed.emit(self.result)
                 logging.info(f"Elaborazione Testo ({self.mode}) - Token Input: {input_tokens}, Token Output: {output_tokens}")
             else:
                 # Se il metodo ritorna un errore (stringa)
                 error_msg = f"Errore durante l'elaborazione del testo: {result_data}"
                 logging.error(error_msg)
-                self.process_error.emit(error_msg)
+                self.error.emit(error_msg)
 
         except Exception as e:
             error_msg = f"Errore imprevisto durante l'elaborazione del testo ({self.mode}): {str(e)}"
             logging.exception(error_msg) # Logga l'intero traceback
-            self.process_error.emit(error_msg)
+            self.error.emit(error_msg)
 
     def _process_text_with_selected_model(self, text_to_process):
         """
@@ -121,7 +121,7 @@ class ProcessTextAI(QThread):
             if "ollama:" in model_name_lower:
                 # --- Logica per Ollama ---
                 logging.info(f"Usando Ollama ({self.selected_model}) per {self.mode}.")
-                self.update_progress.emit(30, f"Invio a Ollama ({self.mode})...")
+                self.progress.emit(30, f"Invio a Ollama ({self.mode})...")
                 ollama_model_name = self.selected_model.split(":", 1)[1]
                 api_url = f"{self.ollama_endpoint}/api/generate"
                 full_prompt = f"{system_prompt_content}\n\n{user_prompt}" # Combina system e user prompt
@@ -130,7 +130,7 @@ class ProcessTextAI(QThread):
                 response = requests.post(api_url, json=payload, timeout=300) # Timeout 5 min
                 response.raise_for_status()
                 response_data = response.json()
-                self.update_progress.emit(80, f"Ricevuta risposta da Ollama ({self.mode})...")
+                self.progress.emit(80, f"Ricevuta risposta da Ollama ({self.mode})...")
                 result_text = response_data.get("response", "").strip()
                 if not result_text:
                     error_details = response_data.get("error", "Risposta vuota.")
@@ -142,11 +142,11 @@ class ProcessTextAI(QThread):
                 # --- Logica per Google Gemini ---
                 logging.info(f"Usando Gemini ({self.selected_model}) per {self.mode}.")
                 if not self.google_api_key: raise ValueError("API Key Google non configurata.")
-                self.update_progress.emit(30, f"Invio a Gemini ({self.mode})...")
+                self.progress.emit(30, f"Invio a Gemini ({self.mode})...")
                 genai.configure(api_key=self.google_api_key)
                 model = genai.GenerativeModel(self.selected_model, system_instruction=system_prompt_content)
                 response = model.generate_content(user_prompt) # Passa solo user prompt
-                self.update_progress.emit(80, f"Ricevuta risposta da Gemini ({self.mode})...")
+                self.progress.emit(80, f"Ricevuta risposta da Gemini ({self.mode})...")
                 try:
                     result_text = response.text
                 except ValueError as ve:
@@ -159,7 +159,7 @@ class ProcessTextAI(QThread):
                 # --- Logica per Anthropic Claude ---
                 logging.info(f"Usando Claude ({self.selected_model}) per {self.mode}.")
                 if not self.anthropic_api_key: raise ValueError("API Key Anthropic non configurata.")
-                self.update_progress.emit(30, f"Invio a Claude ({self.mode})...")
+                self.progress.emit(30, f"Invio a Claude ({self.mode})...")
                 client = anthropic.Anthropic(api_key=self.anthropic_api_key)
                 message = client.messages.create(
                     model=self.selected_model,
@@ -168,7 +168,7 @@ class ProcessTextAI(QThread):
                     system=system_prompt_content,
                     messages=[{"role": "user", "content": [{"type": "text", "text": user_prompt}]}]
                 )
-                self.update_progress.emit(80, f"Ricevuta risposta da Claude ({self.mode})...")
+                self.progress.emit(80, f"Ricevuta risposta da Claude ({self.mode})...")
                 if message.stop_reason == 'max_tokens':
                      logging.warning(f"Risposta Claude ({self.mode}) troncata per max_tokens.")
 
