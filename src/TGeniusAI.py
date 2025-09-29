@@ -27,10 +27,12 @@ from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
 from src.ui.InfoDock import InfoDock
 
-from moviepy.editor import (
-    ImageClip, CompositeVideoClip, concatenate_audioclips,
-    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
-)
+from moviepy.video.VideoClip import ImageClip
+from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip, concatenate_videoclips
+from moviepy.audio.AudioClip import concatenate_audioclips
+from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
+from moviepy.video.fx.MultiplySpeed import MultiplySpeed
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 
@@ -293,7 +295,7 @@ class AudioProcessingThread(QThread):
 
             if not self.running: return
 
-            video_modificato = video_clip.fx(vfx.speedx, speed_factor)
+            video_modificato = video_clip.fx(MultiplySpeed, speed_factor)
             final_video = video_modificato.set_audio(new_audio_clip)
 
             base_name = os.path.splitext(os.path.basename(self.video_path))[0]
@@ -4709,7 +4711,7 @@ class VideoAudioManager(QMainWindow):
 
                     # Applica il cambio di velocità
                     self.progress.emit(40, f"Applicazione fattore velocità: {speed_factor}x...")
-                    video_modified = video_clip.fx(vfx.speedx, speed_factor)
+                    video_modified = video_clip.fx(MultiplySpeed, speed_factor)
 
                     # Checkpoint
                     self.log("Fattore di velocità applicato, fase di unione audio...")
@@ -5229,7 +5231,7 @@ class VideoAudioManager(QMainWindow):
             logging.debug(f"Fattore di velocità: {fattore_velocita}")
 
             # Modifica la velocità del video
-            video_modificato = video_clip.fx(vfx.speedx, fattore_velocita)
+            video_modificato = video_clip.fx(MultiplySpeed, fattore_velocita)
 
             # Imposta il nuovo audio sul video modificato
             final_video = video_modificato.set_audio(new_audio)

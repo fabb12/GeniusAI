@@ -7,7 +7,8 @@ import speech_recognition as sr
 import whisper
 import tempfile
 import logging
-from moviepy.editor import AudioFileClip, VideoFileClip
+from moviepy.audio.io.AudioFileClip import AudioFileClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
 
 
 class TranscriptionThread(QThread):

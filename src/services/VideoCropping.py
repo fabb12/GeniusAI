@@ -1,7 +1,7 @@
 import re
 import tempfile
 from PyQt6.QtCore import QThread, pyqtSignal
-from moviepy.editor import VideoFileClip
+from moviepy.video.io.VideoFileClip import VideoFileClip
 from proglog import ProgressBarLogger
 
 class CropLogger(ProgressBarLogger):
