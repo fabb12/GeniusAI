@@ -590,6 +590,11 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
 
+        self.audioAIDock = self.createAudioAIDock()
+        self.audioAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioAIDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.audioAIDock, 'right')
+
         self.downloadDock = self.createDownloadDock()
         self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.downloadDock.setStyleSheet(self.styleSheet())
@@ -1138,28 +1143,13 @@ class VideoAudioManager(QMainWindow):
 
         self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
 
-        # --- Tab Audio AI ---
-        audio_ai_tab = QWidget()
-        audio_ai_layout = QVBoxLayout(audio_ai_tab)
-
-        # Groupbox per gli strumenti AI
-        audio_ai_tools_group = self.setupVoiceSettingsUI()
-        audio_ai_tools_group.setTitle("Strumenti")
-        audio_ai_layout.addWidget(audio_ai_tools_group)
-
-        # Text area per l'input
-        self.audioAITextArea = CustomTextEdit(self)
-        self.audioAITextArea.setPlaceholderText("Incolla qui il testo da convertire in audio...")
-        audio_ai_layout.addWidget(self.audioAITextArea)
-
-        self.transcriptionTabWidget.addTab(audio_ai_tab, "Audio AI")
-
         self.transcriptionDock.addWidget(self.transcriptionTabWidget)
 
         # Dizionario per la gestione dei dock
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
             'transcriptionDock': self.transcriptionDock,
+            'audioAIDock': self.audioAIDock,
             'downloadDock': self.downloadDock,
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
@@ -1695,14 +1685,14 @@ class VideoAudioManager(QMainWindow):
         text_to_paste = self.transcriptionTextArea.toPlainText()
         self.audioAITextArea.setPlainText(text_to_paste)
         self.show_status_message("Testo della trascrizione incollato in Audio AI.")
-        self.transcriptionTabWidget.setCurrentIndex(2) # Switch to Audio AI tab
+        self.audioAIDock.raise_()
 
     def paste_from_summary(self):
         """Copia il testo dal riassunto all'area di testo di Audio AI."""
         text_to_paste = self.summaryTextArea.toPlainText()
         self.audioAITextArea.setPlainText(text_to_paste)
         self.show_status_message("Testo del riassunto incollato in Audio AI.")
-        self.transcriptionTabWidget.setCurrentIndex(2) # Switch to Audio AI tab
+        self.audioAIDock.raise_()
 
     def fixTextWithAI(self):
         current_text = self.transcriptionTextArea.toPlainText()
@@ -1865,6 +1855,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerDock.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
+        self.audioAIDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
 
@@ -2254,6 +2245,7 @@ class VideoAudioManager(QMainWindow):
         style = self.getDarkStyle()
         self.videoPlayerDock.setStyleSheet(style)
         self.transcriptionDock.setStyleSheet(style)
+        self.audioAIDock.setStyleSheet(style)
         self.downloadDock.setStyleSheet(style)
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
@@ -2261,6 +2253,25 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
+
+    def createAudioAIDock(self):
+        """Crea il dock per la generazione Audio AI."""
+        dock = CustomDock("Audio AI", closable=True)
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+
+        # 1. Groupbox "Strumenti"
+        strumenti_group = self.setupVoiceSettingsUI()
+        strumenti_group.setTitle("Strumenti")
+        main_layout.addWidget(strumenti_group)
+
+        # 2. Text area
+        self.audioAITextArea = CustomTextEdit(self)
+        self.audioAITextArea.setPlaceholderText("Inserisci qui il testo da convertire in audio o incollalo dai tab Trascrizione/Riassunto...")
+        main_layout.addWidget(self.audioAITextArea)
+
+        dock.addWidget(main_widget)
+        return dock
 
     def getDarkStyle(self):
         return """
@@ -3992,6 +4003,7 @@ class VideoAudioManager(QMainWindow):
                                                                          'Mostra/Nascondi Video Player Output')
         self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
                                                                      'Mostra/Nascondi Trascrizione')
+        self.actionToggleAudioAIDock = self.createToggleAction(self.audioAIDock, 'Mostra/Nascondi Audio AI')
         self.actionToggleDownloadDock = self.createToggleAction(self.downloadDock, 'Mostra/Nascondi Download')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
@@ -4003,6 +4015,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
         viewMenu.addAction(self.actionToggleVideoPlayerDockOutput)
         viewMenu.addAction(self.actionToggleTranscriptionDock)
+        viewMenu.addAction(self.actionToggleAudioAIDock)
         viewMenu.addAction(self.actionToggleDownloadDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
@@ -4046,6 +4059,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutput.setVisible(True)
         self.audioDock.setVisible(True)
         self.transcriptionDock.setVisible(True)
+        self.audioAIDock.setVisible(True)
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
@@ -4059,6 +4073,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutput.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
+        self.audioAIDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
@@ -4085,6 +4100,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoPlayerDockOutput.setChecked(True)
         self.actionToggleAudioDock.setChecked(True)
         self.actionToggleTranscriptionDock.setChecked(True)
+        self.actionToggleAudioAIDock.setChecked(True)
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
@@ -4098,6 +4114,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutput.isVisible())
         self.actionToggleAudioDock.setChecked(self.audioDock.isVisible())
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
+        self.actionToggleAudioAIDock.setChecked(self.audioAIDock.isVisible())
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
