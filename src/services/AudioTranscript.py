@@ -24,6 +24,7 @@ class TranscriptionThread(QThread):
 
     def run(self):
         audio_file = None
+        audio_clip_to_close = None
         try:
             settings = QSettings("Genius", "GeniusAI")
             stt_engine = settings.value("transcription/sttEngine", "Google Speech Recognition")
@@ -38,7 +39,7 @@ class TranscriptionThread(QThread):
             if stt_engine == "OpenAI Whisper":
                 transcription, language_code = self.transcribe_with_whisper(audio_file)
             else: # Google Speech Recognition
-                chunks = self.splitAudio(audio_file)
+                chunks, audio_clip_to_close = self.splitAudio(audio_file)
                 total_chunks = len(chunks)
                 transcription = ""
                 language_code = self.parent().languageComboBox.currentData()
@@ -61,6 +62,8 @@ class TranscriptionThread(QThread):
         except Exception as e:
             self.error.emit(str(e))
         finally:
+            if audio_clip_to_close:
+                audio_clip_to_close.close()
             if audio_file and audio_file != self.media_path and os.path.exists(audio_file):
                 os.remove(audio_file)
 
@@ -122,7 +125,7 @@ class TranscriptionThread(QThread):
             (audio.subclip(start / 1000, min((start + length) / 1000, audio.duration)), start)
             for start in range(0, int(audio.duration * 1000), length)
         ]
-        return chunks
+        return chunks, audio
 
     def get_locale_from_language(self, language_code):
         """Converte un codice di lingua ISO 639-1 in un locale più specifico."""
