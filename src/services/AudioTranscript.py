@@ -1,9 +1,10 @@
 import os
 import json
 import datetime
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, QSettings
 import pycountry
 import speech_recognition as sr
+import whisper
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip, VideoFileClip
@@ -23,6 +24,9 @@ class TranscriptionThread(QThread):
     def run(self):
         audio_file = None
         try:
+            settings = QSettings("Genius", "GeniusAI")
+            stt_engine = settings.value("transcription/sttEngine", "Google Speech Recognition")
+
             if os.path.splitext(self.media_path)[1].lower() in ['.wav', '.mp3', '.flac', '.aac']:
                 audio_file = self.media_path
             else:
@@ -30,25 +34,28 @@ class TranscriptionThread(QThread):
                 if not audio_file or not os.path.exists(audio_file):
                     raise Exception("La conversione del video in audio è fallita.")
 
-            chunks = self.splitAudio(audio_file)
-            total_chunks = len(chunks)
-            transcription = ""
-            language_video = self.parent().languageComboBox.currentData()
+            if stt_engine == "OpenAI Whisper":
+                transcription, language_code = self.transcribe_with_whisper(audio_file)
+            else: # Google Speech Recognition
+                chunks = self.splitAudio(audio_file)
+                total_chunks = len(chunks)
+                transcription = ""
+                language_code = self.parent().languageComboBox.currentData()
 
-            for index, (chunk, start_time) in enumerate(chunks):
-                if not self._is_running:
-                    self.save_transcription_to_json(transcription, language_video)
-                    return
+                for index, (chunk, start_time) in enumerate(chunks):
+                    if not self._is_running:
+                        self.save_transcription_to_json(transcription, language_code)
+                        return
 
-                text, _, _ = self.transcribeAudioChunk(chunk, start_time)
-                current_time_seconds = start_time // 1000
-                start_mins, start_secs = divmod(current_time_seconds, 60)
-                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
-                self.partial_text = transcription
-                progress_percentage = int(((index + 1) / total_chunks) * 100)
-                self.progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
+                    text, _, _ = self.transcribeAudioChunk(chunk, start_time)
+                    current_time_seconds = start_time // 1000
+                    start_mins, start_secs = divmod(current_time_seconds, 60)
+                    transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
+                    self.partial_text = transcription
+                    progress_percentage = int(((index + 1) / total_chunks) * 100)
+                    self.progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
 
-            json_path = self.save_transcription_to_json(transcription, language_video)
+            json_path = self.save_transcription_to_json(transcription, language_code)
             self.completed.emit((json_path, []))
         except Exception as e:
             self.error.emit(str(e))
@@ -161,3 +168,27 @@ class TranscriptionThread(QThread):
         finally:
             if os.path.exists(temp_audio_file_path):
                 os.remove(temp_audio_file_path)
+
+    def transcribe_with_whisper(self, audio_file):
+        """
+        Transcribes the given audio file using OpenAI's Whisper model.
+        """
+        self.progress.emit(10, "Caricamento modello Whisper...")
+        model = whisper.load_model("base")
+        self.progress.emit(30, "Trascrizione con Whisper in corso...")
+
+        # Imposta la lingua per la trascrizione
+        language_code = self.parent().languageComboBox.currentData()
+        language_name = self.parent().languageComboBox.currentText()
+
+        result = model.transcribe(audio_file, language=language_name, fp16=False)
+
+        transcription = ""
+        for segment in result["segments"]:
+            start_time = int(segment['start'])
+            start_mins, start_secs = divmod(start_time, 60)
+            text = segment['text'].strip()
+            transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
+
+        self.progress.emit(100, "Trascrizione Whisper completata.")
+        return transcription, language_code
