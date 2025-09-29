@@ -44,10 +44,13 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungere la possibilità di poter inserire un immagine, scegliendo la posizione e dimensione 
 - [x] crea un nuovo menu con dentro , inserimento video pip e inserimento immagine 
 - 
-- [ ] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
-- [ ] aggiugne barra di progresso quando taglio cancellazione
+- [x] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
+- [x] aggiugne barra di progresso quando taglio cancellazione
 - [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
-- [ ] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
+- [x] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
+- [ ] scritta tempo diff in bianco nella timeline
+- [ ] salvare posizone finestrre anche quando sono floating
+- [ ] salvare word con formattazione markdown 
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
