@@ -444,6 +444,7 @@ class VideoAudioManager(QMainWindow):
         self.load_recording_settings() # This will now correctly update the UI
         self.setDefaultAudioDevice()
         self.original_text = ""
+        self.transcription_corrected = ""
         self.summaries = {}
         self.active_summary_type = None
         self.summary_text = ""
@@ -589,11 +590,11 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
 
-        self.editingDock = CustomDock("Generazione Audio AI", closable=True)
-        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.editingDock.setStyleSheet(self.styleSheet())
-        self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
-        area.addDock(self.editingDock, 'right')
+        self.audioAIDock = self.createAudioAIDock()
+        self.audioAIDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioAIDock.setStyleSheet(self.styleSheet())
+        self.audioAIDock.setToolTip("Dock per la generazione audio assistita da AI")
+        area.addDock(self.audioAIDock, 'right')
 
         self.downloadDock = self.createDownloadDock()
         self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -989,6 +990,13 @@ class VideoAudioManager(QMainWindow):
         self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
         file_actions_layout.addWidget(self.resetButton)
 
+        self.pasteToAIFromTranscriptionButton = QPushButton('')
+        self.pasteToAIFromTranscriptionButton.setIcon(QIcon(get_resource("change.png")))
+        self.pasteToAIFromTranscriptionButton.setFixedSize(32, 32)
+        self.pasteToAIFromTranscriptionButton.setToolTip("Incolla il testo nell'area di Audio AI")
+        self.pasteToAIFromTranscriptionButton.clicked.connect(self.paste_from_transcription)
+        file_actions_layout.addWidget(self.pasteToAIFromTranscriptionButton)
+
         groups_layout.addWidget(file_actions_group)
 
         # --- Gruppo 2: Strumenti ---
@@ -1014,12 +1022,26 @@ class VideoAudioManager(QMainWindow):
         self.insertPauseButton.clicked.connect(self.insertPause)
         tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
 
+        self.correctTranscriptionButton = QPushButton('')
+        self.correctTranscriptionButton.setIcon(QIcon(get_resource("text_fix.png")))
+        self.correctTranscriptionButton.setFixedSize(32, 32)
+        self.correctTranscriptionButton.setToolTip("Correggi la Trascrizione con l'AI")
+        self.correctTranscriptionButton.clicked.connect(self.correct_transcription)
+        tools_grid_layout.addWidget(self.correctTranscriptionButton, 0, 2)
+
+
         groups_layout.addWidget(tools_group)
 
         # LA SEGUENTE RIGA È STATA RIMOSSA PER PERMETTERE L'ESPANSIONE
         # groups_layout.addStretch()
 
         main_controls_layout.addLayout(groups_layout)
+
+        self.toggleTranscriptionViewCheckbox = QCheckBox("Mostra testo corretto")
+        self.toggleTranscriptionViewCheckbox.setToolTip("Alterna tra la trascrizione originale e quella corretta")
+        self.toggleTranscriptionViewCheckbox.toggled.connect(self.toggle_transcription_view)
+        self.toggleTranscriptionViewCheckbox.setEnabled(False)
+        main_controls_layout.addWidget(self.toggleTranscriptionViewCheckbox)
 
         transcription_layout.addWidget(trans_controls_group)
 
@@ -1072,6 +1094,13 @@ class VideoAudioManager(QMainWindow):
         self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
         top_controls_layout.addWidget(self.generatePptxActionBtn)
 
+        self.pasteToAIFromSummaryButton = QPushButton('')
+        self.pasteToAIFromSummaryButton.setIcon(QIcon(get_resource("change.png")))
+        self.pasteToAIFromSummaryButton.setFixedSize(32, 32)
+        self.pasteToAIFromSummaryButton.setToolTip("Incolla il riassunto nell'area di Audio AI")
+        self.pasteToAIFromSummaryButton.clicked.connect(self.paste_from_summary)
+        top_controls_layout.addWidget(self.pasteToAIFromSummaryButton)
+
         # Separatore
         separator = QFrame()
         separator.setFrameShape(QFrame.Shape.VLine)
@@ -1118,16 +1147,11 @@ class VideoAudioManager(QMainWindow):
 
         self.transcriptionDock.addWidget(self.transcriptionTabWidget)
 
-        # Impostazioni voce per l'editing audio AI
-        voiceSettingsWidget = self.setupVoiceSettingsUI()
-        voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
-        self.editingDock.addWidget(voiceSettingsWidget)
-
         # Dizionario per la gestione dei dock
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
             'transcriptionDock': self.transcriptionDock,
-            'editingDock': self.editingDock,
+            'audioAIDock': self.audioAIDock,
             'downloadDock': self.downloadDock,
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
@@ -1606,6 +1630,72 @@ class VideoAudioManager(QMainWindow):
         )
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
+    def correct_transcription(self):
+        current_text = self.transcriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("La trascrizione è vuota.", error=True)
+            return
+
+        # Store the original text before sending for correction
+        self.original_text = current_text
+
+        thread = ProcessTextAI(
+            current_text,
+            self.languageComboBox.currentText(),
+            mode="fix"
+        )
+        self.start_task(thread, self.on_correct_transcription_complete, self.onProcessError, self.update_status_progress)
+
+    def on_correct_transcription_complete(self, corrected_text):
+        self.transcription_corrected = corrected_text
+
+        # Update the text area with the corrected text
+        self.transcriptionTextArea.blockSignals(True)
+        self.transcriptionTextArea.setPlainText(self.transcription_corrected)
+        self.transcriptionTextArea.blockSignals(False)
+
+        # Enable and check the toggle
+        self.toggleTranscriptionViewCheckbox.setEnabled(True)
+        self.toggleTranscriptionViewCheckbox.setChecked(True)
+
+        self.show_status_message("Testo corretto con successo.")
+
+        # Update the JSON file
+        update_data = {
+            "transcription_corrected": self.transcription_corrected,
+            # Also save the original text that was corrected
+            "transcription_raw": self.original_text
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
+
+    def toggle_transcription_view(self, checked):
+        """
+        Alterna la visualizzazione tra la trascrizione originale e quella corretta.
+        """
+        self.transcriptionTextArea.blockSignals(True)
+        if checked:
+            # Show corrected text
+            self.transcriptionTextArea.setPlainText(self.transcription_corrected)
+        else:
+            # Show original text
+            self.transcriptionTextArea.setPlainText(self.original_text)
+        self.transcriptionTextArea.blockSignals(False)
+
+    def paste_from_transcription(self):
+        """Copia il testo dalla trascrizione all'area di testo di Audio AI."""
+        text_to_paste = self.transcriptionTextArea.toPlainText()
+        self.audioAITextArea.setPlainText(text_to_paste)
+        self.show_status_message("Testo della trascrizione incollato in Audio AI.")
+        self.audioAIDock.raise_()
+
+    def paste_from_summary(self):
+        """Copia il testo dal riassunto all'area di testo di Audio AI."""
+        text_to_paste = self.summaryTextArea.toPlainText()
+        self.audioAITextArea.setPlainText(text_to_paste)
+        self.show_status_message("Testo del riassunto incollato in Audio AI.")
+        self.audioAIDock.raise_()
+
     def fixTextWithAI(self):
         current_text = self.transcriptionTextArea.toPlainText()
         if not current_text.strip():
@@ -1767,7 +1857,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerDock.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
-        self.editingDock.setVisible(False)
+        self.audioAIDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
 
@@ -2157,7 +2247,7 @@ class VideoAudioManager(QMainWindow):
         style = self.getDarkStyle()
         self.videoPlayerDock.setStyleSheet(style)
         self.transcriptionDock.setStyleSheet(style)
-        self.editingDock.setStyleSheet(style)
+        self.audioAIDock.setStyleSheet(style)
         self.downloadDock.setStyleSheet(style)
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
@@ -2165,6 +2255,25 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
+
+    def createAudioAIDock(self):
+        """Crea il dock per la generazione Audio AI."""
+        dock = CustomDock("Audio AI", closable=True)
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+
+        # 1. Groupbox "Strumenti"
+        strumenti_group = self.setupVoiceSettingsUI()
+        strumenti_group.setTitle("Strumenti") # Rinomina il gruppo come richiesto
+        main_layout.addWidget(strumenti_group)
+
+        # 2. Text area
+        self.audioAITextArea = CustomTextEdit(self)
+        self.audioAITextArea.setPlaceholderText("Inserisci qui il testo da convertire in audio o incollalo dai tab Trascrizione/Riassunto...")
+        main_layout.addWidget(self.audioAITextArea)
+
+        dock.addWidget(main_widget)
+        return dock
 
     def getDarkStyle(self):
         return """
@@ -3422,8 +3531,9 @@ class VideoAudioManager(QMainWindow):
                 if file_ext != ".json": path += ".json"
 
                 metadata = {
-                    "trascrizione_grezza": self.transcriptionTextArea.toPlainText(),
-                    "riassunto_generato": self.summaryTextArea.toPlainText(),
+                    "transcription_raw": self.original_text,
+                    "transcription_corrected": self.transcription_corrected,
+                    "summary_generated": self.summaryTextArea.toPlainText(),
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
                 }
@@ -3628,6 +3738,7 @@ class VideoAudioManager(QMainWindow):
             "video_date": video_date,
             "transcription_date": None,
             "transcription_raw": "",
+            "transcription_corrected": "",
             "summary_generated": "",
             "summary_generated_integrated": "",
             "summary_date": None
@@ -3894,7 +4005,7 @@ class VideoAudioManager(QMainWindow):
                                                                          'Mostra/Nascondi Video Player Output')
         self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
                                                                      'Mostra/Nascondi Trascrizione')
-        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
+        self.actionToggleAudioAIDock = self.createToggleAction(self.audioAIDock, 'Mostra/Nascondi Audio AI')
         self.actionToggleDownloadDock = self.createToggleAction(self.downloadDock, 'Mostra/Nascondi Download')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
@@ -3906,7 +4017,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
         viewMenu.addAction(self.actionToggleVideoPlayerDockOutput)
         viewMenu.addAction(self.actionToggleTranscriptionDock)
-        viewMenu.addAction(self.actionToggleEditingDock)
+        viewMenu.addAction(self.actionToggleAudioAIDock)
         viewMenu.addAction(self.actionToggleDownloadDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
@@ -3950,7 +4061,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutput.setVisible(True)
         self.audioDock.setVisible(True)
         self.transcriptionDock.setVisible(True)
-        self.editingDock.setVisible(True)
+        self.audioAIDock.setVisible(True)
         self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
         self.videoMergeDock.setVisible(True)
@@ -3964,7 +4075,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerOutput.setVisible(False)
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
-        self.editingDock.setVisible(False)
+        self.audioAIDock.setVisible(False)
         self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
@@ -3991,7 +4102,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoPlayerDockOutput.setChecked(True)
         self.actionToggleAudioDock.setChecked(True)
         self.actionToggleTranscriptionDock.setChecked(True)
-        self.actionToggleEditingDock.setChecked(True)
+        self.actionToggleAudioAIDock.setChecked(True)
         self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
@@ -4005,7 +4116,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutput.isVisible())
         self.actionToggleAudioDock.setChecked(self.audioDock.isVisible())
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
-        self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
+        self.actionToggleAudioAIDock.setChecked(self.audioAIDock.isVisible())
         self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
@@ -4036,6 +4147,10 @@ class VideoAudioManager(QMainWindow):
         # e qualsiasi riassunto precedente viene invalidato.
         self.summaries = {}
         self.active_summary_type = None
+        self.transcription_corrected = ""
+        self.toggleTranscriptionViewCheckbox.setEnabled(False)
+        self.toggleTranscriptionViewCheckbox.setChecked(False)
+
 
         self.original_text = self.transcriptionTextArea.toPlainText()
 
@@ -4154,6 +4269,16 @@ class VideoAudioManager(QMainWindow):
         self.original_text = data.get('transcription_raw', "")
         self.transcriptionTextArea.setPlainText(self.original_text)
 
+        # Load corrected transcription and set toggle state
+        self.transcription_corrected = data.get('transcription_corrected', '')
+        if self.transcription_corrected:
+            self.toggleTranscriptionViewCheckbox.setEnabled(True)
+            self.toggleTranscriptionViewCheckbox.setChecked(False) # Default to show original
+        else:
+            self.toggleTranscriptionViewCheckbox.setEnabled(False)
+            self.toggleTranscriptionViewCheckbox.setChecked(False)
+
+
         # Carica entrambi i tipi di riassunto
         self.summary_generated = data.get('summary_generated', '')
         self.summary_generated_integrated = data.get('summary_generated_integrated', '')
@@ -4226,9 +4351,9 @@ class VideoAudioManager(QMainWindow):
                     new_text.append(word)
             return ' '.join(new_text)
 
-        transcriptionText = self.transcriptionTextArea.toPlainText()
+        transcriptionText = self.audioAITextArea.toPlainText()
         if not transcriptionText.strip():
-            self.show_status_message("Inserisci una trascrizione prima di generare l'audio.", error=True)
+            self.show_status_message("Inserisci il testo da generare nell'area di testo di Audio AI.", error=True)
             return
         transcriptionText = convert_numbers_to_words(transcriptionText)
 
