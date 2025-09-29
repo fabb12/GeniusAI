@@ -50,7 +50,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
 - [ ] scritta tempo diff in bianco nella timeline
 - [ ] salvare posizone finestrre anche quando sono floating
-- [ ] salvare word con formattazione markdown 
+- [ ] salvare word con formattazione markdown  
 - 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
