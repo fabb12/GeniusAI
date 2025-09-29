@@ -3,7 +3,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
 
 class VideoCuttingThread(QThread):
-    progress = pyqtSignal(int)
+    progress = pyqtSignal(int, str)
     completed = pyqtSignal(str)
     error = pyqtSignal(str)
 
@@ -83,7 +83,7 @@ class VideoCuttingThread(QThread):
                 # Salva il file audio tagliato
                 clip.write_audiofile(self.output_path)
 
-            self.progress.emit(100)  # Completa il progresso al 100%
+            self.progress.emit(100, "Taglio completato")  # Completa il progresso al 100%
             self.completed.emit(self.output_path)
         except Exception as e:
             self.error.emit(str(e))
