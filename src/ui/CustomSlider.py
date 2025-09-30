@@ -145,7 +145,7 @@ class CustomSlider(QSlider):
             seconds = total_seconds % 60
             duration_text = f"{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}"
 
-            painter.setPen(QColor(0, 0, 0))
+            painter.setPen(QColor(255, 255, 255))
             painter.setFont(QFont("Arial", 10))
 
             text_x = (x_start + x_end) / 2 - painter.fontMetrics().horizontalAdvance(duration_text) / 2
