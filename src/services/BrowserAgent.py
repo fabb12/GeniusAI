@@ -187,7 +187,7 @@ class BrowserAgentWorker(QObject):
                 if not self.config.anthropic_api_key:
                     raise ValueError("Anthropic API Key non configurata.")
                 llm = ChatAnthropic(
-                    model_name=model_id,
+                    model=model_id,
                     anthropic_api_key=self.config.anthropic_api_key,
                     temperature=0.0,
                     max_tokens=4096 # Ensure sufficient tokens
