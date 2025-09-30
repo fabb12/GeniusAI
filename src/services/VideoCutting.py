@@ -1,9 +1,6 @@
 import os
 from PyQt6.QtCore import QThread, pyqtSignal
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.audio.io.AudioFileClip import AudioFileClip
-from moviepy.video.VideoClip import ImageClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
 
 class VideoCuttingThread(QThread):
     progress = pyqtSignal(int, str)

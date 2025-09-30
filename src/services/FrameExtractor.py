@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 import sys
 import time # Per eventuali pause tra richieste API
-from moviepy.video.io.VideoFileClip import VideoFileClip
+from moviepy.editor import VideoFileClip
 from tqdm import tqdm # Barra di progresso
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari

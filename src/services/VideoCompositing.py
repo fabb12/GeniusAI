@@ -1,7 +1,5 @@
 from PyQt6.QtCore import QThread, pyqtSignal
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.video.VideoClip import ImageClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
+from moviepy.editor import VideoFileClip, ImageClip, CompositeVideoClip
 import os
 import time
 import proglog
