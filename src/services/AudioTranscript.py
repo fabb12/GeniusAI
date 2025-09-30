@@ -22,6 +22,7 @@ class TranscriptionThread(QThread):
 
     def run(self):
         audio_file = None
+        audio_clip = None
         try:
             if os.path.splitext(self.media_path)[1].lower() in ['.wav', '.mp3', '.flac', '.aac']:
                 audio_file = self.media_path
@@ -30,7 +31,15 @@ class TranscriptionThread(QThread):
                 if not audio_file or not os.path.exists(audio_file):
                     raise Exception("La conversione del video in audio è fallita.")
 
-            chunks = self.splitAudio(audio_file)
+            audio_clip = AudioFileClip(audio_file)
+            if audio_clip.duration <= 0:
+                raise ValueError("La durata dell'audio è non valida o negativa.")
+
+            length = 30000  # 30 secondi in millisecondi
+            chunks = [
+                (audio_clip.subclip(start / 1000, min((start + length) / 1000, audio_clip.duration)), start)
+                for start in range(0, int(audio_clip.duration * 1000), length)
+            ]
             total_chunks = len(chunks)
             transcription = ""
             language_video = self.parent().languageComboBox.currentData()
@@ -53,6 +62,8 @@ class TranscriptionThread(QThread):
         except Exception as e:
             self.error.emit(str(e))
         finally:
+            if audio_clip:
+                audio_clip.close()
             if audio_file and audio_file != self.media_path and os.path.exists(audio_file):
                 os.remove(audio_file)
 
@@ -101,20 +112,6 @@ class TranscriptionThread(QThread):
         video.close()
 
         return temp_audio_file_path
-
-    def splitAudio(self, audio_input, length=30000):  # 30 secondi in millisecondi
-        logging.debug("Checkpoint: Inside splitAudio")  # Checkpoint
-        audio = AudioFileClip(audio_input)
-
-        if audio.duration <= 0:
-            raise ValueError("La durata dell'audio è non valida o negativa.")
-
-        # Dividi l'audio in blocchi di lunghezza fissa
-        chunks = [
-            (audio.subclip(start / 1000, min((start + length) / 1000, audio.duration)), start)
-            for start in range(0, int(audio.duration * 1000), length)
-        ]
-        return chunks
 
     def get_locale_from_language(self, language_code):
         """Converte un codice di lingua ISO 639-1 in un locale più specifico."""
