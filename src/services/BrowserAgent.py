@@ -253,7 +253,6 @@ class BrowserAgentWorker(QObject):
                 task=self.task,
                 llm=llm,
                 browser_profile=browser_profile, # Pass profile directly
-                headless=self.config.headless, # Pass headless directly
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
