@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
-    QStatusBar
+    QStatusBar, QListWidget, QListWidgetItem
 )
 
 # PyQtGraph (docking)
