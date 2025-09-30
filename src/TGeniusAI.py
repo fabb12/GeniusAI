@@ -1795,6 +1795,10 @@ class VideoAudioManager(QMainWindow):
             self.progressDialog.setLabelText(label)
 
     def onProcessComplete(self, result):
+        if isinstance(result, dict):
+            self.transcriptionTextArea.setPlainText(result.get('transcription_raw', ''))
+            return
+
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             if self.current_summary_type == 'transcription_fix':
                 self.transcription_corrected = result
@@ -4243,7 +4247,8 @@ class VideoAudioManager(QMainWindow):
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            self._update_ui_from_json_data(data)
+            self.transcriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+            self.onProcessComplete(data)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
             logging.error(f"Failed to load transcription JSON {json_path}: {e}")
