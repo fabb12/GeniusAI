@@ -54,9 +54,26 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 from browser_use import Agent, BrowserSession
 from browser_use.browser import BrowserProfile
 
-# Import LLM clients from browser_use
-from browser_use.llm import ChatAnthropic, ChatOpenAI, ChatGoogleGenerativeAI
+# Import LLM clients
+from browser_use.llm import ChatAnthropic, ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 # Note: Ollama integration with langchain might require langchain_community
+
+# Custom wrapper to ensure compatibility with browser-use agent
+class GoogleLLMWrapper:
+    """
+    A wrapper for the ChatGoogleGenerativeAI model to ensure it has the
+    'ainvoke' method expected by the browser-use agent.
+    """
+    def __init__(self, llm):
+        self.llm = llm
+
+    async def ainvoke(self, *args, **kwargs):
+        """Asynchronously invoke the wrapped LLM."""
+        # The browser-use agent expects this method. We pass the call
+        # to the underlying langchain object's ainvoke method.
+        return await self.llm.ainvoke(*args, **kwargs)
+
 
 # --- Local Imports ---
 from src.services.FrameExtractor import FrameExtractor # Used for guide generation
@@ -183,13 +200,14 @@ class BrowserAgentWorker(QObject):
                 except Exception as e:
                     logging.warning(f"Re-configuring genai failed (might be ok): {e}")
 
-                llm = ChatGoogleGenerativeAI(
+                google_llm = ChatGoogleGenerativeAI(
                     model=model_id, # Use the full model name from config
                     google_api_key=self.config.google_api_key, # Pass key explicitly if needed
                     temperature=0.1, # Lower temp for reliability
                     convert_system_message_to_human=True # Often helpful for agents
                 )
-                self.log_message.emit(f"Inizializzato LLM: Google Gemini ({model_id})")
+                llm = GoogleLLMWrapper(google_llm) # Wrap the instance
+                self.log_message.emit(f"Inizializzato e wrappato LLM: Google Gemini ({model_id})")
 
             elif model_lower.startswith("gpt"):
                  if not self.config.openai_api_key:
