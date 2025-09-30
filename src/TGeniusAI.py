@@ -3530,7 +3530,6 @@ class VideoAudioManager(QMainWindow):
                 metadata = {
                     "transcription_original": self.transcription_original,
                     "transcription_corrected": self.transcription_corrected,
-                    "trascrizione_grezza": self.transcriptionTextArea.toPlainText(), # Mantengo per retrocompatibilità
                     "riassunto_generato": self.summaryTextArea.toPlainText(),
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
