@@ -67,6 +67,7 @@ from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
 from src.ui.CursorOverlay import CursorOverlay
+from src.ui.MultiLineInputDialog import MultiLineInputDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
@@ -5590,7 +5591,7 @@ class VideoAudioManager(QMainWindow):
         position = self.player.position()
         timecode = self.formatTimecode(position)
 
-        note_text, ok = QInputDialog.getText(self, "Aggiungi Nota", f"Inserisci la nota per il timecode {timecode}:")
+        note_text, ok = MultiLineInputDialog.getText(self, "Aggiungi Nota", f"Inserisci la nota per il timecode {timecode}:")
 
         if ok and note_text.strip():
             note_item = f"{timecode} - {note_text.strip()}"
@@ -5639,7 +5640,7 @@ class VideoAudioManager(QMainWindow):
         timecode = self.formatTimecode(position)
         current_text = selected_item.text().split(" - ", 1)[1]
 
-        new_text, ok = QInputDialog.getText(self, "Modifica Nota", "Nuovo testo della nota:", text=current_text)
+        new_text, ok = MultiLineInputDialog.getText(self, "Modifica Nota", "Nuovo testo della nota:", text=current_text)
 
         if ok and new_text.strip():
             selected_item.setText(f"{timecode} - {new_text.strip()}")
