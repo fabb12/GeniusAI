@@ -63,10 +63,12 @@ from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 class GoogleLLMWrapper:
     """
     A wrapper for the ChatGoogleGenerativeAI model to ensure it has the
-    'ainvoke' method expected by the browser-use agent.
+    'ainvoke', 'provider', and 'model' attributes expected by the browser-use agent.
     """
     def __init__(self, llm):
         self.llm = llm
+        self.provider = "google"  # Expose the provider attribute
+        self.model = llm.model      # Expose the model name attribute
 
     async def ainvoke(self, *args, **kwargs):
         """Asynchronously invoke the wrapped LLM."""
