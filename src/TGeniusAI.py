@@ -4477,7 +4477,7 @@ class VideoAudioManager(QMainWindow):
                     new_text.append(word)
             return ' '.join(new_text)
 
-        transcriptionText = self.transcriptionTextArea.toPlainText()
+        transcriptionText = self.audioAiTextArea.toPlainText()
         if not transcriptionText.strip():
             self.show_status_message("Inserisci una trascrizione prima di generare l'audio.", error=True)
             return
