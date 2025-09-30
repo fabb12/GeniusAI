@@ -239,8 +239,8 @@ class BrowserAgentWorker(QObject):
 
             if not self.running: return # Check running status after LLM init
 
-            # --- Browser Setup ---
-            self.progress.emit(10, "Configurazione browser...")
+            # --- Browser and Agent Setup ---
+            self.progress.emit(10, "Configurazione browser e agente...")
             browser_profile = BrowserProfile(
                 headless=self.config.headless,
                 viewport_size={'width': 1280, 'height': 900}
@@ -248,19 +248,12 @@ class BrowserAgentWorker(QObject):
 
             if not self.running: return
 
-            self.progress.emit(15, "Avvio sessione browser...")
-            self.browser_session = BrowserSession(browser_profile=browser_profile)
-            self.log_message.emit("Sessione browser inizializzata.")
-            self.progress.emit(20, "Sessione browser avviata")
-
-            if not self.running: return
-
-            # --- Agent Setup ---
-            self.progress.emit(40, "Inizializzazione agente...")
+            self.progress.emit(15, "Inizializzazione agente...")
             self.agent = Agent(
                 task=self.task,
                 llm=llm,
-                browser_session=self.browser_session,
+                browser_profile=browser_profile, # Pass profile directly
+                headless=self.config.headless, # Pass headless directly
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
@@ -325,11 +318,7 @@ class BrowserAgentWorker(QObject):
         finally:
             # --- Cleanup ---
             self.log_message.emit("Inizio pulizia risorse worker...")
-            if self.browser_session:
-                # The browser-use library seems to handle session cleanup automatically.
-                # The explicit call to .close() was causing an AttributeError.
-                self.log_message.emit("Sessione browser terminata, la pulizia è gestita automaticamente.")
-            self.browser_session = None
+            # The browser_session is now managed by the Agent and will be cleaned up automatically.
             self.agent = None # Clear agent reference
             self.log_message.emit("Pulizia risorse worker completata.")
             # Ensure running is false if we exit due to error or completion
