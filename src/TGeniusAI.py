@@ -454,6 +454,7 @@ class VideoAudioManager(QMainWindow):
         self.summary_text = ""
         self.summary_generated = ""
         self.summary_generated_integrated = ""
+        self.original_audio_ai_html = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -1786,18 +1787,17 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
-        self.transcriptionTextArea.setReadOnly(
-            checked)  # Disabilita la modifica del testo quando la checkbox è abilitata
-        # Update the timecode insertion enabled state based on checkbox
+        self.audioAiTextArea.setReadOnly(checked)
         self.timecodeEnabled = checked
 
-        # Trigger text change processing to update timecodes
-        current_html = self.transcriptionTextArea.toHtml()
         if checked:
-            self.original_text_html = current_html
-            self.handleTextChange()
+            # Salva l'HTML originale e applica i timecode
+            self.original_audio_ai_html = self.audioAiTextArea.toHtml()
+            updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(self.original_audio_ai_html)
+            self.audioAiTextArea.setHtml(updated_html)
         else:
-            self.transcriptionTextArea.setHtml(self.original_text_html)
+            # Ripristina l'HTML originale
+            self.audioAiTextArea.setHtml(self.original_audio_ai_html)
 
 
     def updateProgressDialog(self, value, label):
@@ -1956,7 +1956,7 @@ class VideoAudioManager(QMainWindow):
             if 'media_clip' in locals():
                 media_clip.close()
     def insertPause(self):
-        cursor = self.transcriptionTextArea.textCursor()
+        cursor = self.audioAiTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
 
         if not re.match(r'^\d+(\.\d+)?s$', pause_time):
@@ -1965,7 +1965,7 @@ class VideoAudioManager(QMainWindow):
 
         pause_tag = f'<break time="{pause_time}" />'
         cursor.insertText(f' {pause_tag} ')
-        self.transcriptionTextArea.setTextCursor(cursor)
+        self.audioAiTextArea.setTextCursor(cursor)
 
     def rewind5Seconds(self):
         current_position = self.player.position()
@@ -2019,8 +2019,8 @@ class VideoAudioManager(QMainWindow):
 
     def get_nearest_timecode(self):
         # Posizione attuale del cursore nella trascrizione
-        cursor_position = self.transcriptionTextArea.textCursor().position()
-        text = self.transcriptionTextArea.toPlainText()
+        cursor_position = self.audioAiTextArea.textCursor().position()
+        text = self.audioAiTextArea.toPlainText()
 
         # Trova tutti i timecode nel testo
         timecode_pattern = re.compile(r'\[(\d{2}):(\d{2})\]')
@@ -4507,9 +4507,9 @@ class VideoAudioManager(QMainWindow):
                     new_text.append(word)
             return ' '.join(new_text)
 
-        transcriptionText = self.transcriptionTextArea.toPlainText()
+        transcriptionText = self.audioAiTextArea.toPlainText()
         if not transcriptionText.strip():
-            self.show_status_message("Inserisci una trascrizione prima di generare l'audio.", error=True)
+            self.show_status_message("Inserisci il testo nella tab 'Audio AI' prima di generare l'audio.", error=True)
             return
         transcriptionText = convert_numbers_to_words(transcriptionText)
 
