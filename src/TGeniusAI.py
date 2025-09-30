@@ -464,19 +464,25 @@ class VideoAudioManager(QMainWindow):
         self.monitor_preview = None
         self.cursor_overlay = CursorOverlay()
         self.current_thread = None
+        self.original_status_bar_stylesheet = self.statusBar().styleSheet()
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
         if error:
-            self.statusBar.setStyleSheet("color: red;")
+            self.statusBar.setStyleSheet(self.original_status_bar_stylesheet + "color: red;")
         else:
-            self.statusBar.setStyleSheet("")  # Ripristina lo stile predefinito
+            self.statusBar.setStyleSheet(self.original_status_bar_stylesheet)
 
         self.statusLabel.setText(message)
 
         if timeout > 0:
-            QTimer.singleShot(timeout, lambda: self.statusLabel.setText("Pronto") if self.statusLabel.text() == message else None)
-            QTimer.singleShot(timeout, lambda: self.statusBar.setStyleSheet(""))
+            # Ripristina il messaggio e lo stile dopo il timeout
+            def reset_status():
+                # Controlla se il messaggio è ancora quello impostato da questa chiamata
+                if self.statusLabel.text() == message:
+                    self.statusLabel.setText("Pronto")
+                    self.statusBar.setStyleSheet(self.original_status_bar_stylesheet)
+            QTimer.singleShot(timeout, reset_status)
 
     def start_task(self, thread, on_complete, on_error, on_progress):
         """Avvia un thread e gestisce la barra di stato."""
@@ -845,6 +851,7 @@ class VideoAudioManager(QMainWindow):
 
         self.playerOutput.durationChanged.connect(self.updateDurationOutput)
         self.playerOutput.positionChanged.connect(self.updateTimeCodeOutput)
+        self.playerOutput.playbackStateChanged.connect(self.updatePlayButtonIconOutput)
 
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
@@ -1201,6 +1208,7 @@ class VideoAudioManager(QMainWindow):
         # Collegamenti dei segnali del player
         self.player.durationChanged.connect(self.durationChanged)
         self.player.positionChanged.connect(self.positionChanged)
+        self.player.playbackStateChanged.connect(self.updatePlayButtonIcon)
         self.videoSlider.sliderMoved.connect(self.setPosition)
 
 
@@ -5435,6 +5443,22 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
+
+    def updatePlayButtonIcon(self, state):
+        if self.reverseTimer.isActive():
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButton.setIcon(QIcon(get_resource("play.png")))
+
+    def updatePlayButtonIconOutput(self, state):
+        if self.reverseTimerOutput.isActive():
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
 
 def get_application_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
