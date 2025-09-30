@@ -54,7 +54,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] quando incollo testo ai rimuovi timecode
 - [ ] usare whisper 
 - [ ] salvare su disco i file recenti 
-- 
+-  
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
