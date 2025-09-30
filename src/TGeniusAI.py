@@ -27,14 +27,16 @@ from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
 from src.ui.InfoDock import InfoDock
 
-from moviepy.video.VideoClip import ImageClip
-from moviepy.video.compositing.CompositeVideoClip import CompositeVideoClip
-from moviepy.audio.AudioClip import concatenate_audioclips
-from moviepy.video.compositing.concatenate import concatenate_videoclips
-from moviepy.video.io.VideoFileClip import VideoFileClip
-from moviepy.audio.io.AudioFileClip import AudioFileClip
+from moviepy.editor import (
+    ImageClip,
+    CompositeVideoClip,
+    concatenate_audioclips,
+    concatenate_videoclips,
+    VideoFileClip,
+    AudioFileClip,
+    CompositeAudioClip
+)
 from moviepy.video.fx.multiply_speed import MultiplySpeed
-from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 
 import numpy as np
