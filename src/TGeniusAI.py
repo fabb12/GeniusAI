@@ -1170,6 +1170,10 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
         self.editingDock.addWidget(voiceSettingsWidget)
 
+        # Sincronizza i checkbox di allineamento
+        self.alignspeed.toggled.connect(self.alignspeed_replacement.setChecked)
+        self.alignspeed_replacement.toggled.connect(self.alignspeed.setChecked)
+
         # Dizionario per la gestione dei dock
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
@@ -2393,6 +2397,10 @@ class VideoAudioManager(QMainWindow):
         # Pulsanti per le diverse funzionalità
         self.generateAudioButton = QPushButton('Genera e Applica Audio con AI')
         self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
+
+        self.alignspeed = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed.setChecked(True)
+        layout.addWidget(self.alignspeed)
         layout.addWidget(self.generateAudioButton)
 
         voiceSettingsGroup.setLayout(layout)
@@ -2499,6 +2507,10 @@ class VideoAudioManager(QMainWindow):
 
         applyAudioButton = QPushButton('Applica Audio Principale')
         applyAudioButton.clicked.connect(self.handle_apply_main_audio)
+
+        self.alignspeed_replacement = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed_replacement.setChecked(True)
+        layout.addWidget(self.alignspeed_replacement)
         layout.addWidget(applyAudioButton)
 
         audioReplacementGroup.setLayout(layout)
@@ -4439,7 +4451,7 @@ class VideoAudioManager(QMainWindow):
         thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            False, # use_sync is False to apply at a specific time
+            self.alignspeed.isChecked(), # use_sync is now controlled by the checkbox
             start_time_sec,
             parent=self
         )
@@ -4470,7 +4482,7 @@ class VideoAudioManager(QMainWindow):
         thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            False, # use_sync is false to apply at a specific time
+            self.alignspeed_replacement.isChecked(), # use_sync is now controlled by the checkbox
             start_time_sec,
             parent=self
         )
