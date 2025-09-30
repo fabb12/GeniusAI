@@ -4247,7 +4247,14 @@ class VideoAudioManager(QMainWindow):
 
     def onTranscriptionComplete(self, result):
         json_path, temp_files = result
-        self._manage_video_json(self.videoPathLineEdit)
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            self._update_ui_from_json_data(data)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
+            logging.error(f"Failed to load transcription JSON {json_path}: {e}")
+
         self.cleanupFiles(temp_files)
         self.show_status_message("Trascrizione completata.")
 
