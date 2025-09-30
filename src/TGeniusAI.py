@@ -1004,7 +1004,7 @@ class VideoAudioManager(QMainWindow):
         file_actions_layout.addWidget(self.loadButton)
 
         self.saveTranscriptionButton = QPushButton('')
-        self.saveTranscriptionButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveTranscriptionButton.setIcon(QIcon(get_resource("save.png")))
         self.saveTranscriptionButton.setFixedSize(32, 32)
         self.saveTranscriptionButton.setToolTip("Salva Trascrizione nel JSON associato")
         self.saveTranscriptionButton.clicked.connect(self.save_transcription_to_json)
@@ -1058,7 +1058,7 @@ class VideoAudioManager(QMainWindow):
         tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
 
         self.saveAudioAIButton = QPushButton('')
-        self.saveAudioAIButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveAudioAIButton.setIcon(QIcon(get_resource("save.png")))
         self.saveAudioAIButton.setFixedSize(32, 32)
         self.saveAudioAIButton.setToolTip("Salva Testo Audio AI nel JSON associato")
         self.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
@@ -1122,12 +1122,12 @@ class VideoAudioManager(QMainWindow):
         summarize_button.clicked.connect(self.processTextWithAI)
         top_controls_layout.addWidget(summarize_button)
 
-        fix_text_button = QPushButton('')
-        fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
-        fix_text_button.setFixedSize(32, 32)
-        fix_text_button.setToolTip("Correggi Testo")
-        fix_text_button.clicked.connect(self.fixTextWithAI)
-        top_controls_layout.addWidget(fix_text_button)
+        #fix_text_button = QPushButton('')
+        #fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
+        #fix_text_button.setFixedSize(32, 32)
+        #fix_text_button.setToolTip("Correggi Testo")
+        #fix_text_button.clicked.connect(self.fixTextWithAI)
+        #top_controls_layout.addWidget(fix_text_button)
 
         summarize_meeting_button = QPushButton('')
         summarize_meeting_button.setIcon(QIcon(get_resource("meet_sum.png")))
@@ -1152,7 +1152,7 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout.addWidget(self.pasteSummaryToAudioAIButton)
 
         self.saveSummaryButton = QPushButton('')
-        self.saveSummaryButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveSummaryButton.setIcon(QIcon(get_resource("save.png")))
         self.saveSummaryButton.setFixedSize(32, 32)
         self.saveSummaryButton.setToolTip("Salva Riassunto nel JSON associato")
         self.saveSummaryButton.clicked.connect(self.save_summary_to_json)

@@ -57,8 +57,13 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] gestire megliio i contatti teams
 - [ ] drag e drop da sistemare
 - [ ] browser use
-- 
-- [ ] note sul video e visualizza 
+- [ ] mettere tasto salvataggio nel tab trascrzione , rissunto e audio ai , salva il json nnelle rispettive chiavi, e salva ogni 5 minuti automaticamente 
+- [ ] aggiungere replace nel search box e sistema il numero di elmentei trovati e sistema il colore di quadno non trova nulla metti colore arancione 
+- [ ] mettre tasti frecce per andare aventi e indietro nel playback del video
+- [ ] crea un nuovo dock note video dove mostro le note che  utente ha inserito nel video, tramite una fubnzione inseriasci nota con tasto destro del mouse sul frame che in quel momento e visbile 
+- la nota viene salvata in una edit box dentro al dock nuvo con relatiuvo timecode di dove è stata selezionata la nota e deve essere selezionabile e quando premo due volta con il tasto sinistro deve andare al putno del timecode sul video 
+- devo esserce anceh la possibli di cancella la nota e di modificarla , e la nota deve essere salvata nel json con il resto delle intormazione relative al video 
+
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
