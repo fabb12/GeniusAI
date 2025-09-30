@@ -54,10 +54,8 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 from browser_use import Agent, BrowserSession
 from browser_use.browser import BrowserProfile
 
-# Import LLM clients
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI # Keep for potential OpenAI integration
-from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
+# Import LLM clients from browser_use
+from browser_use.llm import ChatAnthropic, ChatOpenAI, ChatGoogleGenerativeAI
 # Note: Ollama integration with langchain might require langchain_community
 
 # --- Local Imports ---
@@ -307,14 +305,9 @@ class BrowserAgentWorker(QObject):
             # --- Cleanup ---
             self.log_message.emit("Inizio pulizia risorse worker...")
             if self.browser_session:
-                try:
-                    self.progress.emit(98, "Chiusura sessione browser...")
-                    await self.browser_session.close()
-                    self.progress.emit(100, "Sessione browser chiusa con successo")
-                    self.log_message.emit("Sessione browser chiusa.")
-                except Exception as browser_close_err:
-                    self.log_message.emit(f"Errore durante chiusura sessione browser: {browser_close_err}")
-                    logging.error(f"Errore nella chiusura della sessione browser: {browser_close_err}")
+                # The browser-use library seems to handle session cleanup automatically.
+                # The explicit call to .close() was causing an AttributeError.
+                self.log_message.emit("Sessione browser terminata, la pulizia è gestita automaticamente.")
             self.browser_session = None
             self.agent = None # Clear agent reference
             self.log_message.emit("Pulizia risorse worker completata.")
