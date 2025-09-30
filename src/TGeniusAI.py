@@ -5630,8 +5630,8 @@ class VideoAudioManager(QMainWindow):
             super().keyPressEvent(event)
 
     def eventFilter(self, source, event):
-        if source is self.videoOverlay and event.type() == QEvent.Type.MouseButtonPress:
-            if event.button() == Qt.MouseButton.RightButton:
+        if source is self.videoOverlay and event.type() == QEvent.Type.MouseButtonDblClick:
+            if event.button() == Qt.MouseButton.LeftButton:
                 self.add_video_note()
                 return True
         return super().eventFilter(source, event)
