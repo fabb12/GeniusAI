@@ -45,15 +45,12 @@ class TranscriptionThread(QThread):
             language_video = self.parent().languageComboBox.currentData()
             transcription = ""
 
-            # Unified chunking logic
+            # Unified chunking logic for all audio lengths
             length = 30000  # 30 seconds
-            if duration < (length / 1000.0):
-                chunks = [(audio_clip_for_chunking, 0)]
-            else:
-                chunks = [
-                    (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start)
-                    for start in range(0, int(duration * 1000), length)
-                ]
+            chunks = [
+                (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start)
+                for start in range(0, int(duration * 1000), length)
+            ]
 
             total_chunks = len(chunks)
 
