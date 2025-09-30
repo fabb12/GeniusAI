@@ -301,14 +301,16 @@ def post_build_steps():
 
                     print(f"  Moving '{item_name}' to '{final_target_path}'")
 
-                    # Prevent overwriting if target exists (optional, move might fail anyway)
+                    # If the destination path exists, remove it to prevent `shutil.move`
+                    # from moving the source *inside* the destination directory.
                     if os.path.exists(final_target_path):
-                         print(f"  Target '{final_target_path}' already exists. Skipping move for '{item_name}'. Consider manual cleanup if needed.")
-                         # Optionally remove from internal if already exists at target:
-                         # if os.path.isdir(internal_item_path): shutil.rmtree(internal_item_path)
-                         # else: os.remove(internal_item_path)
-                    else:
-                         shutil.move(internal_item_path, final_target_path)
+                        print(f"  Target '{final_target_path}' already exists. Removing it to ensure a clean move.")
+                        if os.path.isdir(final_target_path):
+                            shutil.rmtree(final_target_path)
+                        else:
+                            os.remove(final_target_path)
+
+                    shutil.move(internal_item_path, final_target_path)
 
                 except Exception as e:
                     print(f"  ERROR moving '{item_name}': {e}")
