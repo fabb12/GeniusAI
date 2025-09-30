@@ -397,6 +397,7 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput.setVolume(1.0)
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.recentFiles = []
+        self.loadRecentFiles()
         self.recording_segments = []
 
         # Blinking recording indicator
@@ -5359,10 +5360,18 @@ class VideoAudioManager(QMainWindow):
             self.loadVideo(fileName)
 
     def updateRecentFiles(self, newFile):
-        if newFile not in self.recentFiles:
-            self.recentFiles.insert(0, newFile)
-            if len(self.recentFiles) > 5:  # Limita la lista ai 5 più recenti
-                self.recentFiles.pop()
+        if newFile in self.recentFiles:
+            self.recentFiles.remove(newFile)
+
+        self.recentFiles.insert(0, newFile)
+
+        if len(self.recentFiles) > 15:  # Limita la lista ai 15 più recenti
+            self.recentFiles = self.recentFiles[:15]
+
+        # Salva la lista aggiornata nelle impostazioni
+        settings = QSettings("Genius", "GeniusAI")
+        settings.setValue("recentFiles", self.recentFiles)
+
         self.updateRecentFilesMenu()
 
     def updateRecentFilesMenu(self):
@@ -5371,6 +5380,14 @@ class VideoAudioManager(QMainWindow):
             action = QAction(os.path.basename(file), self)
             action.triggered.connect(lambda checked, f=file: self.openRecentFile(f))
             self.recentMenu.addAction(action)
+
+    def loadRecentFiles(self):
+        """Carica la lista dei file recenti da QSettings."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.recentFiles = settings.value("recentFiles", [], type=list)
+        # Rimuovi i file che non esistono più
+        self.recentFiles = [f for f in self.recentFiles if os.path.exists(f)]
+
 
     def openRecentFile(self, filePath):
         self.videoPathLineEdit = filePath
