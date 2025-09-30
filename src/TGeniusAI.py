@@ -464,7 +464,7 @@ class VideoAudioManager(QMainWindow):
         self.monitor_preview = None
         self.cursor_overlay = CursorOverlay()
         self.current_thread = None
-        self.original_status_bar_stylesheet = self.statusBar().styleSheet()
+        self.original_status_bar_stylesheet = self.statusBar.styleSheet()
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
