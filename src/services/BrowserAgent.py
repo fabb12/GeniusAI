@@ -50,20 +50,9 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 
 # --- Langchain Imports ---
-# Import browser_use components (assuming these are correctly installed/located)
-try:
-    from browser_use.agent.service import Agent
-    from browser_use.browser.browser import Browser, BrowserConfig
-    from browser_use.browser.context import BrowserContextConfig
-    from browser_use.controller.service import Controller
-except ImportError as e:
-    logging.error(f"Failed to import browser_use components: {e}. Please ensure the library is installed.")
-    # Define dummy classes to prevent NameErrors if import fails, allowing UI to load
-    class Agent: pass
-    class Browser: pass
-    class BrowserConfig: pass
-    class BrowserContextConfig: pass
-    class Controller: pass
+# Import browser_use components
+from browser_use import Agent, BrowserSession
+from browser_use.browser import BrowserProfile
 
 # Import LLM clients
 from langchain_anthropic import ChatAnthropic
@@ -158,7 +147,7 @@ class BrowserAgentWorker(QObject):
         self.task = task
         self.config = config # Use the passed AgentConfig instance
         self.running = False
-        self.browser = None
+        self.browser_session = None
         self.agent = None # Hold agent instance for potential interruption
 
     async def run_agent_async(self):
@@ -233,36 +222,26 @@ class BrowserAgentWorker(QObject):
 
             # --- Browser Setup ---
             self.progress.emit(10, "Configurazione browser...")
-            browser_config = BrowserConfig(
+            browser_profile = BrowserProfile(
                 headless=self.config.headless,
-                disable_security=True # Often needed for agent control
-            )
-            context_config = BrowserContextConfig(
-                browser_window_size={'width': 1280, 'height': 900},
-                minimum_wait_page_load_time=0.5,
-                highlight_elements=True
+                viewport_size={'width': 1280, 'height': 900}
             )
 
             if not self.running: return
 
-            self.progress.emit(15, "Avvio browser...")
-            self.browser = Browser(config=browser_config)
-            self.log_message.emit("Browser inizializzato.")
-            self.progress.emit(20, "Browser avviato")
+            self.progress.emit(15, "Avvio sessione browser...")
+            self.browser_session = BrowserSession(browser_profile=browser_profile)
+            self.log_message.emit("Sessione browser inizializzata.")
+            self.progress.emit(20, "Sessione browser avviata")
 
             if not self.running: return
 
-            # --- Controller and Agent Setup ---
-            self.progress.emit(35, "Inizializzazione controller...")
-            controller = Controller()
-            if not self.running: return
-
+            # --- Agent Setup ---
             self.progress.emit(40, "Inizializzazione agente...")
             self.agent = Agent(
                 task=self.task,
                 llm=llm,
-                browser=self.browser,
-                controller=controller,
+                browser_session=self.browser_session,
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
@@ -327,16 +306,16 @@ class BrowserAgentWorker(QObject):
         finally:
             # --- Cleanup ---
             self.log_message.emit("Inizio pulizia risorse worker...")
-            if self.browser:
+            if self.browser_session:
                 try:
-                    self.progress.emit(98, "Chiusura browser...")
-                    await self.browser.close()
-                    self.progress.emit(100, "Browser chiuso con successo")
-                    self.log_message.emit("Browser chiuso.")
+                    self.progress.emit(98, "Chiusura sessione browser...")
+                    await self.browser_session.close()
+                    self.progress.emit(100, "Sessione browser chiusa con successo")
+                    self.log_message.emit("Sessione browser chiusa.")
                 except Exception as browser_close_err:
-                    self.log_message.emit(f"Errore durante chiusura browser: {browser_close_err}")
-                    logging.error(f"Errore nella chiusura del browser: {browser_close_err}")
-            self.browser = None
+                    self.log_message.emit(f"Errore durante chiusura sessione browser: {browser_close_err}")
+                    logging.error(f"Errore nella chiusura della sessione browser: {browser_close_err}")
+            self.browser_session = None
             self.agent = None # Clear agent reference
             self.log_message.emit("Pulizia risorse worker completata.")
             # Ensure running is false if we exit due to error or completion
