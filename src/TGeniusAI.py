@@ -3824,13 +3824,7 @@ class VideoAudioManager(QMainWindow):
         openActionOutput.setStatusTip('Open Video Output')
         openActionOutput.triggered.connect(self.browseVideoOutput)
 
-        openAudioAction = QAction('&Apri file audio', self)
-        openAudioAction.setShortcut('Ctrl+A')
-        openAudioAction.setStatusTip('Apri file audio')
-        openAudioAction.triggered.connect(self.browseAudioFile)
-
         fileMenu.addAction(openAction)
-        fileMenu.addAction(openAudioAction)
         fileMenu.addAction(openActionOutput)
 
         # New Save As action
