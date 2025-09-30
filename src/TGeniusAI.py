@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
-    QStatusBar, QListWidget, QListWidgetItem
+    QStatusBar, QListWidget, QListWidgetItem, QMenu
 )
 
 # PyQtGraph (docking)
@@ -389,8 +389,11 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput = QAudioOutput()
         self.playerOutput = QMediaPlayer()
         self.audioOutputOutput = QAudioOutput()
+        self.previewPlayer = QMediaPlayer()
+        self.previewAudioOutput = QAudioOutput()
 
         self.player.setAudioOutput(self.audioOutput)
+        self.previewPlayer.setAudioOutput(self.previewAudioOutput)
         self.audioOutput.setVolume(1.0)
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.recentFiles = []
@@ -2419,6 +2422,8 @@ class VideoAudioManager(QMainWindow):
 
         self.generatedAudiosListWidget = QListWidget()
         self.generatedAudiosListWidget.setToolTip("Lista degli audio generati per il video corrente.")
+        self.generatedAudiosListWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.generatedAudiosListWidget.customContextMenuRequested.connect(self.show_audio_context_menu)
         layout.addWidget(self.generatedAudiosListWidget)
 
         buttons_layout = QHBoxLayout()
@@ -2435,6 +2440,31 @@ class VideoAudioManager(QMainWindow):
         layout.addLayout(buttons_layout)
         generatedAudiosGroup.setLayout(layout)
         return generatedAudiosGroup
+
+    def show_audio_context_menu(self, position):
+        """
+        Mostra il menu contestuale per gli elementi della lista di audio generati.
+        """
+        item = self.generatedAudiosListWidget.itemAt(position)
+        if item:
+            context_menu = QMenu(self)
+            preview_action = context_menu.addAction("Ascolta anteprima")
+            action = context_menu.exec(self.generatedAudiosListWidget.mapToGlobal(position))
+
+            if action == preview_action:
+                self.play_preview_audio(item)
+
+    def play_preview_audio(self, item):
+        """
+        Riproduce l'anteprima dell'audio selezionato.
+        """
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+        if audio_path and os.path.exists(audio_path):
+            self.previewPlayer.setSource(QUrl.fromLocalFile(audio_path))
+            self.previewPlayer.play()
+            self.show_status_message(f"Riproduzione anteprima: {os.path.basename(audio_path)}")
+        else:
+            self.show_status_message("File anteprima non trovato.", error=True)
 
     def addCustomVoice(self):
         custom_name = self.voiceSelectionComboBox.currentText().strip()
