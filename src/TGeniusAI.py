@@ -997,17 +997,16 @@ class VideoAudioManager(QMainWindow):
         self.saveButton = QPushButton('')
         self.saveButton.setIcon(QIcon(get_resource("save.png")))
         self.saveButton.setFixedSize(32, 32)
-        self.saveButton.setToolTip("Salva Testo Come...")
+        self.saveButton.setToolTip("Salva Testo")
         self.saveButton.clicked.connect(self.saveText)
         file_actions_layout.addWidget(self.saveButton)
 
-        self.saveChangesButton = QPushButton('')
-        self.saveChangesButton.setIcon(QIcon(get_resource("save_all.png")))
-        self.saveChangesButton.setFixedSize(32, 32)
-        self.saveChangesButton.setToolTip("Salva modifiche nel JSON associato (Ctrl+S)")
-        self.saveChangesButton.clicked.connect(self.save_all_tabs_to_json)
-        # self.saveChangesButton.setShortcut(QKeySequence("Ctrl+S")) # Potrebbe interferire con altri shortcut
-        file_actions_layout.addWidget(self.saveChangesButton)
+        self.saveTranscriptionButton = QPushButton('')
+        self.saveTranscriptionButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveTranscriptionButton.setFixedSize(32, 32)
+        self.saveTranscriptionButton.setToolTip("Salva Trascrizione nel JSON associato")
+        self.saveTranscriptionButton.clicked.connect(self.save_transcription_to_json)
+        file_actions_layout.addWidget(self.saveTranscriptionButton)
 
         self.resetButton = QPushButton('')
         self.resetButton.setIcon(QIcon(get_resource("reset.png")))
@@ -1055,6 +1054,13 @@ class VideoAudioManager(QMainWindow):
         self.insertPauseButton = QPushButton("Inserisci Pausa")
         self.insertPauseButton.clicked.connect(self.insertPause)
         tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
+
+        self.saveAudioAIButton = QPushButton('')
+        self.saveAudioAIButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveAudioAIButton.setFixedSize(32, 32)
+        self.saveAudioAIButton.setToolTip("Salva Testo Audio AI nel JSON associato")
+        self.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
+        tools_grid_layout.addWidget(self.saveAudioAIButton, 0, 2) # Aggiunto qui
 
         # groups_layout.addWidget(tools_group)
 
@@ -1142,6 +1148,13 @@ class VideoAudioManager(QMainWindow):
         self.pasteSummaryToAudioAIButton.setToolTip("Incolla riassunto nella tab Audio AI")
         self.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.summaryTextArea))
         top_controls_layout.addWidget(self.pasteSummaryToAudioAIButton)
+
+        self.saveSummaryButton = QPushButton('')
+        self.saveSummaryButton.setIcon(QIcon(get_resource("save_all.png")))
+        self.saveSummaryButton.setFixedSize(32, 32)
+        self.saveSummaryButton.setToolTip("Salva Riassunto nel JSON associato")
+        self.saveSummaryButton.clicked.connect(self.save_summary_to_json)
+        top_controls_layout.addWidget(self.saveSummaryButton)
 
         # Separatore
         separator = QFrame()
@@ -1772,10 +1785,58 @@ class VideoAudioManager(QMainWindow):
         # Il callback onProcessComplete gestirà già il risultato
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
+    def save_transcription_to_json(self):
+        """
+        Salva solo il contenuto della scheda Trascrizione nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "transcription_original": self.transcriptionTextArea.toPlainText(),
+            "transcription_corrected": self.transcription_corrected,
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Trascrizione salvata nel file JSON.", timeout=3000)
+
+    def save_summary_to_json(self):
+        """
+        Salva solo il contenuto della scheda Riassunto nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "summary_generated": self.summaryTextArea.toPlainText(),
+            "summary_generated_integrated": self.summary_generated_integrated,
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Riassunto salvato nel file JSON.", timeout=3000)
+
+    def save_audio_ai_to_json(self):
+        """
+        Salva solo il testo della scheda Audio AI nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "audio_ai_text": self.audioAiTextArea.toPlainText(),
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Testo Audio AI salvato nel file JSON.", timeout=3000)
+
     def save_all_tabs_to_json(self, show_message=True):
         """
         Salva i contenuti di tutte le schede rilevanti (Trascrizione, Riassunto, Audio AI)
-        nel file JSON associato al video corrente.
+        nel file JSON associato al video corrente. Legge i dati direttamente dai widget UI
+        per garantire che le modifiche più recenti vengano salvate.
         """
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
             if show_message:
@@ -1784,14 +1845,28 @@ class VideoAudioManager(QMainWindow):
 
         logging.info(f"Salvataggio di tutti i contenuti nel JSON per {self.videoPathLineEdit}...")
 
-        # Raccoglie i dati da salvare.
-        # Usiamo i nostri attributi interni che dovrebbero essere sempre aggiornati.
+        # Determina quale campo di trascrizione/riassunto è stato modificato dall'utente
+        # e aggiorna solo quello, preservando l'altro.
+        transcription_original_text = self.transcription_original
+        transcription_corrected_text = self.transcription_corrected
+        if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
+            transcription_corrected_text = self.transcriptionTextArea.toPlainText()
+        else:
+            transcription_original_text = self.transcriptionTextArea.toPlainText()
+
+        summary_generated_text = self.summary_generated
+        summary_integrated_text = self.summary_generated_integrated
+        if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
+            summary_integrated_text = self.summaryTextArea.toPlainText()
+        else:
+            summary_generated_text = self.summaryTextArea.toPlainText()
+
         update_data = {
-            "transcription_original": self.transcription_original,
-            "transcription_corrected": self.transcription_corrected,
-            "summary_generated": self.summary_generated,
-            "summary_generated_integrated": self.summary_generated_integrated,
-            "audio_ai_text": self.audioAiTextArea.toPlainText(), # Testo per la generazione audio
+            "transcription_original": transcription_original_text,
+            "transcription_corrected": transcription_corrected_text,
+            "summary_generated": summary_generated_text,
+            "summary_generated_integrated": summary_integrated_text,
+            "audio_ai_text": self.audioAiTextArea.toPlainText(),
             "last_save_date": datetime.datetime.now().isoformat()
         }
 
@@ -2027,16 +2102,6 @@ class VideoAudioManager(QMainWindow):
         current_position = self.player.position()
         new_position = current_position + 5000
         self.player.setPosition(new_position)
-
-    def rewind5SecondsOutput(self):
-        current_position = self.playerOutput.position()
-        new_position = max(0, current_position - 5000)
-        self.playerOutput.setPosition(new_position)
-
-    def forward5SecondsOutput(self):
-        current_position = self.playerOutput.position()
-        new_position = current_position + 5000
-        self.playerOutput.setPosition(new_position)
 
     def frameBackward(self):
         self.get_previous_frame()
@@ -5521,13 +5586,9 @@ class VideoAudioManager(QMainWindow):
 
         if key == Qt.Key.Key_Left:
             self.rewind5Seconds()
-            if self.videoPathLineOutputEdit: # Controlla se c'è un video in output
-                self.rewind5SecondsOutput()
             event.accept()
         elif key == Qt.Key.Key_Right:
             self.forward5Seconds()
-            if self.videoPathLineOutputEdit: # Controlla se c'è un video in output
-                self.forward5SecondsOutput()
             event.accept()
         else:
             super().keyPressEvent(event)
