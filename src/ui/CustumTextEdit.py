@@ -1,7 +1,7 @@
 # File: src/ui/CustumTextEdit.py (Versione con Dialogo di Ricerca)
 
 from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
-                             QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox) # Aggiunto QLabel
+                             QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QShortcut, QPalette, QFont) # Aggiunto QFont
@@ -247,26 +247,32 @@ class CustomTextEdit(QTextEdit):
     def replace_all_results(self, replace_text):
         """
         Sostituisce tutte le occorrenze trovate con il testo di sostituzione.
+        Gestisce correttamente la sensibilità alle maiuscole/minuscole.
         """
         if not self.search_results_cursors or not self.search_text:
             return 0
 
+        replacements_count = 0
+        case_sensitive = self.last_search_options.get('case_sensitive', False)
+        search_text_to_compare = self.search_text if case_sensitive else self.search_text.lower()
+
         # Lavoriamo a ritroso per non invalidare gli indici dei cursori successivi
         for cursor in reversed(self.search_results_cursors):
-            # Assicuriamoci che il cursore sia ancora valido
             temp_cursor = QTextCursor(self.document())
-            temp_cursor.setPosition(cursor.selectionStart())
+            temp_cursor.setPosition(cursor.selectionStart(), QTextCursor.MoveMode.MoveAnchor)
             temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
 
-            # Controlliamo se il testo corrisponde ancora (potrebbe essere cambiato)
-            if temp_cursor.selectedText() == self.search_text:
-                 temp_cursor.insertText(replace_text)
+            selected_text = temp_cursor.selectedText()
+            selected_text_to_compare = selected_text if case_sensitive else selected_text.lower()
 
+            if selected_text_to_compare == search_text_to_compare:
+                temp_cursor.insertText(replace_text)
+                replacements_count += 1
 
         # Dopo la sostituzione, puliamo le evidenziazioni e lo stato della ricerca
         self.clear_highlights()
         self.update_result_count_label()
-        return len(self.search_results_cursors) # Restituisce il numero di sostituzioni effettuate
+        return replacements_count
 
     def update_result_count_label(self):
         """
@@ -461,12 +467,16 @@ class SearchDialog(QDialog):
 
     def replace_all(self):
         """
-        Chiama il metodo di sostituzione di tutte le occorrenze nell'editor.
+        Chiama il metodo di sostituzione di tutte le occorrenze nell'editor
+        e mostra un messaggio con il numero di sostituzioni effettuate.
         """
         replace_text = self.replaceLineEdit.text()
+        if not self.textEdit.get_active_search_text():
+            QMessageBox.warning(self, "Attenzione", "Esegui prima una ricerca prima di sostituire.")
+            return
+
         num_replaced = self.textEdit.replace_all_results(replace_text)
-        # Potremmo mostrare un messaggio con il numero di sostituzioni
-        # QMessageBox.information(self, "Sostituisci Tutto", f"{num_replaced} occorrenze sostituite.")
+        QMessageBox.information(self, "Sostituisci Tutto", f"{num_replaced} occorrenze sono state sostituite.")
         self.update_result_count_label() # La ricerca viene pulita, quindi aggiorniamo la label
 
 
