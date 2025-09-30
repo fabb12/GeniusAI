@@ -1003,13 +1003,6 @@ class VideoAudioManager(QMainWindow):
         self.loadButton.clicked.connect(self.loadText)
         file_actions_layout.addWidget(self.loadButton)
 
-        self.saveButton = QPushButton('')
-        self.saveButton.setIcon(QIcon(get_resource("save.png")))
-        self.saveButton.setFixedSize(32, 32)
-        self.saveButton.setToolTip("Salva Testo")
-        self.saveButton.clicked.connect(self.saveText)
-        file_actions_layout.addWidget(self.saveButton)
-
         self.saveTranscriptionButton = QPushButton('')
         self.saveTranscriptionButton.setIcon(QIcon(get_resource("save_all.png")))
         self.saveTranscriptionButton.setFixedSize(32, 32)
