@@ -1170,6 +1170,10 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
         self.editingDock.addWidget(voiceSettingsWidget)
 
+        # Aggiungi la UI per gli audio generati
+        generatedAudiosWidget = self.createGeneratedAudiosUI()
+        self.editingDock.addWidget(generatedAudiosWidget)
+
         # Sincronizza i checkbox di allineamento
         self.alignspeed.toggled.connect(self.alignspeed_replacement.setChecked)
         self.alignspeed_replacement.toggled.connect(self.alignspeed.setChecked)
@@ -2405,6 +2409,32 @@ class VideoAudioManager(QMainWindow):
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
+
+    def createGeneratedAudiosUI(self):
+        """
+        Crea il QGroupBox per la gestione degli audio generati.
+        """
+        generatedAudiosGroup = QGroupBox("Audio Generati per questo Video")
+        layout = QVBoxLayout()
+
+        self.generatedAudiosListWidget = QListWidget()
+        self.generatedAudiosListWidget.setToolTip("Lista degli audio generati per il video corrente.")
+        layout.addWidget(self.generatedAudiosListWidget)
+
+        buttons_layout = QHBoxLayout()
+        applyButton = QPushButton("Applica Selezionato")
+        applyButton.setToolTip("Applica l'audio selezionato al video.")
+        applyButton.clicked.connect(self.apply_selected_audio)
+        buttons_layout.addWidget(applyButton)
+
+        deleteButton = QPushButton("Elimina Selezionato")
+        deleteButton.setToolTip("Elimina l'audio selezionato (il file verrà cancellato).")
+        deleteButton.clicked.connect(self.delete_selected_audio)
+        buttons_layout.addWidget(deleteButton)
+
+        layout.addLayout(buttons_layout)
+        generatedAudiosGroup.setLayout(layout)
+        return generatedAudiosGroup
 
     def addCustomVoice(self):
         custom_name = self.voiceSelectionComboBox.currentText().strip()
@@ -3721,6 +3751,15 @@ class VideoAudioManager(QMainWindow):
             logging.info(f"Nessun file JSON trovato per {video_path}. Creazione di un nuovo file.")
             data = self._create_new_json_data(video_path)
 
+        # Pulisci la lista di audio generati, rimuovendo i file che non esistono più
+        if 'generated_audios' in data:
+            valid_audios = [audio for audio in data['generated_audios'] if os.path.exists(audio)]
+            if len(valid_audios) != len(data['generated_audios']):
+                data['generated_audios'] = valid_audios
+                # Riscrivi il file solo se sono state fatte modifiche
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+
         # Scrivi sempre per assicurarti che il formato sia corretto e aggiornato
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
@@ -3755,8 +3794,73 @@ class VideoAudioManager(QMainWindow):
             "transcription_corrected": "",
             "summary_generated": "",
             "summary_generated_integrated": "",
-            "summary_date": None
+            "summary_date": None,
+            "generated_audios": []
         }
+
+    def apply_selected_audio(self):
+        """
+        Applica l'audio selezionato dalla lista degli audio generati.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato dalla lista.", error=True)
+            return
+
+        audio_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        if not os.path.exists(audio_path):
+            self.show_status_message("Il file audio selezionato non esiste più.", error=True)
+            # Rimuovi l'elemento dalla lista e dal JSON
+            self._manage_video_json(self.videoPathLineEdit) # Questo ricaricherà e pulirà
+            return
+
+        self.show_status_message(f"Applicazione di {os.path.basename(audio_path)}...")
+        self.apply_generated_audio(audio_path)
+
+    def delete_selected_audio(self):
+        """
+        Elimina l'audio selezionato dalla lista, dal disco e dal file JSON.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato da eliminare.", error=True)
+            return
+
+        item = selected_items[0]
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+
+        reply = QMessageBox.question(
+            self,
+            "Conferma Eliminazione",
+            f"Sei sicuro di voler eliminare definitivamente il file audio?\n\n{os.path.basename(audio_path)}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 1. Rimuovi il file dal disco
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                    self.show_status_message(f"File {os.path.basename(audio_path)} eliminato.")
+
+                # 2. Rimuovi dal file JSON
+                json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+                if os.path.exists(json_path):
+                    with open(json_path, 'r+', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if 'generated_audios' in data and audio_path in data['generated_audios']:
+                            data['generated_audios'].remove(audio_path)
+                            f.seek(0)
+                            json.dump(data, f, ensure_ascii=False, indent=4)
+                            f.truncate()
+                        # Aggiorna l'UI con i dati modificati
+                        self._update_ui_from_json_data(data)
+
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione: {e}", error=True)
+                logging.error(f"Errore durante l'eliminazione del file audio {audio_path}: {e}")
+
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
@@ -4316,6 +4420,16 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna il dock informativo
         self.infoDock.update_info(data)
+
+        # Aggiorna la lista degli audio generati
+        self.generatedAudiosListWidget.clear()
+        if 'generated_audios' in data and data['generated_audios']:
+            for audio_path in data['generated_audios']:
+                # Mostra solo il nome del file per leggibilità
+                item_text = os.path.basename(audio_path)
+                list_item = QListWidgetItem(item_text)
+                list_item.setData(Qt.ItemDataRole.UserRole, audio_path) # Salva il percorso completo
+                self.generatedAudiosListWidget.addItem(list_item)
         logging.debug("UI aggiornata con i dati JSON!")
 
     def cleanupFiles(self, file_paths):
@@ -4381,7 +4495,8 @@ class VideoAudioManager(QMainWindow):
 
         base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0] if self.videoPathLineEdit else "generated_audio"
         save_dir = os.path.dirname(self.videoPathLineEdit) if self.videoPathLineEdit else "."
-        audio_save_path = os.path.join(save_dir, f"{base_name}_generated.mp3")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        audio_save_path = os.path.join(save_dir, f"{base_name}_generated_{timestamp}.mp3")
 
         thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key, audio_save_path, self)
         self.start_task(thread, self.onAudioGenerationCompleted, self.onAudioGenerationError, self.update_status_progress)
@@ -4414,6 +4529,20 @@ class VideoAudioManager(QMainWindow):
         Called when the AI audio generation is complete.
         This function now decides whether to sync the audio or apply it at a specific time.
         """
+        # Aggiungi il nuovo audio al file JSON del video
+        json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+        if os.path.exists(json_path):
+            with open(json_path, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'generated_audios' not in data:
+                    data['generated_audios'] = []
+                data['generated_audios'].append(audio_path)
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.truncate()
+            # Aggiorna l'UI
+            self._update_ui_from_json_data(data)
+
         self.apply_generated_audio(
             new_audio_path=audio_path
         )
