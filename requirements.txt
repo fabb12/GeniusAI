@@ -27,3 +27,5 @@ google-generativeai
 langchain_google_genai
 Markdown
 python-docx
+langchain_openai
+langchain_anthropic

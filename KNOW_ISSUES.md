@@ -55,6 +55,10 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] usare whisper 
 - [x] salvare su disco i file recenti 
 - [ ] gestire megliio i contatti teams
+- [ ] drag e drop da sistemare
+- [ ] browser use
+- 
+- [ ] note sul video e visualizza 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
