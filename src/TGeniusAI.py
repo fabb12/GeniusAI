@@ -648,6 +648,13 @@ class VideoAudioManager(QMainWindow):
         self.infoDock.setStyleSheet(self.styleSheet())
         area.addDock(self.infoDock, 'right', self.transcriptionDock)
 
+        self.videoNotesDock = CustomDock("Note Video", closable=True)
+        self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoNotesDock.setStyleSheet(self.styleSheet())
+        self.videoNotesDock.setToolTip("Dock per le note video")
+        area.addDock(self.videoNotesDock, 'bottom', self.transcriptionDock)
+        self.createVideoNotesDock()
+
 
         # self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
         # self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -679,6 +686,7 @@ class VideoAudioManager(QMainWindow):
         self.videoOverlay.panned.connect(self.handle_pan)
         self.videoOverlay.zoomed.connect(self.handle_zoom)
         self.videoOverlay.view_reset.connect(self.reset_view)
+        self.videoOverlay.installEventFilter(self)
 
         self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
@@ -1214,7 +1222,8 @@ class VideoAudioManager(QMainWindow):
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock,
             'videoEffectsDock': self.videoEffectsDock,
-            'infoDock': self.infoDock
+            'infoDock': self.infoDock,
+            'videoNotesDock': self.videoNotesDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -2069,6 +2078,7 @@ class VideoAudioManager(QMainWindow):
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
+        self.videoNotesListWidget.clear()
     def releaseOutputVideo(self):
         self.playerOutput.stop()
         time.sleep(.01)
@@ -2347,6 +2357,31 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
+        self.videoNotesDock.setStyleSheet(style)
+
+    def createVideoNotesDock(self):
+        """Crea il dock per le note video."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.videoNotesListWidget = QListWidget()
+        self.videoNotesListWidget.setToolTip("Elenco delle note del video. Doppio click per andare al timecode.")
+        self.videoNotesListWidget.itemDoubleClicked.connect(self.seek_to_note_timecode)
+        layout.addWidget(self.videoNotesListWidget)
+
+        buttons_layout = QHBoxLayout()
+        self.editNoteButton = QPushButton("Modifica Nota")
+        self.editNoteButton.setToolTip("Modifica la nota selezionata.")
+        self.editNoteButton.clicked.connect(self.edit_video_note)
+        buttons_layout.addWidget(self.editNoteButton)
+
+        self.deleteNoteButton = QPushButton("Cancella Nota")
+        self.deleteNoteButton.setToolTip("Cancella la nota selezionata.")
+        self.deleteNoteButton.clicked.connect(self.delete_video_note)
+        buttons_layout.addWidget(self.deleteNoteButton)
+
+        layout.addLayout(buttons_layout)
+        self.videoNotesDock.addWidget(widget)
 
     def getDarkStyle(self):
         return """
@@ -3889,7 +3924,8 @@ class VideoAudioManager(QMainWindow):
             "summary_generated": "",
             "summary_generated_integrated": "",
             "summary_date": None,
-            "generated_audios": []
+            "generated_audios": [],
+            "video_notes": []
         }
 
     def apply_selected_audio(self):
@@ -4218,6 +4254,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
+        self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -4230,6 +4267,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoMergeDock)
         viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
+        viewMenu.addAction(self.actionToggleVideoNotesDock)
 
 
 
@@ -4328,6 +4366,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
+        self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -4514,6 +4553,9 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna il dock informativo
         self.infoDock.update_info(data)
+
+        # Carica le note video
+        self.load_video_notes_from_json(data)
 
         # Aggiorna la lista degli audio generati
         self.generatedAudiosListWidget.clear()
@@ -5531,6 +5573,92 @@ class VideoAudioManager(QMainWindow):
             event.accept()
         else:
             super().keyPressEvent(event)
+
+    def eventFilter(self, source, event):
+        if source is self.videoOverlay and event.type() == QEvent.Type.MouseButtonPress:
+            if event.button() == Qt.MouseButton.RightButton:
+                self.add_video_note()
+                return True
+        return super().eventFilter(source, event)
+
+    def add_video_note(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Carica un video prima di aggiungere una nota.", error=True)
+            return
+
+        self.player.pause()
+        position = self.player.position()
+        timecode = self.formatTimecode(position)
+
+        note_text, ok = QInputDialog.getText(self, "Aggiungi Nota", f"Inserisci la nota per il timecode {timecode}:")
+
+        if ok and note_text.strip():
+            note_item = f"{timecode} - {note_text.strip()}"
+            list_item = QListWidgetItem(note_item)
+            list_item.setData(Qt.ItemDataRole.UserRole, position) # Store position in ms
+            self.videoNotesListWidget.addItem(list_item)
+            self.save_video_notes_to_json()
+
+    def seek_to_note_timecode(self, item):
+        position = item.data(Qt.ItemDataRole.UserRole)
+        if position is not None:
+            self.player.setPosition(position)
+
+    def save_video_notes_to_json(self):
+        if not self.videoPathLineEdit:
+            return
+
+        notes = []
+        for i in range(self.videoNotesListWidget.count()):
+            item = self.videoNotesListWidget.item(i)
+            position = item.data(Qt.ItemDataRole.UserRole)
+            text = item.text().split(" - ", 1)[1]
+            notes.append({"position": position, "text": text})
+
+        self._update_json_file(self.videoPathLineEdit, {"video_notes": notes})
+
+    def load_video_notes_from_json(self, data):
+        self.videoNotesListWidget.clear()
+        notes = data.get("video_notes", [])
+        for note in notes:
+            position = note.get("position")
+            text = note.get("text")
+            if position is not None and text:
+                timecode = self.formatTimecode(position)
+                list_item = QListWidgetItem(f"{timecode} - {text}")
+                list_item.setData(Qt.ItemDataRole.UserRole, position)
+                self.videoNotesListWidget.addItem(list_item)
+
+    def edit_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da modificare.", error=True)
+            return
+
+        position = selected_item.data(Qt.ItemDataRole.UserRole)
+        timecode = self.formatTimecode(position)
+        current_text = selected_item.text().split(" - ", 1)[1]
+
+        new_text, ok = QInputDialog.getText(self, "Modifica Nota", "Nuovo testo della nota:", text=current_text)
+
+        if ok and new_text.strip():
+            selected_item.setText(f"{timecode} - {new_text.strip()}")
+            self.save_video_notes_to_json()
+
+    def delete_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da cancellare.", error=True)
+            return
+
+        reply = QMessageBox.question(self, "Conferma Cancellazione",
+                                     f"Sei sicuro di voler cancellare la nota?\n\n'{selected_item.text()}'",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.videoNotesListWidget.takeItem(self.videoNotesListWidget.row(selected_item))
+            self.save_video_notes_to_json()
 
     def updatePlayButtonIconOutput(self, state):
         if self.reverseTimerOutput.isActive():
