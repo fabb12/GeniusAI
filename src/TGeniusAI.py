@@ -12,7 +12,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -82,6 +82,7 @@ from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
 from src.services.VideoCompositing import VideoCompositingThread
 import docx
+from docx.enum.text import WD_COLOR_INDEX
 
 class MergeProgressLogger(proglog.ProgressBarLogger):
     def __init__(self, progress_signal_emitter):
@@ -1143,6 +1144,13 @@ class VideoAudioManager(QMainWindow):
         self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
         top_controls_layout.addWidget(self.generatePptxActionBtn)
 
+        self.highlightTextButton = QPushButton('')
+        self.highlightTextButton.setIcon(QIcon(get_resource("key.png")))
+        self.highlightTextButton.setFixedSize(32, 32)
+        self.highlightTextButton.setToolTip("Evidenzia Testo Selezionato")
+        self.highlightTextButton.clicked.connect(self.highlight_selected_text)
+        top_controls_layout.addWidget(self.highlightTextButton)
+
         # Pulsante per incollare il riassunto nella tab Audio AI
         self.pasteSummaryToAudioAIButton = QPushButton('')
         self.pasteSummaryToAudioAIButton.setIcon(QIcon(get_resource("paste.png")))
@@ -1188,9 +1196,6 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
         bottom_controls_layout.addWidget(self.integrazioneToggle)
 
-        self.summaryMarkdownCheckbox = QCheckBox("Visualizza Markdown")
-        self.summaryMarkdownCheckbox.toggled.connect(self.update_summary_view)
-        bottom_controls_layout.addWidget(self.summaryMarkdownCheckbox)
         bottom_controls_layout.addStretch()
         summary_controls_layout.addLayout(bottom_controls_layout)
 
@@ -1505,11 +1510,15 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("È necessario generare un riassunto standard prima di poterlo integrare.", error=True)
             return
 
+        # Converti il riassunto HTML in testo semplice prima di passarlo al thread
+        soup = BeautifulSoup(self.summary_generated, 'html.parser')
+        plain_summary = soup.get_text()
+
         thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            current_summary=self.summary_generated,
+            current_summary=plain_summary,
             parent=self
         )
         self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
@@ -1797,13 +1806,13 @@ class VideoAudioManager(QMainWindow):
 
     def _sync_summary_state_from_ui(self):
         """Sincronizza le variabili di stato del riassunto con il contenuto della UI."""
-        if not self.summaryTextArea.isReadOnly():
-            current_text = self.summaryTextArea.toPlainText()
-            if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
-                self.summary_generated_integrated = current_text
-            else:
-                self.summary_generated = current_text
-            self.summary_text = current_text # Aggiorna anche la variabile di visualizzazione
+        # L'editor del riassunto è ora sempre un editor rich-text, quindi salviamo sempre l'HTML.
+        current_html = self.summaryTextArea.toHtml()
+        if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
+            self.summary_generated_integrated = current_html
+        else:
+            self.summary_generated = current_html
+        self.summary_text = current_html # Aggiorna anche la variabile di visualizzazione
 
     def save_transcription_to_json(self):
         """
@@ -1958,18 +1967,20 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                self.summaries[self.current_summary_type] = result
+                # Converti il risultato Markdown in HTML prima di memorizzarlo e visualizzarlo
+                html_summary = markdown.markdown(result)
+                self.summaries[self.current_summary_type] = html_summary
                 self.active_summary_type = self.current_summary_type
 
-                self.summary_generated = result
-                self.summary_text = result
+                self.summary_generated = html_summary
+                self.summary_text = html_summary
                 self.update_summary_view()
 
                 self.integrazioneToggle.setChecked(False)
                 self.transcriptionTabWidget.setCurrentIndex(1)
 
                 update_data = {
-                    "summary_generated": result,
+                    "summary_generated": html_summary,
                     "summary_date": datetime.datetime.now().isoformat()
                 }
                 self._update_json_file(self.videoPathLineEdit, update_data)
@@ -1977,32 +1988,33 @@ class VideoAudioManager(QMainWindow):
             self.current_summary_type = None
 
     def update_summary_view(self):
-        """Aggiorna la visualizzazione dell'area di testo del riassunto (Markdown/Testo)."""
+        """Aggiorna la visualizzazione dell'area di testo del riassunto con il contenuto HTML."""
         if not hasattr(self, 'summary_text'):
             return
 
-        is_markdown = self.summaryMarkdownCheckbox.isChecked()
-        summary_text = self.summary_text
-
-        # Impedisce la modifica diretta dell'HTML renderizzato per non perdere il Markdown originale
-        self.summaryTextArea.setReadOnly(is_markdown)
-
+        # Il summary_text è ora considerato HTML. La conversione da Markdown
+        # avviene quando il riassunto viene generato. L'editor è sempre modificabile.
         self.summaryTextArea.blockSignals(True)
-        if is_markdown:
-            try:
-                html = markdown.markdown(summary_text)
-                self.summaryTextArea.setHtml(html)
-            except Exception as e:
-                logging.error(f"Errore durante la conversione Markdown in HTML: {e}")
-                self.summaryTextArea.setPlainText(summary_text)
-        else:
-            self.summaryTextArea.setPlainText(summary_text)
+        self.summaryTextArea.setHtml(self.summary_text)
         self.summaryTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
         # The main error display is handled by finish_task.
         self.show_status_message(f"Errore processo AI: {error_message}", error=True)
+
+    def highlight_selected_text(self):
+        """Applies a yellow background to the selected text in the summary text area."""
+        cursor = self.summaryTextArea.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        # Create a format for the highlight
+        highlight_format = QTextCharFormat()
+        highlight_format.setBackground(QColor('yellow'))
+
+        # Apply the format to the selected text
+        cursor.mergeCharFormat(highlight_format)
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
@@ -3800,27 +3812,55 @@ class VideoAudioManager(QMainWindow):
 
     def exportSummaryToWord(self):
         """
-        Exports the summary text to a Word document.
+        Esporta il contenuto del riassunto (con formattazione) in un documento Word.
         """
-        summary_text = self.summaryTextArea.toPlainText()
-        if not summary_text.strip():
-            QMessageBox.warning(self, "Attenzione", "Il riassunto è vuoto. Non c'è nulla da esportare.")
+        summary_html = self.summaryTextArea.toHtml()
+        if not self.summaryTextArea.document().toPlainText().strip():
+            self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
 
-        # Ask user for save location
         path, _ = QFileDialog.getSaveFileName(self, "Esporta Riassunto", "", "Word Document (*.docx)")
+        if not path:
+            return
 
-        if path:
-            if not path.endswith('.docx'):
-                path += '.docx'
+        if not path.endswith('.docx'):
+            path += '.docx'
 
-            try:
-                document = docx.Document()
-                document.add_paragraph(summary_text)
-                document.save(path)
-                QMessageBox.information(self, "Successo", f"Riassunto esportato con successo in:\n{path}")
-            except Exception as e:
-                QMessageBox.critical(self, "Errore", f"Impossibile esportare il riassunto:\n{e}")
+        try:
+            document = docx.Document()
+            soup = BeautifulSoup(summary_html, 'html.parser')
+
+            for element in soup.body.contents:
+                if element.name == 'p':
+                    p = document.add_paragraph()
+                    self._add_html_to_doc(element, p)
+
+            document.save(path)
+            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+        except Exception as e:
+            self.show_status_message(f"Impossibile esportare il riassunto: {e}", error=True)
+            logging.error(f"Errore durante l'esportazione in Word: {e}")
+
+    def _add_html_to_doc(self, element, paragraph):
+        """
+        Funzione di supporto ricorsiva per analizzare l'HTML e aggiungerlo al documento Word.
+        """
+        for child in element.children:
+            if isinstance(child, str):
+                run = paragraph.add_run(child)
+                # Eredita la formattazione dal genitore
+                parent = element
+                while parent:
+                    if parent.name in ['b', 'strong']:
+                        run.bold = True
+                    if parent.name in ['i', 'em']:
+                        run.italic = True
+                    if parent.name == 'span' and parent.get('style'):
+                        if 'background-color:yellow' in parent.get('style'):
+                            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                    parent = parent.parent
+            elif child.name:
+                self._add_html_to_doc(child, paragraph)
 
     def loadText(self):
         path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
