@@ -433,6 +433,18 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
 
+        # Mappatura dei colori per l'evidenziazione
+        self.highlight_colors = {
+            "Giallo": {"qcolor": QColor('yellow'), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
+            "Verde Chiaro": {"qcolor": QColor('lightgreen'), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#90ee90"},
+            "Turchese": {"qcolor": QColor('turquoise'), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#40e0d0"},
+            "Rosa": {"qcolor": QColor('pink'), "docx": WD_COLOR_INDEX.PINK, "hex": "#ffc0cb"},
+            "Azzurro": {"qcolor": QColor('lightblue'), "docx": WD_COLOR_INDEX.BLUE, "hex": "#add8e6"},
+            "Rosso": {"qcolor": QColor('red'), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
+            "Grigio": {"qcolor": QColor('lightgray'), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#d3d3d3"},
+        }
+        self.current_highlight_color_name = "Giallo" # Default
+
         self.initUI()
 
         # Move these initializations to after initUI
@@ -564,6 +576,9 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
         self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
+
+        # Carica il colore di evidenziazione personalizzato
+        self.current_highlight_color_name = self.settings.value("editor/highlightColor", "Giallo")
 
         # Configura l'aspetto dell'overlay
         self.videoOverlay.set_show_red_dot(self.show_red_dot)
@@ -2004,24 +2019,23 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore processo AI: {error_message}", error=True)
 
     def highlight_selected_text(self):
-        """Applies or removes a yellow background from the selected text."""
+        """Applies or removes the selected highlight color from the text."""
         cursor = self.summaryTextArea.textCursor()
         if not cursor.hasSelection():
             return
 
-        # Get the current format of the selection
+        color_name = self.current_highlight_color_name
+        color_info = self.highlight_colors.get(color_name, self.highlight_colors["Giallo"])
+        highlight_color = QColor(color_info["hex"])
+
         current_format = cursor.charFormat()
         new_format = QTextCharFormat()
 
-        # Check if the text is already highlighted in yellow
-        if current_format.background().color() == QColor('yellow'):
-            # If it is, remove the highlight by setting a transparent background
+        if current_format.background().color() == highlight_color:
             new_format.setBackground(QColor(Qt.GlobalColor.transparent))
         else:
-            # If not, apply the highlight
-            new_format.setBackground(QColor('yellow'))
+            new_format.setBackground(highlight_color)
 
-        # Apply the new format to the entire selection
         cursor.mergeCharFormat(new_format)
 
     def openPptxDialog(self):
@@ -3864,8 +3878,11 @@ class VideoAudioManager(QMainWindow):
                     if parent.name in ['i', 'em']:
                         run.italic = True
                     if parent.name == 'span' and parent.get('style'):
-                        if 'background-color:yellow' in parent.get('style'):
-                            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                        style = parent.get('style').replace(" ", "")
+                        for color_name, color_data in self.highlight_colors.items():
+                            if f"background-color:{color_data['hex']}" in style:
+                                run.font.highlight_color = color_data['docx']
+                                break
                     parent = parent.parent
             elif child.name:
                 self._add_html_to_doc(child, paragraph)
