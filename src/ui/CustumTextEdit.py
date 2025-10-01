@@ -18,7 +18,7 @@ class CustomTextEdit(QTextEdit):
     - Zoom del testo con Ctrl + rotellina del mouse.
     """
     cursorPositionChanged = pyqtSignal()
-    timestampDoubleClicked = pyqtSignal(int)
+    timestampDoubleClicked = pyqtSignal(float)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
@@ -114,11 +114,11 @@ class CustomTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
         selected_text = cursor.selectedText()
 
-        # Cerca un timestamp nel formato [MM:SS]
-        match = re.search(r'\[(\d+):(\d+)\]', selected_text)
+        # Cerca un timestamp nel formato [MM:SS.d] o [MM:SS]
+        match = re.search(r'\[(\d+):(\d+(\.\d)?)\]', selected_text)
         if match:
             minutes = int(match.group(1))
-            seconds = int(match.group(2))
+            seconds = float(match.group(2))
             total_seconds = (minutes * 60) + seconds
             self.timestampDoubleClicked.emit(total_seconds)
 
