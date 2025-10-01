@@ -56,7 +56,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] salvare su disco i file recenti 
 - [ ] gestire meglio i contatti teams
 - [ ] drag e drop da sistemare
-- [ ] browser use
+- [ ] browser use 
 - [x] mettere tasto salvataggio nel tab trascrzione , rissunto e audio ai , salva il json nnelle rispettive chiavi, e salva ogni 5 minuti automaticamente 
 - [x] aggiungere replace nel search box e sistema il numero di elmentei trovati e sistema il colore di quadno non trova nulla metti colore arancione 
 - [x] mettere tasti frecce per andare aventi e indietro nel playback del video
