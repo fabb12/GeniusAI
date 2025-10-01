@@ -4598,40 +4598,78 @@ class VideoAudioManager(QMainWindow):
         self._update_json_file(self.videoPathLineEdit, update_data)
 
     def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
-        WPM = 150  # Average words-per-minute rate for spoken language
+        WPM = 150
         words_per_second = WPM / 60
+        cumulative_time = 0.0
 
         soup = BeautifulSoup(html_text, 'html.parser')
-        paragraphs = soup.find_all('p')
+        new_body = BeautifulSoup('<body></body>', 'html.parser').body
 
-        cumulative_time = 0  # Total time in seconds
+        # Process paragraphs or the whole body if no paragraphs exist
+        elements_to_process = soup.find_all('p') if soup.find('p') else [soup.body]
 
-        for paragraph in paragraphs:
-            text = paragraph.get_text()
+        for element in elements_to_process:
+            if not element: continue
 
-            sentences = re.split(r'(?<=[.!?])\s+', text)
-            updated_html = []
+            current_sentence_nodes = []
+            # Make a copy to iterate over as we will be modifying the tree
+            for node in list(element.contents):
+                # Detach the node from its original parent to be moved later
+                node.extract()
+                current_sentence_nodes.append(node)
 
-            for sentence in sentences:
-                words = re.findall(r'\b\w+\b', sentence)
-                cumulative_time += len(words) / words_per_second
+                # Check if the sentence is complete
+                # A sentence is complete if the node is a string that ends with sentence punctuation
+                if isinstance(node, str) and re.search(r'[.!?]\s*$', node):
+                    # Process the collected sentence
+                    sentence_html = ''.join(str(n) for n in current_sentence_nodes)
+                    sentence_text = BeautifulSoup(sentence_html, 'html.parser').get_text()
+                    words = re.findall(r'\b\w+\b', sentence_text)
 
-                pause_pattern = re.compile(r'<break time="(\d+(\.\d+)?)s" />')
-                pauses = pause_pattern.findall(sentence)
-                for pause in pauses:
-                    pause_time = float(pause[0])
-                    cumulative_time += pause_time
+                    if words:
+                        time_for_sentence = len(words) / words_per_second
+                        cumulative_time += time_for_sentence
+                        minutes = int(cumulative_time // 60)
+                        seconds = cumulative_time % 60
 
-                updated_html.append(sentence)
+                        # Create new paragraph for the sentence
+                        new_p = soup.new_tag('p')
 
-                minutes = int(cumulative_time // 60)
-                seconds = cumulative_time % 60
-                updated_html.append(f" <span style='color:cyan;'>[{minutes:02d}:{seconds:04.1f}]</span>")
+                        # Create and add timestamp
+                        timestamp_span_str = f"<span style='color:#ADD8E6;'>[{minutes:02d}:{seconds:04.1f}]</span> "
+                        timestamp_span = BeautifulSoup(timestamp_span_str, 'html.parser').span
+                        new_p.append(timestamp_span)
 
-            paragraph.clear()
-            paragraph.append(BeautifulSoup(' '.join(updated_html), 'html.parser'))
+                        # Add sentence content
+                        for snode in current_sentence_nodes:
+                            new_p.append(snode)
 
-        return str(soup)
+                        new_body.append(new_p)
+
+                    # Reset for the next sentence
+                    current_sentence_nodes = []
+
+            # Handle any remaining nodes that didn't form a complete sentence
+            if current_sentence_nodes:
+                sentence_html = ''.join(str(n) for n in current_sentence_nodes)
+                sentence_text = BeautifulSoup(sentence_html, 'html.parser').get_text()
+                words = re.findall(r'\b\w+\b', sentence_text)
+
+                if words:
+                    time_for_sentence = len(words) / words_per_second
+                    cumulative_time += time_for_sentence
+                    minutes = int(cumulative_time // 60)
+                    seconds = cumulative_time % 60
+
+                    new_p = soup.new_tag('p')
+                    timestamp_span_str = f"<span style='color:#ADD8E6;'>[{minutes:02d}:{seconds:04.1f}]</span> "
+                    timestamp_span = BeautifulSoup(timestamp_span_str, 'html.parser').span
+                    new_p.append(timestamp_span)
+                    for snode in current_sentence_nodes:
+                        new_p.append(snode)
+                    new_body.append(new_p)
+
+        return new_body.decode_contents()
 
     def detectAndUpdateLanguage(self, text):
         try:
