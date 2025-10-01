@@ -1963,17 +1963,24 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
-        self.audioAiTextArea.setReadOnly(checked)
+        # Applica la logica a entrambe le aree di testo
+        text_areas = [self.transcriptionTextArea, self.audioAiTextArea]
         self.timecodeEnabled = checked
 
-        if checked:
-            # Salva l'HTML originale e applica i timecode
-            self.original_audio_ai_html = self.audioAiTextArea.toHtml()
-            updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(self.original_audio_ai_html)
-            self.audioAiTextArea.setHtml(updated_html)
-        else:
-            # Ripristina l'HTML originale
-            self.audioAiTextArea.setHtml(self.original_audio_ai_html)
+        for text_area in text_areas:
+            text_area.setReadOnly(checked)
+            if checked:
+                # Salva l'HTML corrente e applica i timecode
+                original_html = text_area.toHtml()
+                # Salva l'originale in un attributo dinamico per evitare conflitti
+                setattr(self, f"original_html_for_{text_area.objectName()}", original_html)
+                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(original_html)
+                text_area.setHtml(updated_html)
+            else:
+                # Ripristina l'HTML originale
+                original_html = getattr(self, f"original_html_for_{text_area.objectName()}", "")
+                if original_html:
+                    text_area.setHtml(original_html)
 
 
     def updateProgressDialog(self, value, label):
