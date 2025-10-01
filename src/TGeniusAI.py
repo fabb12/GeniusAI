@@ -433,6 +433,18 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
 
+        # Mappatura dei colori per l'evidenziazione
+        self.highlight_colors = {
+            "Giallo": {"qcolor": QColor('yellow'), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
+            "Verde Chiaro": {"qcolor": QColor('lightgreen'), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#90ee90"},
+            "Turchese": {"qcolor": QColor('turquoise'), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#40e0d0"},
+            "Rosa": {"qcolor": QColor('pink'), "docx": WD_COLOR_INDEX.PINK, "hex": "#ffc0cb"},
+            "Azzurro": {"qcolor": QColor('lightblue'), "docx": WD_COLOR_INDEX.BLUE, "hex": "#add8e6"},
+            "Rosso": {"qcolor": QColor('red'), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
+            "Grigio": {"qcolor": QColor('lightgray'), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#d3d3d3"},
+        }
+        self.current_highlight_color_name = "Giallo" # Default
+
         self.initUI()
 
         # Move these initializations to after initUI
@@ -564,6 +576,9 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = settings.value("recording/watermarkSize", 10, type=int)
         self.watermarkPosition = settings.value("recording/watermarkPosition", "Bottom Right")
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
+
+        # Carica il colore di evidenziazione personalizzato
+        self.current_highlight_color_name = self.settings.value("editor/highlightColor", "Giallo")
 
         # Configura l'aspetto dell'overlay
         self.videoOverlay.set_show_red_dot(self.show_red_dot)
@@ -1196,6 +1211,13 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
         bottom_controls_layout.addWidget(self.integrazioneToggle)
 
+        self.toggleSummaryViewButton = QPushButton("Mostra HTML")
+        self.toggleSummaryViewButton.setToolTip("Alterna tra la visualizzazione formattata e il codice sorgente HTML")
+        self.toggleSummaryViewButton.setCheckable(True)
+        self.toggleSummaryViewButton.toggled.connect(self.toggle_summary_view_mode)
+        bottom_controls_layout.addWidget(self.toggleSummaryViewButton)
+        self.summary_view_is_raw = False # Stato iniziale
+
         bottom_controls_layout.addStretch()
         summary_controls_layout.addLayout(bottom_controls_layout)
 
@@ -1805,9 +1827,17 @@ class VideoAudioManager(QMainWindow):
             self.transcription_original = self.transcriptionTextArea.toHtml()
 
     def _sync_summary_state_from_ui(self):
-        """Sincronizza le variabili di stato del riassunto con il contenuto della UI."""
-        # L'editor del riassunto è ora sempre un editor rich-text, quindi salviamo sempre l'HTML.
-        current_html = self.summaryTextArea.toHtml()
+        """
+        Sincronizza le variabili di stato del riassunto con il contenuto della UI,
+        tenendo conto della modalità di visualizzazione (grezza o formattata).
+        """
+        if self.summary_view_is_raw:
+            # Se siamo in modalità HTML grezzo, il testo semplice è la nostra fonte di verità
+            current_html = self.summaryTextArea.toPlainText()
+        else:
+            # Altrimenti, prendiamo l'HTML renderizzato
+            current_html = self.summaryTextArea.toHtml()
+
         if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
             self.summary_generated_integrated = current_html
         else:
@@ -2004,25 +2034,44 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore processo AI: {error_message}", error=True)
 
     def highlight_selected_text(self):
-        """Applies or removes a yellow background from the selected text."""
+        """Applies or removes the selected highlight color from the text."""
         cursor = self.summaryTextArea.textCursor()
         if not cursor.hasSelection():
             return
 
-        # Get the current format of the selection
+        color_name = self.current_highlight_color_name
+        color_info = self.highlight_colors.get(color_name, self.highlight_colors["Giallo"])
+        highlight_color = QColor(color_info["hex"])
+
         current_format = cursor.charFormat()
         new_format = QTextCharFormat()
 
-        # Check if the text is already highlighted in yellow
-        if current_format.background().color() == QColor('yellow'):
-            # If it is, remove the highlight by setting a transparent background
+        if current_format.background().color() == highlight_color:
             new_format.setBackground(QColor(Qt.GlobalColor.transparent))
         else:
-            # If not, apply the highlight
-            new_format.setBackground(QColor('yellow'))
+            new_format.setBackground(highlight_color)
 
-        # Apply the new format to the entire selection
         cursor.mergeCharFormat(new_format)
+
+    def toggle_summary_view_mode(self, checked):
+        """
+        Alterna la visualizzazione dell'editor del riassunto tra testo formattato e sorgente HTML.
+        """
+        self.summary_view_is_raw = checked
+        self.summaryTextArea.blockSignals(True) # Blocca i segnali per evitare loop
+
+        if checked:
+            # Passa alla visualizzazione HTML grezzo
+            current_html = self.summaryTextArea.toHtml()
+            self.summaryTextArea.setPlainText(current_html)
+            self.toggleSummaryViewButton.setText("Mostra Testo")
+        else:
+            # Passa alla visualizzazione formattata
+            raw_html = self.summaryTextArea.toPlainText()
+            self.summaryTextArea.setHtml(raw_html)
+            self.toggleSummaryViewButton.setText("Mostra HTML")
+
+        self.summaryTextArea.blockSignals(False) # Riattiva i segnali
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
@@ -3864,8 +3913,11 @@ class VideoAudioManager(QMainWindow):
                     if parent.name in ['i', 'em']:
                         run.italic = True
                     if parent.name == 'span' and parent.get('style'):
-                        if 'background-color:yellow' in parent.get('style'):
-                            run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+                        style = parent.get('style').replace(" ", "")
+                        for color_name, color_data in self.highlight_colors.items():
+                            if f"background-color:{color_data['hex']}" in style:
+                                run.font.highlight_color = color_data['docx']
+                                break
                     parent = parent.parent
             elif child.name:
                 self._add_html_to_doc(child, paragraph)
@@ -4135,15 +4187,7 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFiles(video_path)
 
         # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
-        video_metadata = self._manage_video_json(video_path)
-
-        # Carica i dati esistenti nelle aree di testo, se presenti
-        if video_metadata:
-            self.transcriptionTextArea.setPlainText(video_metadata.get("transcription_raw", ""))
-
-            # Decide quale riassunto mostrare
-            summary_to_show = video_metadata.get("summary_generated_integrated") or video_metadata.get("summary_generated", "")
-            self.summaryTextArea.setPlainText(summary_to_show)
+        self._manage_video_json(video_path)
 
     def loadVideoOutput(self, video_path):
 
