@@ -45,7 +45,7 @@ class VideoIntegrationThread(QThread):
             integration_html = "<h2>Integrazione Video</h2><ul>"
             for item in frame_data:
                 description = item['description']
-                timestamp_sec = item['timestamp']
+                timestamp_sec = float(item['timestamp'])
                 minutes = int(timestamp_sec // 60)
                 seconds = timestamp_sec % 60
                 # Formatta il timestamp per essere cliccabile: [MM:SS.d]
