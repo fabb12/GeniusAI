@@ -2004,17 +2004,25 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore processo AI: {error_message}", error=True)
 
     def highlight_selected_text(self):
-        """Applies a yellow background to the selected text in the summary text area."""
+        """Applies or removes a yellow background from the selected text."""
         cursor = self.summaryTextArea.textCursor()
         if not cursor.hasSelection():
             return
 
-        # Create a format for the highlight
-        highlight_format = QTextCharFormat()
-        highlight_format.setBackground(QColor('yellow'))
+        # Get the current format of the selection
+        current_format = cursor.charFormat()
+        new_format = QTextCharFormat()
 
-        # Apply the format to the selected text
-        cursor.mergeCharFormat(highlight_format)
+        # Check if the text is already highlighted in yellow
+        if current_format.background().color() == QColor('yellow'):
+            # If it is, remove the highlight by setting a transparent background
+            new_format.setBackground(QColor(Qt.GlobalColor.transparent))
+        else:
+            # If not, apply the highlight
+            new_format.setBackground(QColor('yellow'))
+
+        # Apply the new format to the entire selection
+        cursor.mergeCharFormat(new_format)
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
