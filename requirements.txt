@@ -6,6 +6,9 @@ pygetwindow
 screeninfo
 pycountry
 SpeechRecognition
+openai-whisper
+numba==0.59.1
+llvmlite==0.41.1
 yt-dlp
 anthropic
 python-pptx
