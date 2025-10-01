@@ -4011,18 +4011,38 @@ class VideoAudioManager(QMainWindow):
         logging.debug(f"URL di streaming trovato: {stream_url}")
 
     def onDownloadFinished(self, result):
-        file_path, video_title, video_language, upload_date = result
+        temp_file_path, video_title, video_language, upload_date = result
         self.show_status_message(f"Download completato: {video_title}")
         self.video_download_language = video_language
         logging.debug(video_language)
-        self.loadVideo(file_path, video_title)
 
-        if upload_date:
-            try:
-                video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
-                self._update_json_file(file_path, {"video_date": video_date})
-            except (ValueError, TypeError) as e:
-                logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
+        # Create a permanent downloads directory if it doesn't exist
+        downloads_dir = os.path.join(os.getcwd(), "downloads")
+        os.makedirs(downloads_dir, exist_ok=True)
+
+        # Move the file from the temporary directory to the permanent one
+        try:
+            file_name = os.path.basename(temp_file_path)
+            permanent_file_path = os.path.join(downloads_dir, file_name)
+            shutil.move(temp_file_path, permanent_file_path)
+
+            # Clean up the temporary directory
+            temp_dir = os.path.dirname(temp_file_path)
+            if os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
+
+            self.loadVideo(permanent_file_path, video_title)
+
+            if upload_date:
+                try:
+                    video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
+                    self._update_json_file(permanent_file_path, {"video_date": video_date})
+                except (ValueError, TypeError) as e:
+                    logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
+
+        except Exception as e:
+            self.show_status_message(f"Errore durante lo spostamento del file scaricato: {e}", error=True)
+            logging.error(f"Failed to move downloaded file: {e}")
 
     def onDownloadError(self, error_message):
         self.show_status_message(f"Errore di download: {error_message}", error=True)
