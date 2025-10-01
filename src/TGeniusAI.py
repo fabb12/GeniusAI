@@ -3158,12 +3158,21 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message(f"Selezionato audio di sottofondo: {os.path.basename(fileName)}")
 
     def setupDockSettingsManager(self):
-        settings_file = './dock_settings.json'
-        if os.path.exists(settings_file):
-            self.dockSettingsManager.load_settings(settings_file)
-        else:
+        """
+        Initializes the dock settings manager and loads the settings from the
+        file into memory. The settings are not applied here.
+        """
+        self.dockSettingsManager.load_settings()
+
+    def applyDockSettings(self):
+        """
+        Applies the loaded dock settings. If applying fails or no settings
+        were loaded, it applies a default layout.
+        """
+        if not self.dockSettingsManager.apply_settings():
+            # Fallback to default if settings could not be restored
             self.set_default_dock_layout()
-        self.resetViewMenu()
+            self.updateViewMenu()
 
     def closeEvent(self, event):
         # Salva tutte le modifiche correnti prima di chiudere
@@ -5933,6 +5942,9 @@ if __name__ == "__main__":
     window = VideoAudioManager()
 
     window.show()
+    # Apply the loaded dock settings after the window is visible
+    window.applyDockSettings()
+
 
     splash.finish(window)
 
