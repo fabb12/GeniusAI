@@ -1493,8 +1493,8 @@ class VideoAudioManager(QMainWindow):
             if self.transcription_corrected:
                 self.transcriptionTextArea.setPlainText(self.transcription_corrected)
         else:
-            # Mostra il testo originale
-            self.transcriptionTextArea.setPlainText(self.transcription_original)
+            # Mostra il testo originale con formattazione
+            self.transcriptionTextArea.setHtml(self.transcription_original)
 
     def integraInfoVideo(self):
         if not self.videoPathLineEdit:
@@ -1788,6 +1788,23 @@ class VideoAudioManager(QMainWindow):
         # Il callback onProcessComplete gestirà già il risultato
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
+    def _sync_transcription_state_from_ui(self):
+        """Sincronizza le variabili di stato della trascrizione con il contenuto della UI."""
+        if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
+            self.transcription_corrected = self.transcriptionTextArea.toPlainText()
+        else:
+            self.transcription_original = self.transcriptionTextArea.toHtml()
+
+    def _sync_summary_state_from_ui(self):
+        """Sincronizza le variabili di stato del riassunto con il contenuto della UI."""
+        if not self.summaryTextArea.isReadOnly():
+            current_text = self.summaryTextArea.toPlainText()
+            if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
+                self.summary_generated_integrated = current_text
+            else:
+                self.summary_generated = current_text
+            self.summary_text = current_text # Aggiorna anche la variabile di visualizzazione
+
     def save_transcription_to_json(self):
         """
         Salva solo il contenuto della scheda Trascrizione nel file JSON.
@@ -1796,8 +1813,10 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
             return
 
+        self._sync_transcription_state_from_ui()
+
         update_data = {
-            "transcription_original": self.transcriptionTextArea.toPlainText(),
+            "transcription_original": self.transcription_original,
             "transcription_corrected": self.transcription_corrected,
             "last_save_date": datetime.datetime.now().isoformat()
         }
@@ -1812,8 +1831,10 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
             return
 
+        self._sync_summary_state_from_ui()
+
         update_data = {
-            "summary_generated": self.summaryTextArea.toPlainText(),
+            "summary_generated": self.summary_generated,
             "summary_generated_integrated": self.summary_generated_integrated,
             "last_save_date": datetime.datetime.now().isoformat()
         }
@@ -1848,27 +1869,16 @@ class VideoAudioManager(QMainWindow):
 
         logging.info(f"Salvataggio di tutti i contenuti nel JSON per {self.videoPathLineEdit}...")
 
-        # Determina quale campo di trascrizione/riassunto è stato modificato dall'utente
-        # e aggiorna solo quello, preservando l'altro.
-        transcription_original_text = self.transcription_original
-        transcription_corrected_text = self.transcription_corrected
-        if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
-            transcription_corrected_text = self.transcriptionTextArea.toPlainText()
-        else:
-            transcription_original_text = self.transcriptionTextArea.toPlainText()
+        # 1. Sincronizza lo stato interno con la UI utilizzando i metodi helper
+        self._sync_transcription_state_from_ui()
+        self._sync_summary_state_from_ui()
 
-        summary_generated_text = self.summary_generated
-        summary_integrated_text = self.summary_generated_integrated
-        if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
-            summary_integrated_text = self.summaryTextArea.toPlainText()
-        else:
-            summary_generated_text = self.summaryTextArea.toPlainText()
-
+        # 2. Salva lo stato aggiornato
         update_data = {
-            "transcription_original": transcription_original_text,
-            "transcription_corrected": transcription_corrected_text,
-            "summary_generated": summary_generated_text,
-            "summary_generated_integrated": summary_integrated_text,
+            "transcription_original": self.transcription_original,
+            "transcription_corrected": self.transcription_corrected,
+            "summary_generated": self.summary_generated,
+            "summary_generated_integrated": self.summary_generated_integrated,
             "audio_ai_text": self.audioAiTextArea.toPlainText(),
             "last_save_date": datetime.datetime.now().isoformat()
         }
@@ -1973,6 +1983,9 @@ class VideoAudioManager(QMainWindow):
 
         is_markdown = self.summaryMarkdownCheckbox.isChecked()
         summary_text = self.summary_text
+
+        # Impedisce la modifica diretta dell'HTML renderizzato per non perdere il Markdown originale
+        self.summaryTextArea.setReadOnly(is_markdown)
 
         self.summaryTextArea.blockSignals(True)
         if is_markdown:
@@ -4583,7 +4596,8 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
-            self.transcriptionTextArea.setPlainText(self.transcription_original)
+            # Carica l'HTML per preservare la formattazione
+            self.transcriptionTextArea.setHtml(self.transcription_original)
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
