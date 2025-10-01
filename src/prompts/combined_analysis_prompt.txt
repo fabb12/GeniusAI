@@ -1,13 +1,20 @@
-You are an expert in video analysis. You have been provided with two pieces of information from a video: a summary of the visual content from keyframes, and a full transcription of the audio. Your task is to create a single, cohesive, and detailed summary of the video in {language}.
+You are an expert in video analysis. Your task is to integrate a visual summary from keyframes into a main summary derived from an audio transcript. The goal is to enrich the main summary with visual details without altering its core structure or adding a separate "visual summary" section.
 
-Here is the visual summary:
----
-{frame_summary}
----
-
-Here is the audio transcription:
+Here is the main summary from the audio transcript:
 ---
 {audio_transcript}
 ---
 
-Please provide a detailed and rich summary of the video, combining the information from both sources.
+Here are the visual details from the keyframes:
+---
+{frame_summary}
+---
+
+Please follow these instructions carefully:
+1.  Read the main summary to understand its structure and content.
+2.  Use the visual details to add relevant information to the existing paragraphs of the main summary.
+3.  Do not create new paragraphs or sections for the visual information.
+4.  The final output should be a single, cohesive summary in {language} that seamlessly combines both sources.
+5.  Ensure the original tone and style of the main summary are preserved.
+
+Produce the integrated summary below.
