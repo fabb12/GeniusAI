@@ -4629,16 +4629,19 @@ class VideoAudioManager(QMainWindow):
                     if words:
                         time_for_sentence = len(words) / words_per_second
                         cumulative_time += time_for_sentence
-                        minutes = int(cumulative_time // 60)
+
+                        # Correctly calculate hours, minutes, and seconds
+                        hours = int(cumulative_time // 3600)
+                        minutes = int((cumulative_time % 3600) // 60)
                         seconds = cumulative_time % 60
 
                         # Create new paragraph for the sentence
                         new_p = soup.new_tag('p')
 
-                        # Create and add timestamp
-                        timestamp_span_str = f"<span style='color:#ADD8E6;'>[{minutes:02d}:{seconds:04.1f}]</span> "
-                        timestamp_span = BeautifulSoup(timestamp_span_str, 'html.parser').span
-                        new_p.append(timestamp_span)
+                        # Create and add timestamp with HH:MM:SS.d format using <font> tag for better compatibility
+                        timestamp_font_str = f"<font color='#ADD8E6'>[{hours:02d}:{minutes:02d}:{seconds:04.1f}]</font> "
+                        timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
+                        new_p.append(timestamp_node)
 
                         # Add sentence content
                         for snode in current_sentence_nodes:
@@ -4658,13 +4661,17 @@ class VideoAudioManager(QMainWindow):
                 if words:
                     time_for_sentence = len(words) / words_per_second
                     cumulative_time += time_for_sentence
-                    minutes = int(cumulative_time // 60)
+
+                    # Correctly calculate hours, minutes, and seconds
+                    hours = int(cumulative_time // 3600)
+                    minutes = int((cumulative_time % 3600) // 60)
                     seconds = cumulative_time % 60
 
                     new_p = soup.new_tag('p')
-                    timestamp_span_str = f"<span style='color:#ADD8E6;'>[{minutes:02d}:{seconds:04.1f}]</span> "
-                    timestamp_span = BeautifulSoup(timestamp_span_str, 'html.parser').span
-                    new_p.append(timestamp_span)
+                    # Create and add timestamp with HH:MM:SS.d format using <font> tag
+                    timestamp_font_str = f"<font color='#ADD8E6'>[{hours:02d}:{minutes:02d}:{seconds:04.1f}]</font> "
+                    timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
+                    new_p.append(timestamp_node)
                     for snode in current_sentence_nodes:
                         new_p.append(snode)
                     new_body.append(new_p)
