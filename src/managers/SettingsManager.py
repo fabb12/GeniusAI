@@ -14,7 +14,6 @@ class DockSettingsManager:
         self.dock_area = self.main_window.centralWidget()
         if not isinstance(self.dock_area, DockArea):
             raise TypeError("Main window's central widget is not a DockArea.")
-        # Placeholder for the state loaded from the file
         self.loaded_state = None
 
     def save_settings(self):
@@ -52,14 +51,12 @@ class DockSettingsManager:
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
-            # Restore main window geometry
             main_window_settings = settings.get('main_window', {})
             self.main_window.resize(
                 QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            # Load dock state into the placeholder
             if 'dock_area_state' in settings:
                 state_str = settings['dock_area_state']
                 self.loaded_state = QByteArray.fromBase64(state_str.encode('ascii'))
@@ -71,12 +68,12 @@ class DockSettingsManager:
             logging.info("Settings file not found. Will use default layout.")
         except (json.JSONDecodeError, KeyError, Exception) as e:
             logging.error(f"Error loading settings file '{settings_file}': {e}. Will use default layout.")
-            self.loaded_state = None # Ensure no corrupted state is loaded
+            self.loaded_state = None
 
     def apply_settings(self):
         """
-        Applies the loaded dock state. If no state was loaded, it applies the default layout.
-        This should be called after the main window is shown.
+        Applies the loaded dock state. If no state was loaded or if restoring fails,
+        it applies the default layout. This should be called after the main window is shown.
         """
         if self.loaded_state:
             try:
@@ -89,28 +86,25 @@ class DockSettingsManager:
             logging.info("No saved state to apply. Loading default layout.")
             self.loadDefaultLayout()
 
+        # Always update the view menu after attempting to apply any layout.
         self.main_window.updateViewMenu()
 
     def set_workspace(self, workspace_name):
         """Imposta la visibilità dei dock in base al workspace selezionato."""
         for dock in self.docks.values():
-            dock.setVisible(False)
+            dock.hideDock()
 
         if workspace_name == "Registrazione":
-            self.docks['recordingDock'].setVisible(True)
-            self.docks['videoPlayerOutput'].setVisible(True)
+            self.docks['recordingDock'].showDock()
+            self.docks['videoPlayerOutput'].showDock()
         elif workspace_name == "Confronto":
-            self.docks['videoPlayerDock'].setVisible(True)
-            self.docks['videoPlayerOutput'].setVisible(True)
+            self.docks['videoPlayerDock'].showDock()
+            self.docks['videoPlayerOutput'].showDock()
         elif workspace_name == "Trascrizione":
-            self.docks['videoPlayerDock'].setVisible(True)
-            self.docks['transcriptionDock'].setVisible(True)
+            self.docks['videoPlayerDock'].showDock()
+            self.docks['transcriptionDock'].showDock()
         elif workspace_name == "Default":
-            # In a default scenario, we want all docks to be potentially available
-            # but their visibility will be controlled by the restored state.
-            # So, we can just ensure they are created, which is done in the main window.
-            # The restoreState will handle visibility.
-            pass
+            self.loadDefaultLayout()
 
         self.main_window.updateViewMenu()
 
@@ -124,9 +118,13 @@ class DockSettingsManager:
         self.set_workspace("Trascrizione")
 
     def loadDefaultLayout(self):
-        """Carica il layout di default con i dock principali."""
-        # This will now just set all docks to visible as a fallback.
-        # A more sophisticated default could be implemented here if needed.
-        for dock in self.docks.values():
-            dock.setVisible(True)
+        """
+        Carica un layout di default esplicito, mostrando i dock principali.
+        """
+        for name, dock in self.docks.items():
+            # Show only the most common docks by default
+            if name in ['videoPlayerDock', 'videoPlayerOutput', 'transcriptionDock', 'editingDock']:
+                dock.showDock()
+            else:
+                dock.hideDock()
         self.main_window.updateViewMenu()

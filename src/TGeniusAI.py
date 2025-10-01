@@ -3166,13 +3166,10 @@ class VideoAudioManager(QMainWindow):
 
     def applyDockSettings(self):
         """
-        Applies the loaded dock settings. If applying fails or no settings
-        were loaded, it applies a default layout.
+        Applies the loaded dock settings. The settings manager will handle
+        falling back to a default layout if necessary.
         """
-        if not self.dockSettingsManager.apply_settings():
-            # Fallback to default if settings could not be restored
-            self.set_default_dock_layout()
-            self.updateViewMenu()
+        self.dockSettingsManager.apply_settings()
 
     def closeEvent(self, event):
         # Salva tutte le modifiche correnti prima di chiudere
