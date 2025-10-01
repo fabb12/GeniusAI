@@ -1,62 +1,86 @@
 import json
-from PyQt6.QtCore import QPoint, QSize
+from PyQt6.QtCore import QPoint, QSize, QByteArray
 import logging
 from src.config import DOCK_SETTINGS_FILE
 from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+from pyqtgraph.dockarea.DockArea import DockArea
 
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
         self.parent = parent
         self.main_window = main_window
-        self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
+        self.docks = docks
         self.settings_file = DOCK_SETTINGS_FILE
+        # Get the DockArea instance from the main window's central widget
+        self.dock_area = self.main_window.centralWidget()
+        if not isinstance(self.dock_area, DockArea):
+            raise TypeError("Main window's central widget is not a DockArea.")
 
     def save_settings(self):
-        settings = {'main_window': {
-            'width': self.main_window.size().width(),
-            'height': self.main_window.size().height(),
-            'x': self.main_window.pos().x(),
-            'y': self.main_window.pos().y()
-        }}
-        for name, dock in self.docks.items():
-            settings[name] = {
-                'visible': dock.isVisible(),
-                'x': dock.pos().x(),
-                'y': dock.pos().y(),
-                'width': dock.size().width(),
-                'height': dock.size().height()
+        """
+        Saves the main window's geometry and the complete state of the DockArea,
+        including the state of all docks (both docked and floating).
+        """
+        try:
+            state = self.dock_area.saveState()
+            # The state can be converted to a string for JSON serialization.
+            # QByteArray.toBase64() returns a QByteArray, so we need to decode it to a string.
+            state_str = bytes(state.toBase64()).decode('ascii')
+
+            settings = {
+                'main_window': {
+                    'width': self.main_window.size().width(),
+                    'height': self.main_window.size().height(),
+                    'x': self.main_window.pos().x(),
+                    'y': self.main_window.pos().y()
+                },
+                'dock_area_state': state_str
             }
-        with open(self.settings_file, 'w') as file:
-            json.dump(settings, file, indent=4)
+            with open(self.settings_file, 'w') as file:
+                json.dump(settings, file, indent=4)
+            logging.info("Dock settings saved successfully.")
+        except Exception as e:
+            logging.error(f"Error saving dock settings: {e}")
 
     def load_settings(self, settings_file=None):
+        """
+        Loads the main window's geometry and restores the state of the DockArea.
+        """
         if not settings_file:
             settings_file = self.settings_file
 
         try:
-            for dock in self.docks.values():
-                dock.setVisible(False)
-
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
+            # Restore main window geometry
             main_window_settings = settings.get('main_window', {})
             self.main_window.resize(
                 QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            for name, dock in self.docks.items():
-                dock_settings = settings.get(name, {})
-                dock.setVisible(dock_settings.get('visible', True))
-                dock.resize(QSize(dock_settings.get('width', 600), dock_settings.get('height', 200)))
-                dock.move(QPoint(dock_settings.get('x', 100), dock_settings.get('y', 100)))
+            # Restore DockArea state
+            if 'dock_area_state' in settings:
+                state_str = settings['dock_area_state']
+                # The state needs to be converted back from a Base64 string to a QByteArray.
+                state = QByteArray.fromBase64(state_str.encode('ascii'))
+                self.dock_area.restoreState(state, restore_sizes=True)
+                logging.info("Dock settings loaded successfully.")
+            else:
+                logging.warning("Dock area state not found in settings file. Loading default layout.")
+                self.loadDefaultLayout()
 
             self.main_window.updateViewMenu()
 
         except FileNotFoundError:
-            logging.debug("Settings file not found. Using default settings.")
+            logging.info("Settings file not found. Using default layout.")
             self.loadDefaultLayout()
+        except (json.JSONDecodeError, KeyError, Exception) as e:
+            logging.error(f"Error loading settings file '{settings_file}': {e}. Using default layout.")
+            # If the file is corrupted or has an unexpected format, load defaults.
+            self.loadDefaultLayout()
+
 
     def set_workspace(self, workspace_name):
         """Imposta la visibilità dei dock in base al workspace selezionato."""
