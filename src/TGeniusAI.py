@@ -578,7 +578,7 @@ class VideoAudioManager(QMainWindow):
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
 
         # Carica il colore di evidenziazione personalizzato
-        self.current_highlight_color_name = self.settings.value("editor/highlightColor", "Giallo")
+        self.current_highlight_color_name = settings.value("editor/highlightColor", "Giallo")
 
         # Configura l'aspetto dell'overlay
         self.videoOverlay.set_show_red_dot(self.show_red_dot)
