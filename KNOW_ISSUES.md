@@ -25,7 +25,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] togliere video e mettere in file
 - [x] mettere tasto di esportazione word
 - [ ] metter sincro video nel riassunto
-- 
+-  
 - [x] tasto trasferimento da video player input a video player output
 - [x] migliorare funzionamento rettangolo ritaglio
 - [x] mettere la barra di progressione quando uso la musica di sottofondo
