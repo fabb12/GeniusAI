@@ -2285,7 +2285,7 @@ class VideoAudioManager(QMainWindow):
         Sincronizza il video al timestamp specificato in secondi.
         """
         if self.player:
-            self.player.setPosition(seconds * 1000)
+            self.player.setPosition(int(seconds * 1000))
 
     def setStartBookmark(self):
         self.videoSlider.setPendingBookmarkStart(self.player.position())
