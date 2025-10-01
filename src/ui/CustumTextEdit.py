@@ -186,8 +186,8 @@ class CustomTextEdit(QTextEdit):
             return 0
 
         highlight_format = QTextCharFormat()
-        highlight_format.setBackground(QColor("yellow"))
-        highlight_format.setForeground(QColor("black"))
+        highlight_format.setUnderlineColor(QColor("orange"))
+        highlight_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.WaveUnderline)
 
         options = QTextDocument.FindFlag(0)
         if case_sensitive:
@@ -316,24 +316,16 @@ class CustomTextEdit(QTextEdit):
 
     def clear_highlights(self):
         """
-        Cancella tutte le evidenziazioni di testo create dalla ricerca scorrendo
-        l'intero documento e reimpostando il formato del testo.
-        Questo metodo è più robusto e non dipende dallo stato della ricerca.
+        Rimuove solo l'evidenziazione della ricerca (sottolineatura ondulata)
+        senza alterare altra formattazione come il colore di sfondo.
         """
-        cursor = QTextCursor(self.document())
-        cursor.select(QTextCursor.SelectionType.Document)
+        # Formato per rimuovere la sottolineatura
+        clear_format = QTextCharFormat()
+        clear_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.NoUnderline)
 
-        # Crea un formato di carattere con i colori di default del tema
-        default_format = QTextCharFormat()
-        palette = self.palette()
-        default_bg_color = palette.color(QPalette.ColorRole.Base)
-        default_fg_color = palette.color(QPalette.ColorRole.Text)
-        default_format.setBackground(default_bg_color)
-        default_format.setForeground(default_fg_color)
-
-        # Applica il formato di default a tutto il documento per rimuovere
-        # qualsiasi formattazione di sfondo precedente.
-        cursor.setCharFormat(default_format)
+        # Applica il formato di pulizia solo ai risultati della ricerca memorizzati
+        for cursor in self.search_results_cursors:
+            cursor.mergeCharFormat(clear_format)
 
         # Pulisce lo stato della ricerca
         self.search_results_cursors = []

@@ -1211,6 +1211,13 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
         bottom_controls_layout.addWidget(self.integrazioneToggle)
 
+        self.toggleSummaryViewButton = QPushButton("Mostra HTML")
+        self.toggleSummaryViewButton.setToolTip("Alterna tra la visualizzazione formattata e il codice sorgente HTML")
+        self.toggleSummaryViewButton.setCheckable(True)
+        self.toggleSummaryViewButton.toggled.connect(self.toggle_summary_view_mode)
+        bottom_controls_layout.addWidget(self.toggleSummaryViewButton)
+        self.summary_view_is_raw = False # Stato iniziale
+
         bottom_controls_layout.addStretch()
         summary_controls_layout.addLayout(bottom_controls_layout)
 
@@ -1820,9 +1827,17 @@ class VideoAudioManager(QMainWindow):
             self.transcription_original = self.transcriptionTextArea.toHtml()
 
     def _sync_summary_state_from_ui(self):
-        """Sincronizza le variabili di stato del riassunto con il contenuto della UI."""
-        # L'editor del riassunto è ora sempre un editor rich-text, quindi salviamo sempre l'HTML.
-        current_html = self.summaryTextArea.toHtml()
+        """
+        Sincronizza le variabili di stato del riassunto con il contenuto della UI,
+        tenendo conto della modalità di visualizzazione (grezza o formattata).
+        """
+        if self.summary_view_is_raw:
+            # Se siamo in modalità HTML grezzo, il testo semplice è la nostra fonte di verità
+            current_html = self.summaryTextArea.toPlainText()
+        else:
+            # Altrimenti, prendiamo l'HTML renderizzato
+            current_html = self.summaryTextArea.toHtml()
+
         if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
             self.summary_generated_integrated = current_html
         else:
@@ -2037,6 +2052,26 @@ class VideoAudioManager(QMainWindow):
             new_format.setBackground(highlight_color)
 
         cursor.mergeCharFormat(new_format)
+
+    def toggle_summary_view_mode(self, checked):
+        """
+        Alterna la visualizzazione dell'editor del riassunto tra testo formattato e sorgente HTML.
+        """
+        self.summary_view_is_raw = checked
+        self.summaryTextArea.blockSignals(True) # Blocca i segnali per evitare loop
+
+        if checked:
+            # Passa alla visualizzazione HTML grezzo
+            current_html = self.summaryTextArea.toHtml()
+            self.summaryTextArea.setPlainText(current_html)
+            self.toggleSummaryViewButton.setText("Mostra Testo")
+        else:
+            # Passa alla visualizzazione formattata
+            raw_html = self.summaryTextArea.toPlainText()
+            self.summaryTextArea.setHtml(raw_html)
+            self.toggleSummaryViewButton.setText("Mostra HTML")
+
+        self.summaryTextArea.blockSignals(False) # Riattiva i segnali
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
@@ -4152,15 +4187,7 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFiles(video_path)
 
         # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
-        video_metadata = self._manage_video_json(video_path)
-
-        # Carica i dati esistenti nelle aree di testo, se presenti
-        if video_metadata:
-            self.transcriptionTextArea.setPlainText(video_metadata.get("transcription_raw", ""))
-
-            # Decide quale riassunto mostrare
-            summary_to_show = video_metadata.get("summary_generated_integrated") or video_metadata.get("summary_generated", "")
-            self.summaryTextArea.setPlainText(summary_to_show)
+        self._manage_video_json(video_path)
 
     def loadVideoOutput(self, video_path):
 
