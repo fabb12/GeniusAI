@@ -1225,6 +1225,7 @@ class VideoAudioManager(QMainWindow):
 
         self.summaryTextArea = CustomTextEdit(self)
         self.summaryTextArea.setPlaceholderText("Il riassunto generato dall'AI apparirà qui...")
+        self.summaryTextArea.timestampDoubleClicked.connect(self.sincronizza_video) # Connetti il segnale
         summary_layout.addWidget(self.summaryTextArea)
 
         self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
@@ -1532,15 +1533,12 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("È necessario generare un riassunto standard prima di poterlo integrare.", error=True)
             return
 
-        # Converti il riassunto HTML in testo semplice prima di passarlo al thread
-        soup = BeautifulSoup(self.summary_generated, 'html.parser')
-        plain_summary = soup.get_text()
-
+        # Passa l'HTML del riassunto direttamente al thread
         thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            current_summary=plain_summary,
+            current_summary=self.summary_generated, # Passa l'HTML
             parent=self
         )
         self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
