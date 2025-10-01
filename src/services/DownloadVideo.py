@@ -199,7 +199,7 @@ class DownloadThread(QThread):
                 'preferredcodec': 'mp3',  # Change to mp3 for more universal playback
                 'preferredquality': '192',
             }],
-            'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
+            'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),
             'quiet': True,
             'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
@@ -209,10 +209,13 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(audio_options) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 if 'id' in info:
-                    audio_file_path = info.get('filepath')
-                    if not audio_file_path or not os.path.exists(audio_file_path):
-                        # Fallback for safety, though info['filepath'] should be correct
-                        audio_file_path = os.path.join(self.temp_dir, f"{info['id']}.{info.get('ext', 'mp3')}")
+                    # Robustly find the output file
+                    files_in_temp = os.listdir(self.temp_dir)
+                    if not files_in_temp:
+                        self.error.emit("No file found in temporary directory after download.")
+                        return
+                    # Assuming the first file is the correct one, as the directory should be empty before download
+                    audio_file_path = os.path.join(self.temp_dir, files_in_temp[0])
 
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
@@ -231,7 +234,7 @@ class DownloadThread(QThread):
                 'key': 'FFmpegVideoConvertor',
                 'preferedformat': 'mp4',
             }],
-            'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),  # Salva i file nella directory temporanea
+            'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),
             'quiet': True,
             'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
@@ -241,10 +244,14 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(video_options) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 if 'id' in info:
-                    video_file_path = info.get('filepath')
-                    if not video_file_path or not os.path.exists(video_file_path):
-                        # Fallback for safety
-                        video_file_path = os.path.join(self.temp_dir, f"{info['id']}.{info.get('ext', 'mp4')}")
+                    # Robustly find the output file
+                    files_in_temp = os.listdir(self.temp_dir)
+                    if not files_in_temp:
+                        self.error.emit("No file found in temporary directory after download.")
+                        return
+                    # Assuming the first file is the correct one
+                    video_file_path = os.path.join(self.temp_dir, files_in_temp[0])
+
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
                     upload_date = info.get('upload_date', None)
