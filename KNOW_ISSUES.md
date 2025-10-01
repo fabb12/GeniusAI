@@ -47,15 +47,23 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
 - [x] aggiugne barra di progresso quando taglio cancellazione
 - [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
-- [x] aggiugne una basrra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
-- [ ] scritta tempo diff in bianco nella timeline
-- [ ] salvare posizone finestrre anche quando sono floating
+- [x] aggiugere una barra di stato sotto in fondo per segnalare per esempio che il video è stato elaborato o ha fintio di registrato  e togli i messagge box , 
+- [x] scritta tempo diff in bianco nella timeline
+- [ ] salvare posizione finestre anche quando sono floating
 - [ ] salvare word con formattazione markdown  
 - [ ] quando incollo testo ai rimuovi timecode
 - [ ] usare whisper 
-- [ ] salvare su disco i file recenti 
-- [] contatti teams spostalo dove puoi vederlo
-- 
+- [x] salvare su disco i file recenti 
+- [ ] gestire megliio i contatti teams
+- [ ] drag e drop da sistemare
+- [ ] browser use
+- [ ] mettere tasto salvataggio nel tab trascrzione , rissunto e audio ai , salva il json nnelle rispettive chiavi, e salva ogni 5 minuti automaticamente 
+- [ ] aggiungere replace nel search box e sistema il numero di elmentei trovati e sistema il colore di quadno non trova nulla metti colore arancione 
+- [ ] mettre tasti frecce per andare aventi e indietro nel playback del video
+- [ ] crea un nuovo dock note video dove mostro le note che  utente ha inserito nel video, tramite una fubnzione inseriasci nota con tasto destro del mouse sul frame che in quel momento e visbile 
+- la nota viene salvata in una edit box dentro al dock nuvo con relatiuvo timecode di dove è stata selezionata la nota e deve essere selezionabile e quando premo due volta con il tasto sinistro deve andare al putno del timecode sul video 
+- devo esserce anceh la possibli di cancella la nota e di modificarla , e la nota deve essere salvata nel json con il resto delle intormazione relative al video 
+
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 

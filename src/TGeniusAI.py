@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
-    QStatusBar
+    QStatusBar, QListWidget, QListWidgetItem, QMenu
 )
 
 # PyQtGraph (docking)
@@ -67,6 +67,7 @@ from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
 from src.ui.CursorOverlay import CursorOverlay
+from src.ui.MultiLineInputDialog import MultiLineInputDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
@@ -389,11 +390,15 @@ class VideoAudioManager(QMainWindow):
         self.audioOutput = QAudioOutput()
         self.playerOutput = QMediaPlayer()
         self.audioOutputOutput = QAudioOutput()
+        self.previewPlayer = QMediaPlayer()
+        self.previewAudioOutput = QAudioOutput()
 
         self.player.setAudioOutput(self.audioOutput)
+        self.previewPlayer.setAudioOutput(self.previewAudioOutput)
         self.audioOutput.setVolume(1.0)
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.recentFiles = []
+        self.loadRecentFiles()
         self.recording_segments = []
 
         # Blinking recording indicator
@@ -412,6 +417,11 @@ class VideoAudioManager(QMainWindow):
         self.autosave_timer = QTimer(self)
         self.autosave_timer.setSingleShot(True)
         self.autosave_timer.timeout.connect(self.autosave_transcription)
+
+        # Timer per il salvataggio automatico nel file JSON
+        self.json_autosave_timer = QTimer(self)
+        self.json_autosave_timer.timeout.connect(lambda: self.save_all_tabs_to_json(show_message=False))
+        self.json_autosave_timer.start(300000)  # 5 minuti (300,000 ms)
 
         # Initialize attributes before UI
         self.use_vb_cable = False
@@ -451,6 +461,7 @@ class VideoAudioManager(QMainWindow):
         self.summary_text = ""
         self.summary_generated = ""
         self.summary_generated_integrated = ""
+        self.original_audio_ai_html = ""
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -459,19 +470,25 @@ class VideoAudioManager(QMainWindow):
         self.monitor_preview = None
         self.cursor_overlay = CursorOverlay()
         self.current_thread = None
+        self.original_status_bar_stylesheet = self.statusBar.styleSheet()
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
         if error:
-            self.statusBar.setStyleSheet("color: red;")
+            self.statusBar.setStyleSheet(self.original_status_bar_stylesheet + "color: red;")
         else:
-            self.statusBar.setStyleSheet("")  # Ripristina lo stile predefinito
+            self.statusBar.setStyleSheet(self.original_status_bar_stylesheet)
 
         self.statusLabel.setText(message)
 
         if timeout > 0:
-            QTimer.singleShot(timeout, lambda: self.statusLabel.setText("Pronto") if self.statusLabel.text() == message else None)
-            QTimer.singleShot(timeout, lambda: self.statusBar.setStyleSheet(""))
+            # Ripristina il messaggio e lo stile dopo il timeout
+            def reset_status():
+                # Controlla se il messaggio è ancora quello impostato da questa chiamata
+                if self.statusLabel.text() == message:
+                    self.statusLabel.setText("Pronto")
+                    self.statusBar.setStyleSheet(self.original_status_bar_stylesheet)
+            QTimer.singleShot(timeout, reset_status)
 
     def start_task(self, thread, on_complete, on_error, on_progress):
         """Avvia un thread e gestisce la barra di stato."""
@@ -632,6 +649,13 @@ class VideoAudioManager(QMainWindow):
         self.infoDock.setStyleSheet(self.styleSheet())
         area.addDock(self.infoDock, 'right', self.transcriptionDock)
 
+        self.videoNotesDock = CustomDock("Note Video", closable=True)
+        self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoNotesDock.setStyleSheet(self.styleSheet())
+        self.videoNotesDock.setToolTip("Dock per le note video")
+        area.addDock(self.videoNotesDock, 'bottom', self.transcriptionDock)
+        self.createVideoNotesDock()
+
 
         # self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
         # self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -663,6 +687,7 @@ class VideoAudioManager(QMainWindow):
         self.videoOverlay.panned.connect(self.handle_pan)
         self.videoOverlay.zoomed.connect(self.handle_zoom)
         self.videoOverlay.view_reset.connect(self.reset_view)
+        self.videoOverlay.installEventFilter(self)
 
         self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
@@ -840,6 +865,7 @@ class VideoAudioManager(QMainWindow):
 
         self.playerOutput.durationChanged.connect(self.updateDurationOutput)
         self.playerOutput.positionChanged.connect(self.updateTimeCodeOutput)
+        self.playerOutput.playbackStateChanged.connect(self.updatePlayButtonIconOutput)
 
         videoPlayerOutputWidget = QWidget()
         videoPlayerOutputWidget.setLayout(videoOutputLayout)
@@ -977,12 +1003,12 @@ class VideoAudioManager(QMainWindow):
         self.loadButton.clicked.connect(self.loadText)
         file_actions_layout.addWidget(self.loadButton)
 
-        self.saveButton = QPushButton('')
-        self.saveButton.setIcon(QIcon(get_resource("save.png")))
-        self.saveButton.setFixedSize(32, 32)
-        self.saveButton.setToolTip("Salva Testo")
-        self.saveButton.clicked.connect(self.saveText)
-        file_actions_layout.addWidget(self.saveButton)
+        self.saveTranscriptionButton = QPushButton('')
+        self.saveTranscriptionButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveTranscriptionButton.setFixedSize(32, 32)
+        self.saveTranscriptionButton.setToolTip("Salva Trascrizione nel JSON associato")
+        self.saveTranscriptionButton.clicked.connect(self.save_transcription_to_json)
+        file_actions_layout.addWidget(self.saveTranscriptionButton)
 
         self.resetButton = QPushButton('')
         self.resetButton.setIcon(QIcon(get_resource("reset.png")))
@@ -1030,6 +1056,13 @@ class VideoAudioManager(QMainWindow):
         self.insertPauseButton = QPushButton("Inserisci Pausa")
         self.insertPauseButton.clicked.connect(self.insertPause)
         tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
+
+        self.saveAudioAIButton = QPushButton('')
+        self.saveAudioAIButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveAudioAIButton.setFixedSize(32, 32)
+        self.saveAudioAIButton.setToolTip("Salva Testo Audio AI nel JSON associato")
+        self.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
+        tools_grid_layout.addWidget(self.saveAudioAIButton, 0, 2) # Aggiunto qui
 
         # groups_layout.addWidget(tools_group)
 
@@ -1089,12 +1122,12 @@ class VideoAudioManager(QMainWindow):
         summarize_button.clicked.connect(self.processTextWithAI)
         top_controls_layout.addWidget(summarize_button)
 
-        fix_text_button = QPushButton('')
-        fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
-        fix_text_button.setFixedSize(32, 32)
-        fix_text_button.setToolTip("Correggi Testo")
-        fix_text_button.clicked.connect(self.fixTextWithAI)
-        top_controls_layout.addWidget(fix_text_button)
+        #fix_text_button = QPushButton('')
+        #fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
+        #fix_text_button.setFixedSize(32, 32)
+        #fix_text_button.setToolTip("Correggi Testo")
+        #fix_text_button.clicked.connect(self.fixTextWithAI)
+        #top_controls_layout.addWidget(fix_text_button)
 
         summarize_meeting_button = QPushButton('')
         summarize_meeting_button.setIcon(QIcon(get_resource("meet_sum.png")))
@@ -1117,6 +1150,13 @@ class VideoAudioManager(QMainWindow):
         self.pasteSummaryToAudioAIButton.setToolTip("Incolla riassunto nella tab Audio AI")
         self.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.summaryTextArea))
         top_controls_layout.addWidget(self.pasteSummaryToAudioAIButton)
+
+        self.saveSummaryButton = QPushButton('')
+        self.saveSummaryButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveSummaryButton.setFixedSize(32, 32)
+        self.saveSummaryButton.setToolTip("Salva Riassunto nel JSON associato")
+        self.saveSummaryButton.clicked.connect(self.save_summary_to_json)
+        top_controls_layout.addWidget(self.saveSummaryButton)
 
         # Separatore
         separator = QFrame()
@@ -1170,6 +1210,14 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
         self.editingDock.addWidget(voiceSettingsWidget)
 
+        # Aggiungi la UI per gli audio generati
+        generatedAudiosWidget = self.createGeneratedAudiosUI()
+        self.editingDock.addWidget(generatedAudiosWidget)
+
+        # Sincronizza i checkbox di allineamento
+        self.alignspeed.toggled.connect(self.alignspeed_replacement.setChecked)
+        self.alignspeed_replacement.toggled.connect(self.alignspeed.setChecked)
+
         # Dizionario per la gestione dei dock
         docks = {
             'videoPlayerDock': self.videoPlayerDock,
@@ -1181,13 +1229,15 @@ class VideoAudioManager(QMainWindow):
             'videoPlayerOutput': self.videoPlayerOutput,
             'videoMergeDock': self.videoMergeDock,
             'videoEffectsDock': self.videoEffectsDock,
-            'infoDock': self.infoDock
+            'infoDock': self.infoDock,
+            'videoNotesDock': self.videoNotesDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
         # Collegamenti dei segnali del player
         self.player.durationChanged.connect(self.durationChanged)
         self.player.positionChanged.connect(self.positionChanged)
+        self.player.playbackStateChanged.connect(self.updatePlayButtonIcon)
         self.videoSlider.sliderMoved.connect(self.setPosition)
 
 
@@ -1738,6 +1788,97 @@ class VideoAudioManager(QMainWindow):
         # Il callback onProcessComplete gestirà già il risultato
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
+    def save_transcription_to_json(self):
+        """
+        Salva solo il contenuto della scheda Trascrizione nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "transcription_original": self.transcriptionTextArea.toPlainText(),
+            "transcription_corrected": self.transcription_corrected,
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Trascrizione salvata nel file JSON.", timeout=3000)
+
+    def save_summary_to_json(self):
+        """
+        Salva solo il contenuto della scheda Riassunto nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "summary_generated": self.summaryTextArea.toPlainText(),
+            "summary_generated_integrated": self.summary_generated_integrated,
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Riassunto salvato nel file JSON.", timeout=3000)
+
+    def save_audio_ai_to_json(self):
+        """
+        Salva solo il testo della scheda Audio AI nel file JSON.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        update_data = {
+            "audio_ai_text": self.audioAiTextArea.toPlainText(),
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+        self.show_status_message("Testo Audio AI salvato nel file JSON.", timeout=3000)
+
+    def save_all_tabs_to_json(self, show_message=True):
+        """
+        Salva i contenuti di tutte le schede rilevanti (Trascrizione, Riassunto, Audio AI)
+        nel file JSON associato al video corrente. Legge i dati direttamente dai widget UI
+        per garantire che le modifiche più recenti vengano salvate.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            if show_message:
+                self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        logging.info(f"Salvataggio di tutti i contenuti nel JSON per {self.videoPathLineEdit}...")
+
+        # Determina quale campo di trascrizione/riassunto è stato modificato dall'utente
+        # e aggiorna solo quello, preservando l'altro.
+        transcription_original_text = self.transcription_original
+        transcription_corrected_text = self.transcription_corrected
+        if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
+            transcription_corrected_text = self.transcriptionTextArea.toPlainText()
+        else:
+            transcription_original_text = self.transcriptionTextArea.toPlainText()
+
+        summary_generated_text = self.summary_generated
+        summary_integrated_text = self.summary_generated_integrated
+        if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
+            summary_integrated_text = self.summaryTextArea.toPlainText()
+        else:
+            summary_generated_text = self.summaryTextArea.toPlainText()
+
+        update_data = {
+            "transcription_original": transcription_original_text,
+            "transcription_corrected": transcription_corrected_text,
+            "summary_generated": summary_generated_text,
+            "summary_generated_integrated": summary_integrated_text,
+            "audio_ai_text": self.audioAiTextArea.toPlainText(),
+            "last_save_date": datetime.datetime.now().isoformat()
+        }
+
+        # La funzione _update_json_file gestirà la lettura, l'aggiornamento e la scrittura.
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
+        if show_message:
+            self.show_status_message("Tutte le modifiche sono state salvate nel file JSON.", timeout=3000)
+
     def _update_json_file(self, video_path, update_dict):
         """
         Helper function to update specific fields in a video's JSON file.
@@ -1775,18 +1916,17 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
-        self.transcriptionTextArea.setReadOnly(
-            checked)  # Disabilita la modifica del testo quando la checkbox è abilitata
-        # Update the timecode insertion enabled state based on checkbox
+        self.audioAiTextArea.setReadOnly(checked)
         self.timecodeEnabled = checked
 
-        # Trigger text change processing to update timecodes
-        current_html = self.transcriptionTextArea.toHtml()
         if checked:
-            self.original_text_html = current_html
-            self.handleTextChange()
+            # Salva l'HTML originale e applica i timecode
+            self.original_audio_ai_html = self.audioAiTextArea.toHtml()
+            updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(self.original_audio_ai_html)
+            self.audioAiTextArea.setHtml(updated_html)
         else:
-            self.transcriptionTextArea.setHtml(self.original_text_html)
+            # Ripristina l'HTML originale
+            self.audioAiTextArea.setHtml(self.original_audio_ai_html)
 
 
     def updateProgressDialog(self, value, label):
@@ -1795,6 +1935,10 @@ class VideoAudioManager(QMainWindow):
             self.progressDialog.setLabelText(label)
 
     def onProcessComplete(self, result):
+        if isinstance(result, dict):
+            self.transcriptionTextArea.setPlainText(result.get('transcription_raw', ''))
+            return
+
         if hasattr(self, 'current_summary_type') and self.current_summary_type:
             if self.current_summary_type == 'transcription_fix':
                 self.transcription_corrected = result
@@ -1941,7 +2085,7 @@ class VideoAudioManager(QMainWindow):
             if 'media_clip' in locals():
                 media_clip.close()
     def insertPause(self):
-        cursor = self.transcriptionTextArea.textCursor()
+        cursor = self.audioAiTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
 
         if not re.match(r'^\d+(\.\d+)?s$', pause_time):
@@ -1950,7 +2094,7 @@ class VideoAudioManager(QMainWindow):
 
         pause_tag = f'<break time="{pause_time}" />'
         cursor.insertText(f' {pause_tag} ')
-        self.transcriptionTextArea.setTextCursor(cursor)
+        self.audioAiTextArea.setTextCursor(cursor)
 
     def rewind5Seconds(self):
         current_position = self.player.position()
@@ -1993,6 +2137,7 @@ class VideoAudioManager(QMainWindow):
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
+        self.videoNotesListWidget.clear()
     def releaseOutputVideo(self):
         self.playerOutput.stop()
         time.sleep(.01)
@@ -2004,8 +2149,8 @@ class VideoAudioManager(QMainWindow):
 
     def get_nearest_timecode(self):
         # Posizione attuale del cursore nella trascrizione
-        cursor_position = self.transcriptionTextArea.textCursor().position()
-        text = self.transcriptionTextArea.toPlainText()
+        cursor_position = self.audioAiTextArea.textCursor().position()
+        text = self.audioAiTextArea.toPlainText()
 
         # Trova tutti i timecode nel testo
         timecode_pattern = re.compile(r'\[(\d{2}):(\d{2})\]')
@@ -2271,6 +2416,31 @@ class VideoAudioManager(QMainWindow):
         self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
+        self.videoNotesDock.setStyleSheet(style)
+
+    def createVideoNotesDock(self):
+        """Crea il dock per le note video."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.videoNotesListWidget = QListWidget()
+        self.videoNotesListWidget.setToolTip("Elenco delle note del video. Doppio click per andare al timecode.")
+        self.videoNotesListWidget.itemDoubleClicked.connect(self.seek_to_note_timecode)
+        layout.addWidget(self.videoNotesListWidget)
+
+        buttons_layout = QHBoxLayout()
+        self.editNoteButton = QPushButton("Modifica Nota")
+        self.editNoteButton.setToolTip("Modifica la nota selezionata.")
+        self.editNoteButton.clicked.connect(self.edit_video_note)
+        buttons_layout.addWidget(self.editNoteButton)
+
+        self.deleteNoteButton = QPushButton("Cancella Nota")
+        self.deleteNoteButton.setToolTip("Cancella la nota selezionata.")
+        self.deleteNoteButton.clicked.connect(self.delete_video_note)
+        buttons_layout.addWidget(self.deleteNoteButton)
+
+        layout.addLayout(buttons_layout)
+        self.videoNotesDock.addWidget(widget)
 
     def getDarkStyle(self):
         return """
@@ -2389,10 +2559,67 @@ class VideoAudioManager(QMainWindow):
         # Pulsanti per le diverse funzionalità
         self.generateAudioButton = QPushButton('Genera e Applica Audio con AI')
         self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
+
+        self.alignspeed = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed.setChecked(True)
+        layout.addWidget(self.alignspeed)
         layout.addWidget(self.generateAudioButton)
 
         voiceSettingsGroup.setLayout(layout)
         return voiceSettingsGroup
+
+    def createGeneratedAudiosUI(self):
+        """
+        Crea il QGroupBox per la gestione degli audio generati.
+        """
+        generatedAudiosGroup = QGroupBox("Audio Generati per questo Video")
+        layout = QVBoxLayout()
+
+        self.generatedAudiosListWidget = QListWidget()
+        self.generatedAudiosListWidget.setToolTip("Lista degli audio generati per il video corrente.")
+        self.generatedAudiosListWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.generatedAudiosListWidget.customContextMenuRequested.connect(self.show_audio_context_menu)
+        layout.addWidget(self.generatedAudiosListWidget)
+
+        buttons_layout = QHBoxLayout()
+        applyButton = QPushButton("Applica Selezionato")
+        applyButton.setToolTip("Applica l'audio selezionato al video.")
+        applyButton.clicked.connect(self.apply_selected_audio)
+        buttons_layout.addWidget(applyButton)
+
+        deleteButton = QPushButton("Elimina Selezionato")
+        deleteButton.setToolTip("Elimina l'audio selezionato (il file verrà cancellato).")
+        deleteButton.clicked.connect(self.delete_selected_audio)
+        buttons_layout.addWidget(deleteButton)
+
+        layout.addLayout(buttons_layout)
+        generatedAudiosGroup.setLayout(layout)
+        return generatedAudiosGroup
+
+    def show_audio_context_menu(self, position):
+        """
+        Mostra il menu contestuale per gli elementi della lista di audio generati.
+        """
+        item = self.generatedAudiosListWidget.itemAt(position)
+        if item:
+            context_menu = QMenu(self)
+            preview_action = context_menu.addAction("Ascolta anteprima")
+            action = context_menu.exec(self.generatedAudiosListWidget.mapToGlobal(position))
+
+            if action == preview_action:
+                self.play_preview_audio(item)
+
+    def play_preview_audio(self, item):
+        """
+        Riproduce l'anteprima dell'audio selezionato.
+        """
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+        if audio_path and os.path.exists(audio_path):
+            self.previewPlayer.setSource(QUrl.fromLocalFile(audio_path))
+            self.previewPlayer.play()
+            self.show_status_message(f"Riproduzione anteprima: {os.path.basename(audio_path)}")
+        else:
+            self.show_status_message("File anteprima non trovato.", error=True)
 
     def addCustomVoice(self):
         custom_name = self.voiceSelectionComboBox.currentText().strip()
@@ -2495,6 +2722,10 @@ class VideoAudioManager(QMainWindow):
 
         applyAudioButton = QPushButton('Applica Audio Principale')
         applyAudioButton.clicked.connect(self.handle_apply_main_audio)
+
+        self.alignspeed_replacement = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed_replacement.setChecked(True)
+        layout.addWidget(self.alignspeed_replacement)
         layout.addWidget(applyAudioButton)
 
         audioReplacementGroup.setLayout(layout)
@@ -2847,6 +3078,9 @@ class VideoAudioManager(QMainWindow):
         self.resetViewMenu()
 
     def closeEvent(self, event):
+        # Salva tutte le modifiche correnti prima di chiudere
+        self.save_all_tabs_to_json(show_message=False)
+
         self.dockSettingsManager.save_settings()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
             self.monitor_preview.close()
@@ -3530,7 +3764,6 @@ class VideoAudioManager(QMainWindow):
                 metadata = {
                     "transcription_original": self.transcription_original,
                     "transcription_corrected": self.transcription_corrected,
-                    "trascrizione_grezza": self.transcriptionTextArea.toPlainText(), # Mantengo per retrocompatibilità
                     "riassunto_generato": self.summaryTextArea.toPlainText(),
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
@@ -3706,6 +3939,15 @@ class VideoAudioManager(QMainWindow):
             logging.info(f"Nessun file JSON trovato per {video_path}. Creazione di un nuovo file.")
             data = self._create_new_json_data(video_path)
 
+        # Pulisci la lista di audio generati, rimuovendo i file che non esistono più
+        if 'generated_audios' in data:
+            valid_audios = [audio for audio in data['generated_audios'] if os.path.exists(audio)]
+            if len(valid_audios) != len(data['generated_audios']):
+                data['generated_audios'] = valid_audios
+                # Riscrivi il file solo se sono state fatte modifiche
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+
         # Scrivi sempre per assicurarti che il formato sia corretto e aggiornato
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
@@ -3740,8 +3982,74 @@ class VideoAudioManager(QMainWindow):
             "transcription_corrected": "",
             "summary_generated": "",
             "summary_generated_integrated": "",
-            "summary_date": None
+            "summary_date": None,
+            "generated_audios": [],
+            "video_notes": []
         }
+
+    def apply_selected_audio(self):
+        """
+        Applica l'audio selezionato dalla lista degli audio generati.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato dalla lista.", error=True)
+            return
+
+        audio_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        if not os.path.exists(audio_path):
+            self.show_status_message("Il file audio selezionato non esiste più.", error=True)
+            # Rimuovi l'elemento dalla lista e dal JSON
+            self._manage_video_json(self.videoPathLineEdit) # Questo ricaricherà e pulirà
+            return
+
+        self.show_status_message(f"Applicazione di {os.path.basename(audio_path)}...")
+        self.apply_generated_audio(audio_path)
+
+    def delete_selected_audio(self):
+        """
+        Elimina l'audio selezionato dalla lista, dal disco e dal file JSON.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato da eliminare.", error=True)
+            return
+
+        item = selected_items[0]
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+
+        reply = QMessageBox.question(
+            self,
+            "Conferma Eliminazione",
+            f"Sei sicuro di voler eliminare definitivamente il file audio?\n\n{os.path.basename(audio_path)}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 1. Rimuovi il file dal disco
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                    self.show_status_message(f"File {os.path.basename(audio_path)} eliminato.")
+
+                # 2. Rimuovi dal file JSON
+                json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+                if os.path.exists(json_path):
+                    with open(json_path, 'r+', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if 'generated_audios' in data and audio_path in data['generated_audios']:
+                            data['generated_audios'].remove(audio_path)
+                            f.seek(0)
+                            json.dump(data, f, ensure_ascii=False, indent=4)
+                            f.truncate()
+                        # Aggiorna l'UI con i dati modificati
+                        self._update_ui_from_json_data(data)
+
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione: {e}", error=True)
+                logging.error(f"Errore durante l'eliminazione del file audio {audio_path}: {e}")
+
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
@@ -3825,13 +4133,7 @@ class VideoAudioManager(QMainWindow):
         openActionOutput.setStatusTip('Open Video Output')
         openActionOutput.triggered.connect(self.browseVideoOutput)
 
-        openAudioAction = QAction('&Apri file audio', self)
-        openAudioAction.setShortcut('Ctrl+A')
-        openAudioAction.setStatusTip('Apri file audio')
-        openAudioAction.triggered.connect(self.browseAudioFile)
-
         fileMenu.addAction(openAction)
-        fileMenu.addAction(openAudioAction)
         fileMenu.addAction(openActionOutput)
 
         # New Save As action
@@ -4011,6 +4313,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
+        self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -4023,6 +4326,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoMergeDock)
         viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
+        viewMenu.addAction(self.actionToggleVideoNotesDock)
 
 
 
@@ -4121,6 +4425,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
+        self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -4247,7 +4552,15 @@ class VideoAudioManager(QMainWindow):
 
     def onTranscriptionComplete(self, result):
         json_path, temp_files = result
-        self._manage_video_json(self.videoPathLineEdit)
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            self.transcriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+            self.onProcessComplete(data)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
+            logging.error(f"Failed to load transcription JSON {json_path}: {e}")
+
         self.cleanupFiles(temp_files)
         self.show_status_message("Trascrizione completata.")
 
@@ -4299,6 +4612,19 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna il dock informativo
         self.infoDock.update_info(data)
+
+        # Carica le note video
+        self.load_video_notes_from_json(data)
+
+        # Aggiorna la lista degli audio generati
+        self.generatedAudiosListWidget.clear()
+        if 'generated_audios' in data and data['generated_audios']:
+            for audio_path in data['generated_audios']:
+                # Mostra solo il nome del file per leggibilità
+                item_text = os.path.basename(audio_path)
+                list_item = QListWidgetItem(item_text)
+                list_item.setData(Qt.ItemDataRole.UserRole, audio_path) # Salva il percorso completo
+                self.generatedAudiosListWidget.addItem(list_item)
         logging.debug("UI aggiornata con i dati JSON!")
 
     def cleanupFiles(self, file_paths):
@@ -4346,9 +4672,9 @@ class VideoAudioManager(QMainWindow):
                     new_text.append(word)
             return ' '.join(new_text)
 
-        transcriptionText = self.transcriptionTextArea.toPlainText()
+        transcriptionText = self.audioAiTextArea.toPlainText()
         if not transcriptionText.strip():
-            self.show_status_message("Inserisci una trascrizione prima di generare l'audio.", error=True)
+            self.show_status_message("Inserisci il testo nella tab 'Audio AI' prima di generare l'audio.", error=True)
             return
         transcriptionText = convert_numbers_to_words(transcriptionText)
 
@@ -4364,7 +4690,8 @@ class VideoAudioManager(QMainWindow):
 
         base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0] if self.videoPathLineEdit else "generated_audio"
         save_dir = os.path.dirname(self.videoPathLineEdit) if self.videoPathLineEdit else "."
-        audio_save_path = os.path.join(save_dir, f"{base_name}_generated.mp3")
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        audio_save_path = os.path.join(save_dir, f"{base_name}_generated_{timestamp}.mp3")
 
         thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key, audio_save_path, self)
         self.start_task(thread, self.onAudioGenerationCompleted, self.onAudioGenerationError, self.update_status_progress)
@@ -4397,6 +4724,20 @@ class VideoAudioManager(QMainWindow):
         Called when the AI audio generation is complete.
         This function now decides whether to sync the audio or apply it at a specific time.
         """
+        # Aggiungi il nuovo audio al file JSON del video
+        json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+        if os.path.exists(json_path):
+            with open(json_path, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'generated_audios' not in data:
+                    data['generated_audios'] = []
+                data['generated_audios'].append(audio_path)
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.truncate()
+            # Aggiorna l'UI
+            self._update_ui_from_json_data(data)
+
         self.apply_generated_audio(
             new_audio_path=audio_path
         )
@@ -4434,7 +4775,7 @@ class VideoAudioManager(QMainWindow):
         thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            False, # use_sync is False to apply at a specific time
+            self.alignspeed.isChecked(), # use_sync is now controlled by the checkbox
             start_time_sec,
             parent=self
         )
@@ -4465,7 +4806,7 @@ class VideoAudioManager(QMainWindow):
         thread = AudioProcessingThread(
             video_path,
             new_audio_path,
-            False, # use_sync is false to apply at a specific time
+            self.alignspeed_replacement.isChecked(), # use_sync is now controlled by the checkbox
             start_time_sec,
             parent=self
         )
@@ -5183,10 +5524,18 @@ class VideoAudioManager(QMainWindow):
             self.loadVideo(fileName)
 
     def updateRecentFiles(self, newFile):
-        if newFile not in self.recentFiles:
-            self.recentFiles.insert(0, newFile)
-            if len(self.recentFiles) > 5:  # Limita la lista ai 5 più recenti
-                self.recentFiles.pop()
+        if newFile in self.recentFiles:
+            self.recentFiles.remove(newFile)
+
+        self.recentFiles.insert(0, newFile)
+
+        if len(self.recentFiles) > 15:  # Limita la lista ai 15 più recenti
+            self.recentFiles = self.recentFiles[:15]
+
+        # Salva la lista aggiornata nelle impostazioni
+        settings = QSettings("Genius", "GeniusAI")
+        settings.setValue("recentFiles", self.recentFiles)
+
         self.updateRecentFilesMenu()
 
     def updateRecentFilesMenu(self):
@@ -5195,6 +5544,14 @@ class VideoAudioManager(QMainWindow):
             action = QAction(os.path.basename(file), self)
             action.triggered.connect(lambda checked, f=file: self.openRecentFile(f))
             self.recentMenu.addAction(action)
+
+    def loadRecentFiles(self):
+        """Carica la lista dei file recenti da QSettings."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.recentFiles = settings.value("recentFiles", [], type=list)
+        # Rimuovi i file che non esistono più
+        self.recentFiles = [f for f in self.recentFiles if os.path.exists(f)]
+
 
     def openRecentFile(self, filePath):
         self.videoPathLineEdit = filePath
@@ -5242,6 +5599,129 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
     def stopVideo(self):
         self.player.stop()
+
+    def updatePlayButtonIcon(self, state):
+        if self.reverseTimer.isActive():
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButton.setIcon(QIcon(get_resource("play.png")))
+
+    def keyPressEvent(self, event):
+        """
+        Gestisce gli eventi di pressione dei tasti a livello di finestra principale
+        per controllare la riproduzione video con le frecce.
+        """
+        key = event.key()
+
+        # Non intercettare gli eventi quando un campo di testo ha il focus
+        if QApplication.focusWidget() and isinstance(QApplication.focusWidget(), (QLineEdit, QTextEdit)):
+            super().keyPressEvent(event)
+            return
+
+        if key == Qt.Key.Key_Left:
+            self.rewind5Seconds()
+            event.accept()
+        elif key == Qt.Key.Key_Right:
+            self.forward5Seconds()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    def eventFilter(self, source, event):
+        if source is self.videoOverlay and event.type() == QEvent.Type.MouseButtonDblClick:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.add_video_note()
+                return True
+        return super().eventFilter(source, event)
+
+    def add_video_note(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Carica un video prima di aggiungere una nota.", error=True)
+            return
+
+        self.player.pause()
+        position = self.player.position()
+        timecode = self.formatTimecode(position)
+
+        note_text, ok = MultiLineInputDialog.getText(self, "Aggiungi Nota", f"Inserisci la nota per il timecode {timecode}:")
+
+        if ok and note_text.strip():
+            note_item = f"{timecode} - {note_text.strip()}"
+            list_item = QListWidgetItem(note_item)
+            list_item.setData(Qt.ItemDataRole.UserRole, position) # Store position in ms
+            self.videoNotesListWidget.addItem(list_item)
+            self.save_video_notes_to_json()
+
+    def seek_to_note_timecode(self, item):
+        position = item.data(Qt.ItemDataRole.UserRole)
+        if position is not None:
+            self.player.setPosition(position)
+
+    def save_video_notes_to_json(self):
+        if not self.videoPathLineEdit:
+            return
+
+        notes = []
+        for i in range(self.videoNotesListWidget.count()):
+            item = self.videoNotesListWidget.item(i)
+            position = item.data(Qt.ItemDataRole.UserRole)
+            text = item.text().split(" - ", 1)[1]
+            notes.append({"position": position, "text": text})
+
+        self._update_json_file(self.videoPathLineEdit, {"video_notes": notes})
+
+    def load_video_notes_from_json(self, data):
+        self.videoNotesListWidget.clear()
+        notes = data.get("video_notes", [])
+        for note in notes:
+            position = note.get("position")
+            text = note.get("text")
+            if position is not None and text:
+                timecode = self.formatTimecode(position)
+                list_item = QListWidgetItem(f"{timecode} - {text}")
+                list_item.setData(Qt.ItemDataRole.UserRole, position)
+                self.videoNotesListWidget.addItem(list_item)
+
+    def edit_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da modificare.", error=True)
+            return
+
+        position = selected_item.data(Qt.ItemDataRole.UserRole)
+        timecode = self.formatTimecode(position)
+        current_text = selected_item.text().split(" - ", 1)[1]
+
+        new_text, ok = MultiLineInputDialog.getText(self, "Modifica Nota", "Nuovo testo della nota:", text=current_text)
+
+        if ok and new_text.strip():
+            selected_item.setText(f"{timecode} - {new_text.strip()}")
+            self.save_video_notes_to_json()
+
+    def delete_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da cancellare.", error=True)
+            return
+
+        reply = QMessageBox.question(self, "Conferma Cancellazione",
+                                     f"Sei sicuro di voler cancellare la nota?\n\n'{selected_item.text()}'",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.videoNotesListWidget.takeItem(self.videoNotesListWidget.row(selected_item))
+            self.save_video_notes_to_json()
+
+    def updatePlayButtonIconOutput(self, state):
+        if self.reverseTimerOutput.isActive():
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
 
 def get_application_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""

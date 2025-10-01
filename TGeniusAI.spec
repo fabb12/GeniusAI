@@ -13,37 +13,37 @@ block_cipher = None
 current_dir = os.getcwd()
 
 # --- INIZIO CODICE PER PLAYWRIGHT ---
-def find_playwright_browsers():
-    """Trova il percorso della cartella dei browser Playwright."""
-    system = platform.system()
-    if system == 'Windows':
-        base_path = os.getenv('LOCALAPPDATA')
-    elif system == 'Darwin':
-        base_path = os.path.expanduser('~/Library/Caches')
-    else:
-        base_path = os.path.expanduser('~/.cache')
+# def find_playwright_browsers():
+#     """Trova il percorso della cartella dei browser Playwright."""
+#     system = platform.system()
+#     if system == 'Windows':
+#         base_path = os.getenv('LOCALAPPDATA')
+#     elif system == 'Darwin':
+#         base_path = os.path.expanduser('~/Library/Caches')
+#     else:
+#         base_path = os.path.expanduser('~/.cache')
 
-    if not base_path:
-        raise EnvironmentError("Impossibile determinare la cartella cache/appdata dell'utente.")
+#     if not base_path:
+#         raise EnvironmentError("Impossibile determinare la cartella cache/appdata dell'utente.")
 
-    browser_path = os.path.join(base_path, 'ms-playwright')
+#     browser_path = os.path.join(base_path, 'ms-playwright')
 
-    if not os.path.exists(browser_path):
-        raise FileNotFoundError(
-            f"Cartella browser Playwright non trovata in '{browser_path}'. "
-            "Assicurati di aver eseguito 'playwright install' prima di compilare."
-        )
-    print(f"Trovata cartella browser Playwright in: {browser_path}")
-    return browser_path
+#     if not os.path.exists(browser_path):
+#         raise FileNotFoundError(
+#             f"Cartella browser Playwright non trovata in '{browser_path}'. "
+#             "Assicurati di aver eseguito 'playwright install' prima di compilare."
+#         )
+#     print(f"Trovata cartella browser Playwright in: {browser_path}")
+#     return browser_path
 
-try:
-    playwright_browser_dir = find_playwright_browsers()
-    playwright_datas = [(playwright_browser_dir, 'ms-playwright')]
-    print("Inclusione dati Playwright configurata.")
-except (FileNotFoundError, EnvironmentError) as e:
-    print(f"ERRORE: {e}")
-    print("Il build continuerà senza i browser Playwright, ma l'Agent Browser non funzionerà.")
-    playwright_datas = []
+# try:
+#     playwright_browser_dir = find_playwright_browsers()
+#     playwright_datas = [(playwright_browser_dir, 'ms-playwright')]
+#     print("Inclusione dati Playwright configurata.")
+# except (FileNotFoundError, EnvironmentError) as e:
+#     print(f"ERRORE: {e}")
+#     print("Il build continuerà senza i browser Playwright, ma l'Agent Browser non funzionerà.")
+playwright_datas = []
 
 # --- FINE CODICE PER PLAYWRIGHT ---
 
@@ -58,9 +58,9 @@ hiddenimports = (
     collect_submodules('pycountry') +
     collect_submodules('speech_recognition') +
     collect_submodules('pydantic') +
-    collect_submodules('playwright') +
-    collect_submodules('browser_use') +
-    ['playwright.sync_api', 'playwright.async_api'] +
+    # collect_submodules('playwright') +
+    # collect_submodules('browser_use') +
+    # ['playwright.sync_api', 'playwright.async_api'] +
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
      'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
@@ -74,8 +74,7 @@ datas = (
     collect_data_files('pydub') +
     collect_data_files('PyQt6') +
     collect_data_files('pycountry') +
-    collect_data_files('speech_recognition') +
-    collect_data_files('browser_use')
+    collect_data_files('speech_recognition')
 )
 
 # Additional DLLs and plugins for PyQt6
@@ -261,8 +260,8 @@ def post_build_steps():
     items_to_handle = {
         'res': 'res',
         'prompts': 'prompts',
-        'ms-playwright': 'ms-playwright', # Playwright browsers
-        'browser_use': 'browser_use',    # Data files from browser_use lib
+        # 'ms-playwright': 'ms-playwright', # Playwright browsers
+        # 'browser_use': 'browser_use',    # Data files from browser_use lib
         # Add other collected data subdirs here if necessary
         '.env': '.',
         'README.md': '.',
@@ -302,14 +301,16 @@ def post_build_steps():
 
                     print(f"  Moving '{item_name}' to '{final_target_path}'")
 
-                    # Prevent overwriting if target exists (optional, move might fail anyway)
+                    # If the destination path exists, remove it to prevent `shutil.move`
+                    # from moving the source *inside* the destination directory.
                     if os.path.exists(final_target_path):
-                         print(f"  Target '{final_target_path}' already exists. Skipping move for '{item_name}'. Consider manual cleanup if needed.")
-                         # Optionally remove from internal if already exists at target:
-                         # if os.path.isdir(internal_item_path): shutil.rmtree(internal_item_path)
-                         # else: os.remove(internal_item_path)
-                    else:
-                         shutil.move(internal_item_path, final_target_path)
+                        print(f"  Target '{final_target_path}' already exists. Removing it to ensure a clean move.")
+                        if os.path.isdir(final_target_path):
+                            shutil.rmtree(final_target_path)
+                        else:
+                            os.remove(final_target_path)
+
+                    shutil.move(internal_item_path, final_target_path)
 
                 except Exception as e:
                     print(f"  ERROR moving '{item_name}': {e}")
@@ -334,7 +335,7 @@ def post_build_steps():
 
     # Verifica integrità dell'installazione
     print("\n===== INSTALLATION INTEGRITY CHECK =====")
-    expected_items = ['ffmpeg', 'res', 'prompts', 'ms-playwright', 'browser_use', # Dirs
+    expected_items = ['ffmpeg', 'res', 'prompts',  # Dirs
                       'version_info.txt', '.env', 'README.md', 'CHANGELOG.md', # Files
                       'KNOW_ISSUES.md', 'contatti_teams.txt', 'TGeniusAI.exe']
     missing_items = []

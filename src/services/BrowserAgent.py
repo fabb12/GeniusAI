@@ -50,26 +50,33 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject, QSettings, QTimer
 
 # --- Langchain Imports ---
-# Import browser_use components (assuming these are correctly installed/located)
-try:
-    from browser_use.agent.service import Agent
-    from browser_use.browser.browser import Browser, BrowserConfig
-    from browser_use.browser.context import BrowserContextConfig
-    from browser_use.controller.service import Controller
-except ImportError as e:
-    logging.error(f"Failed to import browser_use components: {e}. Please ensure the library is installed.")
-    # Define dummy classes to prevent NameErrors if import fails, allowing UI to load
-    class Agent: pass
-    class Browser: pass
-    class BrowserConfig: pass
-    class BrowserContextConfig: pass
-    class Controller: pass
+# Import browser_use components
+from browser_use import Agent, BrowserSession
+from browser_use.browser import BrowserProfile
 
 # Import LLM clients
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI # Keep for potential OpenAI integration
+from browser_use.llm import ChatAnthropic, ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI # Import Gemini client
 # Note: Ollama integration with langchain might require langchain_community
+
+# Custom wrapper to ensure compatibility with browser-use agent
+class GoogleLLMWrapper:
+    """
+    A wrapper for the ChatGoogleGenerativeAI model to ensure it has the 'ainvoke',
+    'provider', 'model', and 'model_name' attributes expected by the browser-use agent.
+    """
+    def __init__(self, llm):
+        self.llm = llm
+        self.provider = "google"      # Expose the provider attribute
+        self.model = llm.model          # Expose the model attribute
+        self.model_name = llm.model     # Expose the model_name attribute
+
+    async def ainvoke(self, *args, **kwargs):
+        """Asynchronously invoke the wrapped LLM."""
+        # The browser-use agent expects this method. We pass the call
+        # to the underlying langchain object's ainvoke method.
+        return await self.llm.ainvoke(*args, **kwargs)
+
 
 # --- Local Imports ---
 from src.services.FrameExtractor import FrameExtractor # Used for guide generation
@@ -158,7 +165,7 @@ class BrowserAgentWorker(QObject):
         self.task = task
         self.config = config # Use the passed AgentConfig instance
         self.running = False
-        self.browser = None
+        self.browser_session = None
         self.agent = None # Hold agent instance for potential interruption
 
     async def run_agent_async(self):
@@ -180,7 +187,7 @@ class BrowserAgentWorker(QObject):
                 if not self.config.anthropic_api_key:
                     raise ValueError("Anthropic API Key non configurata.")
                 llm = ChatAnthropic(
-                    model_name=model_id,
+                    model=model_id,
                     anthropic_api_key=self.config.anthropic_api_key,
                     temperature=0.0,
                     max_tokens=4096 # Ensure sufficient tokens
@@ -196,13 +203,14 @@ class BrowserAgentWorker(QObject):
                 except Exception as e:
                     logging.warning(f"Re-configuring genai failed (might be ok): {e}")
 
-                llm = ChatGoogleGenerativeAI(
+                google_llm = ChatGoogleGenerativeAI(
                     model=model_id, # Use the full model name from config
                     google_api_key=self.config.google_api_key, # Pass key explicitly if needed
                     temperature=0.1, # Lower temp for reliability
                     convert_system_message_to_human=True # Often helpful for agents
                 )
-                self.log_message.emit(f"Inizializzato LLM: Google Gemini ({model_id})")
+                llm = GoogleLLMWrapper(google_llm) # Wrap the instance
+                self.log_message.emit(f"Inizializzato e wrappato LLM: Google Gemini ({model_id})")
 
             elif model_lower.startswith("gpt"):
                  if not self.config.openai_api_key:
@@ -231,38 +239,21 @@ class BrowserAgentWorker(QObject):
 
             if not self.running: return # Check running status after LLM init
 
-            # --- Browser Setup ---
-            self.progress.emit(10, "Configurazione browser...")
-            browser_config = BrowserConfig(
+            # --- Browser and Agent Setup ---
+            self.progress.emit(10, "Configurazione browser e agente...")
+            browser_profile = BrowserProfile(
                 headless=self.config.headless,
-                disable_security=True # Often needed for agent control
-            )
-            context_config = BrowserContextConfig(
-                browser_window_size={'width': 1280, 'height': 900},
-                minimum_wait_page_load_time=0.5,
-                highlight_elements=True
+                viewport_size={'width': 1280, 'height': 900}
             )
 
             if not self.running: return
 
-            self.progress.emit(15, "Avvio browser...")
-            self.browser = Browser(config=browser_config)
-            self.log_message.emit("Browser inizializzato.")
-            self.progress.emit(20, "Browser avviato")
-
-            if not self.running: return
-
-            # --- Controller and Agent Setup ---
-            self.progress.emit(35, "Inizializzazione controller...")
-            controller = Controller()
-            if not self.running: return
-
-            self.progress.emit(40, "Inizializzazione agente...")
+            self.progress.emit(15, "Inizializzazione agente...")
             self.agent = Agent(
                 task=self.task,
                 llm=llm,
-                browser=self.browser,
-                controller=controller,
+                browser_profile=browser_profile, # Pass profile directly
+                headless=self.config.headless,
                 use_vision=self.config.use_vision,
                 max_actions_per_step=1
             )
@@ -327,16 +318,7 @@ class BrowserAgentWorker(QObject):
         finally:
             # --- Cleanup ---
             self.log_message.emit("Inizio pulizia risorse worker...")
-            if self.browser:
-                try:
-                    self.progress.emit(98, "Chiusura browser...")
-                    await self.browser.close()
-                    self.progress.emit(100, "Browser chiuso con successo")
-                    self.log_message.emit("Browser chiuso.")
-                except Exception as browser_close_err:
-                    self.log_message.emit(f"Errore durante chiusura browser: {browser_close_err}")
-                    logging.error(f"Errore nella chiusura del browser: {browser_close_err}")
-            self.browser = None
+            # The browser_session is now managed by the Agent and will be cleaned up automatically.
             self.agent = None # Clear agent reference
             self.log_message.emit("Pulizia risorse worker completata.")
             # Ensure running is false if we exit due to error or completion
