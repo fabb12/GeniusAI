@@ -4286,11 +4286,6 @@ class VideoAudioManager(QMainWindow):
         self.recentMenu = fileMenu.addMenu("Recenti")  # Aggiunge il menu dei file recenti
         self.updateRecentFilesMenu()
 
-        # Creazione del menu Export
-        exportMenu = menuBar.addMenu('&Export')
-        exportWordAction = QAction('Esporta riassunto in Word', self)
-        exportWordAction.triggered.connect(self.exportSummaryToWord)
-        exportMenu.addAction(exportWordAction)
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
@@ -4315,6 +4310,12 @@ class VideoAudioManager(QMainWindow):
         workflowsMenu.addAction(self.generatePptxAction)
         # workflowsMenu.addAction(self.extractInfoAction)
 
+        # Creazione del menu Export
+        exportMenu = menuBar.addMenu('&Export')
+        exportWordAction = QAction('Esporta riassunto in Word', self)
+        exportWordAction.triggered.connect(self.exportSummaryToWord)
+        exportMenu.addAction(exportWordAction)
+        """
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
         # Opzioni esistenti
@@ -4329,7 +4330,7 @@ class VideoAudioManager(QMainWindow):
         createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti')
         createGuideAction.triggered.connect(self.createGuideAndRunAgent)
         agentAIsMenu.addAction(createGuideAction)
-
+        """
         viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
         self.setupViewMenuActions(viewMenu)
 
