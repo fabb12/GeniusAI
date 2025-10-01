@@ -2230,42 +2230,43 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabelOutput.setText("Nessun video caricato")
 
     def get_nearest_timecode(self):
-        # Posizione attuale del cursore nella trascrizione
         cursor_position = self.audioAiTextArea.textCursor().position()
         text = self.audioAiTextArea.toPlainText()
 
-        # Trova tutti i timecode nel testo
-        timecode_pattern = re.compile(r'\[(\d{2}):(\d{2})\]')
+        # Regex per trovare [MM:SS.d] o [MM:SS]
+        timecode_pattern = re.compile(r'\[(\d{2}):(\d{2}(?:\.\d)?)\]')
         matches = list(timecode_pattern.finditer(text))
 
         if not matches:
             logging.debug("Nessun timecode trovato nella trascrizione.")
             return None
 
-        nearest_timecode = None
+        nearest_match = None
         min_distance = float('inf')
 
         for match in matches:
-            start, end = match.span()  # Ottieni la posizione del timecode
-            distance = abs(cursor_position - start)  # Distanza dal cursore
-
+            start, end = match.span()
+            distance = abs(cursor_position - start)
             if distance < min_distance:
                 min_distance = distance
-                nearest_timecode = match
+                nearest_match = match
 
-        if nearest_timecode:
+        if nearest_match:
             try:
-                minutes, seconds = map(int, nearest_timecode.groups())
-                timecode_seconds = minutes * 60 + seconds
-                logging.debug(f"Timecode più vicino: {timecode_seconds} secondi")
-                return timecode_seconds
-            except ValueError:
-                logging.error("Errore durante la conversione del timecode in secondi.")
+                time_str = nearest_match.group(1)
+                if '.' in time_str:
+                    minutes, seconds = map(float, time_str.split(':'))
+                else:
+                    minutes, seconds = map(int, time_str.split(':'))
+
+                total_seconds = minutes * 60 + seconds
+                logging.debug(f"Timecode più vicino: {total_seconds} secondi")
+                return total_seconds
+            except ValueError as e:
+                logging.error(f"Errore durante la conversione del timecode in secondi: {e}")
                 return None
 
         logging.debug("Nessun timecode valido trovato.")
-        return None
-
         return None
 
     def sync_video_to_transcription(self):
@@ -4619,8 +4620,8 @@ class VideoAudioManager(QMainWindow):
                 updated_html.append(sentence)
 
                 minutes = int(cumulative_time // 60)
-                seconds = int(cumulative_time % 60)
-                updated_html.append(f" <span style='color:lightblue;'>[{minutes:02d}:{seconds:02d}]</span>")
+                seconds = cumulative_time % 60
+                updated_html.append(f" <span style='color:cyan;'>[{minutes:02d}:{seconds:04.1f}]</span>")
 
             paragraph.clear()
             paragraph.append(BeautifulSoup(' '.join(updated_html), 'html.parser'))
