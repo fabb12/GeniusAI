@@ -12,7 +12,7 @@ from src.config import FFMPEG_PATH
 class DownloadThread(QThread):
     completed = pyqtSignal(list)  # Emits [path, title, language, date]
     error = pyqtSignal(str)
-    progress = pyqtSignal(int)  # Signal for download progress
+    progress = pyqtSignal(int, str)  # Signal for download progress
     stream_url_found = pyqtSignal(str)  # Nuovo segnale per l'URL del flusso trovato
 
     def __init__(self, url, download_video, ffmpeg_path):
@@ -67,7 +67,7 @@ class DownloadThread(QThread):
             base_match = re.search(base_pattern, url)
             base_url = base_match.group(1) if base_match else "https://streamingcommunity.hiphop"
 
-            self.progress.emit(10)  # Aggiorna progresso
+            self.progress.emit(10, "Estrazione URL di streaming...")
 
             # Costruisci l'URL dell'iframe
             iframe_url = f"{base_url}/iframe/{playerid}"
@@ -97,7 +97,7 @@ class DownloadThread(QThread):
 
             iframe_src = iframe_tag.get('src')
 
-            self.progress.emit(30)  # Aggiorna progresso
+            self.progress.emit(30, "Estrazione URL di streaming...")
 
             # Headers per la richiesta del contenuto dell'iframe
             headers = {
@@ -120,7 +120,7 @@ class DownloadThread(QThread):
             response = requests.get(iframe_src, headers=headers)
             response.raise_for_status()
 
-            self.progress.emit(50)  # Aggiorna progresso
+            self.progress.emit(50, "Estrazione URL di streaming...")
 
             # Estrai i parametri necessari dal contenuto JavaScript dell'iframe
             url_pattern = r"url: '([^']+)'"
@@ -139,7 +139,7 @@ class DownloadThread(QThread):
             token = token_match.group(1)
             expires = expires_match.group(1)
 
-            self.progress.emit(70)  # Aggiorna progresso
+            self.progress.emit(70, "Costruzione URL finale...")
 
             # Costruisci l'URL finale del flusso
             if '?' in stream_url:
@@ -149,7 +149,7 @@ class DownloadThread(QThread):
                 # Altrimenti, inizia i parametri con ?
                 final_url = f"{stream_url}?token={token}&expires={expires}&h=1"
 
-            self.progress.emit(90)  # Aggiorna progresso
+            self.progress.emit(90, "URL finale costruito.")
 
             return final_url
 
@@ -209,7 +209,11 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(audio_options) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 if 'id' in info:
-                    audio_file_path = os.path.join(self.temp_dir, f"{info['id']}.mp3")
+                    audio_file_path = info.get('filepath')
+                    if not audio_file_path or not os.path.exists(audio_file_path):
+                        # Fallback for safety, though info['filepath'] should be correct
+                        audio_file_path = os.path.join(self.temp_dir, f"{info['id']}.{info.get('ext', 'mp3')}")
+
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
                     upload_date = info.get('upload_date', None)
@@ -237,7 +241,10 @@ class DownloadThread(QThread):
             with yt_dlp.YoutubeDL(video_options) as ydl:
                 info = ydl.extract_info(self.url, download=True)
                 if 'id' in info:
-                    video_file_path = os.path.join(self.temp_dir, f"{info['id']}.mp4")
+                    video_file_path = info.get('filepath')
+                    if not video_file_path or not os.path.exists(video_file_path):
+                        # Fallback for safety
+                        video_file_path = os.path.join(self.temp_dir, f"{info['id']}.{info.get('ext', 'mp4')}")
                     video_title = info.get('title', 'Unknown Title')
                     video_language = info.get('language', 'Lingua non rilevata')
                     upload_date = info.get('upload_date', None)
@@ -254,7 +261,10 @@ class DownloadThread(QThread):
             total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate')
             if total_bytes:
                 progress = int((d['downloaded_bytes'] / total_bytes) * 100)
-                self.progress.emit(progress)
+                total_mb = total_bytes / (1024 * 1024)
+                speed_str = d.get('_speed_str', 'N/A').strip()
+                label = f"Download in corso: {progress}% di {total_mb:.2f}MB @ {speed_str}"
+                self.progress.emit(progress, label)
         elif d['status'] == 'finished':
             # When finished, set progress to 100%
-            self.progress.emit(100)
+            self.progress.emit(100, "Download completato. Inizio elaborazione...")

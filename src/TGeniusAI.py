@@ -3951,38 +3951,41 @@ class VideoAudioManager(QMainWindow):
 
     def createDownloadDock(self):
         """Crea e restituisce il dock per il download di video."""
-        dock =CustomDock("Download Video", closable=True)
-
-        # GroupBox per organizzare visivamente le opzioni di download
-        downloadGroup = QGroupBox("Opzioni di Download Video")
-        downloadLayout = QVBoxLayout()
-
-        # Widget per inserire l'URL del video di YouTube
-        url_label = QLabel("Inserisci l'URL di YouTube:")
-        url_edit = QLineEdit()
-
-        # CheckBox per selezionare se scaricare anche il video
-        video_checkbox = QCheckBox("Scarica anche il video")
-
-        # Bottone per iniziare il download
-        download_btn = QPushButton("Download Video")
-        download_btn.clicked.connect(lambda: self.handleDownload(url_edit.text(), video_checkbox.isChecked(), FFMPEG_PATH_DOWNLOAD))
-
-        # Aggiunta dei controlli al layout della GroupBox
-        downloadLayout.addWidget(url_label)
-        downloadLayout.addWidget(url_edit)
-        downloadLayout.addWidget(video_checkbox)
-        downloadLayout.addWidget(download_btn)
-
-        # Imposta il layout del GroupBox
-        downloadGroup.setLayout(downloadLayout)
-
-        # Widget principale per il dock
+        dock = CustomDock("Download Video", closable=True)
         widget = QWidget()
-        widget.setLayout(QVBoxLayout())
-        widget.layout().addWidget(downloadGroup)
-        dock.addWidget(widget)
+        main_layout = QVBoxLayout(widget)
 
+        downloadGroup = QGroupBox("Download da URL (YouTube, ecc.)")
+        grid_layout = QGridLayout(downloadGroup)
+
+        # Riga 0: URL Input
+        url_label = QLabel("URL:")
+        url_edit = QLineEdit()
+        url_edit.setPlaceholderText("Incolla qui l'URL del video...")
+        grid_layout.addWidget(url_label, 0, 0)
+        grid_layout.addWidget(url_edit, 0, 1)
+
+        # Riga 1: Opzioni
+        video_checkbox = QCheckBox("Scarica file video (altrimenti solo audio)")
+        video_checkbox.setChecked(True)
+        grid_layout.addWidget(video_checkbox, 1, 1)
+
+        # Riga 2: Pulsante di download
+        download_btn = QPushButton("Scarica")
+        download_btn.clicked.connect(
+            lambda: self.handleDownload(
+                url_edit.text(),
+                video_checkbox.isChecked(),
+                FFMPEG_PATH_DOWNLOAD
+            )
+        )
+        grid_layout.addWidget(download_btn, 2, 1)
+
+        # Imposta lo stretch per la colonna 1 per farla espandere
+        grid_layout.setColumnStretch(1, 1)
+
+        main_layout.addWidget(downloadGroup)
+        dock.addWidget(widget)
         return dock
 
     def handleDownload(self, url, download_video, ffmpeg_path):
