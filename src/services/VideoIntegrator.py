@@ -1,25 +1,23 @@
 # src/services/VideoIntegrator.py
 
 import logging
-from PyQt6.QtCore import QThread, pyqtSignal
-
-import logging
-from PyQt6.QtCore import QThread, pyqtSignal
+from PyQt6.QtCore import QThread, pyqtSignal, QObject
 from bs4 import BeautifulSoup
 
 from src.services.FrameExtractor import FrameExtractor
+from src.services.ProcessTextAI import ProcessTextAI
 
 class VideoIntegrationThread(QThread):
     completed = pyqtSignal(str)
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, video_path, num_frames, language, current_summary, parent=None):
+    def __init__(self, video_path, num_frames, language, current_summary_html, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.num_frames = num_frames
         self.language = language
-        self.current_summary = current_summary # Questo ora è HTML
+        self.current_summary_html = current_summary_html
 
     def run(self):
         try:
@@ -39,44 +37,47 @@ class VideoIntegrationThread(QThread):
                 self.error.emit("L'analisi dei frame non ha prodotto risultati.")
                 return
 
-            self.progress.emit(70, "Integrazione delle informazioni nel riassunto...")
+            # Formatta le informazioni dei frame per il prompt
+            frame_info_str = "\n".join([
+                f"- {item['description']} [{item['timestamp']}]"
+                for item in frame_data
+            ])
 
-            # Costruisci lo snippet HTML per le nuove informazioni
-            integration_html = "<h2>Integrazione Video</h2><ul>"
-            for item in frame_data:
-                description = item['description']
-                time_parts = item['timestamp'].split(':')
-                timestamp_sec = float(int(time_parts[0]) * 60 + int(time_parts[1]))
-                minutes = int(timestamp_sec // 60)
-                seconds = timestamp_sec % 60
-                # Formatta il timestamp per essere cliccabile: [MM:SS.d]
-                timecode = f"[{minutes:02d}:{seconds:.1f}]"
+            # Estrai il testo puro dal riassunto HTML per l'analisi
+            soup = BeautifulSoup(self.current_summary_html, 'html.parser')
+            current_summary_text = soup.get_text()
 
-                # Aggiunge la descrizione e il timecode come un elemento di lista
-                integration_html += f"<li>{description} - {timecode}</li>"
-            integration_html += "</ul>"
+            # Prepara le variabili per il prompt
+            prompt_vars = {
+                "current_summary": current_summary_text,
+                "frame_info": frame_info_str
+            }
 
-            # Accoda il nuovo HTML al riassunto esistente
-            # Usiamo BeautifulSoup per assicurarci che sia inserito correttamente nel body
-            soup = BeautifulSoup(self.current_summary, 'html.parser')
+            self.progress.emit(70, "Integrazione AI nel riassunto...")
 
-            # Se non c'è un body, creane uno
-            if not soup.body:
-                new_body = soup.new_tag('body')
-                # Trasferisci i contenuti esistenti nel nuovo body
-                for content in list(soup.contents):
-                    new_body.append(content.extract())
-                soup.append(new_body)
+            # Crea e avvia il thread di elaborazione AI
+            self.ai_thread = ProcessTextAI(
+                mode="video_integration",
+                language=self.language,
+                prompt_vars=prompt_vars
+            )
 
-            # Aggiungi il nuovo contenuto al body
-            soup.body.append(BeautifulSoup(integration_html, 'html.parser'))
+            # Connetti i segnali
+            self.ai_thread.completed.connect(self.on_ai_completed)
+            self.ai_thread.error.connect(self.on_ai_error)
 
-            # Emetti l'HTML completo
-            final_html = str(soup)
-
-            self.progress.emit(100, "Completato.")
-            self.completed.emit(final_html)
+            # Esegui il thread in modo sincrono per mantenere la logica sequenziale
+            self.ai_thread.run()
 
         except Exception as e:
             logging.exception("Errore in VideoIntegrationThread")
             self.error.emit(str(e))
+
+    def on_ai_completed(self, integrated_summary_html):
+        """Chiamato quando l'AI completa l'integrazione."""
+        self.progress.emit(100, "Completato.")
+        self.completed.emit(integrated_summary_html)
+
+    def on_ai_error(self, error_message):
+        """Chiamato se l'AI restituisce un errore."""
+        self.error.emit(f"Errore durante l'integrazione AI: {error_message}")
