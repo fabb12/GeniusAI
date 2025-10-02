@@ -55,29 +55,31 @@ class VideoIntegrationThread(QThread):
 
             self.progress.emit(70, "Integrazione AI nel riassunto...")
 
-            # Crea e avvia il thread di elaborazione AI
-            self.ai_thread = ProcessTextAI(
+            # Istanzia il processore AI come un oggetto standard per evitare nested threads.
+            # Chiameremo il suo metodo di elaborazione direttamente.
+            ai_processor = ProcessTextAI(
                 mode="video_integration",
                 language=self.language,
-                prompt_vars=prompt_vars
+                prompt_vars=prompt_vars,
+                parent=self  # Gestisce la parentela Qt
             )
 
-            # Connetti i segnali
-            self.ai_thread.completed.connect(self.on_ai_completed)
-            self.ai_thread.error.connect(self.on_ai_error)
+            # Connetti il suo segnale di progresso al nostro per inoltrare i messaggi
+            ai_processor.progress.connect(self.progress)
 
-            # Esegui il thread in modo sincrono per mantenere la logica sequenziale
-            self.ai_thread.run()
+            # Esegui l'elaborazione in modo bloccante (siamo già in un thread in background)
+            result_data = ai_processor._process_text_with_selected_model()
+
+            # Gestisci il risultato direttamente, senza usare slot aggiuntivi
+            if isinstance(result_data, tuple) and len(result_data) == 3:
+                final_html, _, _ = result_data
+                self.progress.emit(100, "Completato.")
+                self.completed.emit(final_html)
+            else:
+                # Se result_data non è una tupla, è un messaggio di errore
+                error_message = str(result_data)
+                self.error.emit(f"Errore durante l'integrazione AI: {error_message}")
 
         except Exception as e:
             logging.exception("Errore in VideoIntegrationThread")
             self.error.emit(str(e))
-
-    def on_ai_completed(self, integrated_summary_html):
-        """Chiamato quando l'AI completa l'integrazione."""
-        self.progress.emit(100, "Completato.")
-        self.completed.emit(integrated_summary_html)
-
-    def on_ai_error(self, error_message):
-        """Chiamato se l'AI restituisce un errore."""
-        self.error.emit(f"Errore durante l'integrazione AI: {error_message}")
