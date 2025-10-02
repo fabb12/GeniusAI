@@ -12,37 +12,40 @@ from dotenv import load_dotenv
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
-    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY
+    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION
 )
 
 load_dotenv()
 
 class ProcessTextAI(QThread):
     """
-    Thread per elaborare testo (riassumere o correggere) utilizzando
-    il modello AI selezionato nelle impostazioni (Claude, Gemini, Ollama).
+    Thread per elaborare testo utilizzando un modello AI.
+    Supporta diverse modalità come riassunto, correzione e integrazione video.
     """
-    progress = pyqtSignal(int, str) # Segnale per aggiornamenti di progresso (percentuale, messaggio)
-    completed = pyqtSignal(str)     # Segnale emesso con il testo elaborato al completamento
-    error = pyqtSignal(str)        # Segnale emesso in caso di errore
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
 
-    def __init__(self, text, language, mode="summary", parent=None):
+    def __init__(self, mode, language, prompt_vars, parent=None):
         """
         Inizializza il thread.
 
         Args:
-            text (str): Il testo da elaborare.
-            language (str): La lingua del testo (es. "italiano", "inglese").
-            mode (str): La modalità di elaborazione ("summary" o "fix"). Default: "summary".
+            mode (str): La modalità di elaborazione (es. "summary", "fix", "video_integration").
+            language (str): La lingua per il prompt (es. "italiano").
+            prompt_vars (dict): Un dizionario con le variabili da inserire nel prompt.
+                                Esempio: {'text': 'Il mio testo...', 'current_summary': '...'}
             parent (QObject, optional): Il parent Qt. Defaults to None.
         """
         super().__init__(parent)
-        self.text = text
         self.language = language
+        self.prompt_vars = prompt_vars
         self.result = None
+
         # Valida la modalità
-        if mode not in ["summary", "fix", "youtube_summary"]:
-            raise ValueError("La modalità deve essere 'summary', 'fix' o 'youtube_summary'")
+        valid_modes = ["summary", "fix", "youtube_summary", "video_integration"]
+        if mode not in valid_modes:
+            raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
 
         # Recupera il modello selezionato per l'azione 'text_processing'
@@ -59,7 +62,7 @@ class ProcessTextAI(QThread):
             self.progress.emit(10, f"Avvio elaborazione testo ({self.mode}) con {self.selected_model}...")
 
             # Chiama il metodo unificato per l'elaborazione
-            result_data = self._process_text_with_selected_model(self.text)
+            result_data = self._process_text_with_selected_model()
 
             # Controlla il risultato
             if isinstance(result_data, tuple) and len(result_data) == 3:
@@ -75,10 +78,10 @@ class ProcessTextAI(QThread):
 
         except Exception as e:
             error_msg = f"Errore imprevisto durante l'elaborazione del testo ({self.mode}): {str(e)}"
-            logging.exception(error_msg) # Logga l'intero traceback
+            logging.exception(error_msg)
             self.error.emit(error_msg)
 
-    def _process_text_with_selected_model(self, text_to_process):
+    def _process_text_with_selected_model(self):
         """
         Metodo interno che seleziona l'API corretta e processa il testo.
         Restituisce una tupla (testo_risultante, input_tokens, output_tokens) o una stringa di errore.
@@ -90,8 +93,9 @@ class ProcessTextAI(QThread):
             prompt_file_path = PROMPT_TEXT_FIX
         elif self.mode == "youtube_summary":
             prompt_file_path = PROMPT_YOUTUBE_SUMMARY
+        elif self.mode == "video_integration":
+            prompt_file_path = PROMPT_VIDEO_INTEGRATION
         else:
-            # Questo non dovrebbe accadere grazie alla validazione nel __init__
             error_msg = f"Modalità non valida: {self.mode}"
             logging.error(error_msg)
             return error_msg
@@ -99,19 +103,31 @@ class ProcessTextAI(QThread):
         if not prompt_file_path or not os.path.exists(prompt_file_path):
              error_msg = f"File prompt non trovato per la modalità '{self.mode}': {prompt_file_path}"
              logging.error(error_msg)
-             return error_msg # Ritorna l'errore invece di sollevare eccezione subito
+             return error_msg
 
         # 2. Leggi e formatta il prompt
         try:
             with open(prompt_file_path, 'r', encoding='utf-8') as f:
                 prompt_template = f.read()
-            system_prompt_content = prompt_template.format(language=self.language)
+
+            # Logica di formattazione condizionale
+            if self.mode == "video_integration":
+                # La modalità nuova usa un template completo
+                format_data = self.prompt_vars.copy()
+                format_data['language'] = self.language
+                system_prompt_content = prompt_template.format(**format_data)
+                user_prompt = "Procedi con la generazione del riassunto integrato come da istruzioni."
+            else:
+                # Le modalità esistenti hanno un template semplice e il testo è separato
+                system_prompt_content = prompt_template.format(language=self.language)
+                if 'text' not in self.prompt_vars:
+                    raise ValueError(f"La modalità '{self.mode}' richiede una variabile 'text' in prompt_vars.")
+                text_to_process = self.prompt_vars['text']
+                user_prompt = f"Testo da elaborare ({self.mode}):\n{text_to_process}\n\n---\nOutput:"
+
         except Exception as e:
             logging.exception(f"Errore lettura/formattazione prompt '{prompt_file_path}'")
             return f"Errore lettura prompt ({self.mode}): {e}"
-
-        # L'input effettivo per l'LLM
-        user_prompt = f"Testo da elaborare ({self.mode}):\n{text_to_process}\n\n---\nOutput:"
 
         # 3. Selezione e chiamata API
         model_name_lower = self.selected_model.lower()
