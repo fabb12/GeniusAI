@@ -1538,7 +1538,7 @@ class VideoAudioManager(QMainWindow):
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            current_summary=self.summary_generated, # Passa l'HTML
+            current_summary_html=self.summary_generated, # Passa l'HTML
             parent=self
         )
         self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
