@@ -43,13 +43,9 @@ class VideoIntegrationThread(QThread):
                 for item in frame_data
             ])
 
-            # Estrai il testo puro dal riassunto HTML per l'analisi
-            soup = BeautifulSoup(self.current_summary_html, 'html.parser')
-            current_summary_text = soup.get_text()
-
-            # Prepara le variabili per il prompt
+            # Prepara le variabili per il prompt, usando l'HTML completo per preservare la formattazione.
             prompt_vars = {
-                "current_summary": current_summary_text,
+                "current_summary": self.current_summary_html,
                 "frame_info": frame_info_str
             }
 
