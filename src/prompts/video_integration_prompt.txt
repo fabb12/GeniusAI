@@ -1,25 +1,35 @@
-Sei un esperto di intelligenza artificiale specializzato nell'analisi e nel miglioramento di testi. Il tuo compito è arricchire e migliorare un riassunto esistente integrandovi le informazioni estratte dai frame video, creando un unico riassunto finale più completo e dettagliato.
-Input:
+Sei un esperto di intelligenza artificiale specializzato nella manipolazione di HTML e nel miglioramento di testi. Il tuo compito è arricchire e migliorare un riassunto **in formato HTML** esistente, integrandovi le informazioni estratte dai frame video. Devi produrre un **unico documento HTML finale**, mantenendo intatta tutta la formattazione originale.
 
-Riassunto Attuale: Un riassunto di testo già esistente.
-Informazioni Estratte dai Frame: Una lista di descrizioni di frame chiave estratti dal video, ciascuna con il proprio timecode.
+**Input:**
 
-Output:
-Un UNICO Riassunto Finale Integrato in {language} che rappresenta una versione arricchita e più dettagliata del riassunto originale. NON creare due riassunti separati, ma un solo testo unificato.
-Linee Guida:
+1.  **Riassunto Attuale (HTML):** Un riassunto di testo già esistente, formattato con tag HTML come `<b>`, `<i>`, `<p>`, e `<font color="...">`.
+2.  **Informazioni Estratte dai Frame:** Una lista di descrizioni di frame chiave estratti dal video, ciascuna con il proprio timecode.
 
-Mantieni la Base Esistente: Parti dal riassunto attuale come fondamento. Non riscriverlo da zero, ma espandilo e miglioralo.
-Integrazione Organica con Timecode: Inserisci le nuove informazioni direttamente nel contesto appropriato del riassunto esistente. Ogni nuova informazione aggiunta deve essere accompagnata dal suo timecode nel formato [MM:SS] o [HH:MM:SS]. Il timecode deve fluire naturalmente nel testo.
-Arricchisci, Non Duplicare: Espandi i concetti già presenti con maggiori dettagli dai frame. Se un punto è già menzionato nel riassunto, arricchiscilo con le specifiche visive e aggiungi il timecode, senza ripetere la stessa informazione due volte.
-Correggi Imprecisioni: Usa le informazioni visive per correggere eventuali errori o imprecisioni presenti nel riassunto originale.
-Flusso Continuo: Il risultato finale deve leggere come un testo unico e coerente, dove è impossibile distinguere dove finisce il riassunto originale e dove iniziano le nuove informazioni. Tutto deve essere perfettamente integrato.
-Struttura Coerente: Mantieni la struttura logica e la formattazione del riassunto originale, espandendola dove necessario per accogliere i nuovi dettagli.
+**Output:**
+Un **UNICO Riassunto Finale Integrato in formato HTML** in {language}, che rappresenta una versione arricchita e più dettagliata del riassunto originale. L'output deve essere un singolo blocco di HTML valido e ben formato.
 
-Esempio di risultato atteso:
-Se il riassunto originale dice: "L'oratore presenta il nuovo prodotto", il riassunto arricchito diventa: "L'oratore presenta il nuovo prodotto [02:34] mostrando il design minimalista con finitura opaca e logo centrale [02:41]."
-Ecco i dati per questo compito:
-Riassunto Attuale:
+**Linee Guida Fondamentali:**
+
+1.  **Mantieni la Formattazione HTML:** L'input è HTML e l'output **DEVE** essere HTML. Parti dal riassunto HTML attuale come base. **Conserva tutti i tag originali** (`<b>`, `<i>`, `<font>`, `<p>`, ecc.). Non devi convertire l'HTML in testo semplice.
+2.  **Integrazione Organica con Timecode:** Inserisci le nuove informazioni direttamente nel contesto appropriato del riassunto HTML esistente. Ogni nuova informazione aggiunta deve essere accompagnata dal suo timecode nel formato `[MM:SS]` o `[HH:MM:SS]`. Il timecode deve fluire naturalmente nel testo.
+3.  **Arricchisci, Non Duplicare:** Espandi i concetti già presenti con maggiori dettagli dai frame. Se un punto è già menzionato, arricchiscilo con le specifiche visive e aggiungi il timecode, senza ripetere la stessa informazione due volte.
+4.  **Correggi Imprecisioni:** Usa le informazioni visive per correggere eventuali errori o imprecisioni presenti nel riassunto originale, sempre all'interno della struttura HTML.
+5.  **Output HTML Unico e Coerente:** Il risultato finale deve essere un **documento HTML unico e coerente**. È fondamentale che non vengano creati due riassunti separati, ma un solo testo HTML unificato.
+
+**Esempio di risultato atteso:**
+
+Se il riassunto originale in HTML è:
+`<p>L'oratore presenta il <b>nuovo prodotto</b>.</p>`
+
+Il riassunto arricchito in HTML deve diventare:
+`<p>L'oratore presenta il <b>nuovo prodotto</b> [02:34] mostrando il design minimalista con <font color="#d3d3d3">finitura opaca</font> e logo centrale [02:41].</p>`
+
+**Ecco i dati per questo compito:**
+
+**Riassunto Attuale (HTML):**
 {current_summary}
-Informazioni Estratte dai Frame (con timecode):
+
+**Informazioni Estratte dai Frame (con timecode):**
 {frame_info}
-Genera ora il UNICO Riassunto Finale Integrato in {language}. Ricorda: il risultato deve essere una versione arricchita del riassunto originale, non due testi separati. Integra organicamente tutte le nuove informazioni con i relativi timecode nel flusso del testo esistente.
+
+Genera ora il **UNICO Riassunto Finale Integrato in HTML** in {language}. Ricorda: il risultato deve essere una versione HTML arricchita del riassunto originale, non due testi separati. Integra organicamente tutte le nuove informazioni con i relativi timecode, preservando scrupolosamente tutta la formattazione HTML esistente.
