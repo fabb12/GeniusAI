@@ -331,7 +331,7 @@ class PptxGeneration:
         return slides_data
 
     @staticmethod
-    def createPresentationFromText(parent, testo, output_file, template_path=None, num_slides=None):
+    def createPresentationFromText(parent, testo, output_file, template_path=None, num_slides=None, is_preview=False):
         """Crea il file .pptx dal testo strutturato generato dall'AI, rispettando il template."""
         logging.info(f"Tentativo di creare file PPTX: {output_file} con template: {template_path}")
         try:
@@ -376,15 +376,24 @@ class PptxGeneration:
             if not slides_data:
                 return
 
+            # --- Gestione Prima Slide (Titolo) ---
             title_slide_data = slides_data.pop(0)
             slide = prs.slides.add_slide(title_slide_layout)
             if slide.shapes.title:
                 slide.shapes.title.text = title_slide_data.get('titolo', '').strip()
+
             subtitle_text = title_slide_data.get('sottotitolo', '').strip()
             subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
             if subtitle_text and subtitle_shape:
                 subtitle_shape.text = subtitle_text
 
+            # Aggiungi anche il contenuto alla prima slide, se presente
+            content_text = title_slide_data.get('contenuto', '').strip()
+            if content_text:
+                PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
+
+
+            # --- Gestione Slide Successive (Contenuto) ---
             for slide_data in slides_data:
                 slide = prs.slides.add_slide(content_slide_layout)
                 if slide.shapes.title:
@@ -400,17 +409,19 @@ class PptxGeneration:
             if prs.slides:
                 prs.save(output_file)
                 logging.info(f"Presentazione salvata con successo: {output_file}")
-                if parent and hasattr(parent, 'show_status_message'):
-                    parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
-                    reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
-                    if reply == QMessageBox.StandardButton.Yes:
-                        try:
-                            if sys.platform == "win32": os.startfile(output_file)
-                            elif sys.platform == "darwin": subprocess.call(['open', output_file])
-                            else: subprocess.call(['xdg-open', output_file])
-                        except Exception as e:
-                            logging.error(f"Impossibile aprire il file '{output_file}': {e}")
-                            parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
+                # Mostra il popup solo se non è un'anteprima
+                if not is_preview:
+                    if parent and hasattr(parent, 'show_status_message'):
+                        parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
+                        reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                        if reply == QMessageBox.StandardButton.Yes:
+                            try:
+                                if sys.platform == "win32": os.startfile(output_file)
+                                elif sys.platform == "darwin": subprocess.call(['open', output_file])
+                                else: subprocess.call(['xdg-open', output_file])
+                            except Exception as e:
+                                logging.error(f"Impossibile aprire il file '{output_file}': {e}")
+                                parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
             else:
                 logging.warning("Nessuna slide è stata generata.")
 
@@ -440,8 +451,10 @@ class PptxGeneration:
             # 1. Crea un file .pptx temporaneo
             temp_pptx_file = parent.get_temp_filepath(suffix=".pptx")
 
-            # Passa num_slides per coerenza con la generazione finale
-            PptxGeneration.createPresentationFromText(parent, testo, temp_pptx_file, template_path, num_slides=num_slides)
+            # Passa num_slides per coerenza con la generazione finale e is_preview per disabilitare il popup
+            PptxGeneration.createPresentationFromText(
+                parent, testo, temp_pptx_file, template_path, num_slides=num_slides, is_preview=True
+            )
 
             # 2. Usa COM per esportare le slide come immagini
             powerpoint = win32com.client.Dispatch("PowerPoint.Application")
