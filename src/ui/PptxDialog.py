@@ -147,7 +147,7 @@ class PptxDialog(QDialog):
 
         settings = self.get_settings()
         image_paths = PptxGeneration.generate_preview(
-            self,
+            self.parent(),
             ai_text,
             settings["template_path"]
         )
@@ -172,7 +172,7 @@ class PptxDialog(QDialog):
 
         settings = self.get_settings()
         PptxGeneration.createPresentationFromText(
-            self,
+            self.parent(),
             ai_text,
             save_path,
             settings["template_path"]
