@@ -491,17 +491,17 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
 
-        # Mappatura dei colori per l'evidenziazione
+        # Mappatura dei colori per l'evidenziazione (ottimizzata per tema scuro)
         self.highlight_colors = {
-            "Giallo": {"qcolor": QColor('yellow'), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
-            "Verde Chiaro": {"qcolor": QColor('lightgreen'), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#90ee90"},
-            "Turchese": {"qcolor": QColor('turquoise'), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#40e0d0"},
-            "Rosa": {"qcolor": QColor('pink'), "docx": WD_COLOR_INDEX.PINK, "hex": "#ffc0cb"},
-            "Azzurro": {"qcolor": QColor('lightblue'), "docx": WD_COLOR_INDEX.BLUE, "hex": "#add8e6"},
-            "Rosso": {"qcolor": QColor('red'), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
-            "Grigio": {"qcolor": QColor('lightgray'), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#d3d3d3"},
+            "Giallo Brillante": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
+            "Verde Elettrico": {"qcolor": QColor("#39FF14"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#39ff14"},
+            "Ciano Acceso": {"qcolor": QColor("#00FFFF"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#00ffff"},
+            "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
+            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#ffa500"},
+            "Rosso": {"qcolor": QColor("#FF0000"), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
+            "Azzurro Elettrico": {"qcolor": QColor("#00BFFF"), "docx": WD_COLOR_INDEX.BLUE, "hex": "#00bfff"},
         }
-        self.current_highlight_color_name = "Giallo" # Default
+        self.current_highlight_color_name = "Giallo Brillante" # Default
 
         self.initUI()
 
@@ -699,12 +699,6 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setStyleSheet(self.styleSheet())
         self.audioDock.setToolTip("Dock per la gestione audio")
         area.addDock(self.audioDock, 'left')
-
-        self.videoMergeDock = self.createVideoMergeDock()
-        self.videoMergeDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.videoMergeDock.setStyleSheet(self.styleSheet())
-        self.videoMergeDock.setToolTip("Dock per l'unione di più video")
-        area.addDock(self.videoMergeDock, 'top')
 
         self.videoEffectsDock = self.createVideoEffectsDock()
         self.videoEffectsDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -1314,7 +1308,6 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'videoMergeDock': self.videoMergeDock,
             'videoEffectsDock': self.videoEffectsDock,
             'infoDock': self.infoDock,
             'projectDock': self.projectDock,
@@ -2818,7 +2811,7 @@ class VideoAudioManager(QMainWindow):
                     final_video.audio.close()
 
     def createAudioDock(self):
-        dock = CustomDock("Gestione Audio", closable=True)
+        dock = CustomDock("Gestione Audio e Video", closable=True)
 
         # Creazione del QTabWidget
         tab_widget = QTabWidget()
@@ -2832,6 +2825,7 @@ class VideoAudioManager(QMainWindow):
 
         add_pause_layout.addWidget(audioPauseGroup)
         add_pause_layout.addWidget(videoPauseGroup)
+        tab_widget.addTab(add_pause_tab, "Aggiungi/Pausa")
 
         # Secondo tab: Selezione Audio
         audio_selection_tab = QWidget()
@@ -2842,10 +2836,43 @@ class VideoAudioManager(QMainWindow):
 
         audio_selection_layout.addWidget(audioReplacementGroup)
         audio_selection_layout.addWidget(backgroundAudioGroup)
-
-        # Aggiunta dei tab al QTabWidget
-        tab_widget.addTab(add_pause_tab, "Aggiungi/Pausa")
         tab_widget.addTab(audio_selection_tab, "Selezione Audio")
+
+        # Terzo tab: Unisci Video
+        video_merge_tab = QWidget()
+        video_merge_layout = QVBoxLayout(video_merge_tab)
+
+        mergeGroup = QGroupBox("Opzioni di Unione Video")
+        grid_layout = QGridLayout(mergeGroup)
+        grid_layout.setSpacing(10)
+
+        self.mergeVideoPathLineEdit = QLineEdit()
+        self.mergeVideoPathLineEdit.setReadOnly(True)
+        self.mergeVideoPathLineEdit.setPlaceholderText("Seleziona il video da aggiungere...")
+        browseMergeVideoButton = QPushButton('Sfoglia...')
+        browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
+
+        grid_layout.addWidget(QLabel("Video da unire:"), 0, 0)
+        grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1, 1, 2)
+        grid_layout.addWidget(browseMergeVideoButton, 0, 3)
+
+        resolution_group = QGroupBox("Gestione Risoluzione")
+        resolution_layout = QVBoxLayout(resolution_group)
+        self.adaptResolutionRadio = QRadioButton("Adatta le risoluzioni")
+        self.adaptResolutionRadio.setChecked(True)
+        self.maintainResolutionRadio = QRadioButton("Mantieni le risoluzioni originali")
+        resolution_layout.addWidget(self.adaptResolutionRadio)
+        resolution_layout.addWidget(self.maintainResolutionRadio)
+        grid_layout.addWidget(resolution_group, 1, 0, 1, 4)
+
+        mergeButton = QPushButton('Unisci Video')
+        mergeButton.setStyleSheet("padding: 10px; font-weight: bold;")
+        mergeButton.clicked.connect(self.mergeVideo)
+        grid_layout.addWidget(mergeButton, 2, 0, 1, 4)
+
+        video_merge_layout.addWidget(mergeGroup)
+        video_merge_tab.setLayout(video_merge_layout)
+        tab_widget.addTab(video_merge_tab, "Unisci Video")
 
         # Aggiunta del QTabWidget al dock
         dock.addWidget(tab_widget)
@@ -2965,53 +2992,6 @@ class VideoAudioManager(QMainWindow):
     def setTimecodeVideoFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
-
-    def createVideoMergeDock(self):
-        """Crea e restituisce il dock per la gestione dell'unione di video."""
-        dock = CustomDock("Unione video", closable=True)
-        widget = QWidget()
-        main_layout = QVBoxLayout(widget)
-
-        # --- Gruppo Principale ---
-        mergeGroup = QGroupBox("Opzioni di Unione Video")
-        grid_layout = QGridLayout(mergeGroup)
-        grid_layout.setSpacing(10)
-
-        # --- Riga 0: Selezione File ---
-        self.mergeVideoPathLineEdit = QLineEdit()
-        self.mergeVideoPathLineEdit.setReadOnly(True)
-        self.mergeVideoPathLineEdit.setPlaceholderText("Seleziona il video da aggiungere...")
-        browseMergeVideoButton = QPushButton('Sfoglia...')
-        browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
-
-        grid_layout.addWidget(QLabel("Video da unire:"), 0, 0)
-        grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1, 1, 2)
-        grid_layout.addWidget(browseMergeVideoButton, 0, 3)
-
-        # --- Riga 2: Opzioni Risoluzione ---
-        resolution_group = QGroupBox("Gestione Risoluzione")
-        resolution_layout = QVBoxLayout(resolution_group)
-
-        self.adaptResolutionRadio = QRadioButton("Adatta le risoluzioni")
-        self.adaptResolutionRadio.setChecked(True)
-        self.maintainResolutionRadio = QRadioButton("Mantieni le risoluzioni originali")
-
-        resolution_layout.addWidget(self.adaptResolutionRadio)
-        resolution_layout.addWidget(self.maintainResolutionRadio)
-        grid_layout.addWidget(resolution_group, 1, 0, 1, 4)
-
-        # --- Riga 3: Pulsante di Unione ---
-        mergeButton = QPushButton('Unisci Video')
-        mergeButton.setStyleSheet("padding: 10px; font-weight: bold;")
-        mergeButton.clicked.connect(self.mergeVideo)
-        grid_layout.addWidget(mergeButton, 2, 0, 1, 4)
-
-        # --- Impostazione Layout ---
-        main_layout.addWidget(mergeGroup)
-        dock.addWidget(widget)
-
-        return dock
-
 
     def createVideoEffectsDock(self):
         """Crea e restituisce il dock per gli effetti video (PiP e Overlay)."""
