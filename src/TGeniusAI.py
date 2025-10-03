@@ -2809,7 +2809,7 @@ class VideoAudioManager(QMainWindow):
             if video_clip.audio:
                 final_video.audio = video_clip.audio
 
-            output_path = tempfile.mktemp(suffix='.mp4')
+            output_path = self.get_temp_filepath(suffix='.mp4')
             final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
             self.show_status_message("Pausa video applicata con successo.")
@@ -3349,7 +3349,7 @@ class VideoAudioManager(QMainWindow):
 
             # Create a silent audio clip for the pause
             pause_audio = AudioSegment.silent(duration=pause_duration * 1000)
-            temp_pause_path = tempfile.mktemp(suffix=".mp3")
+            temp_pause_path = self.get_temp_filepath(suffix=".mp3")
             pause_audio.export(temp_pause_path, format="mp3")
             pause_clip = AudioFileClip(temp_pause_path)
 
@@ -3363,7 +3363,7 @@ class VideoAudioManager(QMainWindow):
             video_clip.audio = final_audio
 
             # Save the result
-            output_path = tempfile.mktemp(suffix=".mp4")
+            output_path = self.get_temp_filepath(suffix=".mp4")
             video_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
 
             self.loadVideoOutput(output_path)
@@ -3849,7 +3849,13 @@ class VideoAudioManager(QMainWindow):
             output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
 
             ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
-            segments_file = "segments.txt"
+
+            if self.current_project_path:
+                temp_dir = os.path.join(self.current_project_path, "temp")
+                os.makedirs(temp_dir, exist_ok=True)
+                segments_file = os.path.join(temp_dir, "segments.txt")
+            else:
+                segments_file = "segments.txt"
 
             try:
                 with open(segments_file, "w") as file:
@@ -3881,10 +3887,24 @@ class VideoAudioManager(QMainWindow):
             clip_filename = os.path.basename(output_path)
             metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
 
+            # Raccogli i metadati aggiuntivi
+            try:
+                clip_info = VideoFileClip(output_path)
+                duration = clip_info.duration
+                clip_info.close()
+                size = os.path.getsize(output_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+            except Exception as e:
+                logging.error(f"Impossibile estrarre i metadati per {output_path}: {e}")
+                duration, size, creation_date = 0, 0, datetime.datetime.now().isoformat()
+
             self.project_manager.add_clip_to_project(
                 self.projectDock.gnai_path,
                 clip_filename,
-                metadata_filename
+                metadata_filename,
+                duration,
+                size,
+                creation_date
             )
 
             # Ricarica i dati del progetto per aggiornare la UI
@@ -4099,7 +4119,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Inserisci un URL valido.", error=True)
             return
 
-        thread = DownloadThread(url, download_video, ffmpeg_path)
+        thread = DownloadThread(url, download_video, ffmpeg_path, parent_window=self)
 
         if hasattr(thread, 'stream_url_found'):
             thread.stream_url_found.connect(self.onStreamUrlFound)
@@ -5117,7 +5137,7 @@ class VideoAudioManager(QMainWindow):
 
     def extractAudioFromVideo(self, video_path):
         # Estrai l'audio dal video e salvalo temporaneamente
-        temp_audio_path = tempfile.mktemp(suffix='.mp3')
+        temp_audio_path = self.get_temp_filepath(suffix='.mp3')
         video_clip = VideoFileClip(video_path)
         video_clip.audio.write_audiofile(temp_audio_path)
         return temp_audio_path
@@ -5225,12 +5245,13 @@ class VideoAudioManager(QMainWindow):
             error = pyqtSignal(str)
             detailed_log = pyqtSignal(str)
 
-            def __init__(self, video_path, audio_path, output_path, align_speed, chunk_size=10):
+            def __init__(self, video_path, audio_path, output_path, align_speed, parent_window, chunk_size=10):
                 super().__init__()
                 self.video_path = video_path
                 self.audio_path = audio_path
                 self.output_path = output_path
                 self.align_speed = align_speed
+                self.parent_window = parent_window
                 self.running = True
                 self.chunk_size = chunk_size  # In secondi, per elaborazione a pezzi
 
@@ -5418,7 +5439,7 @@ class VideoAudioManager(QMainWindow):
                     self.log("Utilizzo ffmpeg per file di grandi dimensioni")
 
                     # Crea un file temporaneo per il video con velocità modificata
-                    temp_video = tempfile.mktemp(suffix='.mp4')
+                    temp_video = self.parent_window.get_temp_filepath(suffix='.mp4')
 
                     # Modifica la velocità del video con ffmpeg
                     ffmpeg_speed_cmd = [
@@ -5471,8 +5492,8 @@ class VideoAudioManager(QMainWindow):
                 """Salva il video usando ffmpeg direttamente"""
                 try:
                     # Salva video e audio temporanei
-                    temp_video = tempfile.mktemp(suffix='.mp4')
-                    temp_audio = tempfile.mktemp(suffix='.aac')
+                    temp_video = self.parent_window.get_temp_filepath(suffix='.mp4')
+                    temp_audio = self.parent_window.get_temp_filepath(suffix='.aac')
 
                     # Salva solo il video senza audio
                     video_clip.without_audio().write_videofile(temp_video, codec='libx264',
@@ -5656,7 +5677,7 @@ class VideoAudioManager(QMainWindow):
         progress_dialog = CustomProgressDialog(self)
 
         # Crea thread per l'elaborazione
-        self.audio_video_thread = AudioVideoThread(video_path, new_audio_path, output_path, align_audio_video)
+        self.audio_video_thread = AudioVideoThread(video_path, new_audio_path, output_path, align_audio_video, self)
 
         # Collega i segnali - versione corretta
         self.audio_video_thread.progress.connect(
@@ -6095,6 +6116,34 @@ class VideoAudioManager(QMainWindow):
 
     def on_merge_clips_error(self, error_message):
         self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
+
+    def get_temp_filepath(self, suffix="", prefix="tmp_"):
+        """
+        Genera un percorso per un file temporaneo, all'interno della cartella
+        temp del progetto se un progetto è attivo.
+        """
+        if self.current_project_path:
+            temp_dir = os.path.join(self.current_project_path, "temp")
+            os.makedirs(temp_dir, exist_ok=True)
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=temp_dir)
+            os.close(fd)
+            return path
+        else:
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix=prefix)
+            os.close(fd)
+            return path
+
+    def get_temp_dir(self, prefix="tmp_"):
+        """
+        Genera un percorso per una directory temporanea, all'interno della cartella
+        temp del progetto se un progetto è attivo.
+        """
+        if self.current_project_path:
+            temp_dir = os.path.join(self.current_project_path, "temp")
+            os.makedirs(temp_dir, exist_ok=True)
+            return tempfile.mkdtemp(prefix=prefix, dir=temp_dir)
+        else:
+            return tempfile.mkdtemp(prefix=prefix)
 
 
 def get_application_path():

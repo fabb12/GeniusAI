@@ -83,7 +83,7 @@ class CropThread(QThread):
             if cropped_video.duration and cropped_video.duration > 1.8:
                 cropped_video = cropped_video.subclip(0, cropped_video.duration - 1.8)
 
-            output_path = tempfile.mktemp(suffix='.mp4')
+            output_path = self.parent().get_temp_filepath(suffix='.mp4')
 
             # Use the custom logger to get progress updates
             logger = CropLogger(self.progress)

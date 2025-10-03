@@ -28,8 +28,7 @@ class TranscriptionThread(QThread):
             # Step 1: Standardize all input to a temporary WAV file.
             self.progress.emit(5, "Standardizzazione audio...")
 
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
-                standard_wav_path = f.name
+            standard_wav_path = self.parent().get_temp_filepath(suffix=".wav")
 
             input_clip = AudioFileClip(self.media_path)
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', logger=None)
@@ -112,9 +111,8 @@ class TranscriptionThread(QThread):
         recognizer = sr.Recognizer()
         temp_audio_file_path = None
         try:
-            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio_file:
-                temp_audio_file_path = temp_audio_file.name
-                audio_chunk.write_audiofile(temp_audio_file_path, codec='pcm_s16le', logger=None)
+            temp_audio_file_path = self.parent().get_temp_filepath(suffix=".wav")
+            audio_chunk.write_audiofile(temp_audio_file_path, codec='pcm_s16le', logger=None)
 
             with sr.AudioFile(temp_audio_file_path) as source:
                 audio_data = recognizer.record(source)

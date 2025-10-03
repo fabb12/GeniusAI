@@ -49,7 +49,7 @@ class ProjectManager:
 
         return project_data, None
 
-    def add_clip_to_project(self, gnai_path, clip_filename, metadata_filename):
+    def add_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date):
         if not os.path.exists(gnai_path):
             return False, "Project file not found"
 
@@ -59,7 +59,10 @@ class ProjectManager:
             clip_info = {
                 "clip_filename": clip_filename,
                 "metadata_filename": metadata_filename,
-                "addedAt": datetime.now().isoformat()
+                "addedAt": datetime.now().isoformat(),
+                "duration": duration,
+                "size": size,
+                "creation_date": creation_date
             }
 
             project_data["clips"].append(clip_info)
