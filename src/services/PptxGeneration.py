@@ -433,13 +433,12 @@ class PptxGeneration:
             return None
 
         temp_pptx_file = None
-        temp_image_dir = tempfile.mkdtemp()
+        temp_image_dir = parent.get_temp_dir()
         image_paths = []
 
         try:
             # 1. Crea un file .pptx temporaneo
-            fd, temp_pptx_file = tempfile.mkstemp(suffix=".pptx")
-            os.close(fd)
+            temp_pptx_file = parent.get_temp_filepath(suffix=".pptx")
 
             PptxGeneration.createPresentationFromText(parent, testo, temp_pptx_file, template_path)
 

@@ -15,13 +15,16 @@ class DownloadThread(QThread):
     progress = pyqtSignal(int, str)  # Signal for download progress
     stream_url_found = pyqtSignal(str)  # Nuovo segnale per l'URL del flusso trovato
 
-    def __init__(self, url, download_video, ffmpeg_path):
+    def __init__(self, url, download_video, ffmpeg_path, parent_window=None):
         super().__init__()
         self.url = url
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
         FFmpegPostProcessor._ffmpeg_location.set(FFMPEG_PATH)
         self.download_video = download_video
-        self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
+        if parent_window and hasattr(parent_window, 'get_temp_dir'):
+            self.temp_dir = parent_window.get_temp_dir(prefix="downloads_")
+        else:
+            self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
 
     def run(self):
         # Controlla se è un URL di StreamingCommunity
