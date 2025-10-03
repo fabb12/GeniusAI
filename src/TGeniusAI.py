@@ -2551,7 +2551,7 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
-        #self.videoMergeDock.setStyleSheet(style)
+        self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
         self.videoNotesDock.setStyleSheet(style)
