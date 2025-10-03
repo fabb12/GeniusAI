@@ -39,9 +39,8 @@ class PreviewDialog(QDialog):
         main_layout.addWidget(scroll_area)
 
         # Pulsanti
-        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-        self.button_box.accepted.connect(self.accept)
-        self.button_box.rejected.connect(self.reject)
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        self.button_box.accepted.connect(self.accept) # Chiude semplicemente la dialog
 
         main_layout.addWidget(self.button_box)
 
