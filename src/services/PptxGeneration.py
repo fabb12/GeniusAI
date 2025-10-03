@@ -33,13 +33,35 @@ class PptxGeneration:
     """
 
     @staticmethod
-    def _get_layout(prs, layout_names):
-        """Trova un layout da una lista di possibili nomi."""
-        for name in layout_names:
-            for layout in prs.slide_layouts:
-                if layout.name.strip().lower() == name.lower():
-                    return layout
-        return None
+    def _find_layout_by_placeholder_types(prs, *placeholder_types):
+        """
+        Trova un layout di slide che contenga tutti i tipi di placeholder specificati.
+        Cerca il layout più "pulito" (con meno placeholder extra).
+        """
+        best_layout = None
+        min_extra_placeholders = float('inf')
+
+        for layout in prs.slide_layouts:
+            layout_placeholder_types = {p.placeholder_format.type for p in layout.placeholders}
+
+            # Verifica se il layout contiene tutti i placeholder richiesti
+            if all(pt in layout_placeholder_types for pt in placeholder_types):
+                num_extra_placeholders = len(layout_placeholder_types) - len(placeholder_types)
+
+                # Preferisce layout con meno placeholder extra
+                if num_extra_placeholders < min_extra_placeholders:
+                    min_extra_placeholders = num_extra_placeholders
+                    best_layout = layout
+                    # Se troviamo una corrispondenza esatta, è l'ideale
+                    if num_extra_placeholders == 0:
+                        return best_layout
+
+        if best_layout:
+            logging.info(f"Trovato layout '{best_layout.name}' per i placeholder: {placeholder_types}")
+        else:
+            logging.warning(f"Nessun layout trovato per i placeholder: {placeholder_types}")
+
+        return best_layout
 
 
     @staticmethod
@@ -332,21 +354,24 @@ class PptxGeneration:
 
     @staticmethod
     def createPresentationFromText(parent, testo, output_file, template_path=None, num_slides=None, is_preview=False):
-        """Crea il file .pptx dal testo strutturato generato dall'AI, rispettando il template."""
+        """Crea il file .pptx dal testo strutturato generato dall'AI, usando un approccio robusto per i layout."""
         logging.info(f"Tentativo di creare file PPTX: {output_file} con template: {template_path}")
         try:
             prs = Presentation(template_path) if template_path and os.path.exists(template_path) else Presentation()
 
-            title_layouts = ["Title Slide", "Copertina", "Title"]
-            content_layouts = ["Title and Content", "Contenuto", "Titolo e contenuto"]
+            # --- Ricerca robusta dei layout ---
+            title_slide_layout = PptxGeneration._find_layout_by_placeholder_types(prs, PP_PLACEHOLDER.TITLE)
+            content_slide_layout = PptxGeneration._find_layout_by_placeholder_types(prs, PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.BODY)
 
-            title_slide_layout = PptxGeneration._get_layout(prs, title_layouts)
-            content_slide_layout = PptxGeneration._get_layout(prs, content_layouts)
-
-            if not title_slide_layout or not content_slide_layout:
-                QMessageBox.critical(parent, "Errore Template", "Layout 'Title Slide' o 'Title and Content' non trovati nel template.")
+            if not content_slide_layout:
+                QMessageBox.critical(parent, "Errore Template", "Impossibile trovare un layout 'Titolo e Contenuto' adeguato nel template.")
                 return
+            if not title_slide_layout:
+                logging.warning("Nessun layout solo titolo trovato, userò 'Titolo e Contenuto' come fallback.")
+                title_slide_layout = content_slide_layout
 
+
+            # --- Parsing del testo AI ---
             slides_data = []
             current_slide = None
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
@@ -376,24 +401,29 @@ class PptxGeneration:
             if not slides_data:
                 return
 
-            # --- Gestione Prima Slide (Titolo) ---
-            title_slide_data = slides_data.pop(0)
-            slide = prs.slides.add_slide(title_slide_layout)
-            if slide.shapes.title:
-                slide.shapes.title.text = title_slide_data.get('titolo', '').strip()
+            # --- Gestione Prima Slide (con logica condizionale per layout) ---
+            first_slide_data = slides_data.pop(0)
+            first_slide_content = first_slide_data.get('contenuto', '').strip()
 
-            subtitle_text = title_slide_data.get('sottotitolo', '').strip()
+            # Se la prima slide ha contenuto, usa il layout 'Titolo e Contenuto'. Altrimenti, usa quello per il titolo.
+            layout_per_prima_slide = content_slide_layout if first_slide_content else title_slide_layout
+
+            slide = prs.slides.add_slide(layout_per_prima_slide)
+
+            # Popola titolo e sottotitolo
+            if slide.shapes.title:
+                slide.shapes.title.text = first_slide_data.get('titolo', '').strip()
+            subtitle_text = first_slide_data.get('sottotitolo', '').strip()
             subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
             if subtitle_text and subtitle_shape:
                 subtitle_shape.text = subtitle_text
 
-            # Aggiungi anche il contenuto alla prima slide, se presente
-            content_text = title_slide_data.get('contenuto', '').strip()
-            if content_text:
-                PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
+            # Popola il contenuto se il layout lo permette e il contenuto esiste
+            if first_slide_content:
+                 PptxGeneration._add_content_to_slide(slide, first_slide_content, subtitle_text, subtitle_shape)
 
 
-            # --- Gestione Slide Successive (Contenuto) ---
+            # --- Gestione Slide Successive ---
             for slide_data in slides_data:
                 slide = prs.slides.add_slide(content_slide_layout)
                 if slide.shapes.title:
@@ -406,22 +436,21 @@ class PptxGeneration:
                 if content_text:
                     PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
 
+            # --- Salvataggio e notifica ---
             if prs.slides:
                 prs.save(output_file)
                 logging.info(f"Presentazione salvata con successo: {output_file}")
-                # Mostra il popup solo se non è un'anteprima
-                if not is_preview:
-                    if parent and hasattr(parent, 'show_status_message'):
-                        parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
-                        reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
-                        if reply == QMessageBox.StandardButton.Yes:
-                            try:
-                                if sys.platform == "win32": os.startfile(output_file)
-                                elif sys.platform == "darwin": subprocess.call(['open', output_file])
-                                else: subprocess.call(['xdg-open', output_file])
-                            except Exception as e:
-                                logging.error(f"Impossibile aprire il file '{output_file}': {e}")
-                                parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
+                if not is_preview and parent and hasattr(parent, 'show_status_message'):
+                    parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
+                    reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
+                    if reply == QMessageBox.StandardButton.Yes:
+                        try:
+                            if sys.platform == "win32": os.startfile(output_file)
+                            elif sys.platform == "darwin": subprocess.call(['open', output_file])
+                            else: subprocess.call(['xdg-open', output_file])
+                        except Exception as e:
+                            logging.error(f"Impossibile aprire il file '{output_file}': {e}")
+                            parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
             else:
                 logging.warning("Nessuna slide è stata generata.")
 
