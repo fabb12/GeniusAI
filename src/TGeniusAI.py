@@ -729,6 +729,7 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.projectDock, 'right', self.infoDock)
         self.projectDock.clip_selected.connect(self.load_project_clip)
         self.projectDock.merge_clips_requested.connect(self.merge_project_clips)
+        self.projectDock.open_folder_requested.connect(self.open_project_folder)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -6116,6 +6117,14 @@ class VideoAudioManager(QMainWindow):
 
     def on_merge_clips_error(self, error_message):
         self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
+
+    def open_project_folder(self):
+        """Apre la cartella del progetto corrente nel file explorer di sistema."""
+        if self.current_project_path and os.path.isdir(self.current_project_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.current_project_path))
+            self.show_status_message(f"Apertura della cartella: {self.current_project_path}")
+        else:
+            self.show_status_message("Nessuna cartella di progetto valida da aprire.", error=True)
 
     def get_temp_filepath(self, suffix="", prefix="tmp_"):
         """
