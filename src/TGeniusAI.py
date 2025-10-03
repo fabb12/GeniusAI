@@ -1741,9 +1741,9 @@ class VideoAudioManager(QMainWindow):
         self.current_summary_type = 'text'
 
         thread = ProcessTextAI(
-            current_text,
-            self.languageComboBox.currentText(),
-            mode="summary"
+            mode="summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
         )
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
@@ -1772,9 +1772,9 @@ class VideoAudioManager(QMainWindow):
         self.current_summary_type = 'transcription_fix' # Tipo specifico per questa azione
 
         thread = ProcessTextAI(
-            current_text,
-            self.languageComboBox.currentText(),
-            mode="fix"
+            mode="fix",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
         )
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
@@ -1788,9 +1788,9 @@ class VideoAudioManager(QMainWindow):
         self.current_summary_type = 'fix' # Assumendo che questo sia un tipo valido
 
         thread = ProcessTextAI(
-            current_text,
-            self.languageComboBox.currentText(),
-            mode="fix"
+            mode="fix",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
         )
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
@@ -1810,9 +1810,9 @@ class VideoAudioManager(QMainWindow):
         self.cleanupFiles(temp_files) # Pulisce i file temporanei della trascrizione
 
         thread = ProcessTextAI(
-            transcript,
-            self.languageComboBox.currentText(),
-            mode="youtube_summary"
+            mode="youtube_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': transcript}
         )
         # Il callback onProcessComplete gestirà già il risultato
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
