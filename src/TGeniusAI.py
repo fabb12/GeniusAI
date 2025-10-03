@@ -2158,7 +2158,6 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
-        self.videoMergeDock.setVisible(False)
 
     def openRootFolder(self):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
@@ -4469,7 +4468,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
-        self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Project Dock')
@@ -4482,7 +4480,6 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleEditingDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
-        viewMenu.addAction(self.actionToggleVideoMergeDock)
         viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
         viewMenu.addAction(self.actionToggleProjectDock)
@@ -4525,11 +4522,8 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setVisible(True)
         self.transcriptionDock.setVisible(True)
         self.editingDock.setVisible(True)
-        self.downloadDock.setVisible(True)
         self.recordingDock.setVisible(True)
-        self.videoMergeDock.setVisible(True)
         self.videoEffectsDock.setVisible(True)
-        self.infoExtractionDock.setVisible(True)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
 
     def hideAllDocks(self):
@@ -4539,11 +4533,8 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
-        self.downloadDock.setVisible(False)
         self.recordingDock.setVisible(False)
-        self.videoMergeDock.setVisible(False)
         self.videoEffectsDock.setVisible(False)
-        self.infoExtractionDock.setVisible(False)
         self.updateViewMenu()  # Aggiorna lo stato dei menu
     def createToggleAction(self, dock, menuText):
         action = QAction(menuText, self, checkable=True)
@@ -4567,7 +4558,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock.setChecked(True)
         self.actionToggleEditingDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
-        self.actionToggleVideoMergeDock.setChecked(True)
         self.actionToggleVideoEffectsDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
         self.actionToggleInfoDock.setChecked(True)
@@ -4581,7 +4571,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
-        self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
