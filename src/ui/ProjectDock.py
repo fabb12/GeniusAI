@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu
 from PyQt6.QtCore import Qt, pyqtSignal
 from src.ui.CustomDock import CustomDock
 import datetime
@@ -10,6 +10,7 @@ class ProjectDock(CustomDock):
     """
     clip_selected = pyqtSignal(str, str)
     merge_clips_requested = pyqtSignal()
+    open_folder_requested = pyqtSignal()
 
     def __init__(self, title="Progetto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -21,6 +22,21 @@ class ProjectDock(CustomDock):
         self._setup_ui()
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
         self.btn_merge_clips.clicked.connect(self.merge_clips_requested.emit)
+        self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
+
+    def show_context_menu(self, position):
+        """Mostra il menu contestuale per l'area delle clip."""
+        if not self.project_dir:
+            return
+
+        menu = QMenu()
+        open_folder_action = menu.addAction("Apri cartella progetto")
+
+        action = menu.exec(self.tree_clips.mapToGlobal(position))
+
+        if action == open_folder_action:
+            self.open_folder_requested.emit()
 
     def _setup_ui(self):
         main_widget = QWidget()
