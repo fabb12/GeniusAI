@@ -44,7 +44,7 @@ from langdetect import detect, LangDetectException
 import pycountry
 from difflib import SequenceMatcher
 
-from src.services.DownloadVideo import DownloadThread
+from src.ui.DownloadDialog import DownloadDialog
 from src.services.AudioTranscript import TranscriptionThread
 from src.services.AudioGenerationREST import AudioGenerationThread
 from src.services.VideoCutting import VideoCuttingThread
@@ -688,12 +688,6 @@ class VideoAudioManager(QMainWindow):
         self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
         area.addDock(self.editingDock, 'right')
 
-        self.downloadDock = self.createDownloadDock()
-        self.downloadDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.downloadDock.setStyleSheet(self.styleSheet())
-        self.downloadDock.setToolTip("Dock per il download dei contenuti video/audio")
-        area.addDock(self.downloadDock, 'top')
-
         self.recordingDock = self.createRecordingDock()
         self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.recordingDock.setStyleSheet(self.styleSheet())
@@ -1317,7 +1311,6 @@ class VideoAudioManager(QMainWindow):
             'videoPlayerDock': self.videoPlayerDock,
             'transcriptionDock': self.transcriptionDock,
             'editingDock': self.editingDock,
-            'downloadDock': self.downloadDock,
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
@@ -2172,7 +2165,6 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setVisible(False)
         self.transcriptionDock.setVisible(False)
         self.editingDock.setVisible(False)
-        self.downloadDock.setVisible(False)
         self.videoMergeDock.setVisible(False)
 
     def openRootFolder(self):
@@ -2564,7 +2556,6 @@ class VideoAudioManager(QMainWindow):
         self.videoPlayerDock.setStyleSheet(style)
         self.transcriptionDock.setStyleSheet(style)
         self.editingDock.setStyleSheet(style)
-        self.downloadDock.setStyleSheet(style)
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
@@ -4076,97 +4067,10 @@ class VideoAudioManager(QMainWindow):
                 except Exception as e:
                     logging.error(f"Errore durante il caricamento del file di testo: {e}")
 
-    def createDownloadDock(self):
-        """Crea e restituisce il dock per il download di video."""
-        dock = CustomDock("Download Video", closable=True)
-        widget = QWidget()
-        main_layout = QVBoxLayout(widget)
-
-        downloadGroup = QGroupBox("Download da URL (YouTube, ecc.)")
-        grid_layout = QGridLayout(downloadGroup)
-
-        # Riga 0: URL Input
-        url_label = QLabel("URL:")
-        url_edit = QLineEdit()
-        url_edit.setPlaceholderText("Incolla qui l'URL del video...")
-        grid_layout.addWidget(url_label, 0, 0)
-        grid_layout.addWidget(url_edit, 0, 1)
-
-        # Riga 1: Opzioni
-        video_checkbox = QCheckBox("Scarica file video (altrimenti solo audio)")
-        video_checkbox.setChecked(True)
-        grid_layout.addWidget(video_checkbox, 1, 1)
-
-        # Riga 2: Pulsante di download
-        download_btn = QPushButton("Scarica")
-        download_btn.clicked.connect(
-            lambda: self.handleDownload(
-                url_edit.text(),
-                video_checkbox.isChecked(),
-                FFMPEG_PATH_DOWNLOAD
-            )
-        )
-        grid_layout.addWidget(download_btn, 2, 1)
-
-        # Imposta lo stretch per la colonna 1 per farla espandere
-        grid_layout.setColumnStretch(1, 1)
-
-        main_layout.addWidget(downloadGroup)
-        dock.addWidget(widget)
-        return dock
-
-    def handleDownload(self, url, download_video, ffmpeg_path):
-        if not url:
-            self.show_status_message("Inserisci un URL valido.", error=True)
-            return
-
-        thread = DownloadThread(url, download_video, ffmpeg_path, parent_window=self)
-
-        if hasattr(thread, 'stream_url_found'):
-            thread.stream_url_found.connect(self.onStreamUrlFound)
-
-        self.start_task(thread, self.onDownloadFinished, self.onDownloadError, self.update_status_progress)
-
-    def onStreamUrlFound(self, stream_url):
-        """Gestisce l'URL di streaming trovato"""
-        logging.debug(f"URL di streaming trovato: {stream_url}")
-
-    def onDownloadFinished(self, result):
-        temp_file_path, video_title, video_language, upload_date = result
-        self.show_status_message(f"Download completato: {video_title}")
-        self.video_download_language = video_language
-        logging.debug(video_language)
-
-        # Create a permanent downloads directory if it doesn't exist
-        downloads_dir = os.path.join(os.getcwd(), "downloads")
-        os.makedirs(downloads_dir, exist_ok=True)
-
-        # Move the file from the temporary directory to the permanent one
-        try:
-            file_name = os.path.basename(temp_file_path)
-            permanent_file_path = os.path.join(downloads_dir, file_name)
-            shutil.move(temp_file_path, permanent_file_path)
-
-            # Clean up the temporary directory
-            temp_dir = os.path.dirname(temp_file_path)
-            if os.path.exists(temp_dir):
-                shutil.rmtree(temp_dir)
-
-            self.loadVideo(permanent_file_path, video_title)
-
-            if upload_date:
-                try:
-                    video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
-                    self._update_json_file(permanent_file_path, {"video_date": video_date})
-                except (ValueError, TypeError) as e:
-                    logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
-
-        except Exception as e:
-            self.show_status_message(f"Errore durante lo spostamento del file scaricato: {e}", error=True)
-            logging.error(f"Failed to move downloaded file: {e}")
-
-    def onDownloadError(self, error_message):
-        self.show_status_message(f"Errore di download: {error_message}", error=True)
+    def openDownloadDialog(self):
+        """Apre il dialogo per importare video da URL."""
+        dialog = DownloadDialog(self)
+        dialog.exec()
 
     def isAudioOnly(self, file_path):
         """Check if the file is likely audio-only based on the extension."""
@@ -4441,6 +4345,13 @@ class VideoAudioManager(QMainWindow):
         self.updateRecentFilesMenu()
 
 
+        # Creazione del menu Import
+        importMenu = menuBar.addMenu('&Import')
+        importUrlAction = QAction('Importa da URL...', self)
+        importUrlAction.setStatusTip('Importa video o audio da un URL (es. YouTube)')
+        importUrlAction.triggered.connect(self.openDownloadDialog)
+        importMenu.addAction(importUrlAction)
+
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
@@ -4576,7 +4487,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
                                                                      'Mostra/Nascondi Trascrizione')
         self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
-        self.actionToggleDownloadDock = self.createToggleAction(self.downloadDock, 'Mostra/Nascondi Download')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
@@ -4590,7 +4500,6 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoPlayerDockOutput)
         viewMenu.addAction(self.actionToggleTranscriptionDock)
         viewMenu.addAction(self.actionToggleEditingDock)
-        viewMenu.addAction(self.actionToggleDownloadDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleVideoMergeDock)
@@ -4677,7 +4586,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleAudioDock.setChecked(True)
         self.actionToggleTranscriptionDock.setChecked(True)
         self.actionToggleEditingDock.setChecked(True)
-        self.actionToggleDownloadDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
         self.actionToggleVideoEffectsDock.setChecked(True)
@@ -4692,7 +4600,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleAudioDock.setChecked(self.audioDock.isVisible())
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
-        self.actionToggleDownloadDock.setChecked(self.downloadDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
