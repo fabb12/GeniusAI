@@ -149,14 +149,14 @@ class PptxDialog(QDialog):
         image_paths = PptxGeneration.generate_preview(
             self.parent(),
             ai_text,
-            settings["template_path"]
+            settings["template_path"],
+            settings["num_slides"]
         )
 
         if image_paths:
             preview_dialog = PreviewDialog(image_paths, self)
-            if preview_dialog.exec():
-                self.handle_generate()
-            preview_dialog.cleanup()
+            preview_dialog.exec()  # Mostra la dialog in modo modale
+            preview_dialog.cleanup() # Pulisce le immagini temporanee dopo la chiusura
 
     def handle_generate(self):
         """Gestisce la generazione della presentazione finale."""
@@ -175,7 +175,8 @@ class PptxDialog(QDialog):
             self.parent(),
             ai_text,
             save_path,
-            settings["template_path"]
+            settings["template_path"],
+            num_slides=settings["num_slides"]
         )
         self.accept()
 

@@ -420,7 +420,7 @@ class PptxGeneration:
                 QMessageBox.critical(parent, "Errore Creazione PPTX", f"Si è verificato un errore: {e}")
 
     @staticmethod
-    def generate_preview(parent, testo, template_path=None):
+    def generate_preview(parent, testo, template_path=None, num_slides=None):
         """Genera un'anteprima della presentazione come immagini."""
         if sys.platform != "win32":
             QMessageBox.warning(parent, "Funzionalità non supportata", "La generazione dell'anteprima è supportata solo su Windows.")
@@ -440,7 +440,8 @@ class PptxGeneration:
             # 1. Crea un file .pptx temporaneo
             temp_pptx_file = parent.get_temp_filepath(suffix=".pptx")
 
-            PptxGeneration.createPresentationFromText(parent, testo, temp_pptx_file, template_path)
+            # Passa num_slides per coerenza con la generazione finale
+            PptxGeneration.createPresentationFromText(parent, testo, temp_pptx_file, template_path, num_slides=num_slides)
 
             # 2. Usa COM per esportare le slide come immagini
             powerpoint = win32com.client.Dispatch("PowerPoint.Application")
