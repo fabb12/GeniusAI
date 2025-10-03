@@ -80,9 +80,65 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+from src.managers.ProjectManager import ProjectManager
+from src.ui.ProjectDock import ProjectDock
 from src.services.VideoCompositing import VideoCompositingThread
 import docx
 from docx.enum.text import WD_COLOR_INDEX
+
+
+class ProjectClipsMergeThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, clips_paths, output_path, parent=None):
+        super().__init__(parent)
+        self.clips_paths = clips_paths
+        self.output_path = output_path
+        self.running = True
+
+    def run(self):
+        try:
+            self.progress.emit(10, "Caricamento clip...")
+            video_clips = [VideoFileClip(path) for path in self.clips_paths]
+
+            if not self.running:
+                return
+
+            target_resolution = video_clips[0].size
+            resized_clips = []
+            for i, clip in enumerate(video_clips):
+                if not self.running: return
+                self.progress.emit(20 + int(i / len(video_clips) * 30), f"Controllo clip {i+1}...")
+                if clip.size != target_resolution:
+                    resized_clips.append(clip.resize(target_resolution))
+                else:
+                    resized_clips.append(clip)
+
+            self.progress.emit(50, "Unione delle clip...")
+            final_clip = concatenate_videoclips(resized_clips, method="compose")
+
+            if not self.running:
+                return
+
+            self.progress.emit(80, "Salvataggio video finale...")
+            final_clip.write_videofile(self.output_path, codec='libx264', audio_codec='aac')
+
+            if self.running:
+                self.progress.emit(100, "Completato")
+                self.completed.emit(self.output_path)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(f"Errore durante l'unione: {e}")
+        finally:
+            for clip in video_clips:
+                clip.close()
+
+    def stop(self):
+        self.running = False
+
 
 class MergeProgressLogger(proglog.ProgressBarLogger):
     def __init__(self, progress_signal_emitter):
@@ -374,6 +430,8 @@ class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.project_manager = ProjectManager(base_dir="projects")
+        self.current_project_path = None
 
         setup_logging()
 
@@ -664,6 +722,13 @@ class VideoAudioManager(QMainWindow):
         self.infoDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.infoDock.setStyleSheet(self.styleSheet())
         area.addDock(self.infoDock, 'right', self.transcriptionDock)
+
+        self.projectDock = ProjectDock()
+        self.projectDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.projectDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.projectDock, 'right', self.infoDock)
+        self.projectDock.clip_selected.connect(self.load_project_clip)
+        self.projectDock.merge_clips_requested.connect(self.merge_project_clips)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -1258,6 +1323,7 @@ class VideoAudioManager(QMainWindow):
             'videoMergeDock': self.videoMergeDock,
             'videoEffectsDock': self.videoEffectsDock,
             'infoDock': self.infoDock,
+            'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
@@ -3639,14 +3705,22 @@ class VideoAudioManager(QMainWindow):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
             recording_name = f"recording_{timestamp}"
 
-        if not folder_path:
-            default_folder = os.path.join(os.getcwd(), 'screenrecorder')
+        # --- MODIFICA PER INTEGRAZIONE PROGETTO ---
+        # Se un progetto è attivo, salva le clip nella sua cartella 'clips'
+        if self.current_project_path:
+            output_folder = os.path.join(self.current_project_path, "clips")
         else:
-            default_folder = folder_path
-        os.makedirs(default_folder, exist_ok=True)
+            # Altrimenti, usa la cartella specificata o quella di default
+            if folder_path:
+                output_folder = folder_path
+            else:
+                output_folder = os.path.join(os.getcwd(), 'screenrecorder')
+
+        os.makedirs(output_folder, exist_ok=True)
+        # --- FINE MODIFICA ---
 
         file_extension = ".mp3" if save_audio_only else ".mp4"
-        segment_file_path = os.path.join(default_folder, f"{recording_name}{file_extension}")
+        segment_file_path = os.path.join(output_folder, f"{recording_name}{file_extension}")
 
         while os.path.exists(segment_file_path):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -3762,8 +3836,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         first_segment = self.recording_segments[0]
-        is_audio_only = first_segment.lower().endswith('.mp3')
-        file_extension = ".mp3" if is_audio_only else ".mp4"
+        output_path = ""
 
         if len(self.recording_segments) > 1:
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -3772,24 +3845,51 @@ class VideoAudioManager(QMainWindow):
                 base_name = base_name.rsplit('_', 1)[0]
 
             output_dir = os.path.dirname(first_segment)
+            file_extension = os.path.splitext(first_segment)[1]
             output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
 
             ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
-
             segments_file = "segments.txt"
-            with open(segments_file, "w") as file:
+
+            try:
+                with open(segments_file, "w") as file:
+                    for segment in self.recording_segments:
+                        file.write(f"file '{os.path.abspath(segment)}'\n")
+
+                merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
+                subprocess.run(merge_command, check=True)
+
+                # Pulizia dei segmenti temporanei
                 for segment in self.recording_segments:
-                    file.write(f"file '{segment}'\n")
-
-            merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
-            subprocess.run(merge_command)
-
-            self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
-            self.loadVideoOutput(output_path)
+                    if os.path.exists(segment):
+                        os.remove(segment)
+            finally:
+                if os.path.exists(segments_file):
+                    os.remove(segments_file)
         else:
             output_path = self.recording_segments[0]
-            self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
-            self.loadVideoOutput(output_path)
+
+        if not output_path or not os.path.exists(output_path):
+            self.show_status_message("Errore nel salvataggio della registrazione.", error=True)
+            return
+
+        self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+        # --- INTEGRAZIONE PROGETTO ---
+        if self.current_project_path and self.projectDock.gnai_path:
+            clip_filename = os.path.basename(output_path)
+            metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+            self.project_manager.add_clip_to_project(
+                self.projectDock.gnai_path,
+                clip_filename,
+                metadata_filename
+            )
+
+            # Ricarica i dati del progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Clip '{clip_filename}' aggiunta al progetto.")
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""
@@ -4257,6 +4357,19 @@ class VideoAudioManager(QMainWindow):
     def setupMenuBar(self):
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('&File')
+
+        openProjectAction = QAction('&Open Project...', self)
+        openProjectAction.setStatusTip('Open a .gnai project file')
+        openProjectAction.triggered.connect(self.open_project)
+        fileMenu.addAction(openProjectAction)
+
+        newProjectAction = QAction('&New Project...', self)
+        newProjectAction.setStatusTip('Create a new project')
+        newProjectAction.triggered.connect(self.create_new_project)
+        fileMenu.addAction(newProjectAction)
+
+        fileMenu.addSeparator()
+
         openAction = QAction('&Open Video/Audio', self)
         openAction.setShortcut('Ctrl+O')
         openAction.setStatusTip('Open video')
@@ -4448,6 +4561,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock = self.createToggleAction(self.videoMergeDock, 'Mostra/Nascondi Unisci Video')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
+        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Project Dock')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
 
         # Aggiungi tutte le azioni al menu 'View'
@@ -4461,6 +4575,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoMergeDock)
         viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
+        viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
 
 
@@ -4545,6 +4660,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleVideoMergeDock.setChecked(True)
         self.actionToggleVideoEffectsDock.setChecked(True)
+        self.actionToggleProjectDock.setChecked(True)
         self.actionToggleInfoDock.setChecked(True)
 
     def updateViewMenu(self):
@@ -4560,6 +4676,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoMergeDock.setChecked(self.videoMergeDock.isVisible())
         self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
+        self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
 
     def about(self):
@@ -5903,6 +6020,82 @@ class VideoAudioManager(QMainWindow):
             self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
         else:
             self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+
+    # --- PROJECT MANAGEMENT METHODS ---
+
+    def create_new_project(self):
+        project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del progetto (lascia vuoto per default):")
+        if ok:
+            project_path, gnai_path = self.project_manager.create_project(project_name if project_name.strip() else None)
+            if project_path:
+                self.show_status_message(f"Progetto '{os.path.basename(project_path)}' creato con successo.")
+                self.load_project(gnai_path)
+            else:
+                self.show_status_message("Errore: Progetto già esistente.", error=True)
+
+    def open_project(self):
+        gnai_path, _ = QFileDialog.getOpenFileName(self, "Apri Progetto", self.project_manager.base_dir, "GeniusAI Project Files (*.gnai)")
+        if gnai_path:
+            self.load_project(gnai_path)
+
+    def load_project(self, gnai_path):
+        project_data, error = self.project_manager.load_project(gnai_path)
+        if error:
+            self.show_status_message(f"Errore caricamento progetto: {error}", error=True)
+            return
+
+        self.current_project_path = os.path.dirname(gnai_path)
+        self.projectDock.load_project_data(project_data, self.current_project_path, gnai_path)
+        self.show_status_message(f"Progetto '{project_data.get('projectName')}' caricato.")
+        if not self.projectDock.isVisible():
+            self.projectDock.show()
+
+    def load_project_clip(self, clip_filename, metadata_filename):
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        video_path = os.path.join(clips_dir, clip_filename)
+
+        if os.path.exists(video_path):
+            self.loadVideo(video_path)
+            # The JSON is loaded automatically by loadVideo's _manage_video_json
+            self.show_status_message(f"Clip '{clip_filename}' caricata.")
+        else:
+            self.show_status_message(f"File video non trovato: {video_path}", error=True)
+
+    def merge_project_clips(self):
+        if not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto caricato o nessuna clip nel progetto.", error=True)
+            return
+
+        clips = self.projectDock.project_data.get("clips", [])
+        if not clips:
+            self.show_status_message("Nessuna clip da unire nel progetto.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        clips_paths = sorted([os.path.join(clips_dir, c["clip_filename"]) for c in clips])
+
+        # Proponi un nome di default per il file unito
+        project_name = self.projectDock.project_data.get("projectName", "merged_video")
+        default_save_path = os.path.join(self.current_project_path, f"{project_name}_merged.mp4")
+
+        output_path, _ = QFileDialog.getSaveFileName(self, "Salva Video Unito", default_save_path, "MP4 Video Files (*.mp4)")
+        if not output_path:
+            return
+
+        thread = ProjectClipsMergeThread(clips_paths, output_path, self)
+        self.start_task(thread, self.on_merge_clips_completed, self.on_merge_clips_error, self.update_status_progress)
+
+    def on_merge_clips_completed(self, output_path):
+        self.show_status_message(f"Clip unite con successo. Video salvato in {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+    def on_merge_clips_error(self, error_message):
+        self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
+
 
 def get_application_path():
     """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
