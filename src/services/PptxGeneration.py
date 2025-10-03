@@ -370,24 +370,31 @@ class PptxGeneration:
                 title_slide_layout = content_slide_layout
 
 
-            # --- Parsing del testo AI ---
+            # --- Parsing del testo AI con Regex robusto ---
             slides_data = []
-            current_slide = None
-            clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto):', r'\1:', testo, flags=re.IGNORECASE)
+            # Pulisce i tag in stile Markdown (es. **Titolo:**) in tag semplici (es. Titolo:)
+            clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto)\*\*:', r'\1:', testo, flags=re.IGNORECASE)
 
-            for line in clean_text.splitlines():
-                line_lower = line.lower()
-                if line_lower.startswith('titolo:'):
-                    if current_slide: slides_data.append(current_slide)
-                    current_slide = {'titolo': line[len('titolo:'):].strip(), 'sottotitolo': '', 'contenuto': ''}
-                elif current_slide and line_lower.startswith('sottotitolo:'):
-                    current_slide['sottotitolo'] = line[len('sottotitolo:'):].strip()
-                elif current_slide and line_lower.startswith('contenuto:'):
-                    current_slide['contenuto'] = ""
-                elif current_slide:
-                    current_slide['contenuto'] += line + '\n'
+            # Pattern per trovare un intero blocco slide (da "Titolo:" fino al prossimo "Titolo:" o alla fine del testo)
+            slide_block_pattern = re.compile(r"Titolo:.*?(?=\n?Titolo:|$)", re.DOTALL | re.IGNORECASE)
 
-            if current_slide: slides_data.append(current_slide)
+            # Pattern per estrarre i dettagli da un singolo blocco slide
+            detail_pattern = re.compile(
+                r"Titolo:\s*(?P<titolo>[^\n]*)"
+                r"(?:\n\s*Sottotitolo:\s*(?P<sottotitolo>[^\n]*))?"
+                r"(?:\n\s*Contenuto:\s*(?P<contenuto>.*))?",
+                re.DOTALL | re.IGNORECASE
+            )
+
+            for block in slide_block_pattern.finditer(clean_text):
+                match = detail_pattern.match(block.group(0).strip())
+                if match:
+                    slide_dict = {
+                        'titolo': match.group('titolo').strip() if match.group('titolo') else '',
+                        'sottotitolo': match.group('sottotitolo').strip() if match.group('sottotitolo') else '',
+                        'contenuto': match.group('contenuto').strip() if match.group('contenuto') else ''
+                    }
+                    slides_data.append(slide_dict)
 
             if not slides_data:
                 if hasattr(parent, 'show_status_message'):
