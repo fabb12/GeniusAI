@@ -61,8 +61,11 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungere replace nel search box e sistema il numero di elmentei trovati e sistema il colore di quadno non trova nulla metti colore arancione 
 - [x] mettere tasti frecce per andare aventi e indietro nel playback del video
 - [x] crea un nuovo dock note video dove mostro le note che  utente ha inserito nel video, tramite una funzione inserisci nota con tasto sx del mouse sul frame che in quel momento e visibile 
-
-
+-[] togliere dock downlaod e metterno sotto voce import come nuovo menu . deve aprire un dialog cone le stess impostazioni del dock
+- aggiugn il dock unisci video nel dock gestione audio (rinomina audio e video) , togli il dock unisci video 
+- qundo premo su video nel dock prgoetto devi aggionrare anche informaizon video 
+- rendi coerente anche il dock registrazione (percorso file e nome della registrazione) con la nuova sezione dock progetti 
+- sistemare timecode audio ai 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 

@@ -2,11 +2,11 @@ import os
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGridLayout, QGroupBox, QLabel, QLineEdit,
     QComboBox, QPushButton, QFileDialog, QMessageBox, QSpinBox,
-    QDialogButtonBox, QTextEdit
+    QDialogButtonBox, QTextEdit, QApplication
 )
-from PyQt6.QtCore import QSettings
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PreviewDialog import PreviewDialog
+
 
 class PptxDialog(QDialog):
     def __init__(self, parent=None, transcription_text=""):
@@ -113,7 +113,7 @@ class PptxDialog(QDialog):
         settings = self.get_settings()
         self.get_ai_content_button.setEnabled(False)
         self.get_ai_content_button.setText("Generazione in corso...")
-        QApplication.processEvents()
+        QApplication.instance().processEvents()
 
         try:
             result = PptxGeneration.generaTestoPerSlide(
