@@ -301,28 +301,17 @@ class PptxGeneration:
         return None
 
     @staticmethod
-    def _add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape):
-        """Aggiunge il contenuto principale (bullet points) a una slide."""
+    def _add_content_to_slide(slide, content_text):
+        """Aggiunge il contenuto principale (bullet points) a una slide, gestendo i livelli di indentazione."""
         body_shape = PptxGeneration._find_content_placeholder(slide)
         if not body_shape:
-            logging.warning("Nessun placeholder per il contenuto (BODY o OBJECT) trovato nella slide.")
+            logging.warning(f"Layout '{slide.slide_layout.name}' non ha un placeholder per il contenuto (BODY/OBJECT). Salto il contenuto.")
             return
 
         tf = body_shape.text_frame
-        # Pulisci i paragrafi esistenti invece di cancellare l'intero textframe per preservare lo stile
-        for para in tf.paragraphs:
-            para.clear()
+        tf.clear()  # Pulisce tutto il contenuto esistente nel placeholder
 
-        # Rimuovi paragrafi extra
-        while len(tf.paragraphs) > 1:
-            tf._bodyPr.remove(tf.paragraphs[-1]._p)
-
-        effective_content = ""
-        if subtitle_text and not subtitle_shape:
-            effective_content = subtitle_text + "\n\n"
-        effective_content += content_text
-
-        lines = effective_content.split('\n')
+        lines = content_text.strip().split('\n')
         p = tf.paragraphs[0]
         first_line_processed = False
 
@@ -357,7 +346,17 @@ class PptxGeneration:
         """Crea il file .pptx dal testo strutturato generato dall'AI, usando un approccio robusto per i layout."""
         logging.info(f"Tentativo di creare file PPTX: {output_file} con template: {template_path}")
         try:
-            prs = Presentation(template_path) if template_path and os.path.exists(template_path) else Presentation()
+            # Se viene fornito un template, caricalo. Altrimenti, crea una presentazione vuota.
+            if template_path and os.path.exists(template_path):
+                prs = Presentation(template_path)
+                # Rimuovi tutte le slide esistenti dal template per usarlo solo per lo stile.
+                # Questo ciclo itera all'indietro per eliminare le slide in modo sicuro senza problemi di indice.
+                for i in range(len(prs.slides) - 1, -1, -1):
+                    rId = prs.slides._sldIdLst[i].rId
+                    prs.part.drop_rel(rId)
+                    del prs.slides._sldIdLst[i]
+            else:
+                prs = Presentation()
 
             # --- Ricerca robusta dei layout ---
             title_slide_layout = PptxGeneration._find_layout_by_placeholder_types(prs, PP_PLACEHOLDER.TITLE)
@@ -420,7 +419,7 @@ class PptxGeneration:
 
             # Popola il contenuto se il layout lo permette e il contenuto esiste
             if first_slide_content:
-                 PptxGeneration._add_content_to_slide(slide, first_slide_content, subtitle_text, subtitle_shape)
+                 PptxGeneration._add_content_to_slide(slide, first_slide_content)
 
 
             # --- Gestione Slide Successive ---
@@ -434,7 +433,7 @@ class PptxGeneration:
                     subtitle_shape.text = subtitle_text
                 content_text = slide_data.get('contenuto', '').strip()
                 if content_text:
-                    PptxGeneration._add_content_to_slide(slide, content_text, subtitle_text, subtitle_shape)
+                    PptxGeneration._add_content_to_slide(slide, content_text)
 
             # --- Salvataggio e notifica ---
             if prs.slides:
