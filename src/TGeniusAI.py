@@ -491,17 +491,18 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
 
-        # Mappatura dei colori per l'evidenziazione (ottimizzata per tema scuro)
+        # Mappatura dei colori ad alto contrasto per l'evidenziazione su sfondo scuro
         self.highlight_colors = {
-            "Giallo Brillante": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
-            "Verde Elettrico": {"qcolor": QColor("#39FF14"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#39ff14"},
-            "Ciano Acceso": {"qcolor": QColor("#00FFFF"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#00ffff"},
+            "Giallo": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
+            "Verde Chiaro": {"qcolor": QColor("#90EE90"), "docx": WD_COLOR_INDEX.LIME, "hex": "#90ee90"},
+            "Turchese": {"qcolor": QColor("#40E0D0"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#40e0d0"},
             "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
-            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#ffa500"},
-            "Rosso": {"qcolor": QColor("#FF0000"), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
-            "Azzurro Elettrico": {"qcolor": QColor("#00BFFF"), "docx": WD_COLOR_INDEX.BLUE, "hex": "#00bfff"},
+            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.ORANGE, "hex": "#ffa500"},
+            "Azzurro": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
+            "Grigio": {"qcolor": QColor("#A9A9A9"), "docx": WD_COLOR_INDEX.GRAY_50, "hex": "#a9a9a9"},
+            "Rosso": {"qcolor": QColor("#FF474C"), "docx": WD_COLOR_INDEX.RED, "hex": "#ff474c"},
         }
-        self.current_highlight_color_name = "Giallo Brillante" # Default
+        self.current_highlight_color_name = "Giallo" # Default
 
         self.initUI()
 
@@ -636,7 +637,7 @@ class VideoAudioManager(QMainWindow):
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
 
         # Carica il colore di evidenziazione personalizzato
-        self.current_highlight_color_name = settings.value("editor/highlightColor", "Giallo Brillante")
+        self.current_highlight_color_name = settings.value("editor/highlightColor", "Giallo")
 
         # Configura l'aspetto dell'overlay
         self.videoOverlay.set_show_red_dot(self.show_red_dot)
