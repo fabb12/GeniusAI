@@ -20,15 +20,16 @@ class SettingsDialog(QDialog):
         self.model_combos = {}
         self.api_key_edits = {}
 
-        # Mappatura dei colori per l'evidenziazione
+        # Mappatura dei colori ad alto contrasto per l'evidenziazione su sfondo scuro
         self.highlight_colors = {
-            "Giallo": {"qcolor": QColor('yellow'), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
-            "Verde Chiaro": {"qcolor": QColor('lightgreen'), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#90ee90"},
-            "Turchese": {"qcolor": QColor('turquoise'), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#40e0d0"},
-            "Rosa": {"qcolor": QColor('pink'), "docx": WD_COLOR_INDEX.PINK, "hex": "#ffc0cb"},
-            "Azzurro": {"qcolor": QColor('lightblue'), "docx": WD_COLOR_INDEX.BLUE, "hex": "#add8e6"},
-            "Rosso": {"qcolor": QColor('red'), "docx": WD_COLOR_INDEX.RED, "hex": "#ff0000"},
-            "Grigio": {"qcolor": QColor('lightgray'), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#d3d3d3"},
+            "Giallo": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
+            "Verde Chiaro": {"qcolor": QColor("#98FB98"), "docx": WD_COLOR_INDEX.LIME, "hex": "#98fb98"},
+            "Turchese": {"qcolor": QColor("#48D1CC"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#48d1cc"},
+            "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
+            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.ORANGE, "hex": "#ffa500"},
+            "Azzurro": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
+            "Grigio": {"qcolor": QColor("#B0C4DE"), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#b0c4de"},
+            "Rosso": {"qcolor": QColor("#F08080"), "docx": WD_COLOR_INDEX.RED, "hex": "#f08080"},
         }
 
         layout = QVBoxLayout(self)
