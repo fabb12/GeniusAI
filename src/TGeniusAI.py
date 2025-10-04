@@ -636,7 +636,7 @@ class VideoAudioManager(QMainWindow):
         self.use_vb_cable = settings.value("recording/useVBCable", False, type=bool)
 
         # Carica il colore di evidenziazione personalizzato
-        self.current_highlight_color_name = settings.value("editor/highlightColor", "Giallo")
+        self.current_highlight_color_name = settings.value("editor/highlightColor", "Giallo Brillante")
 
         # Configura l'aspetto dell'overlay
         self.videoOverlay.set_show_red_dot(self.show_red_dot)
@@ -2096,16 +2096,25 @@ class VideoAudioManager(QMainWindow):
         if not cursor.hasSelection():
             return
 
-        color_name = self.current_highlight_color_name
-        color_info = self.highlight_colors.get(color_name, self.highlight_colors["Giallo"])
-        highlight_color = QColor(color_info["hex"])
+        # Safely get the color info. If the configured color is invalid,
+        # fall back to the first color in the dictionary.
+        color_info = self.highlight_colors.get(self.current_highlight_color_name)
+        if not color_info:
+            first_color_name = next(iter(self.highlight_colors))
+            color_info = self.highlight_colors[first_color_name]
+            logging.warning(f"Invalid highlight color '{self.current_highlight_color_name}' found in settings. Falling back to '{first_color_name}'.")
 
+        highlight_color = color_info["qcolor"]
+
+        # Determine if we are applying or removing the highlight
         current_format = cursor.charFormat()
         new_format = QTextCharFormat()
 
         if current_format.background().color() == highlight_color:
+            # If the current background is the highlight color, remove it (make it transparent)
             new_format.setBackground(QColor(Qt.GlobalColor.transparent))
         else:
+            # Otherwise, apply the highlight color
             new_format.setBackground(highlight_color)
 
         cursor.mergeCharFormat(new_format)
