@@ -4614,14 +4614,10 @@ class VideoAudioManager(QMainWindow):
         # Usa il testo semplice per il rilevamento della lingua per evitare problemi con l'HTML
         plain_text = self.transcriptionTextArea.toPlainText()
         if plain_text.strip():
-            if self.timecodeEnabled:
-                self.transcriptionTextArea.blockSignals(True)
-                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(self.transcriptionTextArea.toHtml())
-                self.transcriptionTextArea.setHtml(updated_html)
-                self.detectAndUpdateLanguage(self.transcriptionTextArea.toPlainText())
-                self.transcriptionTextArea.blockSignals(False)
-            else:
-                self.detectAndUpdateLanguage(plain_text)
+            # La logica del timecode è stata rimossa da qui perché deve essere
+            # gestita esclusivamente dal toggle nella tab "Audio AI" e non
+            # deve attivarsi a ogni modifica della trascrizione.
+            self.detectAndUpdateLanguage(plain_text)
 
     def autosave_transcription(self):
         """
@@ -4645,6 +4641,16 @@ class VideoAudioManager(QMainWindow):
         cumulative_time = 0.0
 
         soup = BeautifulSoup(html_text, 'html.parser')
+
+        # Rimuove i timestamp esistenti per evitare duplicazioni.
+        # Cerca il tag <font> specifico e lo elimina.
+        for ts_tag in soup.find_all('font', color='#ADD8E6'):
+            # Rimuove anche lo spazio vuoto che segue il timestamp, se presente
+            next_sibling = ts_tag.next_sibling
+            if next_sibling and isinstance(next_sibling, str) and next_sibling.startswith(' '):
+                next_sibling.replace_with(next_sibling.lstrip())
+            ts_tag.decompose()
+
         new_body = BeautifulSoup('<body></body>', 'html.parser').body
 
         # Process paragraphs or the whole body if no paragraphs exist
