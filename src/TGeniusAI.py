@@ -2016,24 +2016,23 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
-        # Applica la logica a entrambe le aree di testo
-        text_areas = [self.transcriptionTextArea, self.audioAiTextArea]
+        # Applica la logica solo all'area di testo dell'Audio AI
         self.timecodeEnabled = checked
+        text_area = self.audioAiTextArea # Target solo l'area AI
 
-        for text_area in text_areas:
-            text_area.setReadOnly(checked)
-            if checked:
-                # Salva l'HTML corrente e applica i timecode
-                original_html = text_area.toHtml()
-                # Salva l'originale in un attributo dinamico per evitare conflitti
-                setattr(self, f"original_html_for_{text_area.objectName()}", original_html)
-                updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(original_html)
-                text_area.setHtml(updated_html)
-            else:
-                # Ripristina l'HTML originale
-                original_html = getattr(self, f"original_html_for_{text_area.objectName()}", "")
-                if original_html:
-                    text_area.setHtml(original_html)
+        text_area.setReadOnly(checked)
+        if checked:
+            # Salva l'HTML corrente e applica i timecode
+            original_html = text_area.toHtml()
+            # Salva l'originale in un attributo dinamico per evitare conflitti
+            setattr(self, f"original_html_for_{text_area.objectName()}", original_html)
+            updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(original_html)
+            text_area.setHtml(updated_html)
+        else:
+            # Ripristina l'HTML originale
+            original_html = getattr(self, f"original_html_for_{text_area.objectName()}", "")
+            if original_html:
+                text_area.setHtml(original_html)
 
 
     def updateProgressDialog(self, value, label):
@@ -4712,6 +4711,36 @@ class VideoAudioManager(QMainWindow):
 
         return new_body.decode_contents()
 
+    def _style_existing_timestamps(self, text_edit):
+        """
+        Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
+        Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
+        """
+        # Pattern per trovare timestamp come [00:00:02.4] o [00:00]
+        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+
+        current_html = text_edit.toHtml()
+
+        # Sostituisce ogni timestamp trovato con la versione stilizzata
+        def style_match(match):
+            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+        # Per evitare di stilizzare più volte, prima rimuoviamo i tag <font> esistenti
+        current_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', current_html)
+
+        # Riapplichiamo lo stile
+        new_html = timestamp_pattern.sub(style_match, current_html)
+
+        if new_html != current_html:
+            # Salva la posizione del cursore
+            cursor = text_edit.textCursor()
+            cursor_pos = cursor.position()
+            # Applica il nuovo HTML
+            text_edit.setHtml(new_html)
+            # Ripristina la posizione del cursore
+            cursor.setPosition(cursor_pos)
+
+
     def detectAndUpdateLanguage(self, text):
         try:
             detected_language_code = detect(text)
@@ -4748,7 +4777,9 @@ class VideoAudioManager(QMainWindow):
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            # Carica il testo e poi applica lo stile
             self.transcriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+            self._style_existing_timestamps(self.transcriptionTextArea)
             self.onProcessComplete(data)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
@@ -4778,6 +4809,7 @@ class VideoAudioManager(QMainWindow):
         else:
             # Carica l'HTML per preservare la formattazione
             self.transcriptionTextArea.setHtml(self.transcription_original)
+            self._style_existing_timestamps(self.transcriptionTextArea) # Applica stile
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
