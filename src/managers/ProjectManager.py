@@ -16,11 +16,18 @@ class ProjectManager:
                 return project_name
             i += 1
 
-    def create_project(self, project_name=None):
+    def create_project(self, project_name=None, base_dir=None):
         if not project_name:
             project_name = self.get_next_untitled_project_name()
 
-        project_path = os.path.join(self.base_dir, project_name)
+        # Usa la base_dir fornita, altrimenti quella di default
+        effective_base_dir = base_dir if base_dir else self.base_dir
+        project_path = os.path.join(effective_base_dir, project_name)
+
+        # Se la base_dir è specificata, il progetto viene creato direttamente lì
+        if not base_dir:
+             project_path = os.path.join(self.base_dir, project_name)
+
         clips_path = os.path.join(project_path, "clips")
 
         if os.path.exists(project_path):
@@ -56,6 +63,10 @@ class ProjectManager:
         with open(gnai_path, 'r+') as f:
             project_data = json.load(f)
 
+            # Evita di aggiungere clip duplicati
+            if any(c['clip_filename'] == clip_filename for c in project_data.get('clips', [])):
+                return True, "Clip already in project"
+
             clip_info = {
                 "clip_filename": clip_filename,
                 "metadata_filename": metadata_filename,
@@ -72,3 +83,36 @@ class ProjectManager:
             f.truncate()
 
         return True, "Clip added successfully"
+
+    def save_project(self, gnai_path, project_data):
+        """
+        Salva l'intero oggetto dati del progetto nel file .gnai.
+        """
+        if not gnai_path:
+            return False, "Invalid project path"
+        try:
+            with open(gnai_path, 'w') as f:
+                json.dump(project_data, f, indent=4)
+            return True, "Project saved successfully"
+        except Exception as e:
+            return False, f"Failed to save project: {e}"
+
+    def remove_clip_from_project(self, gnai_path, clip_filename):
+        """
+        Rimuove una clip dal file di progetto .gnai.
+        """
+        if not os.path.exists(gnai_path):
+            return False, "Project file not found"
+
+        with open(gnai_path, 'r+') as f:
+            project_data = json.load(f)
+
+            original_clips = project_data.get("clips", [])
+            # Filtra le clip, mantenendo solo quelle che non corrispondono al nome del file da eliminare
+            project_data["clips"] = [clip for clip in original_clips if clip.get("clip_filename") != clip_filename]
+
+            f.seek(0)
+            json.dump(project_data, f, indent=4)
+            f.truncate()
+
+        return True, "Clip removed successfully"
