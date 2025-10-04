@@ -719,6 +719,8 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.clip_selected.connect(self.load_project_clip)
         self.projectDock.merge_clips_requested.connect(self.merge_project_clips)
         self.projectDock.open_folder_requested.connect(self.open_project_folder)
+        self.projectDock.delete_clip_requested.connect(self.delete_project_clip)
+        self.projectDock.reload_project_requested.connect(lambda: self.load_project(self.projectDock.gnai_path))
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -4280,6 +4282,12 @@ class VideoAudioManager(QMainWindow):
         newProjectAction.triggered.connect(self.create_new_project)
         fileMenu.addAction(newProjectAction)
 
+        saveProjectAction = QAction('&Save Project', self)
+        saveProjectAction.setShortcut('Ctrl+S')
+        saveProjectAction.setStatusTip('Save the current project')
+        saveProjectAction.triggered.connect(self.save_project)
+        fileMenu.addAction(saveProjectAction)
+
         fileMenu.addSeparator()
 
         openAction = QAction('&Open Video/Audio', self)
@@ -4431,10 +4439,27 @@ class VideoAudioManager(QMainWindow):
             return
 
         save_options = options_dialog.getOptions()
-        file_filter = "Video Files (*.mp4 *.mov *.avi)"
-        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", file_filter)
+        fileName = ""
+
+        # --- MODIFICA PER SALVATAGGIO IN PROGETTO ---
+        if self.current_project_path:
+            # Se un progetto è attivo, costruisci il percorso di salvataggio automaticamente
+            source_for_name = self.videoPathLineEdit if self.videoPathLineEdit else self.videoPathLineOutputEdit
+            base_name, ext = os.path.splitext(os.path.basename(source_for_name))
+
+            if base_name.startswith("tmp_"):
+                base_name = "processed_clip"
+
+            output_filename = f"{base_name}_output{ext}"
+            fileName = os.path.join(self.current_project_path, "clips", output_filename)
+        else:
+            # Altrimenti, chiedi all'utente dove salvare
+            file_filter = "Video Files (*.mp4 *.mov *.avi)"
+            fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", file_filter)
+
         if not fileName:
             return
+        # --- FINE MODIFICA ---
 
         video_saver = VideoSaver(self)
         rate = 1.0
@@ -4452,10 +4477,35 @@ class VideoAudioManager(QMainWindow):
                 self.videoPathLineOutputEdit, fileName, playback_rate=rate
             )
 
-        self.start_task(thread, self.onSaveCompleted, self.onSaveError, self.update_status_progress)
+        # Passa il nome del file al callback per aggiungerlo al progetto
+        self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=bool(self.current_project_path)), self.onSaveError, self.update_status_progress)
 
-    def onSaveCompleted(self, output_path):
+    def onSaveCompleted(self, output_path, is_project_save=False):
         self.show_status_message(f"Video salvato con successo in: {os.path.basename(output_path)}")
+
+        if is_project_save and self.current_project_path:
+            clip_filename = os.path.basename(output_path)
+            metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+            try:
+                clip_info = VideoFileClip(output_path)
+                duration = clip_info.duration
+                clip_info.close()
+                size = os.path.getsize(output_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+
+                self.project_manager.add_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                self.load_project(self.projectDock.gnai_path) # Ricarica per aggiornare la UI
+                self.show_status_message(f"Clip '{clip_filename}' aggiunta al progetto.")
+            except Exception as e:
+                logging.error(f"Impossibile aggiungere la clip salvata al progetto: {e}")
+                self.show_status_message("Errore nell'aggiungere la clip al progetto.", error=True)
 
     def onSaveError(self, error_message):
         self.show_status_message(f"Errore durante il salvataggio del video: {error_message}", error=True)
@@ -5969,14 +6019,25 @@ class VideoAudioManager(QMainWindow):
     # --- PROJECT MANAGEMENT METHODS ---
 
     def create_new_project(self):
-        project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del progetto (lascia vuoto per default):")
-        if ok:
-            project_path, gnai_path = self.project_manager.create_project(project_name if project_name.strip() else None)
-            if project_path:
-                self.show_status_message(f"Progetto '{os.path.basename(project_path)}' creato con successo.")
-                self.load_project(gnai_path)
-            else:
-                self.show_status_message("Errore: Progetto già esistente.", error=True)
+        project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
+        if not ok or not project_name.strip():
+            # L'utente ha annullato o non ha inserito un nome
+            return
+
+        # Chiedi all'utente di scegliere una cartella di destinazione
+        destination_folder = QFileDialog.getExistingDirectory(self, "Scegli la cartella di destinazione del progetto", self.project_manager.base_dir)
+        if not destination_folder:
+            # L'utente ha annullato la selezione della cartella
+            return
+
+        # Crea il progetto nella cartella scelta
+        project_path, gnai_path = self.project_manager.create_project(project_name.strip(), base_dir=destination_folder)
+
+        if project_path:
+            self.show_status_message(f"Progetto '{os.path.basename(project_path)}' creato con successo in '{destination_folder}'.")
+            self.load_project(gnai_path)
+        else:
+            self.show_status_message(f"Errore: Il progetto '{project_name.strip()}' esiste già in questa cartella.", error=True)
 
     def open_project(self):
         gnai_path, _ = QFileDialog.getOpenFileName(self, "Apri Progetto", self.project_manager.base_dir, "GeniusAI Project Files (*.gnai)")
@@ -6042,6 +6103,45 @@ class VideoAudioManager(QMainWindow):
     def on_merge_clips_error(self, error_message):
         self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
 
+    def delete_project_clip(self, clip_filename):
+        """Elimina una clip dal progetto e dal filesystem."""
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Conferma Eliminazione",
+            f"Sei sicuro di voler eliminare definitivamente la clip?\n\n{clip_filename}\n\nQuesta azione non può essere annullata.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            clip_path = os.path.join(self.current_project_path, "clips", clip_filename)
+
+            # 1. Rimuovi il file dal disco
+            try:
+                if os.path.exists(clip_path):
+                    os.remove(clip_path)
+                    # Elimina anche il file .json associato, se esiste
+                    json_path = os.path.splitext(clip_path)[0] + ".json"
+                    if os.path.exists(json_path):
+                        os.remove(json_path)
+                    self.show_status_message(f"File '{clip_filename}' eliminato.")
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
+                return
+
+            # 2. Rimuovi la clip dal file .gnai
+            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+            if not success:
+                self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
+                return
+
+            # 3. Ricarica il progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
+
     def open_project_folder(self):
         """Apre la cartella del progetto corrente nel file explorer di sistema."""
         if self.current_project_path and os.path.isdir(self.current_project_path):
@@ -6049,6 +6149,25 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message(f"Apertura della cartella: {self.current_project_path}")
         else:
             self.show_status_message("Nessuna cartella di progetto valida da aprire.", error=True)
+
+    def save_project(self):
+        """Salva lo stato corrente del progetto."""
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo da salvare.", error=True)
+            return
+
+        # Assicurati che i dati del progetto nel dock siano aggiornati
+        # (Questo potrebbe non essere necessario se i dati sono sempre coerenti)
+        current_data = self.projectDock.project_data
+        if not current_data:
+            self.show_status_message("Dati del progetto non validi.", error=True)
+            return
+
+        success, message = self.project_manager.save_project(self.projectDock.gnai_path, current_data)
+        if success:
+            self.show_status_message("Progetto salvato con successo.")
+        else:
+            self.show_status_message(f"Errore nel salvataggio del progetto: {message}", error=True)
 
     def get_temp_filepath(self, suffix="", prefix="tmp_"):
         """

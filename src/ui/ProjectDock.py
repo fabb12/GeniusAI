@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher
 from src.ui.CustomDock import CustomDock
 import datetime
+import os
 
 class ProjectDock(CustomDock):
     """
@@ -11,6 +12,8 @@ class ProjectDock(CustomDock):
     clip_selected = pyqtSignal(str, str)
     merge_clips_requested = pyqtSignal()
     open_folder_requested = pyqtSignal()
+    delete_clip_requested = pyqtSignal(str) # Segnale per eliminare una clip
+    reload_project_requested = pyqtSignal()
 
     def __init__(self, title="Progetto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -18,6 +21,8 @@ class ProjectDock(CustomDock):
         self.project_data = None
         self.project_dir = None
         self.gnai_path = None
+        self.file_watcher = QFileSystemWatcher(self)
+        self.file_watcher.directoryChanged.connect(self.on_directory_changed)
 
         self._setup_ui()
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
@@ -25,18 +30,27 @@ class ProjectDock(CustomDock):
         self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
 
+    def on_directory_changed(self, path):
+        """
+        Slot che viene chiamato quando la cartella monitorata cambia.
+        Ricarica i dati del progetto.
+        """
+        print(f"Directory changed: {path}. Reloading project.")
+        self.reload_project_requested.emit()
+
     def show_context_menu(self, position):
         """Mostra il menu contestuale per l'area delle clip."""
-        if not self.project_dir:
+        item = self.tree_clips.itemAt(position)
+        if not self.project_dir or not item or item.isDisabled():
             return
 
         menu = QMenu()
-        open_folder_action = menu.addAction("Apri cartella progetto")
-
+        delete_action = menu.addAction("Elimina File")
         action = menu.exec(self.tree_clips.mapToGlobal(position))
 
-        if action == open_folder_action:
-            self.open_folder_requested.emit()
+        if action == delete_action:
+            clip_filename = item.text(0)
+            self.delete_clip_requested.emit(clip_filename)
 
     def _setup_ui(self):
         main_widget = QWidget()
@@ -44,11 +58,19 @@ class ProjectDock(CustomDock):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         project_info_group = QGroupBox("Dettagli Progetto")
-        form_layout = QFormLayout(project_info_group)
+        project_info_layout = QVBoxLayout(project_info_group) # Layout verticale
+        form_layout = QFormLayout()
         self.lbl_project_name = QLabel("N/A")
         self.lbl_project_path = QLabel("N/A")
         form_layout.addRow("<b>Nome:</b>", self.lbl_project_name)
         form_layout.addRow("<b>Percorso:</b>", self.lbl_project_path)
+
+        project_info_layout.addLayout(form_layout) # Aggiungi il form layout
+
+        # Pulsante per aprire la cartella
+        self.btn_open_folder = QPushButton("Apri Cartella Progetto")
+        self.btn_open_folder.clicked.connect(self.open_folder_requested.emit)
+        project_info_layout.addWidget(self.btn_open_folder)
 
         clips_group = QGroupBox("Clip Video")
         clips_layout = QVBoxLayout(clips_group)
@@ -103,6 +125,10 @@ class ProjectDock(CustomDock):
             return "N/A"
 
     def load_project_data(self, project_data, project_dir, gnai_path):
+        # Rimuovi i percorsi precedenti dal watcher
+        if self.file_watcher.directories():
+            self.file_watcher.removePaths(self.file_watcher.directories())
+
         self.project_data = project_data
         self.project_dir = project_dir
         self.gnai_path = gnai_path
@@ -112,6 +138,10 @@ class ProjectDock(CustomDock):
 
         self.tree_clips.clear()
         clips = sorted(project_data.get("clips", []), key=lambda x: x.get("creation_date", ""))
+
+        clips_dir = os.path.join(project_dir, "clips")
+        if os.path.exists(clips_dir):
+            self.file_watcher.addPath(clips_dir)
 
         if clips:
             for clip in clips:
@@ -126,6 +156,8 @@ class ProjectDock(CustomDock):
             item.setDisabled(True)
 
     def clear_dock(self):
+        if self.file_watcher.directories():
+            self.file_watcher.removePaths(self.file_watcher.directories())
         self.lbl_project_name.setText("N/A")
         self.lbl_project_path.setText("N/A")
         self.tree_clips.clear()
