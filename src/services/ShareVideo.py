@@ -20,7 +20,7 @@ class VideoSharingManager:
 
     def shareOnTeams(self, file_path):
         try:
-            contacts = self.get_contacts_from_txt('../contatti_teams.txt')
+            contacts = self.get_contacts_from_txt()
             if not contacts:
                 if self.parent and hasattr(self.parent, 'show_status_message'):
                     self.parent.show_status_message("Elenco contatti non trovato o vuoto.", error=True)
@@ -53,19 +53,30 @@ class VideoSharingManager:
         except Exception as e:
             QMessageBox.critical(self.parent, "Errore", f"Errore durante la condivisione su WhatsApp: {str(e)}")
 
-    def get_contacts_from_txt(self, file_path=None):
+    def get_contacts_from_txt(self):
         """Funzione per caricare i contatti da un file .txt"""
         contacts = []
         try:
-            with open(file_path or CONTACTS_FILE, mode='r', encoding='utf-8') as file:
+            with open(CONTACTS_FILE, mode='r', encoding='utf-8') as file:
                 for line in file:
-                    name, email = line.strip().split(',')
-                    contacts.append({
-                        "displayName": name,
-                        "email": email
-                    })
+                    line = line.strip()
+                    if not line:  # Salta le righe vuote
+                        continue
+                    try:
+                        name, email = line.split(',')
+                        contacts.append({
+                            "displayName": name.strip(),
+                            "email": email.strip()
+                        })
+                    except ValueError:
+                        print(f"Skipping malformed line: {line}")
+
+        except FileNotFoundError:
+            QMessageBox.critical(self.parent, "Errore", f"File dei contatti non trovato: {CONTACTS_FILE}")
+            return [] # Ritorna una lista vuota se il file non esiste
         except Exception as e:
-            QMessageBox.critical(self.parent, "Errore", f"Errore durante la lettura del file: {e}")
+            QMessageBox.critical(self.parent, "Errore", f"Errore durante la lettura del file dei contatti: {e}")
+            return [] # Ritorna una lista vuota in caso di altri errori
         return contacts
 
     def open_file_explorer_at_file(self, file_path):
