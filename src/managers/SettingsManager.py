@@ -68,19 +68,22 @@ class DockSettingsManager:
         if workspace_name == "Registrazione":
             self.docks['recordingDock'].setVisible(True)
             self.docks['videoPlayerOutput'].setVisible(True)
+            self.docks['projectDock'].setVisible(True)
         elif workspace_name == "Confronto":
             self.docks['videoPlayerDock'].setVisible(True)
             self.docks['videoPlayerOutput'].setVisible(True)
         elif workspace_name == "Trascrizione":
             self.docks['videoPlayerDock'].setVisible(True)
             self.docks['transcriptionDock'].setVisible(True)
+            self.docks['videoNotesDock'].setVisible(True)
+            self.docks['projectDock'].setVisible(True)
         elif workspace_name == "Default":
+            self.docks['videoNotesDock'].setVisible(True)
+            self.docks['projectDock'].setVisible(True)
             self.docks['videoPlayerDock'].setVisible(True)
             self.docks['videoPlayerOutput'].setVisible(True)
             self.docks['transcriptionDock'].setVisible(True)
             self.docks['editingDock'].setVisible(True)
-            self.docks['downloadDock'].setVisible(True)
-            self.docks['recordingDock'].setVisible(True)
             self.docks['audioDock'].setVisible(True)
 
         self.main_window.updateViewMenu()

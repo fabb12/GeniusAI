@@ -2551,7 +2551,6 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
-        self.videoMergeDock.setStyleSheet(style)
         self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
         self.videoNotesDock.setStyleSheet(style)
@@ -4470,7 +4469,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
-        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Project Dock')
+        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
 
         # Aggiungi tutte le azioni al menu 'View'
