@@ -34,6 +34,7 @@ class ProjectDock(CustomDock):
 
         self._setup_ui()
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
+        self.btn_merge_clips.clicked.connect(self.merge_clips_requested.emit)
         self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
 
@@ -99,7 +100,7 @@ class ProjectDock(CustomDock):
         self.btn_refresh_clips = QPushButton()
         self.btn_refresh_clips.setIcon(QIcon(get_resource("sync.png")))
         self.btn_refresh_clips.setToolTip("Aggiorna la lista delle clip")
-        self.btn_refresh_clips.clicked.connect(self.reload_project_requested.emit)
+        self.btn_refresh_clips.clicked.connect(self.project_clips_folder_changed.emit)
         self.btn_refresh_clips.setFixedSize(32, 32)
         buttons_layout.addWidget(self.btn_refresh_clips)
 
