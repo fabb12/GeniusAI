@@ -710,10 +710,9 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.setStyleSheet(self.styleSheet())
         area.addDock(self.projectDock, 'right', self.infoDock)
         self.projectDock.clip_selected.connect(self.load_project_clip)
-        self.projectDock.merge_clips_requested.connect(self.merge_project_clips)
         self.projectDock.open_folder_requested.connect(self.open_project_folder)
         self.projectDock.delete_clip_requested.connect(self.delete_project_clip)
-        self.projectDock.reload_project_requested.connect(lambda: self.load_project(self.projectDock.gnai_path))
+        self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -6095,6 +6094,69 @@ class VideoAudioManager(QMainWindow):
 
     def on_merge_clips_error(self, error_message):
         self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
+
+    def sync_project_clips_folder(self):
+        """
+        Sincronizza il file .gnai con il contenuto effettivo della cartella 'clips'.
+        Aggiunge automaticamente le nuove clip video trovate nella cartella al progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        if not os.path.isdir(clips_dir):
+            return
+
+        try:
+            # 1. Ottieni i file presenti nella cartella
+            disk_files = {f for f in os.listdir(clips_dir) if os.path.isfile(os.path.join(clips_dir, f)) and f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))}
+
+            # 2. Ottieni le clip già registrate nel progetto
+            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+            if not project_data:
+                return
+
+            registered_clips = {c['clip_filename'] for c in project_data.get('clips', [])}
+
+            # 3. Trova i nuovi file
+            new_files = disk_files - registered_clips
+
+            if not new_files:
+                self.load_project(self.projectDock.gnai_path)
+                return
+
+            self.show_status_message(f"Trovati {len(new_files)} nuovi file. Aggiunta al progetto in corso...")
+
+            # 4. Aggiungi ogni nuovo file al progetto
+            for filename in new_files:
+                clip_path = os.path.join(clips_dir, filename)
+                metadata_filename = os.path.splitext(filename)[0] + ".json"
+
+                try:
+                    clip_info = VideoFileClip(clip_path)
+                    duration = clip_info.duration
+                    clip_info.close()
+                    size = os.path.getsize(clip_path)
+                    creation_date = datetime.datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
+
+                    self.project_manager.add_clip_to_project(
+                        self.projectDock.gnai_path,
+                        filename,
+                        metadata_filename,
+                        duration,
+                        size,
+                        creation_date
+                    )
+                except Exception as e:
+                    logging.error(f"Impossibile elaborare e aggiungere la nuova clip {filename}: {e}")
+
+            # 5. Ricarica il progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message("Vista del progetto aggiornata con le nuove clip.")
+
+        except Exception as e:
+            logging.error(f"Errore durante la sincronizzazione della cartella clip del progetto: {e}")
+            self.show_status_message("Errore durante la sincronizzazione della cartella.", error=True)
 
     def delete_project_clip(self, clip_filename):
         """Elimina una clip dal progetto e dal filesystem."""
