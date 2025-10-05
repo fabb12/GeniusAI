@@ -14,8 +14,8 @@ class ProjectDock(CustomDock):
     clip_selected = pyqtSignal(str, str)
     merge_clips_requested = pyqtSignal()
     open_folder_requested = pyqtSignal()
-    delete_clip_requested = pyqtSignal(str) # Segnale per eliminare una clip
-    reload_project_requested = pyqtSignal()
+    delete_clip_requested = pyqtSignal(str)
+    project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
 
     def __init__(self, title="Progetto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -28,17 +28,15 @@ class ProjectDock(CustomDock):
 
         self._setup_ui()
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
-        self.btn_merge_clips.clicked.connect(self.merge_clips_requested.emit)
         self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
 
     def on_directory_changed(self, path):
         """
         Slot che viene chiamato quando la cartella monitorata cambia.
-        Ricarica i dati del progetto.
+        Notifica la finestra principale per la sincronizzazione.
         """
-        print(f"Directory changed: {path}. Reloading project.")
-        self.reload_project_requested.emit()
+        self.project_clips_folder_changed.emit()
 
     def show_context_menu(self, position):
         """Mostra il menu contestuale per l'area delle clip."""
