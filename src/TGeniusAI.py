@@ -72,7 +72,7 @@ from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
                     DEFAULT_FRAME_RATE, DEFAULT_VOICES, SPLASH_IMAGES_DIR,
-                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE)
+                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS)
 import os
 AudioSegment.converter = FFMPEG_PATH
 from src.ui.VideoOverlay import VideoOverlay
@@ -491,18 +491,11 @@ class VideoAudioManager(QMainWindow):
         self.watermarkSize = 0
         self.watermarkPosition = "Bottom Right"
 
-        # Mappatura dei colori ad alto contrasto per l'evidenziazione su sfondo scuro
-        self.highlight_colors = {
-            "Giallo": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
-            "Verde Chiaro": {"qcolor": QColor("#98FB98"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#98fb98"},
-            "Turchese": {"qcolor": QColor("#48D1CC"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#48d1cc"},
-            "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
-            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#ffa500"},
-            "Azzurro": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
-            "Grigio": {"qcolor": QColor("#B0C4DE"), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#b0c4de"},
-            "Rosso": {"qcolor": QColor("#F08080"), "docx": WD_COLOR_INDEX.RED, "hex": "#f08080"},
-        }
-        self.current_highlight_color_name = "Giallo" # Default
+        # Usa la configurazione dei colori centralizzata da config.py
+        self.highlight_colors = HIGHLIGHT_COLORS
+        # Imposta un colore di default. Prende il primo nome dalla config se quello salvato non è valido.
+        default_color_name = next(iter(self.highlight_colors))
+        self.current_highlight_color_name = default_color_name
 
         self.initUI()
 
@@ -2101,11 +2094,11 @@ class VideoAudioManager(QMainWindow):
 
         # Safely get the color info. If the configured color is invalid,
         # fall back to the first color in the dictionary.
-        color_info = self.highlight_colors.get(self.current_highlight_color_name)
-        if not color_info:
-            first_color_name = next(iter(self.highlight_colors))
-            color_info = self.highlight_colors[first_color_name]
-            logging.warning(f"Invalid highlight color '{self.current_highlight_color_name}' found in settings. Falling back to '{first_color_name}'.")
+        default_color_name = next(iter(self.highlight_colors))
+        color_info = self.highlight_colors.get(self.current_highlight_color_name, self.highlight_colors[default_color_name])
+        if self.current_highlight_color_name not in self.highlight_colors:
+            logging.warning(f"Invalid highlight color '{self.current_highlight_color_name}' found in settings. Falling back to '{default_color_name}'.")
+            self.current_highlight_color_name = default_color_name
 
         highlight_color = color_info["qcolor"]
 
