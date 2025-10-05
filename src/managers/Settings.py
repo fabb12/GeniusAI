@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QFontComboBox
 )
 from PyQt6.QtCore import QSettings
-from PyQt.QtGui import QFont
+from PyQt6.QtGui import QFont
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE, HIGHLIGHT_COLORS
 
 class SettingsDialog(QDialog):
