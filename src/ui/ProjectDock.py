@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout
-from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher
+from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QIcon
 from src.ui.CustomDock import CustomDock
 from src.config import get_resource
@@ -23,8 +23,14 @@ class ProjectDock(CustomDock):
         self.project_data = None
         self.project_dir = None
         self.gnai_path = None
+
         self.file_watcher = QFileSystemWatcher(self)
         self.file_watcher.directoryChanged.connect(self.on_directory_changed)
+
+        self.sync_timer = QTimer(self)
+        self.sync_timer.setSingleShot(True)
+        self.sync_timer.setInterval(1500)  # Attendi 1.5 secondi per la stabilità del file
+        self.sync_timer.timeout.connect(self.project_clips_folder_changed.emit)
 
         self._setup_ui()
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
@@ -34,9 +40,9 @@ class ProjectDock(CustomDock):
     def on_directory_changed(self, path):
         """
         Slot che viene chiamato quando la cartella monitorata cambia.
-        Notifica la finestra principale per la sincronizzazione.
+        Avvia un timer per evitare esecuzioni multiple e dare tempo al file di essere scritto.
         """
-        self.project_clips_folder_changed.emit()
+        self.sync_timer.start()
 
     def show_context_menu(self, position):
         """Mostra il menu contestuale per l'area delle clip."""
