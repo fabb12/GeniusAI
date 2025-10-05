@@ -458,6 +458,8 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.recentFiles = []
         self.loadRecentFiles()
+        self.recentProjects = []
+        self.loadRecentProjects()
         self.recording_segments = []
 
         # Blinking recording indicator
@@ -4331,6 +4333,9 @@ class VideoAudioManager(QMainWindow):
         self.recentMenu = fileMenu.addMenu("Recenti")  # Aggiunge il menu dei file recenti
         self.updateRecentFilesMenu()
 
+        self.recentProjectsMenu = fileMenu.addMenu("Progetti Recenti")
+        self.updateRecentProjectsMenu()
+
 
         # Creazione del menu Import
         importMenu = menuBar.addMenu('&Import')
@@ -5830,6 +5835,38 @@ class VideoAudioManager(QMainWindow):
             action.triggered.connect(lambda checked, f=file: self.openRecentFile(f))
             self.recentMenu.addAction(action)
 
+    def updateRecentProjects(self, newProject):
+        if newProject in self.recentProjects:
+            self.recentProjects.remove(newProject)
+
+        self.recentProjects.insert(0, newProject)
+
+        if len(self.recentProjects) > 15:
+            self.recentProjects = self.recentProjects[:15]
+
+        settings = QSettings("Genius", "GeniusAI")
+        settings.setValue("recentProjects", self.recentProjects)
+
+        self.updateRecentProjectsMenu()
+
+    def updateRecentProjectsMenu(self):
+        self.recentProjectsMenu.clear()
+        for project in self.recentProjects:
+            project_name = os.path.basename(os.path.dirname(project))
+            action = QAction(project_name, self)
+            action.triggered.connect(lambda checked, p=project: self.openRecentProject(p))
+            self.recentProjectsMenu.addAction(action)
+
+    def loadRecentProjects(self):
+        """Carica la lista dei progetti recenti da QSettings."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.recentProjects = settings.value("recentProjects", [], type=list)
+        # Rimuovi i progetti che non esistono più
+        self.recentProjects = [p for p in self.recentProjects if os.path.exists(p)]
+
+    def openRecentProject(self, filePath):
+        self.load_project(filePath)
+
     def loadRecentFiles(self):
         """Carica la lista dei file recenti da QSettings."""
         settings = QSettings("Genius", "GeniusAI")
@@ -6046,6 +6083,7 @@ class VideoAudioManager(QMainWindow):
         self.folderPathLineEdit.setText(self.current_project_path)
         self.projectDock.load_project_data(project_data, self.current_project_path, gnai_path)
         self.show_status_message(f"Progetto '{project_data.get('projectName')}' caricato.")
+        self.updateRecentProjects(gnai_path)
         if not self.projectDock.isVisible():
             self.projectDock.show()
 
