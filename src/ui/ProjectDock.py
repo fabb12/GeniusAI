@@ -1,6 +1,8 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout
 from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher
+from PyQt6.QtGui import QIcon
 from src.ui.CustomDock import CustomDock
+from src.config import get_resource
 import datetime
 import os
 
@@ -80,12 +82,24 @@ class ProjectDock(CustomDock):
         self.tree_clips.setHeaderLabels(["Nome File", "Data", "Durata", "Dimensione"])
         self.tree_clips.setToolTip("Fai doppio click su una clip per caricarla.")
         self.tree_clips.header().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        clips_layout.addWidget(self.tree_clips)
 
+        # Layout per i pulsanti sotto la lista delle clip
+        buttons_layout = QHBoxLayout()
         self.btn_merge_clips = QPushButton("Unisci Clip")
         self.btn_merge_clips.setToolTip("Unisci tutte le clip in un unico video.")
+        buttons_layout.addWidget(self.btn_merge_clips)
 
-        clips_layout.addWidget(self.tree_clips)
-        clips_layout.addWidget(self.btn_merge_clips)
+        buttons_layout.addStretch()
+
+        self.btn_refresh_clips = QPushButton()
+        self.btn_refresh_clips.setIcon(QIcon(get_resource("sync.png")))
+        self.btn_refresh_clips.setToolTip("Aggiorna la lista delle clip")
+        self.btn_refresh_clips.clicked.connect(self.reload_project_requested.emit)
+        self.btn_refresh_clips.setFixedSize(32, 32)
+        buttons_layout.addWidget(self.btn_refresh_clips)
+
+        clips_layout.addLayout(buttons_layout)
 
         main_layout.addWidget(project_info_group)
         main_layout.addWidget(clips_group)
