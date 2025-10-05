@@ -494,10 +494,10 @@ class VideoAudioManager(QMainWindow):
         # Mappatura dei colori ad alto contrasto per l'evidenziazione su sfondo scuro
         self.highlight_colors = {
             "Giallo": {"qcolor": QColor("#FFFF00"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffff00"},
-            "Verde Chiaro": {"qcolor": QColor("#98FB98"), "docx": WD_COLOR_INDEX.LIME, "hex": "#98fb98"},
+            "Verde Chiaro": {"qcolor": QColor("#98FB98"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#98fb98"},
             "Turchese": {"qcolor": QColor("#48D1CC"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#48d1cc"},
             "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
-            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.ORANGE, "hex": "#ffa500"},
+            "Arancione": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#ffa500"},
             "Azzurro": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
             "Grigio": {"qcolor": QColor("#B0C4DE"), "docx": WD_COLOR_INDEX.GRAY_25, "hex": "#b0c4de"},
             "Rosso": {"qcolor": QColor("#F08080"), "docx": WD_COLOR_INDEX.RED, "hex": "#f08080"},
