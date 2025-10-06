@@ -190,26 +190,27 @@ class ProjectDock(CustomDock):
                 full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
                 item.setData(0, Qt.ItemDataRole.UserRole, full_path)
 
-        # Carica file dalla cartella Download
-        download_folder = Path.home() / "Downloads"
-        if download_folder.exists():
+        # Carica file dalla cartella 'download' del progetto
+        download_folder_path = os.path.join(project_dir, "download")
+        if os.path.exists(download_folder_path):
             download_root = QTreeWidgetItem(self.tree_clips)
             download_root.setText(0, "Download")
             download_root.setExpanded(True)
 
             media_extensions = {".mp4", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".aac"}
 
-            for file_path in download_folder.iterdir():
-                if file_path.is_file() and file_path.suffix.lower() in media_extensions:
+            for filename in os.listdir(download_folder_path):
+                file_path = os.path.join(download_folder_path, filename)
+                if os.path.isfile(file_path) and os.path.splitext(filename)[1].lower() in media_extensions:
                     item = QTreeWidgetItem(download_root)
-                    item.setText(0, file_path.name)
+                    item.setText(0, filename)
 
                     try:
-                        stat = file_path.stat()
+                        stat = os.stat(file_path)
                         item.setText(1, self._format_date(datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()))
                         item.setText(2, "N/A") # Durata non calcolata per performance
                         item.setText(3, self._format_size(stat.st_size))
-                        item.setData(0, Qt.ItemDataRole.UserRole, str(file_path))
+                        item.setData(0, Qt.ItemDataRole.UserRole, file_path)
                     except (OSError, ValueError):
                         item.setText(1, "N/A")
                         item.setText(2, "N/A")
