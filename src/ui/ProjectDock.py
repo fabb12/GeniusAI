@@ -5,6 +5,7 @@ from src.ui.CustomDock import CustomDock
 from src.config import get_resource
 import datetime
 import os
+from pathlib import Path
 
 class ProjectDock(CustomDock):
     """
@@ -112,14 +113,25 @@ class ProjectDock(CustomDock):
         self.addWidget(main_widget)
 
     def _on_clip_selected(self, item, column):
+        clip_path = item.data(0, Qt.ItemDataRole.UserRole) # Get full path from item data
         clip_filename = item.text(0)
+
+        # Se il percorso completo è disponibile, usalo
+        if clip_path and os.path.exists(clip_path):
+            self.clip_selected.emit(clip_path, "") # Emetti il percorso completo
+            return
+
+        # Altrimenti, gestisci come una clip di progetto
         if self.project_data and self.project_dir:
             metadata_filename = ""
             for clip in self.project_data.get("clips", []):
                 if clip.get("clip_filename") == clip_filename:
                     metadata_filename = clip.get("metadata_filename")
                     break
-            self.clip_selected.emit(clip_filename, metadata_filename)
+
+            # Costruisci il percorso completo per le clip di progetto
+            project_clip_path = os.path.join(self.project_dir, "clips", clip_filename)
+            self.clip_selected.emit(project_clip_path, metadata_filename)
 
     def _format_duration(self, seconds):
         if not isinstance(seconds, (int, float)) or seconds < 0:
@@ -156,20 +168,54 @@ class ProjectDock(CustomDock):
         self.lbl_project_path.setText(project_dir)
 
         self.tree_clips.clear()
-        clips = sorted(project_data.get("clips", []), key=lambda x: x.get("creation_date", ""))
 
+        # Carica clip del progetto
+        project_clips = sorted(project_data.get("clips", []), key=lambda x: x.get("creation_date", ""))
         clips_dir = os.path.join(project_dir, "clips")
         if os.path.exists(clips_dir):
             self.file_watcher.addPath(clips_dir)
 
-        if clips:
-            for clip in clips:
-                item = QTreeWidgetItem(self.tree_clips)
+        if project_clips:
+            project_clips_root = QTreeWidgetItem(self.tree_clips)
+            project_clips_root.setText(0, "Clip del Progetto")
+            project_clips_root.setExpanded(True)
+
+            for clip in project_clips:
+                item = QTreeWidgetItem(project_clips_root)
                 item.setText(0, clip.get("clip_filename", "N/A"))
                 item.setText(1, self._format_date(clip.get("creation_date")))
                 item.setText(2, self._format_duration(clip.get("duration")))
                 item.setText(3, self._format_size(clip.get("size")))
-        else:
+                # Salva il percorso completo per un facile accesso
+                full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
+                item.setData(0, Qt.ItemDataRole.UserRole, full_path)
+
+        # Carica file dalla cartella Download
+        download_folder = Path.home() / "Downloads"
+        if download_folder.exists():
+            download_root = QTreeWidgetItem(self.tree_clips)
+            download_root.setText(0, "Download")
+            download_root.setExpanded(True)
+
+            media_extensions = {".mp4", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".aac"}
+
+            for file_path in download_folder.iterdir():
+                if file_path.is_file() and file_path.suffix.lower() in media_extensions:
+                    item = QTreeWidgetItem(download_root)
+                    item.setText(0, file_path.name)
+
+                    try:
+                        stat = file_path.stat()
+                        item.setText(1, self._format_date(datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()))
+                        item.setText(2, "N/A") # Durata non calcolata per performance
+                        item.setText(3, self._format_size(stat.st_size))
+                        item.setData(0, Qt.ItemDataRole.UserRole, str(file_path))
+                    except (OSError, ValueError):
+                        item.setText(1, "N/A")
+                        item.setText(2, "N/A")
+                        item.setText(3, "N/A")
+
+        if self.tree_clips.topLevelItemCount() == 0:
             item = QTreeWidgetItem(self.tree_clips)
             item.setText(0, "Nessuna clip trovata.")
             item.setDisabled(True)
