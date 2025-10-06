@@ -6047,7 +6047,48 @@ class VideoAudioManager(QMainWindow):
 
     # --- PROJECT MANAGEMENT METHODS ---
 
+    def _clear_workspace(self):
+        """
+        Pulisce completamente lo stato dell'applicazione per prepararsi a un nuovo progetto.
+        """
+        # 1. Pulisci i video player e i percorsi associati
+        self.releaseSourceVideo()
+        self.releaseOutputVideo()
+
+        # 2. Pulisci le aree di testo
+        self.transcriptionTextArea.clear()
+        self.audioAiTextArea.clear()
+        self.summaryTextArea.clear()
+
+        # 3. Resetta lo stato interno delle trascrizioni e dei riassunti
+        self.transcription_original = ""
+        self.transcription_corrected = ""
+        self.summaries = {}
+        self.active_summary_type = None
+        self.summary_text = ""
+        self.summary_generated = ""
+        self.summary_generated_integrated = ""
+        self.original_audio_ai_html = ""
+        self.transcriptionViewToggle.setChecked(False)
+        self.transcriptionViewToggle.setEnabled(False)
+        self.integrazioneToggle.setChecked(False)
+        self.integrazioneToggle.setEnabled(False)
+
+        # 4. Resetta i percorsi e lo stato del progetto
+        self.current_project_path = None
+        self.current_video_path = None
+        self.current_audio_path = None
+
+        # 5. Pulisci i dock informativi
+        self.infoDock.clear_info()
+        self.projectDock.clear_project()
+
+        self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
+
     def create_new_project(self):
+        # Pulisci l'area di lavoro prima di creare un nuovo progetto
+        self._clear_workspace()
+
         project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
         if not ok or not project_name.strip():
             # L'utente ha annullato o non ha inserito un nome
