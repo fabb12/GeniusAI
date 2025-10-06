@@ -80,22 +80,37 @@ def get_api_key(service_name: str) -> str:
     return fallback_keys.get(service_name.lower(), "")
 
 # --- Definizione Identificatori Modello ---
-# Claude (Anthropic)
-MODEL_3_7_SONNET = "claude-3-7-sonnet-20250219" # Nota: Rinominato per chiarezza, 3.7 non esiste al momento
-MODEL_3_5_SONNET = "claude-3-5-haiku-20241022" # Il più recente 3.5
+# Claude (Anthropic) - Modelli stabili a Ottobre 2025
+
+# Serie 4.x (I più recenti e potenti)
+MODEL_4_5_SONNET = "claude-sonnet-4-5-20250929"  # Il modello di punta per agenti complessi e coding
+MODEL_4_1_OPUS = "claude-opus-4-1-20250805"      # Eccezionale per compiti specializzati e ragionamento avanzato
+MODEL_4_OPUS = "claude-opus-4-20250514"
+MODEL_4_SONNET = "claude-sonnet-4-20250514"
+
+# Serie 3.x (Ancora validi e performanti)
+MODEL_3_7_SONNET = "claude-3-7-sonnet-20250219"
+MODEL_3_5_SONNET = "claude-3.5-sonnet-20240620"
+MODEL_3_5_HAIKU = "claude-3-5-haiku-20241022"
 MODEL_3_OPUS = "claude-3-opus-20240229"
 MODEL_3_SONNET = "claude-3-sonnet-20240229"
-MODEL_3_HAIKU = "claude-3-5-haiku-latest"
+MODEL_3_HAIKU = "claude-3-haiku-20240307"
 
-# Gemini (Google Cloud)
-GEMINI_15_PRO = "gemini-1.5-pro-latest"
-GEMINI_15_FLASH = "gemini-2.0-flash-001"
-#GEMINI_25_PRO_EXP = "gemini-2.5-pro-exp-03-25" # Mantenuto come esempio sperimentale
-GEMINI_25_PRO = "gemini-2.5-pro"
-GEMINI_20_FLASH = "gemini-2.0-flash"
-GEMINI_25_FLASH = "gemini-2.5-flash"
-GEMINI_20_FLASH_LITE = "gemini-2.0-flash-lite"
-GEMINI_15_FLASH_8B = "gemini-1.5-flash-8b" # Nome API specifico
+# Gemini (Google Cloud) - Modelli stabili a Ottobre 2025
+# Serie 2.5 (I più recenti e raccomandati)
+GEMINI_25_PRO = "gemini-2.5-pro"        # Modello di punta per compiti complessi e alta qualità.
+GEMINI_25_FLASH = "gemini-2.5-flash"      # Ottimo bilanciamento tra velocità e capacità.
+GEMINI_25_FLASH_LITE = "gemini-2.5-flash-lite" # Ideale per risposte rapide e a bassa latenza.
+
+# Serie 2.0 (Stabili e affidabili)
+GEMINI_20_FLASH = "gemini-2.0-flash"        # Alias che punta alla versione stabile più recente di Flash 2.0.
+GEMINI_20_FLASH_LITE = "gemini-2.0-flash-lite"  # Alias che punta alla versione stabile più recente di Flash Lite 2.0.
+
+# Mappatura dei vecchi nomi di variabili ai nuovi modelli per mantenere la compatibilità.
+# Questi alias verranno rimossi in un secondo momento per pulire il codice.
+GEMINI_15_PRO = GEMINI_25_PRO               # Deprecato, mappato al successore.
+GEMINI_15_FLASH = GEMINI_25_FLASH           # Deprecato e rinominato, mappato al successore.
+GEMINI_15_FLASH_8B = GEMINI_25_FLASH_LITE   # Deprecato, mappato al modello leggero equivalente.
 
 # OpenAI (Esempi se li integri)
 # GPT_4_TURBO = "gpt-4-turbo"
@@ -106,80 +121,123 @@ GEMINI_15_FLASH_8B = "gemini-1.5-flash-8b" # Nome API specifico
 OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434") # Default Ollama endpoint
 OLLAMA_GEMMA_2B = "ollama:gemma:2b"
 OLLAMA_GEMMA_7B = "ollama:gemma:7b"
-OLLAMA_GEMMA2_9B = "ollama:gemma2:9b"
+OLLAMA_GEMMA2_9B = "ollama:gemma2:9B"
 OLLAMA_LLAMA3_8B = "ollama:llama3:8b"
 OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
 
-# --- Liste Categoria Modelli ---
-# (Queste liste aiutano a definire quali modelli mostrare per ogni azione)
+# --- Struttura Dati Categoria Modelli ---
+# Dizionari che raggruppano i modelli per provider per una migliore visualizzazione nella UI
 
-# Modelli con capacità Vision (per Frame Extractor, Browser Agent con visione)
-MODELS_WITH_VISION = [
-    MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET, MODEL_3_HAIKU, # Claude 3/3.5
-    GEMINI_15_PRO, GEMINI_15_FLASH, GEMINI_25_PRO, GEMINI_20_FLASH,GEMINI_25_FLASH, GEMINI_20_FLASH_LITE, # Gemini Cloud
-    # GPT_4O, GPT_4_TURBO, # Se usi OpenAI Vision
-    # Aggiungere modelli Ollama con capacità vision (es. llava) se configurati e testati
-    # "ollama:llava:7b",
-]
+def _flatten_model_dict(d):
+    """Funzione helper per appiattire un dizionario di modelli in una lista."""
+    return [model for models in d.values() for model in models]
 
-# Modelli testuali veloci (per Browser Agent, Riassunti rapidi, Text Processing base)
-FAST_TEXT_MODELS = [
-    MODEL_3_HAIKU,
-    GEMINI_15_FLASH, GEMINI_20_FLASH, GEMINI_25_FLASH, GEMINI_20_FLASH_LITE, GEMINI_15_FLASH_8B,
-    OLLAMA_GEMMA_2B, OLLAMA_GEMMA_7B, OLLAMA_LLAMA3_8B, OLLAMA_MISTRAL_7B, OLLAMA_GEMMA2_9B,
-    # GPT_4O_MINI, # Se usi OpenAI
-]
+def _merge_categorized_dicts(*dicts):
+    merged = {}
+    for d in dicts:
+        for category, models in d.items():
+            if category not in merged:
+                merged[category] = []
+            # Add only unique models
+            for model in models:
+                if model not in merged[category]:
+                    merged[category].append(model)
+    return merged
 
-# Modelli testuali potenti (per PPTX Generation, Text Processing complesso, Riassunti dettagliati)
-POWERFUL_TEXT_MODELS = [
-    MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET,
-    GEMINI_15_PRO, GEMINI_25_PRO,
-    # GPT_4O, GPT_4_TURBO, # Se usi OpenAI
-    # Modelli Ollama più grandi (es. llama3:70b) se l'utente li ha
-]
+CATEGORIZED_MODELS_WITH_VISION = {
+    "Anthropic": [
+        MODEL_4_5_SONNET, MODEL_4_1_OPUS, MODEL_4_OPUS, MODEL_4_SONNET,
+        MODEL_3_7_SONNET, MODEL_3_5_SONNET, MODEL_3_5_HAIKU, MODEL_3_OPUS,
+        MODEL_3_SONNET, MODEL_3_HAIKU
+    ],
+    "Google": [
+        GEMINI_25_PRO, GEMINI_25_FLASH, GEMINI_25_FLASH_LITE,
+        GEMINI_20_FLASH, GEMINI_20_FLASH_LITE
+    ]
+}
+
+CATEGORIZED_FAST_TEXT_MODELS = {
+    "Anthropic": [MODEL_3_5_HAIKU, MODEL_3_HAIKU],
+    "Google": [
+        GEMINI_25_FLASH, GEMINI_25_FLASH_LITE,
+        GEMINI_20_FLASH, GEMINI_20_FLASH_LITE
+    ],
+    "Ollama": [
+        OLLAMA_GEMMA_2B, OLLAMA_GEMMA_7B, OLLAMA_GEMMA2_9B,
+        OLLAMA_LLAMA3_8B, OLLAMA_MISTRAL_7B
+    ]
+}
+
+CATEGORIZED_POWERFUL_TEXT_MODELS = {
+    "Anthropic": [
+        MODEL_4_5_SONNET, MODEL_4_1_OPUS, MODEL_4_OPUS, MODEL_4_SONNET,
+        MODEL_3_7_SONNET, MODEL_3_5_SONNET, MODEL_3_OPUS, MODEL_3_SONNET
+    ],
+    "Google": [GEMINI_25_PRO]
+}
+
+# --- Liste Piatte per Compatibilità ---
+# Queste liste mantengono la compatibilità con il codice esistente, generate dinamicamente.
+MODELS_WITH_VISION = _flatten_model_dict(CATEGORIZED_MODELS_WITH_VISION)
+FAST_TEXT_MODELS = _flatten_model_dict(CATEGORIZED_FAST_TEXT_MODELS)
+POWERFUL_TEXT_MODELS = _flatten_model_dict(CATEGORIZED_POWERFUL_TEXT_MODELS)
 
 # Tutti i modelli Text/Multimodal conosciuti (per fallback o liste complete)
 ALL_KNOWN_MODELS = list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS + MODELS_WITH_VISION)) # Usa set per rimuovere duplicati
 
 # --- Configurazione Modelli per Azione Specifica ---
+
+# Definizioni di gruppi di modelli categorizzati per azioni complesse
+_CATEGORIZED_ALL_TEXT_MODELS = _merge_categorized_dicts(CATEGORIZED_FAST_TEXT_MODELS, CATEGORIZED_POWERFUL_TEXT_MODELS)
+_powerful_vision_models_by_provider = {
+    provider: [model for model in models if model in POWERFUL_TEXT_MODELS]
+    for provider, models in CATEGORIZED_MODELS_WITH_VISION.items()
+}
+_powerful_vision_models_by_provider = {k: v for k, v in _powerful_vision_models_by_provider.items() if v}
+_CATEGORIZED_BROWSER_AGENT_MODELS = _merge_categorized_dicts(CATEGORIZED_FAST_TEXT_MODELS, _powerful_vision_models_by_provider)
+
 ACTION_MODELS_CONFIG = {
     # Identificatore unico per l'azione
     'frame_extractor': {
         'display_name': "Estrazione Frame (Visione)", # Etichetta UI
         'setting_key': "models/frame_extractor",    # Chiave QSettings
-        'default': os.getenv("DEFAULT_MODEL_FRAME_EXTRACTOR", GEMINI_15_FLASH), # Modello di fallback
-        'allowed': MODELS_WITH_VISION # Lista di modelli permessi
+        'default': os.getenv("DEFAULT_MODEL_FRAME_EXTRACTOR", GEMINI_25_FLASH), # Modello di fallback
+        'allowed': MODELS_WITH_VISION, # Lista di modelli permessi (per compatibilità)
+        'categorized_source': CATEGORIZED_MODELS_WITH_VISION
     },
     'text_processing': {
         'display_name': "Elaborazione Testo (Summary/Fix)",
         'setting_key': "models/text_processing",
-        'default': os.getenv("DEFAULT_MODEL_TEXT_PROCESSING", GEMINI_15_FLASH),
-        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)) # Permette tutti i modelli testuali
+        'default': os.getenv("DEFAULT_MODEL_TEXT_PROCESSING", GEMINI_25_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)), # Permette tutti i modelli testuali
+        'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
     },
     'pptx_generation': {
         'display_name': "Generazione Presentazioni",
         'setting_key': "models/pptx_generation",
-        'default': os.getenv("DEFAULT_MODEL_PPTX_GENERATION", MODEL_3_5_SONNET),
-        'allowed': POWERFUL_TEXT_MODELS # Preferibilmente modelli potenti
+        'default': os.getenv("DEFAULT_MODEL_PPTX_GENERATION", MODEL_4_5_SONNET),
+        'allowed': POWERFUL_TEXT_MODELS, # Preferibilmente modelli potenti
+        'categorized_source': CATEGORIZED_POWERFUL_TEXT_MODELS
     },
     'browser_agent': {
         'display_name': "Browser Agent",
         'setting_key': "models/browser_agent",
-        'default': os.getenv("DEFAULT_MODEL_BROWSER_AGENT", GEMINI_15_FLASH),
-        # Permette modelli veloci o modelli potenti che abbiano anche capacità di visione
-        'allowed': list(set(FAST_TEXT_MODELS + [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION]))
+        'default': os.getenv("DEFAULT_MODEL_BROWSER_AGENT", GEMINI_25_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION])),
+        'categorized_source': _CATEGORIZED_BROWSER_AGENT_MODELS
     },
     'summary': { # Usato da MeetingSummarizer
         'display_name': "Riassunto Meeting",
         'setting_key': "models/summary",
-        'default': os.getenv("DEFAULT_MODEL_SUMMARY", GEMINI_15_FLASH),
-        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)) # Tutti i modelli testuali vanno bene
+        'default': os.getenv("DEFAULT_MODEL_SUMMARY", GEMINI_25_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)), # Tutti i modelli testuali vanno bene
+        'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
     },
     # Esempio: Se avessi una generazione specifica per la guida operativa
     # 'operational_guide': {
     #     'display_name': "Guida Operativa (da Visione)",
     #     'setting_key': "models/operational_guide",
-    #     'default': os.getenv("DEFAULT_MODEL_OPERATIONAL_GUIDE", GEMINI_15_PRO),
+    #     'default': os.getenv("DEFAULT_MODEL_OPERATIONAL_GUIDE", GEMINI_25_PRO),
     #     'allowed': [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION] # Modelli potenti con visione
     # }
 }

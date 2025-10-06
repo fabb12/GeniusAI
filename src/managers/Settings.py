@@ -6,8 +6,8 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QPushButton, QFileDialog, QSpinBox, QHBoxLayout,
     QFontComboBox
 )
-from PyQt6.QtCore import QSettings
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QSettings, Qt
+from PyQt6.QtGui import QFont, QColor
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE, HIGHLIGHT_COLORS
 
 class SettingsDialog(QDialog):
@@ -62,19 +62,42 @@ class SettingsDialog(QDialog):
         row = 1
         for action, config in ACTION_MODELS_CONFIG.items():
             if not config.get('allowed') or not config.get('setting_key'): continue
+
             label = QLabel(f"{config.get('display_name', action.replace('_', ' ').title())}:")
             combo = QComboBox(toolTip=f"Modello per: {config.get('display_name')}")
-            combo.addItems(config.get('allowed', []))
+
+            # Popola la ComboBox con i modelli categorizzati
+            categorized_models = config.get('categorized_source')
+            if categorized_models:
+                for category, models in categorized_models.items():
+                    # Aggiungi un separatore con il nome della categoria
+                    combo.insertSeparator(combo.count())
+                    header_font = QFont()
+                    header_font.setBold(True)
+                    combo.setItemData(combo.count() - 1, header_font, role=Qt.ItemDataRole.FontRole)
+                    combo.setItemData(combo.count() - 1, QColor("gray"), role=Qt.ItemDataRole.ForegroundRole)
+                    combo.model().item(combo.count() - 1).setFlags(Qt.ItemFlag.NoItemFlags)
+                    combo.model().item(combo.count() - 1).setText(f"--- {category} ---")
+
+                    # Aggiungi i modelli per la categoria
+                    combo.addItems(models)
+            else:
+                # Fallback per la lista piatta se non ci sono categorie
+                combo.addItems(config.get('allowed', []))
+
             layout.addWidget(label, row, 0)
             layout.addWidget(combo, row, 1)
             self.model_combos[action] = combo
             row += 1
+
         layout.setRowStretch(row, 1)
+
         if any("ollama:" in m for cfg in ACTION_MODELS_CONFIG.values() for m in cfg.get('allowed', [])):
             ollama_note = QLabel(f"<i>Nota: I modelli 'ollama:' richiedono Ollama in esecuzione (default: {OLLAMA_ENDPOINT}).</i>")
             ollama_note.setWordWrap(True)
             layout.addWidget(ollama_note, row, 0, 1, 2)
             layout.setRowStretch(row + 1, 1)
+
         return widget
 
     def createCursorSettingsTab(self):
