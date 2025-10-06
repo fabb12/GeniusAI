@@ -107,36 +107,42 @@ class CustomTextEdit(QTextEdit):
     def mouseDoubleClickEvent(self, event):
         """
         Gestisce il doppio clic del mouse per cercare un timestamp e sincronizzare il video.
+        Identifica quale timecode è stato cliccato, anche se ce ne sono multipli sulla stessa riga.
         """
         super().mouseDoubleClickEvent(event)
 
         cursor = self.cursorForPosition(event.pos())
-        cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
-        selected_text = cursor.selectedText()
+        block_text = cursor.block().text()
+        click_pos_in_block = cursor.positionInBlock()
 
-        # Cerca un timestamp nel formato [HH:MM:SS.d], [MM:SS.d] o [MM:SS]
-        match = re.search(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]', selected_text)
-        if match:
-            time_str = match.group(1)
-            parts = time_str.split(':')
-            total_seconds = 0
-            try:
-                if len(parts) == 3:  # Formato HH:MM:SS.d
-                    hours = int(parts[0])
-                    minutes = int(parts[1])
-                    seconds = float(parts[2])
-                    total_seconds = (hours * 3600) + (minutes * 60) + seconds
-                elif len(parts) == 2:  # Formato MM:SS.d
-                    minutes = int(parts[0])
-                    seconds = float(parts[1])
-                    total_seconds = (minutes * 60) + seconds
+        # Regex per trovare tutti i possibili formati di timecode
+        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
 
-                # Emetti il segnale solo se è stato calcolato un tempo valido
-                if total_seconds >= 0:
-                    self.timestampDoubleClicked.emit(total_seconds)
-            except ValueError:
-                # Ignora errori di parsing (es. testo che assomiglia a un timecode ma non lo è)
-                pass
+        for match in timecode_pattern.finditer(block_text):
+            start_pos, end_pos = match.span(0)
+
+            # Controlla se la posizione del clic è all'interno di questo specifico timecode
+            if start_pos <= click_pos_in_block < end_pos:
+                time_str = match.group(1)
+                parts = time_str.split(':')
+                total_seconds = 0
+                try:
+                    if len(parts) == 3:  # Formato HH:MM:SS.d
+                        hours = int(parts[0])
+                        minutes = int(parts[1])
+                        seconds = float(parts[2])
+                        total_seconds = (hours * 3600) + (minutes * 60) + seconds
+                    elif len(parts) == 2:  # Formato MM:SS.d
+                        minutes = int(parts[0])
+                        seconds = float(parts[1])
+                        total_seconds = (minutes * 60) + seconds
+
+                    if total_seconds >= 0:
+                        self.timestampDoubleClicked.emit(total_seconds)
+                        return  # Esci dopo aver trovato e processato il timecode corretto
+                except ValueError:
+                    # Se il parsing fallisce, continua a cercare altri match
+                    continue
 
     def insertFromMimeData(self, source):
         """
