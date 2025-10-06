@@ -190,11 +190,11 @@ class ProjectDock(CustomDock):
                 full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
                 item.setData(0, Qt.ItemDataRole.UserRole, full_path)
 
-        # Carica file dalla cartella 'download' del progetto
-        download_folder_path = os.path.join(project_dir, "download")
+        # Carica file dalla cartella 'downloads' del progetto
+        download_folder_path = os.path.join(project_dir, "downloads")
         if os.path.exists(download_folder_path):
             download_root = QTreeWidgetItem(self.tree_clips)
-            download_root.setText(0, "Download")
+            download_root.setText(0, "Downloads")
             download_root.setExpanded(True)
 
             media_extensions = {".mp4", ".mov", ".avi", ".mkv", ".mp3", ".wav", ".aac"}
