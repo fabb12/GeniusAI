@@ -2072,14 +2072,31 @@ class VideoAudioManager(QMainWindow):
             self.current_summary_type = None
 
     def update_summary_view(self):
-        """Aggiorna la visualizzazione dell'area di testo del riassunto con il contenuto HTML."""
+        """
+        Aggiorna la visualizzazione dell'area di testo del riassunto con il contenuto HTML,
+        applicando una colorazione azzurra ai timecode.
+        """
         if not hasattr(self, 'summary_text'):
             return
 
-        # Il summary_text è ora considerato HTML. La conversione da Markdown
-        # avviene quando il riassunto viene generato. L'editor è sempre modificabile.
+        html_content = self.summary_text
+
+        # Pattern robusto per trovare vari formati di timecode come [00:01:15.3] o [01:15]
+        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+
+        # Funzione per sostituire il timecode con la versione stilizzata
+        def style_match(match):
+            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+        # Prima rimuoviamo eventuali tag di stile preesistenti per evitare doppioni,
+        # poi applichiamo quello nuovo.
+        # Questo passaggio è importante se la funzione viene chiamata più volte sullo stesso testo.
+        temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', html_content if html_content else "")
+        styled_html = timestamp_pattern.sub(style_match, temp_html)
+
+        # Imposta l'HTML finale nell'area di testo
         self.summaryTextArea.blockSignals(True)
-        self.summaryTextArea.setHtml(self.summary_text)
+        self.summaryTextArea.setHtml(styled_html)
         self.summaryTextArea.blockSignals(False)
 
     def onProcessError(self, error_message):
