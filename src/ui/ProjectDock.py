@@ -174,7 +174,8 @@ class ProjectDock(CustomDock):
             item.setText(0, "Nessuna clip trovata.")
             item.setDisabled(True)
 
-    def clear_dock(self):
+    def clear_project(self):
+        """Resetta il dock allo stato iniziale, pulendo i dati del progetto."""
         if self.file_watcher.directories():
             self.file_watcher.removePaths(self.file_watcher.directories())
         self.lbl_project_name.setText("N/A")
@@ -183,3 +184,8 @@ class ProjectDock(CustomDock):
         self.project_data = None
         self.project_dir = None
         self.gnai_path = None
+
+        # Aggiungi un item placeholder per chiarezza
+        item = QTreeWidgetItem(self.tree_clips)
+        item.setText(0, "Nessun progetto caricato.")
+        item.setDisabled(True)
