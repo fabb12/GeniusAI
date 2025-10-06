@@ -75,7 +75,13 @@ class DownloadDialog(QDialog):
         self.parent_window.video_download_language = video_language
         logging.debug(video_language)
 
-        downloads_dir = os.path.join(os.getcwd(), "downloads")
+        # Se un progetto è attivo, salva nella cartella 'downloads' del progetto,
+        # altrimenti nella cartella 'downloads' principale.
+        if self.parent_window.current_project_path:
+            downloads_dir = os.path.join(self.parent_window.current_project_path, "downloads")
+        else:
+            downloads_dir = os.path.join(os.getcwd(), "downloads")
+
         os.makedirs(downloads_dir, exist_ok=True)
 
         try:
