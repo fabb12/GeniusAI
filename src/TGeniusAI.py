@@ -743,6 +743,15 @@ class VideoAudioManager(QMainWindow):
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
 
+        # Aggiungi un QLabel per l'immagine "Solo audio"
+        self.audioOnlyLabel = QLabel(self.videoContainer)
+        self.audioOnlyLabel.setPixmap(QPixmap(get_resource("audio_only.png")).scaled(
+            self.videoContainer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        ))
+        self.audioOnlyLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.audioOnlyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioOnlyLabel.setVisible(False) # Inizialmente nascosto
+
         self.videoOverlay = VideoOverlay(self, parent=self.videoContainer)
         self.videoOverlay.show()
         self.videoOverlay.raise_()
@@ -1463,6 +1472,10 @@ class VideoAudioManager(QMainWindow):
         if self.zoom_level == 1.0:
             self.videoCropWidget.setGeometry(self.videoContainer.rect())
             self.videoOverlay.setGeometry(self.videoContainer.rect())
+            self.audioOnlyLabel.setGeometry(self.videoContainer.rect())
+            self.audioOnlyLabel.setPixmap(QPixmap(get_resource("audio_only.png")).scaled(
+                self.videoContainer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            ))
         QWidget.resizeEvent(self.videoContainer, event)
 
     def videoCropWidgetResizeEvent(self, event):
@@ -4235,8 +4248,12 @@ class VideoAudioManager(QMainWindow):
 
         if is_audio_only:
             self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")
+            self.videoCropWidget.setVisible(False)
+            self.audioOnlyLabel.setVisible(True)
         else:
             self.fileNameLabel.setText(os.path.basename(video_path))
+            self.videoCropWidget.setVisible(True)
+            self.audioOnlyLabel.setVisible(False)
 
         self.updateRecentFiles(video_path)
 
@@ -6145,18 +6162,10 @@ class VideoAudioManager(QMainWindow):
         if not self.projectDock.isVisible():
             self.projectDock.show()
 
-    def load_project_clip(self, clip_filename, metadata_filename):
-        if not self.current_project_path:
-            self.show_status_message("Nessun progetto attivo.", error=True)
-            return
-
-        clips_dir = os.path.join(self.current_project_path, "clips")
-        video_path = os.path.join(clips_dir, clip_filename)
-
+    def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
             self.loadVideo(video_path)
-            # The JSON is loaded automatically by loadVideo's _manage_video_json
-            self.show_status_message(f"Clip '{clip_filename}' caricata.")
+            self.show_status_message(f"Clip '{os.path.basename(video_path)}' caricata.")
         else:
             self.show_status_message(f"File video non trovato: {video_path}", error=True)
 
