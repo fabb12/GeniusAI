@@ -114,13 +114,29 @@ class CustomTextEdit(QTextEdit):
         cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
         selected_text = cursor.selectedText()
 
-        # Cerca un timestamp nel formato [MM:SS.d] o [MM:SS]
-        match = re.search(r'\[(\d+):(\d+(\.\d)?)\]', selected_text)
+        # Cerca un timestamp nel formato [HH:MM:SS.d], [MM:SS.d] o [MM:SS]
+        match = re.search(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]', selected_text)
         if match:
-            minutes = int(match.group(1))
-            seconds = float(match.group(2))
-            total_seconds = (minutes * 60) + seconds
-            self.timestampDoubleClicked.emit(total_seconds)
+            time_str = match.group(1)
+            parts = time_str.split(':')
+            total_seconds = 0
+            try:
+                if len(parts) == 3:  # Formato HH:MM:SS.d
+                    hours = int(parts[0])
+                    minutes = int(parts[1])
+                    seconds = float(parts[2])
+                    total_seconds = (hours * 3600) + (minutes * 60) + seconds
+                elif len(parts) == 2:  # Formato MM:SS.d
+                    minutes = int(parts[0])
+                    seconds = float(parts[1])
+                    total_seconds = (minutes * 60) + seconds
+
+                # Emetti il segnale solo se è stato calcolato un tempo valido
+                if total_seconds >= 0:
+                    self.timestampDoubleClicked.emit(total_seconds)
+            except ValueError:
+                # Ignora errori di parsing (es. testo che assomiglia a un timecode ma non lo è)
+                pass
 
     def insertFromMimeData(self, source):
         """
