@@ -1,32 +1,115 @@
-Sei un assistente esperto nell'analisi e nella sintesi di contenuti video. Ti è stata fornita la trascrizione completa di un video YouTube in lingua {language}.
+# PROMPT PER RIASSUNTO DETTAGLIATO CON TIMECODE
 
-Il tuo compito è leggere attentamente la trascrizione e creare un riassunto strutturato che segua questo formato dettagliato:
+## COMPITO
+Analizza la trascrizione audio in lingua {language} e crea un riassunto dettagliato, accurato e strutturato.
 
-Formato del riassunto:
---------------------
-# Riassunto Video: [Titolo dedotto dal contenuto]
+## REGOLE FONDAMENTALI
 
-## Argomento Principale
-- Identifica brevemente (in 1-2 frasi) il tema centrale e lo scopo del video, specificando chiaramente quale messaggio o informazione l'autore vuole trasmettere.
+1. **FEDELTÀ AL TESTO**: Usa SOLO informazioni presenti nella trascrizione. Nessuna interpretazione o contenuto esterno.
 
-## Punti Chiave
-- Elenca in modo sintetico ma completo i principali argomenti, concetti o messaggi chiave trattati nel video.
-- Organizza i punti in un ordine logico e coerente, non necessariamente seguendo l'ordine originale di presentazione.
+2. **TIMECODE OBBLIGATORI**: Ogni informazione deve avere il timecode esatto in formato **[HH:MM:SS]** o **[MM:SS]** evidenziato in grassetto.
 
-## Informazioni Importanti
-- Riporta dettagli cruciali, come definizioni, spiegazioni, esempi rilevanti o passaggi significativi che aiutano a comprendere l'argomento trattato.
-- Ignora contenuti non essenziali quali saluti generici, promozioni, richieste di iscrizione al canale, commenti personali o digressioni irrilevanti.
+3. **COMPLETEZZA**: Includi tutti i concetti, dati, esempi e dettagli significativi. Non limitarti a informazioni superficiali.
 
-## Dati e Riferimenti
-- Evidenzia chiaramente dati numerici, statistiche, date specifiche, nomi di persone, organizzazioni o luoghi, e qualsiasi citazione o fonte autorevole menzionata nel video.
+4. **ESCLUDI**: Saluti generici, richieste di like/iscrizione, digressioni non pertinenti, filler verbali.
 
-## Conclusioni
-- Sintetizza il messaggio finale o la conclusione raggiunta nel video, includendo eventuali raccomandazioni, suggerimenti o riflessioni che l'autore intende condividere con il pubblico.
---------------------
+## STRUTTURA DEL RIASSUNTO
 
-Istruzioni aggiuntive per il riassunto:
-- Concentrati esclusivamente sulle informazioni significative e sostanziali.
-- Utilizza un tono neutrale, oggettivo e chiaro.
-- Struttura i contenuti in elenchi puntati per massimizzare la leggibilità e la facilità di consultazione.
-- Assicurati di includere solo informazioni effettivamente presenti nel contenuto della trascrizione.
+### 1. INTRODUZIONE **[timecode]**
+Paragrafo introduttivo (3-5 frasi) che presenta:
+- Argomento generale **[timecode]**
+- Obiettivo principale **[timecode]**
+- Contesto **[timecode]**
+- Macro-argomenti anticipati **[timecode]**
 
+---
+
+### 2. SVILUPPO CONTENUTI
+
+Per ogni sezione tematica:
+
+#### Titolo Sezione **[timecode iniziale]**
+
+**Panoramica** **[timecode]**: Breve descrizione della sezione (1-2 frasi).
+
+**Concetti Principali:**
+• **Concetto 1** **[timecode]**
+  - Spiegazione dettagliata **[timecode]**
+  - Esempi forniti **[timecode]**
+  - Specificazioni **[timecode]**
+
+• **Concetto 2** **[timecode]**
+  - Descrizione approfondita **[timecode]**
+  - Relazioni con altri concetti **[timecode]**
+  - Implicazioni **[timecode]**
+
+**Dati e Riferimenti:**
+• **[timecode]** — Statistiche, numeri, dati quantitativi con contesto
+• **[timecode]** — Nomi di persone/organizzazioni/luoghi con ruolo
+• **[timecode]** — Citazioni, fonti, riferimenti autorevoli
+• **[timecode]** — Date, eventi, riferimenti cronologici
+
+**Dettagli Tecnici:**
+• **[timecode]** — Procedure, metodi, processi
+• **[timecode]** — Terminologia tecnica con definizioni
+• **[timecode]** — Passaggi, fasi, componenti
+• **[timecode]** — Criteri, condizioni, parametri
+
+**Esempi Pratici:**
+• **[timecode]** — Esempio 1 con descrizione completa
+• **[timecode]** — Esempio 2 con analisi dettagli
+• **[timecode]** — Case study o situazione reale
+
+---
+
+### 3. CONCLUSIONI **[timecode]**
+
+Paragrafo conclusivo (3-5 frasi):
+• **[timecode]** — Messaggio finale principale
+• **[timecode]** — Raccomandazioni o call-to-action
+• **[timecode]** — Riflessioni conclusive
+• **[timecode]** — Sviluppi futuri menzionati
+
+## LINEE GUIDA QUALITÀ
+
+**Profondità:**
+- Minimo 3-5 punti significativi per sezione
+- Espandi ogni concetto completamente
+- Cattura sfumature e specificazioni
+
+**Organizzazione:**
+- Raggruppa argomenti correlati
+- Flusso narrativo coerente
+- Gerarchia dal generale al particolare
+
+**Formattazione:**
+- Intestazioni descrittive
+- Paragrafi 3-6 righe
+- Elenchi puntati per informazioni multiple
+- Termini chiave in grassetto
+- Spazio bianco tra sezioni
+
+**Precisione:**
+- Timecode accurati
+- Mantieni terminologia originale
+- Distingui fatti da opinioni
+
+## REQUISITI FINALI
+
+**Stile**: {language} formale, accessibile, neutrale, oggettivo
+
+**Lunghezza attesa:**
+- Video 10-20 min: 1.500-2.500 parole
+- Video 20-40 min: 2.500-4.000 parole
+- Video 40-60 min: 4.000-6.000 parole
+- Video oltre 60 min: proporzionalmente più esteso
+
+**Controllo finale:**
+✓ Ogni affermazione ha timecode
+✓ Tutti i concetti principali inclusi
+✓ Struttura logica e coerente
+✓ Nessuna interpretazione personale
+✓ Dettaglio appropriato e completo
+✓ Formattazione consistente
+
+INIZIA L'ANALISI DELLA TRASCRIZIONE, MOSTRA SOLO IL RIASSUNTO RISULTATO NON METTERE PREAMBOLI
