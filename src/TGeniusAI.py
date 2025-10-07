@@ -6122,9 +6122,6 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
 
     def create_new_project(self):
-        # Pulisci l'area di lavoro prima di creare un nuovo progetto
-        self._clear_workspace()
-
         project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
         if not ok or not project_name.strip():
             # L'utente ha annullato o non ha inserito un nome
@@ -6135,6 +6132,9 @@ class VideoAudioManager(QMainWindow):
         if not destination_folder:
             # L'utente ha annullato la selezione della cartella
             return
+
+        # Pulisci l'area di lavoro solo dopo che l'utente ha confermato tutto
+        self._clear_workspace()
 
         # Crea il progetto nella cartella scelta
         project_path, gnai_path = self.project_manager.create_project(project_name.strip(), base_dir=destination_folder)
@@ -6148,12 +6148,10 @@ class VideoAudioManager(QMainWindow):
     def open_project(self):
         gnai_path, _ = QFileDialog.getOpenFileName(self, "Apri Progetto", self.project_manager.base_dir, "GeniusAI Project Files (*.gnai)")
         if gnai_path:
+            self._clear_workspace()
             self.load_project(gnai_path)
 
     def load_project(self, gnai_path):
-        # Pulisci l'area di lavoro prima di caricare un nuovo progetto
-        self._clear_workspace()
-
         project_data, error = self.project_manager.load_project(gnai_path)
         if error:
             self.show_status_message(f"Errore caricamento progetto: {error}", error=True)
@@ -6169,15 +6167,15 @@ class VideoAudioManager(QMainWindow):
 
     def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
-            # Disconnetti temporaneamente il segnale per evitare un ricaricamento indesiderato
+            # Disconnect the signal to prevent unintended reloads
             try:
                 self.projectDock.project_clips_folder_changed.disconnect(self.sync_project_clips_folder)
             except TypeError:
-                pass  # Il segnale non era connesso
+                pass  # Signal was not connected
 
             self.loadVideo(video_path)
 
-            # Riconnetti il segnale dopo aver caricato il video
+            # Reconnect the signal after loading
             self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
 
             self.show_status_message(f"Clip '{os.path.basename(video_path)}' caricata.")
