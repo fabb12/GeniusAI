@@ -6122,6 +6122,8 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
 
     def create_new_project(self):
+        # Pulisci l'area di lavoro prima di creare un nuovo progetto
+        self._clear_workspace()
 
         project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
         if not ok or not project_name.strip():
@@ -6167,7 +6169,17 @@ class VideoAudioManager(QMainWindow):
 
     def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
+            # Disconnetti temporaneamente il segnale per evitare un ricaricamento indesiderato
+            try:
+                self.projectDock.project_clips_folder_changed.disconnect(self.sync_project_clips_folder)
+            except TypeError:
+                pass  # Il segnale non era connesso
+
             self.loadVideo(video_path)
+
+            # Riconnetti il segnale dopo aver caricato il video
+            self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
+
             self.show_status_message(f"Clip '{os.path.basename(video_path)}' caricata.")
         else:
             self.show_status_message(f"File video non trovato: {video_path}", error=True)
