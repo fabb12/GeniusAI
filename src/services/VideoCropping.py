@@ -77,12 +77,6 @@ class CropThread(QThread):
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
-            # WORKAROUND: This is a workaround for a persistent issue in moviepy where the audio at the end of a clip is repeated.
-            # The user reported that the last second of audio is repeated twice, so we are trimming 1.8 seconds from the end of the clip.
-            # This is not an ideal solution, but it is a direct response to the user's feedback after other, more robust solutions have failed.
-            if cropped_video.duration and cropped_video.duration > 1.8:
-                cropped_video = cropped_video.subclip(0, cropped_video.duration - 1.8)
-
             output_path = self.parent().get_temp_filepath(suffix='.mp4')
 
             # Use the custom logger to get progress updates
