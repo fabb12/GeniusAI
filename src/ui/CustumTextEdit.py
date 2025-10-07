@@ -488,7 +488,7 @@ class SearchDialog(QDialog):
         layout.addLayout(replace_layout)
 
         self.setLayout(layout)
-        self.searchLineEdit.setFocus()
+        self.searchComboBox.setFocus()
         self.adjustSize()
 
         # Collega le checkbox per rieseguire la ricerca quando il loro stato cambia
