@@ -3729,9 +3729,11 @@ class VideoAudioManager(QMainWindow):
         file_extension = ".mp3" if save_audio_only else ".mp4"
         segment_file_path = os.path.join(output_folder, f"{recording_name}{file_extension}")
 
+        # BUG: The original code used an undefined 'default_folder' variable.
+        # This has been corrected to use 'output_folder'.
         while os.path.exists(segment_file_path):
             timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            segment_file_path = os.path.join(default_folder, f"{recording_name}_{timestamp}{file_extension}")
+            segment_file_path = os.path.join(output_folder, f"{recording_name}_{timestamp}{file_extension}")
 
         ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
         if not os.path.exists(ffmpeg_path):
