@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout, QInputDialog
 from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QIcon
 from src.ui.CustomDock import CustomDock
@@ -13,6 +13,9 @@ class ProjectDock(CustomDock):
     informazioni sul progetto e un elenco di clip con metadati.
     """
     clip_selected = pyqtSignal(str, str)
+    open_in_input_player_requested = pyqtSignal(str)
+    open_in_output_player_requested = pyqtSignal(str)
+    rename_clip_requested = pyqtSignal(str, str)
     merge_clips_requested = pyqtSignal()
     open_folder_requested = pyqtSignal()
     delete_clip_requested = pyqtSignal(str)
@@ -52,11 +55,32 @@ class ProjectDock(CustomDock):
         if not self.project_dir or not item or item.isDisabled():
             return
 
+        file_path = item.data(0, Qt.ItemDataRole.UserRole)
+        if not file_path or not os.path.exists(file_path):
+            return
+
         menu = QMenu()
-        delete_action = menu.addAction("Elimina File")
+
+        open_input_action = menu.addAction("Apri nel player di input")
+        open_output_action = menu.addAction("Apri nel player di output")
+        menu.addSeparator()
+        rename_action = menu.addAction("Rinomina")
+        delete_action = menu.addAction("Rimuovi dal progetto")
+
         action = menu.exec(self.tree_clips.mapToGlobal(position))
 
-        if action == delete_action:
+        if action == open_input_action:
+            self.open_in_input_player_requested.emit(file_path)
+        elif action == open_output_action:
+            self.open_in_output_player_requested.emit(file_path)
+        elif action == rename_action:
+            old_filename = item.text(0)
+            base_name, extension = os.path.splitext(old_filename)
+            new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
+            if ok and new_base_name:
+                new_filename = new_base_name + extension
+                self.rename_clip_requested.emit(old_filename, new_filename)
+        elif action == delete_action:
             clip_filename = item.text(0)
             self.delete_clip_requested.emit(clip_filename)
 

@@ -85,6 +85,7 @@ from src.ui.ProjectDock import ProjectDock
 from src.services.VideoCompositing import VideoCompositingThread
 import docx
 from docx.enum.text import WD_COLOR_INDEX
+from docx.shared import RGBColor
 
 
 class ProjectClipsMergeThread(QThread):
@@ -715,6 +716,9 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_folder_requested.connect(self.open_project_folder)
         self.projectDock.delete_clip_requested.connect(self.delete_project_clip)
         self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
+        self.projectDock.open_in_input_player_requested.connect(self.loadVideo)
+        self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
+        self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -2552,7 +2556,7 @@ class VideoAudioManager(QMainWindow):
         self.progressBar.setVisible(True)
         self.cancelButton.setVisible(True)
 
-        thread = CropThread(self.videoPathLineEdit, crop_rect, self)
+        thread = CropThread(self.videoPathLineEdit, crop_rect, self.current_project_path, self)
         self.current_thread = thread
 
         thread.progress.connect(self.progressBar.setValue)
@@ -4035,26 +4039,36 @@ class VideoAudioManager(QMainWindow):
 
     def _add_html_to_doc(self, element, paragraph):
         """
-        Funzione di supporto ricorsiva per analizzare l'HTML e aggiungerlo al documento Word.
+        Funzione di supporto ricorsiva per analizzare l'HTML e aggiungerlo al documento Word,
+        preservando la formattazione come grassetto, corsivo, colore del testo e colore di sfondo.
         """
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
-                # Eredita la formattazione dal genitore
                 parent = element
-                while parent:
+                # Applica stili ereditati dai tag genitori (es. <b>, <i>, <font>, <span>)
+                while parent and parent.name != 'body':
                     if parent.name in ['b', 'strong']:
                         run.bold = True
                     if parent.name in ['i', 'em']:
                         run.italic = True
-                    if parent.name == 'span' and parent.get('style'):
-                        style = parent.get('style').replace(" ", "")
-                        for color_name, color_data in self.highlight_colors.items():
-                            if f"background-color:{color_data['hex']}" in style:
-                                run.font.highlight_color = color_data['docx']
-                                break
+                    # Gestisce il colore del testo (es. per i timecode)
+                    if parent.name == 'font' and 'color' in parent.attrs:
+                        color_str = parent['color'].lstrip('#')
+                        if len(color_str) == 6: # Formato esadecimale RRGGBB
+                            run.font.color.rgb = RGBColor.from_string(color_str)
+                    # Gestisce il colore di sfondo (evidenziazione)
+                    if parent.name == 'span' and 'style' in parent.attrs:
+                        style = parent['style'].replace(" ", "")
+                        if 'background-color:' in style:
+                            # Cerca il colore corrispondente nella configurazione
+                            for color_name, color_data in self.highlight_colors.items():
+                                if f"background-color:{color_data['hex']}" in style:
+                                    run.font.highlight_color = color_data['docx']
+                                    break
                     parent = parent.parent
             elif child.name:
+                # Se il figlio è un tag, continua la ricorsione
                 self._add_html_to_doc(child, paragraph)
 
     def loadText(self):
@@ -4088,6 +4102,71 @@ class VideoAudioManager(QMainWindow):
         """Apre il dialogo per importare video da URL."""
         dialog = DownloadDialog(self)
         dialog.exec()
+
+    def import_videos_to_project(self):
+        """
+        Apre un dialogo per selezionare file video e li importa nel progetto corrente.
+        I video vengono copiati nella cartella 'clips' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di importare i video.", error=True)
+            return
+
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Importa Video nel Progetto",
+            "", # Default directory
+            "Video Files (*.mp4 *.mov *.avi *.mkv)"
+        )
+
+        if not file_paths:
+            return # User cancelled
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        os.makedirs(clips_dir, exist_ok=True)
+
+        imported_count = 0
+        for src_path in file_paths:
+            try:
+                clip_filename = os.path.basename(src_path)
+                dest_path = os.path.join(clips_dir, clip_filename)
+
+                # Evita di sovrascrivere file esistenti
+                if os.path.exists(dest_path):
+                    logging.warning(f"Il file '{clip_filename}' esiste già nella cartella delle clip. Importazione saltata.")
+                    continue
+
+                # Copia il file
+                shutil.copy2(src_path, dest_path)
+
+                # Estrai i metadati e aggiungi al progetto
+                metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+                clip_info = VideoFileClip(dest_path)
+                duration = clip_info.duration
+                clip_info.close()
+
+                size = os.path.getsize(dest_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(dest_path)).isoformat()
+
+                self.project_manager.add_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                imported_count += 1
+
+            except Exception as e:
+                logging.error(f"Errore durante l'importazione del file {src_path}: {e}")
+                self.show_status_message(f"Errore durante l'importazione di {os.path.basename(src_path)}.", error=True)
+
+        if imported_count > 0:
+            self.show_status_message(f"Importati {imported_count} video con successo.")
+            # Ricarica il progetto per aggiornare la vista
+            self.load_project(self.projectDock.gnai_path)
 
     def isAudioOnly(self, file_path):
         """Check if the file is likely audio-only based on the extension."""
@@ -4381,6 +4460,11 @@ class VideoAudioManager(QMainWindow):
         importUrlAction.setStatusTip('Importa video o audio da un URL (es. YouTube)')
         importUrlAction.triggered.connect(self.openDownloadDialog)
         importMenu.addAction(importUrlAction)
+
+        importVideoAction = QAction('Importa Video nel Progetto...', self)
+        importVideoAction.setStatusTip('Importa file video locali nel progetto corrente')
+        importVideoAction.triggered.connect(self.import_videos_to_project)
+        importMenu.addAction(importVideoAction)
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
@@ -6285,43 +6369,82 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Errore durante la sincronizzazione della cartella.", error=True)
 
     def delete_project_clip(self, clip_filename):
-        """Elimina una clip dal progetto e dal filesystem."""
+        """Rimuove una clip dal progetto senza eliminarla dal filesystem."""
         if not self.current_project_path:
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
         reply = QMessageBox.question(
             self,
-            "Conferma Eliminazione",
-            f"Sei sicuro di voler eliminare definitivamente la clip?\n\n{clip_filename}\n\nQuesta azione non può essere annullata.",
+            "Rimuovi Clip dal Progetto",
+            f"Sei sicuro di voler rimuovere la clip '{clip_filename}' dal progetto?\n\nIl file non verrà eliminato dal disco.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            clip_path = os.path.join(self.current_project_path, "clips", clip_filename)
-
-            # 1. Rimuovi il file dal disco
-            try:
-                if os.path.exists(clip_path):
-                    os.remove(clip_path)
-                    # Elimina anche il file .json associato, se esiste
-                    json_path = os.path.splitext(clip_path)[0] + ".json"
-                    if os.path.exists(json_path):
-                        os.remove(json_path)
-                    self.show_status_message(f"File '{clip_filename}' eliminato.")
-            except Exception as e:
-                self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
-                return
-
-            # 2. Rimuovi la clip dal file .gnai
+            # 1. Rimuovi la clip solo dal file .gnai
             success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
             if not success:
                 self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
                 return
 
-            # 3. Ricarica il progetto per aggiornare la UI
+            # 2. Ricarica il progetto per aggiornare la UI
             self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
+
+    def rename_project_clip(self, old_filename, new_filename):
+        """Rinomina una clip nel progetto, aggiornando il filesystem e il file .gnai."""
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+
+        old_video_path = os.path.join(clips_dir, old_filename)
+        new_video_path = os.path.join(clips_dir, new_filename)
+
+        old_json_path = os.path.splitext(old_video_path)[0] + ".json"
+        new_json_path = os.path.splitext(new_video_path)[0] + ".json"
+
+        # Controlla se il nuovo nome file esiste già
+        if os.path.exists(new_video_path):
+            self.show_status_message(f"Un file con nome '{new_filename}' esiste già.", error=True)
+            return
+
+        try:
+            # 1. Rinomina il file video
+            if os.path.exists(old_video_path):
+                os.rename(old_video_path, new_video_path)
+
+            # 2. Rinomina il file JSON associato
+            if os.path.exists(old_json_path):
+                os.rename(old_json_path, new_json_path)
+
+            # 3. Aggiorna il file di progetto .gnai
+            success, message = self.project_manager.rename_clip_in_project(
+                self.projectDock.gnai_path, old_filename, new_filename
+            )
+            if not success:
+                # Se l'aggiornamento del .gnai fallisce, tenta di ripristinare i nomi dei file
+                self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
+                if os.path.exists(new_video_path):
+                    os.rename(new_video_path, old_video_path)
+                if os.path.exists(new_json_path):
+                    os.rename(new_json_path, old_json_path)
+                return
+
+            # 4. Ricarica il progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Clip '{old_filename}' rinominata in '{new_filename}'.")
+
+        except Exception as e:
+            self.show_status_message(f"Errore durante la rinomina del file: {e}", error=True)
+            # Tenta di ripristinare se qualcosa va storto
+            if os.path.exists(new_video_path) and not os.path.exists(old_video_path):
+                 os.rename(new_video_path, old_video_path)
+            if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
+                 os.rename(new_json_path, old_json_path)
 
     def open_project_folder(self):
         """Apre la cartella del progetto corrente nel file explorer di sistema."""

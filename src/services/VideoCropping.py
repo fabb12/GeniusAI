@@ -1,4 +1,5 @@
 import re
+import os
 import tempfile
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip
@@ -47,10 +48,11 @@ class CropThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
 
-    def __init__(self, video_path, crop_rect, parent=None):
+    def __init__(self, video_path, crop_rect, project_path, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.crop_rect = crop_rect
+        self.project_path = project_path
 
     def run(self):
         try:
@@ -77,7 +79,21 @@ class CropThread(QThread):
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
-            output_path = self.parent().get_temp_filepath(suffix='.mp4')
+            # Define output path based on whether a project is active
+            if self.project_path:
+                clip_dir = os.path.join(self.project_path, "clips")
+                os.makedirs(clip_dir, exist_ok=True)
+                original_filename = os.path.basename(self.video_path)
+                base, ext = os.path.splitext(original_filename)
+                # Ensure the extension is .mp4 for consistency
+                if not ext:
+                    ext = '.mp4'
+                output_filename = f"cropped_{base}{ext}"
+                output_path = os.path.join(clip_dir, output_filename)
+            else:
+                # Fallback to creating a temporary file if no project is open
+                fd, output_path = tempfile.mkstemp(suffix='.mp4', prefix='cropped_')
+                os.close(fd)
 
             # Use the custom logger to get progress updates
             logger = CropLogger(self.progress)
