@@ -199,12 +199,9 @@ class CustomTextEdit(QTextEdit):
         Evidenzia tutte le corrispondenze nel testo e memorizza i cursori.
         Restituisce il numero di risultati trovati.
         """
-        self.search_text = search_text
-        self.current_search_index = -1
-        self.search_results_cursors = []
         self.clear_highlights()
-
         if not search_text:
+            self.update_result_count_label()
             return 0
 
         highlight_format = QTextCharFormat()
@@ -268,51 +265,36 @@ class CustomTextEdit(QTextEdit):
 
     def replace_all_results(self, replace_text):
         """
-        Sostituisce tutte le occorrenze trovate con il testo di sostituzione.
-        Lavora a ritroso per evitare di invalidare le posizioni delle occorrenze successive.
+        Sostituisce tutte le occorrenze trovate. NON aggiorna le evidenziazioni.
+        Il chiamante (SearchDialog) è responsabile di aggiornare l'interfaccia.
         """
         if not self.search_text:
             return 0
 
-        # Ottieni le opzioni di ricerca dall'ultima ricerca effettuata
         options = QTextDocument.FindFlag(0)
         if self.last_search_options.get('case_sensitive', False):
             options |= QTextDocument.FindFlag.FindCaseSensitively
         if self.last_search_options.get('whole_words', False):
             options |= QTextDocument.FindFlag.FindWholeWords
-
-        # Aggiungi l'opzione per cercare all'indietro
         options |= QTextDocument.FindFlag.FindBackward
 
-        # Inizia la ricerca dalla fine del documento
         cursor = QTextCursor(self.document())
         cursor.movePosition(QTextCursor.MoveOperation.End)
 
         replacements_count = 0
         self.document().undoStack().beginMacro("Sostituisci Tutto")
-
         while True:
-            # Trova l'occorrenza precedente
+            # Usa self.search_text che è lo stato attivo
             cursor = self.document().find(self.search_text, cursor, options)
             if cursor.isNull():
-                break  # Nessun'altra occorrenza trovata
-
-            # Sostituisci il testo selezionato
+                break
             cursor.insertText(replace_text)
             replacements_count += 1
-
         self.document().undoStack().endMacro()
 
-        # Dopo la sostituzione, puliamo le evidenziazioni ma manteniamo la ricerca attiva
-        self.clear_highlights(keep_search_term=True)
-        # Eseguiamo di nuovo l'evidenziazione per mostrare che non ci sono più risultati
-        self.highlight_search_results(
-            self.search_text,
-            self.last_search_options.get('case_sensitive', False),
-            self.last_search_options.get('whole_words', False)
-        )
-        self.update_result_count_label()
-
+        # Le evidenziazioni esistenti sono ora obsolete.
+        # Verranno pulite dalla prossima chiamata a highlight_search_results
+        # che sarà attivata dal SearchDialog.
         return replacements_count
 
     def update_result_count_label(self):
@@ -355,26 +337,22 @@ class CustomTextEdit(QTextEdit):
             self.setTextCursor(temp_cursor)
             self.ensureCursorVisible()
 
-    def clear_highlights(self, keep_search_term=False):
+    def clear_highlights(self):
         """
-        Rimuove l'evidenziazione della ricerca (sottolineatura ondulata).
-        Se `keep_search_term` è True, non cancella il termine di ricerca attivo.
+        Rimuove l'evidenziazione della ricerca e resetta completamente lo stato della ricerca.
         """
         # Formato per rimuovere la sottolineatura
         clear_format = QTextCharFormat()
         clear_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.NoUnderline)
 
-        # Applica il formato di pulizia solo ai risultati della ricerca memorizzati
-        # È più sicuro iterare su una copia se la lista viene modificata altrove
-        for cursor in list(self.search_results_cursors):
+        # Applica il formato di pulizia ai risultati memorizzati
+        for cursor in self.search_results_cursors:
             cursor.mergeCharFormat(clear_format)
 
-        # Pulisce lo stato della ricerca
+        # Pulisce completamente lo stato della ricerca
         self.search_results_cursors = []
         self.current_search_index = -1
-
-        if not keep_search_term:
-            self.search_text = None
+        self.search_text = None
 
         # Aggiorna l'etichetta nel dialogo di ricerca, se esiste
         if self.search_dialog_instance and self.search_dialog_instance.isVisible():
@@ -546,17 +524,21 @@ class SearchDialog(QDialog):
 
     def replace_all(self):
         """
-        Chiama il metodo di sostituzione di tutte le occorrenze nell'editor
-        e mostra un messaggio con il numero di sostituzioni effettuate.
+        Sostituisce tutte le occorrenze e aggiorna l'interfaccia.
         """
         replace_text = self.replaceLineEdit.text()
-        if not self.textEdit.get_active_search_text():
+        search_term = self.textEdit.get_active_search_text()
+
+        if not search_term:
             QMessageBox.warning(self, "Attenzione", "Esegui prima una ricerca prima di sostituire.")
             return
 
         num_replaced = self.textEdit.replace_all_results(replace_text)
         QMessageBox.information(self, "Sostituisci Tutto", f"{num_replaced} occorrenze sono state sostituite.")
-        self.update_result_count_label() # La ricerca viene pulita, quindi aggiorniamo la label
+
+        # Dopo la sostituzione, riesegue la ricerca per aggiornare le evidenziazioni
+        # e mostrare che non ci sono più risultati.
+        self.perform_search()
 
 
     def perform_search(self):
