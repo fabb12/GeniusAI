@@ -78,6 +78,10 @@ class MeetingSummarizer(QThread):
         Metodo interno che seleziona l'API corretta e genera il riassunto.
         Restituisce una tupla (testo_riassunto, input_tokens, output_tokens) o una stringa di errore.
         """
+        # 0. Verifica preliminare del modello selezionato
+        if self.selected_model.startswith('---'):
+            return "Errore: Seleziona un modello AI valido dal menu."
+
         # 1. Verifica percorso prompt
         if not PROMPT_MEETING_SUMMARY or not os.path.exists(PROMPT_MEETING_SUMMARY):
              error_msg = f"File prompt non trovato per riassunto meeting: {PROMPT_MEETING_SUMMARY}"
