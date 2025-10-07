@@ -6122,8 +6122,6 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
 
     def create_new_project(self):
-        # Pulisci l'area di lavoro prima di creare un nuovo progetto
-        self._clear_workspace()
 
         project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
         if not ok or not project_name.strip():
@@ -6151,6 +6149,9 @@ class VideoAudioManager(QMainWindow):
             self.load_project(gnai_path)
 
     def load_project(self, gnai_path):
+        # Pulisci l'area di lavoro prima di caricare un nuovo progetto
+        self._clear_workspace()
+
         project_data, error = self.project_manager.load_project(gnai_path)
         if error:
             self.show_status_message(f"Errore caricamento progetto: {error}", error=True)
