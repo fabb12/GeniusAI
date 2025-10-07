@@ -8,6 +8,8 @@ import logging
 
 class CropVideoWidget(QVideoWidget):
     """A simple video widget that serves as a display surface for video content."""
+    spacePressed = pyqtSignal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setMinimumWidth(400)
@@ -19,6 +21,8 @@ class CropVideoWidget(QVideoWidget):
                 self.setFullScreen(False)
             else:
                 self.setFullScreen(True)
+        elif event.key() == Qt.Key.Key_Space:
+            self.spacePressed.emit()
         super().keyPressEvent(event)
 
 

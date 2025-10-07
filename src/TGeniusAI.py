@@ -742,6 +742,7 @@ class VideoAudioManager(QMainWindow):
         self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
         self.player.setVideoOutput(self.videoCropWidget)
+        self.videoCropWidget.spacePressed.connect(self.togglePlayPause)
 
         # Aggiungi un QLabel per l'immagine "Solo audio"
         self.audioOnlyLabel = QLabel(self.videoContainer)
@@ -860,6 +861,7 @@ class VideoAudioManager(QMainWindow):
         self.videoOutputWidget.setAcceptDrops(True)
         self.videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoOutputWidget.setToolTip("Area di visualizzazione e ritaglio video output")
+        self.videoOutputWidget.spacePressed.connect(self.togglePlayPauseOutput)
 
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
