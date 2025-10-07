@@ -116,3 +116,27 @@ class ProjectManager:
             f.truncate()
 
         return True, "Clip removed successfully"
+
+    def rename_clip_in_project(self, gnai_path, old_filename, new_filename):
+        """
+        Rinomina una clip nel file di progetto .gnai.
+        """
+        if not os.path.exists(gnai_path):
+            return False, "Project file not found"
+
+        with open(gnai_path, 'r+') as f:
+            project_data = json.load(f)
+
+            new_metadata_filename = os.path.splitext(new_filename)[0] + ".json"
+
+            for clip in project_data.get("clips", []):
+                if clip.get("clip_filename") == old_filename:
+                    clip["clip_filename"] = new_filename
+                    clip["metadata_filename"] = new_metadata_filename
+                    break
+
+            f.seek(0)
+            json.dump(project_data, f, indent=4)
+            f.truncate()
+
+        return True, "Clip renamed successfully"
