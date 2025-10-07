@@ -1,11 +1,11 @@
 # File: src/ui/CustumTextEdit.py (Versione con Dialogo di Ricerca)
 
 from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
-                             QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox)
+                             QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QShortcut, QPalette, QFont) # Aggiunto QFont
-from PyQt6.QtCore import pyqtSignal, Qt, QTimer
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings
 import re
 
 class CustomTextEdit(QTextEdit):
@@ -191,8 +191,8 @@ class CustomTextEdit(QTextEdit):
         # queste operazioni vengano eseguite dopo che il dialogo è completamente visibile.
         self.search_dialog_instance.activateWindow()
         self.search_dialog_instance.raise_()
-        QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.setFocus)
-        QTimer.singleShot(50, self.search_dialog_instance.searchLineEdit.selectAll)
+        QTimer.singleShot(50, self.search_dialog_instance.searchComboBox.lineEdit().setFocus)
+        QTimer.singleShot(50, self.search_dialog_instance.searchComboBox.lineEdit().selectAll)
 
     def highlight_search_results(self, search_text, case_sensitive=False, whole_words=False):
         """
@@ -269,31 +269,50 @@ class CustomTextEdit(QTextEdit):
     def replace_all_results(self, replace_text):
         """
         Sostituisce tutte le occorrenze trovate con il testo di sostituzione.
-        Gestisce correttamente la sensibilità alle maiuscole/minuscole.
+        Lavora a ritroso per evitare di invalidare le posizioni delle occorrenze successive.
         """
-        if not self.search_results_cursors or not self.search_text:
+        if not self.search_text:
             return 0
 
+        # Ottieni le opzioni di ricerca dall'ultima ricerca effettuata
+        options = QTextDocument.FindFlag(0)
+        if self.last_search_options.get('case_sensitive', False):
+            options |= QTextDocument.FindFlag.FindCaseSensitively
+        if self.last_search_options.get('whole_words', False):
+            options |= QTextDocument.FindFlag.FindWholeWords
+
+        # Aggiungi l'opzione per cercare all'indietro
+        options |= QTextDocument.FindFlag.FindBackward
+
+        # Inizia la ricerca dalla fine del documento
+        cursor = QTextCursor(self.document())
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+
         replacements_count = 0
-        case_sensitive = self.last_search_options.get('case_sensitive', False)
-        search_text_to_compare = self.search_text if case_sensitive else self.search_text.lower()
+        self.document().undoStack().beginMacro("Sostituisci Tutto")
 
-        # Lavoriamo a ritroso per non invalidare gli indici dei cursori successivi
-        for cursor in reversed(self.search_results_cursors):
-            temp_cursor = QTextCursor(self.document())
-            temp_cursor.setPosition(cursor.selectionStart(), QTextCursor.MoveMode.MoveAnchor)
-            temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
+        while True:
+            # Trova l'occorrenza precedente
+            cursor = self.document().find(self.search_text, cursor, options)
+            if cursor.isNull():
+                break  # Nessun'altra occorrenza trovata
 
-            selected_text = temp_cursor.selectedText()
-            selected_text_to_compare = selected_text if case_sensitive else selected_text.lower()
+            # Sostituisci il testo selezionato
+            cursor.insertText(replace_text)
+            replacements_count += 1
 
-            if selected_text_to_compare == search_text_to_compare:
-                temp_cursor.insertText(replace_text)
-                replacements_count += 1
+        self.document().undoStack().endMacro()
 
-        # Dopo la sostituzione, puliamo le evidenziazioni e lo stato della ricerca
-        self.clear_highlights()
+        # Dopo la sostituzione, puliamo le evidenziazioni ma manteniamo la ricerca attiva
+        self.clear_highlights(keep_search_term=True)
+        # Eseguiamo di nuovo l'evidenziazione per mostrare che non ci sono più risultati
+        self.highlight_search_results(
+            self.search_text,
+            self.last_search_options.get('case_sensitive', False),
+            self.last_search_options.get('whole_words', False)
+        )
         self.update_result_count_label()
+
         return replacements_count
 
     def update_result_count_label(self):
@@ -336,23 +355,26 @@ class CustomTextEdit(QTextEdit):
             self.setTextCursor(temp_cursor)
             self.ensureCursorVisible()
 
-    def clear_highlights(self):
+    def clear_highlights(self, keep_search_term=False):
         """
-        Rimuove solo l'evidenziazione della ricerca (sottolineatura ondulata)
-        senza alterare altra formattazione come il colore di sfondo.
+        Rimuove l'evidenziazione della ricerca (sottolineatura ondulata).
+        Se `keep_search_term` è True, non cancella il termine di ricerca attivo.
         """
         # Formato per rimuovere la sottolineatura
         clear_format = QTextCharFormat()
         clear_format.setUnderlineStyle(QTextCharFormat.UnderlineStyle.NoUnderline)
 
         # Applica il formato di pulizia solo ai risultati della ricerca memorizzati
-        for cursor in self.search_results_cursors:
+        # È più sicuro iterare su una copia se la lista viene modificata altrove
+        for cursor in list(self.search_results_cursors):
             cursor.mergeCharFormat(clear_format)
 
         # Pulisce lo stato della ricerca
         self.search_results_cursors = []
         self.current_search_index = -1
-        self.search_text = None
+
+        if not keep_search_term:
+            self.search_text = None
 
         # Aggiorna l'etichetta nel dialogo di ricerca, se esiste
         if self.search_dialog_instance and self.search_dialog_instance.isVisible():
@@ -396,11 +418,12 @@ class SearchDialog(QDialog):
         # Layout per input e pulsanti di navigazione/cerca
         searchLayout = QHBoxLayout()
 
-        self.searchLineEdit = QLineEdit()
-        self.searchLineEdit.setPlaceholderText("Cerca...")
-        # --- Ricerca su Invio ---
-        self.searchLineEdit.returnPressed.connect(self.perform_search)
-        searchLayout.addWidget(self.searchLineEdit)
+        self.searchComboBox = QComboBox()
+        self.searchComboBox.setEditable(True)
+        self.searchComboBox.setPlaceholderText("Cerca...")
+        self.searchComboBox.lineEdit().returnPressed.connect(self.perform_search)
+        self.load_search_history()
+        searchLayout.addWidget(self.searchComboBox)
 
         # Pulsante Cerca esplicito
         searchButton = QPushButton("Cerca")
@@ -440,7 +463,7 @@ class SearchDialog(QDialog):
         options_layout.addStretch() # Spinge la label a destra
 
         # Label per mostrare il numero di risultati
-        self.resultCountLabel = QLabel("Risultati: N/A")
+        self.resultCountLabel = QLabel("Risultati:")
         self.resultCountLabel.setAlignment(Qt.AlignmentFlag.AlignRight)
         options_layout.addWidget(self.resultCountLabel)
 
@@ -471,6 +494,48 @@ class SearchDialog(QDialog):
         # Collega le checkbox per rieseguire la ricerca quando il loro stato cambia
         self.caseSensitiveCheck.stateChanged.connect(self.perform_search)
         self.wholeWordCheck.stateChanged.connect(self.perform_search)
+        self.searchComboBox.currentIndexChanged.connect(self.combobox_selection_changed)
+
+    def load_search_history(self):
+        """Carica la cronologia delle ricerche da QSettings."""
+        settings = QSettings()
+        history = settings.value("SearchHistory", [], type=list)
+        self.searchComboBox.addItems(history)
+
+    def save_search_history(self, term):
+        """Salva la cronologia delle ricerche in QSettings."""
+        if not term:
+            return
+
+        settings = QSettings()
+        history = settings.value("SearchHistory", [], type=list)
+
+        # Rimuovi il termine se già presente per riposizionarlo in cima
+        if term in history:
+            history.remove(term)
+
+        # Inserisci il nuovo termine all'inizio
+        history.insert(0, term)
+
+        # Limita la cronologia a 10 elementi
+        history = history[:10]
+
+        settings.setValue("SearchHistory", history)
+
+        # Aggiorna il ComboBox
+        self.searchComboBox.blockSignals(True)
+        self.searchComboBox.clear()
+        self.searchComboBox.addItems(history)
+        self.searchComboBox.setCurrentText(term)
+        self.searchComboBox.blockSignals(False)
+
+    def combobox_selection_changed(self, index):
+        """
+        Quando un elemento viene selezionato dalla cronologia,
+        esegue immediatamente la ricerca.
+        """
+        if index != -1: # Assicurati che sia una selezione valida
+             self.perform_search()
 
     def replace_current(self):
         """
@@ -495,33 +560,41 @@ class SearchDialog(QDialog):
 
 
     def perform_search(self):
-        """Esegue la ricerca quando viene premuto Invio o il pulsante Cerca."""
-        search_text = self.searchLineEdit.text()
+        """Esegue la ricerca e aggiorna la cronologia."""
+        search_text = self.searchComboBox.currentText()
         case_sensitive = self.caseSensitiveCheck.isChecked()
         whole_words = self.wholeWordCheck.isChecked()
+
         if search_text:
+            self.save_search_history(search_text) # Salva il termine cercato
             num_results = self.textEdit.highlight_search_results(search_text, case_sensitive, whole_words)
+
             # Aggiorna stile input se non ci sono risultati
             if num_results == 0:
-                self.searchLineEdit.setStyleSheet("background-color: #FFD580;") # Arancione più visibile
+                self.searchComboBox.setStyleSheet("background-color: #FFD580;")
             else:
-                self.searchLineEdit.setStyleSheet("") # Stile default
-            self.update_result_count_label() # Aggiorna dopo aver gestito lo stile
+                self.searchComboBox.setStyleSheet("")
         else:
-            self.textEdit.clear_highlights() # Cancella se il campo è vuoto
-            self.update_result_count_label() # Aggiorna anche quando cancella
-            self.searchLineEdit.setStyleSheet("") # Stile default
+            self.textEdit.clear_highlights()
+            self.searchComboBox.setStyleSheet("")
+
+        self.update_result_count_label()
 
     def update_result_count_label(self):
-        """Aggiorna la label con il numero di risultati trovati."""
-        # Legge lo stato direttamente da textEdit usando i metodi getter
+        """Aggiorna la label con il numero di risultati trovati, mostrando la posizione corrente."""
         search_text = self.textEdit.get_active_search_text()
         num_results = self.textEdit.get_search_results_count()
+        current_index = self.textEdit.get_current_search_index()
 
         if not search_text:
             self.resultCountLabel.setText("Risultati:")
+            return
+
+        if num_results == 0:
+            self.resultCountLabel.setText("Risultati: 0")
         else:
-            self.resultCountLabel.setText(f"Risultati: {num_results}")
+            # L'indice è basato su 0, quindi aggiungiamo 1 per la visualizzazione
+            self.resultCountLabel.setText(f"Risultati: {current_index + 1} di {num_results}")
 
     def closeEvent(self, event):
         """Sovrascrive l'evento di chiusura per garantire la pulizia."""
