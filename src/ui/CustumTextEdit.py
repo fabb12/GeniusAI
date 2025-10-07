@@ -1,6 +1,6 @@
 # File: src/ui/CustumTextEdit.py (Versione con Dialogo di Ricerca)
 
-from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout,
+from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLayout,
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
@@ -178,9 +178,9 @@ class CustomTextEdit(QTextEdit):
         se già esistente, impostando il focus e selezionando il testo.
         """
         if self.search_dialog_instance is None or not self.search_dialog_instance.isVisible():
-            # Crea una nuova istanza se non esiste o non è visibile
-            parent_widget = self.parent() # Ottieni il parent (TGeniusAI)
-            self.search_dialog_instance = SearchDialog(self, parent_widget)
+            # Il genitore del dialogo deve essere la finestra principale per un comportamento corretto
+            parent_window = self.window()
+            self.search_dialog_instance = SearchDialog(self, parent_window)
             self.search_dialog_instance.show()
         else:
             # Se esiste ed è visibile, portalo solo in primo piano
@@ -200,6 +200,8 @@ class CustomTextEdit(QTextEdit):
         Restituisce il numero di risultati trovati.
         """
         self.clear_highlights()
+        self.search_text = search_text # Memorizza il termine di ricerca attivo
+
         if not search_text:
             self.update_result_count_label()
             return 0
@@ -263,38 +265,36 @@ class CustomTextEdit(QTextEdit):
         self.update_result_count_label()
 
 
-    def replace_all_results(self, replace_text):
+    def replace_all_results(self, search_text, replace_text, case_sensitive, whole_words):
         """
-        Sostituisce tutte le occorrenze trovate. NON aggiorna le evidenziazioni.
-        Il chiamante (SearchDialog) è responsabile di aggiornare l'interfaccia.
+        Sostituisce tutte le occorrenze di `search_text` con `replace_text`.
+        Questa operazione è unica e non dipende da una ricerca precedente.
         """
-        if not self.search_text:
+        if not search_text:
             return 0
 
         options = QTextDocument.FindFlag(0)
-        if self.last_search_options.get('case_sensitive', False):
+        if case_sensitive:
             options |= QTextDocument.FindFlag.FindCaseSensitively
-        if self.last_search_options.get('whole_words', False):
+        if whole_words:
             options |= QTextDocument.FindFlag.FindWholeWords
+        # Cerca all'indietro per evitare che le sostituzioni invalidino le posizioni dei risultati successivi
         options |= QTextDocument.FindFlag.FindBackward
 
-        cursor = QTextCursor(self.document())
+        cursor = self.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
 
         replacements_count = 0
         self.document().undoStack().beginMacro("Sostituisci Tutto")
         while True:
-            # Usa self.search_text che è lo stato attivo
-            cursor = self.document().find(self.search_text, cursor, options)
+            cursor = self.document().find(search_text, cursor, options)
             if cursor.isNull():
                 break
+            # Sostituisce il testo mantenendo il formato del testo sostituito
             cursor.insertText(replace_text)
             replacements_count += 1
         self.document().undoStack().endMacro()
 
-        # Le evidenziazioni esistenti sono ora obsolete.
-        # Verranno pulite dalla prossima chiamata a highlight_search_results
-        # che sarà attivata dal SearchDialog.
         return replacements_count
 
     def update_result_count_label(self):
@@ -388,82 +388,70 @@ class SearchDialog(QDialog):
              try: self.setStyleSheet(self.main_window.styleSheet())
              except Exception as e: print(f"Warning: Impossibile applicare stylesheet: {e}")
 
-        # Layout principale
-        layout = QVBoxLayout(self) # Usiamo QVBoxLayout per aggiungere la label
+        # Layout principale a griglia per un'organizzazione più compatta
+        layout = QGridLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(5)
+        layout.setSpacing(8)
 
-        # Layout per input e pulsanti di navigazione/cerca
-        searchLayout = QHBoxLayout()
-
+        # --- Riga 0: Campi di ricerca e navigazione ---
+        find_label = QLabel("Cerca:")
         self.searchComboBox = QComboBox()
         self.searchComboBox.setEditable(True)
-        self.searchComboBox.setPlaceholderText("Cerca...")
+        self.searchComboBox.setPlaceholderText("Trova...")
         self.searchComboBox.lineEdit().returnPressed.connect(self.perform_search)
         self.load_search_history()
-        searchLayout.addWidget(self.searchComboBox)
 
-        # Pulsante Cerca esplicito
         searchButton = QPushButton("Cerca")
-        searchButton.setToolTip("Cerca (Invio)")
+        searchButton.setToolTip("Cerca il testo (Invio)")
         searchButton.clicked.connect(self.perform_search)
-        searchLayout.addWidget(searchButton)
 
-        # Pulsante Precedente
         prevButton = QPushButton("↑")
-        prevButton.setToolTip("Precedente (Shift+F3)")
-        prevButton.setFixedSize(25, 25)
+        prevButton.setToolTip("Risultato precedente (Shift+F3)")
+        prevButton.setFixedSize(28, 28)
         prevButton.clicked.connect(self.textEdit.find_previous_result)
-        searchLayout.addWidget(prevButton)
 
-        # Pulsante Successivo
         nextButton = QPushButton("↓")
-        nextButton.setToolTip("Successivo (F3)")
-        nextButton.setFixedSize(25, 25)
+        nextButton.setToolTip("Risultato successivo (F3)")
+        nextButton.setFixedSize(28, 28)
         nextButton.clicked.connect(self.textEdit.find_next_result)
-        searchLayout.addWidget(nextButton)
 
-        layout.addLayout(searchLayout)
+        layout.addWidget(find_label, 0, 0)
+        layout.addWidget(self.searchComboBox, 0, 1, 1, 2) # Occupa 2 colonne
+        layout.addWidget(searchButton, 0, 3)
+        layout.addWidget(prevButton, 0, 4)
+        layout.addWidget(nextButton, 0, 5)
 
-        # Layout per opzioni e risultati
+        # --- Riga 1: Campi di sostituzione ---
+        replace_label = QLabel("Sostituisci:")
+        self.replaceLineEdit = QLineEdit()
+        self.replaceLineEdit.setPlaceholderText("Sostituisci con...")
+
+        self.replaceButton = QPushButton("Sostituisci")
+        self.replaceButton.setToolTip("Sostituisce l'occorrenza corrente")
+        self.replaceButton.clicked.connect(self.replace_current)
+
+        self.replaceAllButton = QPushButton("Sostituisci Tutto")
+        self.replaceAllButton.setToolTip("Sostituisce tutte le occorrenze")
+        self.replaceAllButton.clicked.connect(self.replace_all)
+
+        layout.addWidget(replace_label, 1, 0)
+        layout.addWidget(self.replaceLineEdit, 1, 1, 1, 2)
+        layout.addWidget(self.replaceButton, 1, 3)
+        layout.addWidget(self.replaceAllButton, 1, 4, 1, 2) # Occupa 2 colonne
+
+        # --- Riga 2: Opzioni di ricerca e contatore risultati ---
         options_layout = QHBoxLayout()
-
-        # Checkbox per ricerca case-sensitive
         self.caseSensitiveCheck = QCheckBox("Maiuscole/minuscole")
-        self.caseSensitiveCheck.setToolTip("Attiva per distinguere tra maiuscole e minuscole nella ricerca")
-        options_layout.addWidget(self.caseSensitiveCheck)
-
-        # Checkbox per ricerca parola intera
         self.wholeWordCheck = QCheckBox("Parola intera")
-        self.wholeWordCheck.setToolTip("Cerca solo parole intere")
+        options_layout.addWidget(self.caseSensitiveCheck)
         options_layout.addWidget(self.wholeWordCheck)
+        options_layout.addStretch()
 
-        options_layout.addStretch() # Spinge la label a destra
-
-        # Label per mostrare il numero di risultati
-        self.resultCountLabel = QLabel("Risultati:")
+        self.resultCountLabel = QLabel("Risultati: N/A")
         self.resultCountLabel.setAlignment(Qt.AlignmentFlag.AlignRight)
         options_layout.addWidget(self.resultCountLabel)
 
-        layout.addLayout(options_layout)
-
-        # --- Layout per la sostituzione ---
-        replace_layout = QHBoxLayout()
-        self.replaceLineEdit = QLineEdit()
-        self.replaceLineEdit.setPlaceholderText("Sostituisci con...")
-        replace_layout.addWidget(self.replaceLineEdit)
-
-        self.replaceButton = QPushButton("Sostituisci")
-        self.replaceButton.setToolTip("Sostituisce l'occorrenza corrente e trova la successiva")
-        self.replaceButton.clicked.connect(self.replace_current)
-        replace_layout.addWidget(self.replaceButton)
-
-        self.replaceAllButton = QPushButton("Sostituisci Tutto")
-        self.replaceAllButton.setToolTip("Sostituisce tutte le occorrenze nel documento")
-        self.replaceAllButton.clicked.connect(self.replace_all)
-        replace_layout.addWidget(self.replaceAllButton)
-
-        layout.addLayout(replace_layout)
+        layout.addLayout(options_layout, 2, 0, 1, 6) # Occupa tutta la larghezza
 
         self.setLayout(layout)
         self.searchComboBox.setFocus()
@@ -524,21 +512,27 @@ class SearchDialog(QDialog):
 
     def replace_all(self):
         """
-        Sostituisce tutte le occorrenze e aggiorna l'interfaccia.
+        Sostituisce tutte le occorrenze del testo di ricerca con il testo di sostituzione,
+        utilizzando le opzioni di ricerca correnti.
         """
+        search_text = self.searchComboBox.currentText()
         replace_text = self.replaceLineEdit.text()
-        search_term = self.textEdit.get_active_search_text()
+        case_sensitive = self.caseSensitiveCheck.isChecked()
+        whole_words = self.wholeWordCheck.isChecked()
 
-        if not search_term:
-            QMessageBox.warning(self, "Attenzione", "Esegui prima una ricerca prima di sostituire.")
+        if not search_text:
+            QMessageBox.warning(self, "Nessun Termine", "Inserisci un termine di ricerca prima di sostituire.")
             return
 
-        num_replaced = self.textEdit.replace_all_results(replace_text)
-        QMessageBox.information(self, "Sostituisci Tutto", f"{num_replaced} occorrenze sono state sostituite.")
+        # Esegue la sostituzione
+        num_replaced = self.textEdit.replace_all_results(search_text, replace_text, case_sensitive, whole_words)
 
-        # Dopo la sostituzione, riesegue la ricerca per aggiornare le evidenziazioni
-        # e mostrare che non ci sono più risultati.
-        self.perform_search()
+        # Mostra un messaggio con il numero di sostituzioni
+        QMessageBox.information(self, "Sostituisci Tutto", f"Sono state sostituite {num_replaced} occorrenze.")
+
+        # Pulisce le evidenziazioni e resetta lo stato della ricerca
+        self.textEdit.clear_highlights()
+        self.update_result_count_label()
 
 
     def perform_search(self):
@@ -551,10 +545,12 @@ class SearchDialog(QDialog):
             self.save_search_history(search_text) # Salva il termine cercato
             num_results = self.textEdit.highlight_search_results(search_text, case_sensitive, whole_words)
 
-            # Aggiorna stile input se non ci sono risultati
+            # Aggiorna stile input in base al risultato
             if num_results == 0:
-                self.searchComboBox.setStyleSheet("background-color: #FFD580;")
+                # Giallo avviso con testo nero per leggibilità
+                self.searchComboBox.setStyleSheet("background-color: #FFD580; color: black;")
             else:
+                # Resetta allo stile di default
                 self.searchComboBox.setStyleSheet("")
         else:
             self.textEdit.clear_highlights()
@@ -569,14 +565,14 @@ class SearchDialog(QDialog):
         current_index = self.textEdit.get_current_search_index()
 
         if not search_text:
-            self.resultCountLabel.setText("Risultati:")
+            self.resultCountLabel.setText("Risultati: N/A")
             return
 
         if num_results == 0:
-            self.resultCountLabel.setText("Risultati: 0")
+            self.resultCountLabel.setText("Nessun risultato")
         else:
             # L'indice è basato su 0, quindi aggiungiamo 1 per la visualizzazione
-            self.resultCountLabel.setText(f"Risultati: {current_index + 1} di {num_results}")
+            self.resultCountLabel.setText(f"{current_index + 1} di {num_results}")
 
     def closeEvent(self, event):
         """Sovrascrive l'evento di chiusura per garantire la pulizia."""
