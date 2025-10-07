@@ -693,7 +693,7 @@ class VideoAudioManager(QMainWindow):
         self.audioDock = self.createAudioDock()
         self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.audioDock.setStyleSheet(self.styleSheet())
-        self.audioDock.setToolTip("Dock per la gestione audio")
+        self.audioDock.setToolTip("Dock per la gestione Audio/Video")
         area.addDock(self.audioDock, 'left')
 
         self.videoEffectsDock = self.createVideoEffectsDock()
@@ -4560,7 +4560,7 @@ class VideoAudioManager(QMainWindow):
                                                                      'Mostra/Nascondi Trascrizione')
         self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
-        self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio')
+        self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
         self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')

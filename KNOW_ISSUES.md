@@ -61,17 +61,20 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungere replace nel search box e sistema il numero di elmentei trovati e sistema il colore di quadno non trova nulla metti colore arancione 
 - [x] mettere tasti frecce per andare aventi e indietro nel playback del video
 - [x] crea un nuovo dock note video dove mostro le note che  utente ha inserito nel video, tramite una funzione inserisci nota con tasto sx del mouse sul frame che in quel momento e visibile 
-- [x ] togliere dock downlaod e metterno sotto voce import come nuovo menu . deve aprire un dialog cone le stess impostazioni del dock
-- [x ] aggiungi il dock unisci video nel dock gestione audio (rinomina audio e video) , togli il dock unisci video 
+- [x] togliere dock downlaod e metterno sotto voce import come nuovo menu . deve aprire un dialog cone le stess impostazioni del dock
+- [x] aggiungi il dock unisci video nel dock gestione audio (rinomina audio e video) , togli il dock unisci video 
 - [x] quando premo su video nel dock progetto devi asggiornare anche informaizon video 
-- [x ] rendi coerente anche il dock registrazione (percorso file e nome della registrazione) con la nuova sezione dock progetti 
+- [x] rendi coerente anche il dock registrazione (percorso file e nome della registrazione) con la nuova sezione dock progetti 
 - [x] sistemare timecode audio ai 
-- [ x ] migliroa evidenziazione del testo con colori giusto per sfondo scuro e scritta chiara
-- quando salvo video caricato nel video player outpout salvalo nella cartella clip mettendo il postfisso come _output nella cartella progetto  aggiungi un nuona voce nel menu file con 'salva' 
-- aggiorna visualzizaione del dock progetto in base a se trovi nuovoi file , se ne trovi aggiorna la vista , inoltere mettei anche al funzione di elimna file con tasto desto sul file 
-- quando crea nuovo progetto da la possiblia di sceleter anceh la cartella di dove salvare il progetto
-- 
-- 
+- [x] migliroa evidenziazione del testo con colori giusto per sfondo scuro e scritta chiara
+- [x] quando salvo video caricato nel video player outpout salvalo nella cartella clip mettendo il postfisso come _output nella cartella progetto  aggiungi un nuona voce nel menu file con 'salva' 
+- [x] aggiorna visualzizaione del dock progetto in base a se trovi nuovoi file , se ne trovi aggiorna la vista , inoltere mettei anche al funzione di elimna file con tasto desto sul file 
+- [x] quando crea nuovo progetto da la possiblia di sceleter anceh la cartella di dove salvare il progetto
+- [x] esport corerttamten il riassuti nel file docx , esportta tutte informazoni del riassunto scritto mantenendo il piu possible la formattazione
+-quando cancello un file dal dock progetto e dal fila .gnai cancella solo dalla vista non dal file system 
+- aggiung funzoan import video da metter nel progetto '
+- tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
+- qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
