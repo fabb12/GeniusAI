@@ -4585,29 +4585,7 @@ class VideoAudioManager(QMainWindow):
                 is_project_save = True
 
         video_saver = VideoSaver(self)
-        thread = None
-
-        if save_options.get('use_slow_motion', False):
-            thread = video_saver.save_with_slow_motion(
-                self.videoPathLineOutputEdit,
-                fileName,
-                factor=save_options['slow_motion_factor']
-            )
-        else:
-            rate = 1.0
-            if save_options['save_with_speed']:
-                rate = self.speedSpinBoxOutput.value()
-                if rate == 0: rate = 1.0
-
-            if save_options['use_compression']:
-                thread = video_saver.save_compressed(
-                    self.videoPathLineOutputEdit, fileName,
-                    quality=save_options['compression_quality'], playback_rate=rate
-                )
-            else:
-                thread = video_saver.save_original(
-                    self.videoPathLineOutputEdit, fileName, playback_rate=rate
-                )
+        thread = video_saver.save_video(self.videoPathLineOutputEdit, fileName, save_options)
 
         if thread:
             self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=is_project_save), self.onSaveError, self.update_status_progress)
