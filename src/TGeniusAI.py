@@ -4587,6 +4587,7 @@ class VideoAudioManager(QMainWindow):
         addMediaAction.setStatusTip('Aggiungi testo o immagini al video')
         addMediaAction.triggered.connect(self.openAddMediaDialog)
         insertMenu.addAction(addMediaAction)
+
         """
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
