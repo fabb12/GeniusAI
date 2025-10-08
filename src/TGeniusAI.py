@@ -2630,6 +2630,31 @@ class VideoAudioManager(QMainWindow):
             print(f"Error getting frame at {position_ms}ms: {e}")
             return None
 
+    def get_frame_at(self, position_ms):
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            return None
+        try:
+            position_sec = position_ms / 1000.0
+            video_clip = VideoFileClip(self.videoPathLineEdit)
+
+            # Ensure the position is within the video duration
+            if not (0 <= position_sec <= video_clip.duration):
+                video_clip.close()
+                return None
+
+            frame = video_clip.get_frame(position_sec)
+            video_clip.close()
+
+            height, width, channel = frame.shape
+            bytes_per_line = 3 * width
+            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+            pixmap = QPixmap.fromImage(q_image)
+
+            return pixmap
+        except Exception as e:
+            logging.error(f"Error getting frame at {position_ms}ms: {e}")
+            return None
+
     def get_current_fps(self):
         try:
             return VideoFileClip(self.videoPathLineEdit).fps
@@ -6691,6 +6716,12 @@ class VideoAudioManager(QMainWindow):
         else:
             start_time = self.player.position() / 1000.0
             self.show_status_message(f"Adding overlay at current position: {start_time:.2f}s")
+
+        if media_data['type'] == 'text':
+            points = media_data['fontsize']
+            # Convert points to pixels (assuming 96 DPI)
+            pixels = int(points * 96 / 72)
+            media_data['fontsize'] = pixels
 
         thread = MediaOverlayThread(
             base_video_path=self.videoPathLineEdit,
