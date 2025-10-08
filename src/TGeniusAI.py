@@ -719,6 +719,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_in_input_player_requested.connect(self.loadVideo)
         self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
+        self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -6490,6 +6491,37 @@ class VideoAudioManager(QMainWindow):
                  os.rename(new_video_path, old_video_path)
             if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
                  os.rename(new_json_path, old_json_path)
+
+    def relink_project_clip(self, old_filename, new_filepath):
+        """Gestisce il ricollegamento di una clip offline."""
+        if not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        new_filename = os.path.basename(new_filepath)
+        dest_path = os.path.join(clips_dir, new_filename)
+
+        # Copia il nuovo file nella cartella clips del progetto
+        try:
+            shutil.copy2(new_filepath, dest_path)
+        except Exception as e:
+            self.show_status_message(f"Errore durante la copia del file: {e}", error=True)
+            return
+
+        # Aggiorna il file .gnai usando il ProjectManager
+        success, message = self.project_manager.relink_clip(
+            self.projectDock.gnai_path, old_filename, dest_path
+        )
+
+        if success:
+            self.load_project(self.projectDock.gnai_path) # Ricarica per aggiornare la UI
+            self.show_status_message(f"Clip '{old_filename}' ricollegata a '{new_filename}'.")
+        else:
+            self.show_status_message(f"Errore nel ricollegamento: {message}", error=True)
+            # Se il ricollegamento fallisce, rimuovi il file copiato per pulizia
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
 
     def open_project_folder(self):
         """Apre la cartella del progetto corrente nel file explorer di sistema."""
