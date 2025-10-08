@@ -1,6 +1,6 @@
 import os
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QFont, QColor, QPainter, QPixmap
+from PyQt6.QtGui import QFont, QColor, QPainter, QPixmap, QFontInfo
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout, QLineEdit,
     QSpinBox, QPushButton, QDialogButtonBox, QColorDialog, QFontDialog,
@@ -358,7 +358,7 @@ class AddMediaDialog(QDialog):
                 "type": "text",
                 "text": self.text_input.text(),
                 "font": self.current_font.family(),
-                "fontsize": self.current_font.pointSize(),
+                "fontsize": QFontInfo(self.current_font).pixelSize(),
                 "color": self.current_color.name(),
                 "position": (self.pos_x_spinbox.value(), self.pos_y_spinbox.value()),
                 "duration": self.duration_spinbox_text.value(),
