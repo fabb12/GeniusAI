@@ -4558,27 +4558,34 @@ class VideoAudioManager(QMainWindow):
             return
 
         save_options = options_dialog.getOptions()
-        fileName = ""
 
-        # --- MODIFICA PER SALVATAGGIO IN PROGETTO ---
+        # Imposta la directory di default e il nome del file
+        default_dir = ""
         if self.current_project_path:
-            # Se un progetto è attivo, costruisci il percorso di salvataggio automaticamente
-            source_for_name = self.videoPathLineEdit if self.videoPathLineEdit else self.videoPathLineOutputEdit
-            base_name, ext = os.path.splitext(os.path.basename(source_for_name))
+            default_dir = os.path.join(self.current_project_path, "clips")
 
-            if base_name.startswith("tmp_"):
-                base_name = "processed_clip"
+        source_for_name = self.videoPathLineEdit if self.videoPathLineEdit else self.videoPathLineOutputEdit
+        base_name, ext = os.path.splitext(os.path.basename(source_for_name))
+        if base_name.startswith("tmp_"):
+            base_name = "processed_clip"
+        default_filename = f"{base_name}_output{ext}"
 
-            output_filename = f"{base_name}_output{ext}"
-            fileName = os.path.join(self.current_project_path, "clips", output_filename)
-        else:
-            # Altrimenti, chiedi all'utente dove salvare
-            file_filter = "Video Files (*.mp4 *.mov *.avi)"
-            fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", "", file_filter)
+        default_path = os.path.join(default_dir, default_filename) if default_dir else default_filename
+
+        # Apri sempre il dialogo file
+        file_filter = "Video Files (*.mp4 *.mov *.avi)"
+        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", default_path, file_filter)
 
         if not fileName:
-            return
-        # --- FINE MODIFICA ---
+            return # L'utente ha annullato
+
+        # Controlla se il salvataggio avviene nella cartella clips del progetto
+        is_project_save = False
+        if self.current_project_path:
+            clips_dir = os.path.join(self.current_project_path, "clips")
+            # os.path.normpath per gestire eventuali differenze di slash
+            if os.path.normpath(os.path.dirname(fileName)) == os.path.normpath(clips_dir):
+                is_project_save = True
 
         video_saver = VideoSaver(self)
         rate = 1.0
@@ -4596,8 +4603,8 @@ class VideoAudioManager(QMainWindow):
                 self.videoPathLineOutputEdit, fileName, playback_rate=rate
             )
 
-        # Passa il nome del file al callback per aggiungerlo al progetto
-        self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=bool(self.current_project_path)), self.onSaveError, self.update_status_progress)
+        # Passa il flag al callback per gestire l'aggiunta al progetto
+        self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=is_project_save), self.onSaveError, self.update_status_progress)
 
     def onSaveCompleted(self, output_path, is_project_save=False):
         self.show_status_message(f"Video salvato con successo in: {os.path.basename(output_path)}")
