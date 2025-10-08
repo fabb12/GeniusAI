@@ -66,20 +66,20 @@ class VideoSaveOptionsDialog(QDialog):
         self.compressionGroup.setLayout(compressLayout)
         layout.addWidget(self.compressionGroup)
 
-        # Slow Motion options group
-        self.slowMotionGroup = QGroupBox("Effetto Slow Motion (Optical Flow)")
-        self.slowMotionGroup.setCheckable(True)
-        self.slowMotionGroup.setChecked(False)
-        slowMotionLayout = QHBoxLayout(self.slowMotionGroup)
+        # Frame Interpolation options group
+        self.interpolationGroup = QGroupBox("Frame Interpolation (Optical Flow)")
+        self.interpolationGroup.setCheckable(True)
+        self.interpolationGroup.setChecked(False)
+        interpolationLayout = QHBoxLayout(self.interpolationGroup)
 
-        slowMotionLayout.addWidget(QLabel("Fattore di rallentamento:"))
-        self.slowMotionFactorSpinBox = QSpinBox()
-        self.slowMotionFactorSpinBox.setRange(2, 5)
-        self.slowMotionFactorSpinBox.setValue(2)
-        self.slowMotionFactorSpinBox.setSuffix("x")
-        slowMotionLayout.addWidget(self.slowMotionFactorSpinBox)
-        slowMotionLayout.addStretch()
-        layout.addWidget(self.slowMotionGroup)
+        interpolationLayout.addWidget(QLabel("Fattore di interpolazione:"))
+        self.interpolationFactorSpinBox = QSpinBox()
+        self.interpolationFactorSpinBox.setRange(2, 5)
+        self.interpolationFactorSpinBox.setValue(2)
+        self.interpolationFactorSpinBox.setSuffix("x")
+        interpolationLayout.addWidget(self.interpolationFactorSpinBox)
+        interpolationLayout.addStretch()
+        layout.addWidget(self.interpolationGroup)
 
         # Enable/disable options based on selection
         self.originalRadio.toggled.connect(self.update_options_state)
@@ -103,8 +103,8 @@ class VideoSaveOptionsDialog(QDialog):
             'use_compression': self.compressedRadio.isChecked(),
             'compression_quality': self.qualitySlider.value(),
             'save_with_speed': self.saveWithPlaybackSpeedCheck.isChecked(),
-            'use_slow_motion': self.slowMotionGroup.isChecked(),
-            'slow_motion_factor': self.slowMotionFactorSpinBox.value()
+            'use_interpolation': self.interpolationGroup.isChecked(),
+            'interpolation_factor': self.interpolationFactorSpinBox.value()
         }
 
     def get_file_size_info(self):
