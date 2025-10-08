@@ -100,14 +100,22 @@ class ProjectClipsMergeThread(QThread):
         self.clips_paths = clips_paths
         self.output_path = output_path
         self.running = True
+        self.process = None
 
     def run(self):
+        video_clips = []
+        final_clip = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
+
         try:
             self.progress.emit(10, "Caricamento clip...")
-            video_clips = [VideoFileClip(path) for path in self.clips_paths]
-
-            if not self.running:
-                return
+            video_clips = [VideoFileClip(path) for path in self.clips_paths if self.running]
+            if not self.running: return
 
             target_resolution = video_clips[0].size
             resized_clips = []
@@ -119,13 +127,14 @@ class ProjectClipsMergeThread(QThread):
                 else:
                     resized_clips.append(clip)
 
+            if not self.running: return
             self.progress.emit(50, "Unione delle clip...")
             final_clip = concatenate_videoclips(resized_clips, method="compose")
 
-            if not self.running:
-                return
-
+            if not self.running: return
             self.progress.emit(80, "Salvataggio video finale...")
+
+            subprocess.Popen = custom_popen
             final_clip.write_videofile(self.output_path, codec='libx264', audio_codec='aac')
 
             if self.running:
@@ -136,11 +145,21 @@ class ProjectClipsMergeThread(QThread):
             if self.running:
                 self.error.emit(f"Errore durante l'unione: {e}")
         finally:
+            subprocess.Popen = original_popen
+            self.process = None
             for clip in video_clips:
-                clip.close()
+                if clip: clip.close()
+            if final_clip: final_clip.close()
 
     def stop(self):
         self.running = False
+        if self.process:
+            try:
+                self.process.kill()
+                self.progress.emit(0, "Processo di unione annullato.")
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento del processo di unione: {e}")
+        self.process = None
 
 
 class MediaOverlayThread(QThread):
@@ -155,51 +174,48 @@ class MediaOverlayThread(QThread):
         self.output_path = output_path
         self.start_time = start_time
         self.running = True
+        self.process = None
 
     def run(self):
         video_clip = None
         overlay_clip = None
         final_clip = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
+
         try:
             self.progress.emit(10, "Loading base video...")
             if not self.running: return
             video_clip = VideoFileClip(self.base_video_path)
 
             duration = self.media_data.get('duration', 5)
-
             media_type = self.media_data.get('type')
 
             if media_type == 'text':
                 self.progress.emit(30, "Creating text overlay...")
-
-                # Create text image with Pillow
                 font_path = self.media_data['font'].replace('-', ' ')
                 try:
                     font = ImageFont.truetype(f"{font_path}.ttf", self.media_data['fontsize'])
                 except IOError:
-                    font = ImageFont.load_default() # Fallback font
-
+                    font = ImageFont.load_default()
                 text = self.media_data['text']
-
-                # Dummy draw to get text size
                 dummy_img = Image.new('RGB', (0, 0))
                 dummy_draw = ImageDraw.Draw(dummy_img)
                 left, top, right, bottom = dummy_draw.textbbox((0,0), text, font=font)
                 text_width = right - left
                 text_height = bottom - top
-
-                # Create image with a bit of padding
                 img = Image.new('RGBA', (text_width + 20, text_height + 20), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
                 draw.text((10, 10), text, font=font, fill=self.media_data['color'])
-
-                # Convert Pillow image to moviepy clip
                 overlay_clip = ImageClip(np.array(img))
             elif media_type == 'image':
                 self.progress.emit(30, "Creating image overlay...")
                 overlay_clip = (ImageClip(self.media_data['path'])
                                 .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
-
             elif media_type == 'gif':
                 self.progress.emit(30, "Creating GIF overlay...")
                 overlay_clip = (VideoFileClip(self.media_data['path'], has_mask=True, transparent=True)
@@ -211,19 +227,18 @@ class MediaOverlayThread(QThread):
 
             if not overlay_clip:
                 raise ValueError("Unsupported media type or error creating overlay.")
-
             if not self.running: return
 
             overlay_clip = overlay_clip.set_position(self.media_data['position']).set_duration(duration).set_start(self.start_time)
 
             self.progress.emit(60, "Compositing video...")
             if not self.running: return
-
             final_clip = CompositeVideoClip([video_clip, overlay_clip])
 
             self.progress.emit(80, "Writing final video...")
             if not self.running: return
 
+            subprocess.Popen = custom_popen
             final_clip.write_videofile(self.output_path, codec='libx264', audio_codec='aac', temp_audiofile=f'temp-audio.m4a', remove_temp=True)
 
             if self.running:
@@ -236,12 +251,21 @@ class MediaOverlayThread(QThread):
             if self.running:
                 self.error.emit(str(e))
         finally:
+            subprocess.Popen = original_popen
+            self.process = None
             if video_clip: video_clip.close()
             if overlay_clip: overlay_clip.close()
             if final_clip: final_clip.close()
 
     def stop(self):
         self.running = False
+        if self.process:
+            try:
+                self.process.kill()
+                self.progress.emit(0, "Processo overlay annullato.")
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento del processo overlay: {e}")
+        self.process = None
 
 
 class MergeProgressLogger(proglog.ProgressBarLogger):
@@ -272,13 +296,24 @@ class VideoMergeThread(QThread):
         self.timecode_str = timecode_str
         self.adapt_resolution = adapt_resolution
         self.running = True
+        self.process = None
 
     def run(self):
         base_clip = None
         merge_clip = None
+        final_clip = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
+
         try:
             self.progress.emit(5, "Caricamento video...")
+            if not self.running: return
             base_clip = VideoFileClip(self.base_path)
+            if not self.running: return
             merge_clip = VideoFileClip(self.merge_path)
 
             if not self.running: return
@@ -317,6 +352,7 @@ class VideoMergeThread(QThread):
             if not self.running: return
 
             logger = MergeProgressLogger(self.progress)
+            subprocess.Popen = custom_popen
             final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger)
 
             if self.running:
@@ -326,12 +362,21 @@ class VideoMergeThread(QThread):
         except Exception as e:
             if self.running: self.error.emit(str(e))
         finally:
+            subprocess.Popen = original_popen
+            self.process = None
             if base_clip: base_clip.close()
             if merge_clip: merge_clip.close()
+            if final_clip: final_clip.close()
 
     def stop(self):
         self.running = False
         self.progress.emit(0, "Annullamento in corso...")
+        if self.process:
+            try:
+                self.process.kill()
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento del processo di unione: {e}")
+        self.process = None
 
 
 class BackgroundAudioProgressLogger(proglog.ProgressBarLogger):
@@ -361,13 +406,24 @@ class BackgroundAudioThread(QThread):
         self.volume = volume
         self.loop_audio = loop_audio
         self.running = True
+        self.process = None
 
     def run(self):
         video_clip = None
         background_audio_clip = None
+        final_clip = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
+
         try:
             self.progress.emit(5, "Caricamento file...")
+            if not self.running: return
             video_clip = VideoFileClip(self.video_path)
+            if not self.running: return
             background_audio_clip = AudioFileClip(self.audio_path).volumex(self.volume)
             if not self.running: return
 
@@ -395,6 +451,7 @@ class BackgroundAudioThread(QThread):
             if not self.running: return
 
             logger = BackgroundAudioProgressLogger(self.progress)
+            subprocess.Popen = custom_popen
             final_clip.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=logger)
 
             if self.running:
@@ -404,12 +461,21 @@ class BackgroundAudioThread(QThread):
         except Exception as e:
             if self.running: self.error.emit(str(e))
         finally:
+            subprocess.Popen = original_popen
+            self.process = None
             if video_clip: video_clip.close()
             if background_audio_clip: background_audio_clip.close()
+            if final_clip: final_clip.close()
 
     def stop(self):
         self.running = False
         self.progress.emit(0, "Annullamento in corso...")
+        if self.process:
+            try:
+                self.process.kill()
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento del processo audio: {e}")
+        self.process = None
 
 
 class AudioProcessingThread(QThread):
@@ -424,6 +490,7 @@ class AudioProcessingThread(QThread):
         self.use_sync = use_sync
         self.start_time = start_time
         self.running = True
+        self.process = None
 
     def run(self):
         try:
@@ -437,12 +504,27 @@ class AudioProcessingThread(QThread):
 
     def stop(self):
         self.running = False
-        self.terminate()
-        self.wait()
+        if self.process:
+            try:
+                self.process.kill()
+                self.progress.emit(0, "Processo audio annullato.")
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento del processo audio: {e}")
+        self.process = None
 
     def sync_and_apply(self):
         self.progress.emit(10, "Avvio sincronizzazione...")
         if not self.running: return
+
+        video_clip = None
+        new_audio_clip = None
+        final_video = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
 
         try:
             video_clip = VideoFileClip(self.video_path)
@@ -465,19 +547,33 @@ class AudioProcessingThread(QThread):
             self.progress.emit(70, "Salvataggio video finale...")
             if not self.running: return
 
+            subprocess.Popen = custom_popen
             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps, logger=None)
 
             if self.running:
                 self.progress.emit(100, "Completato")
                 self.completed.emit(output_path)
         finally:
-            if 'video_clip' in locals(): video_clip.close()
-            if 'new_audio_clip' in locals(): new_audio_clip.close()
-
+            subprocess.Popen = original_popen
+            self.process = None
+            if video_clip: video_clip.close()
+            if new_audio_clip: new_audio_clip.close()
+            if final_video: final_video.close()
 
     def apply_at_time(self):
         self.progress.emit(10, "Avvio applicazione audio...")
         if not self.running: return
+
+        video_clip = None
+        original_audio = None
+        new_audio_clip = None
+        final_video = None
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            process = original_popen(*args, **kwargs)
+            self.process = process
+            return process
 
         try:
             video_clip = VideoFileClip(self.video_path)
@@ -491,22 +587,17 @@ class AudioProcessingThread(QThread):
 
             self.progress.emit(30, "Composizione tracce audio...")
 
-            # Parte 1: Audio originale fino a start_time
             part1 = original_audio.subclip(0, self.start_time)
-
-            # Parte 3: Audio originale dopo il nuovo audio
             end_of_new_audio = self.start_time + new_audio_clip.duration
             part3 = None
             if end_of_new_audio < video_clip.duration:
                 part3 = original_audio.subclip(end_of_new_audio)
 
-            # Combina le parti
             final_audio_clips = [part1, new_audio_clip]
             if part3:
                 final_audio_clips.append(part3)
 
             final_audio = concatenate_audioclips(final_audio_clips)
-
             if not self.running: return
 
             self.progress.emit(60, "Applicazione audio al video...")
@@ -519,15 +610,77 @@ class AudioProcessingThread(QThread):
             self.progress.emit(80, "Salvataggio video...")
             if not self.running: return
 
+            subprocess.Popen = custom_popen
             final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps, logger=None)
 
             if self.running:
                 self.progress.emit(100, "Completato")
                 self.completed.emit(output_path)
         finally:
-            if 'video_clip' in locals(): video_clip.close()
-            if 'original_audio' in locals(): original_audio.close()
-            if 'new_audio_clip' in locals(): new_audio_clip.close()
+            subprocess.Popen = original_popen
+            self.process = None
+            if video_clip: video_clip.close()
+            if original_audio: original_audio.close()
+            if new_audio_clip: new_audio_clip.close()
+            if final_video: final_video.close()
+
+
+class MergeSegmentsThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, segments_list, output_path, ffmpeg_path, temp_dir, parent=None):
+        super().__init__(parent)
+        self.segments_list = segments_list
+        self.output_path = output_path
+        self.ffmpeg_path = ffmpeg_path
+        self.temp_dir = temp_dir
+        self.running = True
+        self.process = None
+
+    def run(self):
+        segments_file = os.path.join(self.temp_dir, "segments.txt")
+        try:
+            self.progress.emit(10, "Preparazione unione segmenti...")
+            with open(segments_file, "w") as file:
+                for segment in self.segments_list:
+                    file.write(f"file '{os.path.abspath(segment)}'\n")
+
+            if not self.running: return
+
+            self.progress.emit(30, "Unione dei segmenti in corso...")
+            merge_command = [self.ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', self.output_path]
+
+            self.process = subprocess.Popen(merge_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW)
+            stdout, stderr = self.process.communicate()
+
+            if not self.running: return
+
+            if self.process.returncode != 0:
+                error_msg = stderr.decode('utf-8', errors='ignore')
+                self.error.emit(f"Errore durante l'unione: {error_msg}")
+            else:
+                self.progress.emit(100, "Unione completata.")
+                self.completed.emit(self.output_path)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(str(e))
+        finally:
+            self.process = None
+            if os.path.exists(segments_file):
+                os.remove(segments_file)
+
+    def stop(self):
+        self.running = False
+        if self.process and self.process.poll() is None:
+            try:
+                self.process.kill()
+                self.progress.emit(0, "Unione segmenti annullata.")
+            except Exception as e:
+                logging.error(f"Errore durante l'annullamento dell'unione: {e}")
+        self.process = None
 
 
 class VideoAudioManager(QMainWindow):
@@ -3977,46 +4130,34 @@ class VideoAudioManager(QMainWindow):
         if not self.recording_segments:
             return
 
-        first_segment = self.recording_segments[0]
-        output_path = ""
-
-        if len(self.recording_segments) > 1:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-            base_name = os.path.splitext(os.path.basename(first_segment))[0]
-            if '_' in base_name:
-                base_name = base_name.rsplit('_', 1)[0]
-
-            output_dir = os.path.dirname(first_segment)
-            file_extension = os.path.splitext(first_segment)[1]
-            output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
-
-            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
-
-            if self.current_project_path:
-                temp_dir = os.path.join(self.current_project_path, "temp")
-                os.makedirs(temp_dir, exist_ok=True)
-                segments_file = os.path.join(temp_dir, "segments.txt")
-            else:
-                segments_file = "segments.txt"
-
-            try:
-                with open(segments_file, "w") as file:
-                    for segment in self.recording_segments:
-                        file.write(f"file '{os.path.abspath(segment)}'\n")
-
-                merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
-                subprocess.run(merge_command, check=True)
-
-                # Pulizia dei segmenti temporanei
-                for segment in self.recording_segments:
-                    if os.path.exists(segment):
-                        os.remove(segment)
-            finally:
-                if os.path.exists(segments_file):
-                    os.remove(segments_file)
-        else:
+        if len(self.recording_segments) == 1:
             output_path = self.recording_segments[0]
+            self.on_merge_segments_completed(output_path)
+            return
 
+        first_segment = self.recording_segments[0]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        base_name = os.path.splitext(os.path.basename(first_segment))[0]
+        if '_' in base_name:
+            base_name = base_name.rsplit('_', 1)[0]
+
+        output_dir = os.path.dirname(first_segment)
+        file_extension = os.path.splitext(first_segment)[1]
+        output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
+
+        ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+        temp_dir = self.get_temp_dir()
+
+        thread = MergeSegmentsThread(
+            segments_list=self.recording_segments,
+            output_path=output_path,
+            ffmpeg_path=ffmpeg_path,
+            temp_dir=temp_dir,
+            parent=self
+        )
+        self.start_task(thread, self.on_merge_segments_completed, self.on_merge_segments_error, self.update_status_progress)
+
+    def on_merge_segments_completed(self, output_path):
         if not output_path or not os.path.exists(output_path):
             self.show_status_message("Errore nel salvataggio della registrazione.", error=True)
             return
@@ -4028,8 +4169,6 @@ class VideoAudioManager(QMainWindow):
         if self.current_project_path and self.projectDock.gnai_path:
             clip_filename = os.path.basename(output_path)
             metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
-
-            # Raccogli i metadati aggiuntivi
             try:
                 clip_info = VideoFileClip(output_path)
                 duration = clip_info.duration
@@ -4048,10 +4187,20 @@ class VideoAudioManager(QMainWindow):
                 size,
                 creation_date
             )
-
-            # Ricarica i dati del progetto per aggiornare la UI
             self.load_project(self.projectDock.gnai_path)
             self.show_status_message(f"Clip '{clip_filename}' aggiunta al progetto.")
+
+        # Pulizia finale dei segmenti
+        for segment in self.recording_segments:
+            if os.path.exists(segment):
+                try:
+                    os.remove(segment)
+                except Exception as e:
+                    logging.warning(f"Impossibile rimuovere il segmento temporaneo {segment}: {e}")
+        self.recording_segments.clear()
+
+    def on_merge_segments_error(self, error_message):
+        self.show_status_message(f"Errore durante l'unione dei segmenti: {error_message}", error=True)
 
     def _is_bluetooth_mode_active(self):
         """Checks if any of the selected audio devices is a Bluetooth headset."""

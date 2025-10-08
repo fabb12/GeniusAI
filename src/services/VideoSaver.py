@@ -25,10 +25,22 @@ class VideoProcessingThread(QThread):
 
     def stop(self):
         self.running = False
-        if self.process:
-            self.process.kill()
-            self.process = None
-        self.progress.emit(0, "Operazione annullata.")
+        if self.process and self.process.poll() is None:
+            self.progress.emit(0, "Annullamento in corso...")
+            try:
+                self.process.stdin.write(b'q')
+                self.process.stdin.flush()
+                self.process.wait(timeout=2)
+            except (subprocess.TimeoutExpired, IOError, BrokenPipeError):
+                self.process.kill()
+                self.process.wait()
+            except Exception as e:
+                logging.error(f"Errore imprevisto durante l'annullamento del processo ffmpeg: {e}")
+                if self.process.poll() is None:
+                    self.process.kill()
+                    self.process.wait()
+            finally:
+                self.process = None
 
     def run(self):
         try:
@@ -168,6 +180,7 @@ class VideoProcessingThread(QThread):
 
         self.process = subprocess.Popen(
             command,
+            stdin=subprocess.PIPE,
             stderr=subprocess.PIPE,
             stdout=subprocess.PIPE,
             universal_newlines=True,
