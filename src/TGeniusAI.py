@@ -819,12 +819,6 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setToolTip("Dock per la gestione Audio/Video")
         area.addDock(self.audioDock, 'left')
 
-        self.videoEffectsDock = self.createVideoEffectsDock()
-        self.videoEffectsDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.videoEffectsDock.setStyleSheet(self.styleSheet())
-        self.videoEffectsDock.setToolTip("Dock per effetti video (PiP, Overlay)")
-        area.addDock(self.videoEffectsDock, 'right', self.audioDock)
-
         self.infoDock = InfoDock()
         self.infoDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.infoDock.setStyleSheet(self.styleSheet())
@@ -1443,7 +1437,6 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'videoEffectsDock': self.videoEffectsDock,
             'infoDock': self.infoDock,
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock
@@ -2740,7 +2733,6 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
-        self.videoEffectsDock.setStyleSheet(style)
         self.infoDock.setStyleSheet(style)
         self.videoNotesDock.setStyleSheet(style)
 
@@ -3179,137 +3171,6 @@ class VideoAudioManager(QMainWindow):
     def setTimecodeVideoFromSlider(self):
         current_position = self.player.position()
         self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
-
-    def createVideoEffectsDock(self):
-        """Crea e restituisce il dock per gli effetti video (PiP e Overlay)."""
-        dock = CustomDock("Effetti Video", closable=True)
-
-        tab_widget = QTabWidget()
-
-        # --- Tab Picture-in-Picture (PiP) ---
-        pip_tab = QWidget()
-        pip_layout = QVBoxLayout(pip_tab)
-        pip_group = QGroupBox("Aggiungi Video Picture-in-Picture (PiP)")
-        pip_group_layout = QVBoxLayout(pip_group)
-
-        # File selection
-        pip_file_layout = QHBoxLayout()
-        self.pipVideoPathLineEdit = QLineEdit()
-        self.pipVideoPathLineEdit.setReadOnly(True)
-        self.pipVideoPathLineEdit.setPlaceholderText("Seleziona il video per il PiP...")
-        browsePipVideoButton = QPushButton("Sfoglia...")
-        browsePipVideoButton.clicked.connect(self.browsePipVideo)
-        pip_file_layout.addWidget(self.pipVideoPathLineEdit)
-        pip_file_layout.addWidget(browsePipVideoButton)
-        pip_group_layout.addLayout(pip_file_layout)
-
-        # Position and Size
-        pip_options_layout = QHBoxLayout()
-        pip_group_layout.addWidget(QLabel("Posizione e Dimensione:"))
-        self.pipPositionComboBox = QComboBox()
-        self.pipPositionComboBox.addItems(["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Center"])
-        pip_options_layout.addWidget(self.pipPositionComboBox)
-
-        self.pipSizeSpinBox = QSpinBox()
-        self.pipSizeSpinBox.setRange(5, 75)
-        self.pipSizeSpinBox.setValue(25)
-        self.pipSizeSpinBox.setSuffix("%")
-        pip_options_layout.addWidget(self.pipSizeSpinBox)
-        pip_group_layout.addLayout(pip_options_layout)
-
-        applyPipButton = QPushButton("Applica Effetto PiP")
-        applyPipButton.clicked.connect(self.apply_pip_effect)
-        pip_group_layout.addWidget(applyPipButton)
-
-        pip_layout.addWidget(pip_group)
-        pip_layout.addStretch()
-        tab_widget.addTab(pip_tab, "Video PiP")
-
-        # --- Tab Image Overlay ---
-        image_tab = QWidget()
-        image_layout = QVBoxLayout(image_tab)
-        image_group = QGroupBox("Aggiungi Immagine in Sovraimpressione")
-        image_group_layout = QVBoxLayout(image_group)
-
-        # File selection
-        image_file_layout = QHBoxLayout()
-        self.imageOverlayPathLineEdit = QLineEdit()
-        self.imageOverlayPathLineEdit.setReadOnly(True)
-        self.imageOverlayPathLineEdit.setPlaceholderText("Seleziona l'immagine da sovrapporre...")
-        browseImageOverlayButton = QPushButton("Sfoglia...")
-        browseImageOverlayButton.clicked.connect(self.browseImageOverlay)
-        image_file_layout.addWidget(self.imageOverlayPathLineEdit)
-        image_file_layout.addWidget(browseImageOverlayButton)
-        image_group_layout.addLayout(image_file_layout)
-
-        # Position and Size
-        image_options_layout = QHBoxLayout()
-        image_group_layout.addWidget(QLabel("Posizione e Dimensione:"))
-        self.imagePositionComboBox = QComboBox()
-        self.imagePositionComboBox.addItems(["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Center"])
-        image_options_layout.addWidget(self.imagePositionComboBox)
-
-        self.imageSizeSpinBox = QSpinBox()
-        self.imageSizeSpinBox.setRange(5, 100)
-        self.imageSizeSpinBox.setValue(20)
-        self.imageSizeSpinBox.setSuffix("%")
-        image_options_layout.addWidget(self.imageSizeSpinBox)
-        image_group_layout.addLayout(image_options_layout)
-
-        applyImageButton = QPushButton("Applica Immagine Overlay")
-        applyImageButton.clicked.connect(self.apply_image_overlay_effect)
-        image_group_layout.addWidget(applyImageButton)
-
-        image_layout.addWidget(image_group)
-        image_layout.addStretch()
-        tab_widget.addTab(image_tab, "Immagine Overlay")
-
-        dock.addWidget(tab_widget)
-        return dock
-
-    def browsePipVideo(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video per PiP", "", "Video Files (*.mp4 *.mov *.avi)")
-        if fileName:
-            self.pipVideoPathLineEdit.setText(fileName)
-
-    def browseImageOverlay(self):
-        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Immagine Overlay", "", "Image Files (*.png *.jpg *.jpeg)")
-        if fileName:
-            self.imageOverlayPathLineEdit.setText(fileName)
-
-    def apply_pip_effect(self):
-        base_video_path = self.videoPathLineEdit
-        overlay_video_path = self.pipVideoPathLineEdit.text()
-
-        if not base_video_path or not os.path.exists(base_video_path):
-            self.show_status_message("Carica un video nel player di input prima di applicare un effetto.", error=True)
-            return
-        if not overlay_video_path or not os.path.exists(overlay_video_path):
-            self.show_status_message("Seleziona un video per l'effetto Picture-in-Picture.", error=True)
-            return
-
-        position = self.pipPositionComboBox.currentText()
-        size = self.pipSizeSpinBox.value()
-        start_time = self.player.position() / 1000.0
-
-        self.run_compositing_thread('video', base_video_path, overlay_video_path, position, size, start_time)
-
-    def apply_image_overlay_effect(self):
-        base_video_path = self.videoPathLineEdit
-        overlay_image_path = self.imageOverlayPathLineEdit.text()
-
-        if not base_video_path or not os.path.exists(base_video_path):
-            self.show_status_message("Carica un video nel player di input prima di applicare un effetto.", error=True)
-            return
-        if not overlay_image_path or not os.path.exists(overlay_image_path):
-            self.show_status_message("Seleziona un'immagine per l'effetto overlay.", error=True)
-            return
-
-        position = self.imagePositionComboBox.currentText()
-        size = self.imageSizeSpinBox.value()
-        start_time = self.player.position() / 1000.0
-
-        self.run_compositing_thread('image', base_video_path, overlay_image_path, position, size, start_time)
 
     def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size, start_time):
         thread = VideoCompositingThread(
@@ -4617,10 +4478,6 @@ class VideoAudioManager(QMainWindow):
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
-        # Creazione del menu Effetti (Rimosso)
-        # effectsMenu = menuBar.addMenu('&Effetti')
-        # self.setupEffectsMenuActions(effectsMenu)
-
         # Creazione del menu Workspace per i layout preimpostati
         workspaceMenu = menuBar.addMenu('&Workspace')
         workspaceMenu.addAction(self.defaultLayoutAction)
@@ -4676,30 +4533,6 @@ class VideoAudioManager(QMainWindow):
         aboutAction.setStatusTip('About the application')
         aboutAction.triggered.connect(self.about)
         aboutMenu.addAction(aboutAction)
-
-    def setupEffectsMenuActions(self, effectsMenu):
-        addPipAction = QAction('Aggiungi Video Picture-in-Picture', self)
-        addPipAction.setStatusTip('Apre il pannello per aggiungere un video in PiP')
-        addPipAction.triggered.connect(lambda: self.showEffectsDock(0))
-        effectsMenu.addAction(addPipAction)
-
-        addImageOverlayAction = QAction('Aggiungi Immagine Overlay', self)
-        addImageOverlayAction.setStatusTip("Apre il pannello per aggiungere un'immagine in sovraimpressione")
-        addImageOverlayAction.triggered.connect(lambda: self.showEffectsDock(1))
-        effectsMenu.addAction(addImageOverlayAction)
-
-    def showEffectsDock(self, tab_index=0):
-        """Mostra il dock degli effetti e seleziona il tab specificato."""
-        if not self.videoEffectsDock.isVisible():
-            self.videoEffectsDock.show()
-        self.videoEffectsDock.raise_()
-
-        # Accedi al QTabWidget, che è il primo (e unico) widget nel dock
-        widgets_in_dock = self.videoEffectsDock.widgets()
-        if widgets_in_dock:
-            tab_widget = widgets_in_dock[0]
-            if isinstance(tab_widget, QTabWidget):
-                tab_widget.setCurrentIndex(tab_index)
 
     def saveVideoAs(self):
         if not self.videoPathLineOutputEdit:
@@ -4791,7 +4624,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
-        self.actionToggleVideoEffectsDock = self.createToggleAction(self.videoEffectsDock, 'Mostra/Nascondi Effetti Video')
         self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
@@ -4803,7 +4635,6 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleEditingDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
-        viewMenu.addAction(self.actionToggleVideoEffectsDock)
         viewMenu.addAction(self.actionToggleInfoDock)
         viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
@@ -4894,7 +4725,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
-        self.actionToggleVideoEffectsDock.setChecked(self.videoEffectsDock.isVisible())
         self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
@@ -6736,20 +6566,33 @@ class VideoAudioManager(QMainWindow):
             start_time = self.player.position() / 1000.0
             self.show_status_message(f"Adding overlay at current position: {start_time:.2f}s")
 
-        thread = MediaOverlayThread(
-            base_video_path=self.videoPathLineEdit,
-            media_data=media_data,
-            output_path=output_path,
-            start_time=start_time,
-            parent=self
-        )
+        media_type = media_data.get("type")
 
-        self.start_task(
-            thread,
-            on_complete=self.on_overlay_completed,
-            on_error=self.on_overlay_error,
-            on_progress=self.update_status_progress
-        )
+        if media_type == 'video_pip':
+            thread = VideoCompositingThread(
+                base_video_path=self.videoPathLineEdit,
+                overlay_path=media_data['path'],
+                overlay_type='video',
+                position=media_data['position_name'],
+                size=media_data['size_percent'],
+                start_time=start_time,
+                parent=self
+            )
+            self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
+        else:
+            thread = MediaOverlayThread(
+                base_video_path=self.videoPathLineEdit,
+                media_data=media_data,
+                output_path=output_path,
+                start_time=start_time,
+                parent=self
+            )
+            self.start_task(
+                thread,
+                on_complete=self.on_overlay_completed,
+                on_error=self.on_overlay_error,
+                on_progress=self.update_status_progress
+            )
 
     def on_overlay_completed(self, output_path):
         self.show_status_message("Media overlay applied successfully.")
