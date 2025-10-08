@@ -4701,7 +4701,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock.setChecked(True)
         self.actionToggleEditingDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
-        self.actionToggleVideoEffectsDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
         self.actionToggleInfoDock.setChecked(True)
 
