@@ -29,7 +29,7 @@ from src.ui.InfoDock import InfoDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
-    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx
+    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip
 )
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
@@ -68,6 +68,7 @@ from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
 from src.ui.CursorOverlay import CursorOverlay
 from src.ui.MultiLineInputDialog import MultiLineInputDialog
+from src.ui.AddMediaDialog import AddMediaDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
@@ -136,6 +137,90 @@ class ProjectClipsMergeThread(QThread):
         finally:
             for clip in video_clips:
                 clip.close()
+
+    def stop(self):
+        self.running = False
+
+
+class MediaOverlayThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, base_video_path, media_data, output_path, start_time, parent=None):
+        super().__init__(parent)
+        self.base_video_path = base_video_path
+        self.media_data = media_data
+        self.output_path = output_path
+        self.start_time = start_time
+        self.running = True
+
+    def run(self):
+        video_clip = None
+        overlay_clip = None
+        final_clip = None
+        try:
+            self.progress.emit(10, "Loading base video...")
+            if not self.running: return
+            video_clip = VideoFileClip(self.base_video_path)
+
+            duration = self.media_data.get('duration', 5)
+
+            media_type = self.media_data.get('type')
+
+            if media_type == 'text':
+                self.progress.emit(30, "Creating text overlay...")
+                font_path = self.media_data['font'].replace('-', ' ')
+                overlay_clip = TextClip(
+                    self.media_data['text'],
+                    fontsize=self.media_data['fontsize'],
+                    color=self.media_data['color'],
+                    font=font_path
+                )
+            elif media_type == 'image':
+                self.progress.emit(30, "Creating image overlay...")
+                overlay_clip = (ImageClip(self.media_data['path'])
+                                .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
+
+            elif media_type == 'gif':
+                self.progress.emit(30, "Creating GIF overlay...")
+                overlay_clip = (VideoFileClip(self.media_data['path'], has_mask=True, transparent=True)
+                                .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
+                if duration < overlay_clip.duration:
+                    overlay_clip = overlay_clip.subclip(0, duration)
+                else:
+                    overlay_clip = overlay_clip.loop(duration=duration)
+
+            if not overlay_clip:
+                raise ValueError("Unsupported media type or error creating overlay.")
+
+            if not self.running: return
+
+            overlay_clip = overlay_clip.set_position(self.media_data['position']).set_duration(duration).set_start(self.start_time)
+
+            self.progress.emit(60, "Compositing video...")
+            if not self.running: return
+
+            final_clip = CompositeVideoClip([video_clip, overlay_clip])
+
+            self.progress.emit(80, "Writing final video...")
+            if not self.running: return
+
+            final_clip.write_videofile(self.output_path, codec='libx264', audio_codec='aac', temp_audiofile=f'temp-audio.m4a', remove_temp=True)
+
+            if self.running:
+                self.progress.emit(100, "Completed.")
+                self.completed.emit(self.output_path)
+
+        except Exception as e:
+            import traceback
+            logging.error(f"Error in MediaOverlayThread: {e}\n{traceback.format_exc()}")
+            if self.running:
+                self.error.emit(str(e))
+        finally:
+            if video_clip: video_clip.close()
+            if overlay_clip: overlay_clip.close()
+            if final_clip: final_clip.close()
 
     def stop(self):
         self.running = False
@@ -4495,6 +4580,13 @@ class VideoAudioManager(QMainWindow):
         exportWordAction = QAction('Esporta riassunto in Word', self)
         exportWordAction.triggered.connect(self.exportSummaryToWord)
         exportMenu.addAction(exportWordAction)
+
+        # Creazione del menu Insert
+        insertMenu = menuBar.addMenu('&Insert')
+        addMediaAction = QAction('Add Media/Text...', self)
+        addMediaAction.setStatusTip('Aggiungi testo o immagini al video')
+        addMediaAction.triggered.connect(self.openAddMediaDialog)
+        insertMenu.addAction(addMediaAction)
         """
         agentAIsMenu = menuBar.addMenu('&Agent AIs')
 
@@ -6577,6 +6669,48 @@ class VideoAudioManager(QMainWindow):
             return tempfile.mkdtemp(prefix=prefix, dir=temp_dir)
         else:
             return tempfile.mkdtemp(prefix=prefix)
+
+    def openAddMediaDialog(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Please load a video in the Input Player first.", error=True)
+            return
+
+        dialog = AddMediaDialog(self)
+        dialog.media_added.connect(self.handle_media_added)
+        dialog.exec()
+
+    def handle_media_added(self, media_data):
+        output_path = self.get_temp_filepath(suffix=".mp4", prefix=f"{media_data['type']}_overlay_")
+
+        # Determine start time: use first bookmark or current position
+        if self.videoSlider.bookmarks:
+            start_time = sorted(self.videoSlider.bookmarks)[0][0] / 1000.0
+            self.show_status_message(f"Adding overlay at start of bookmark: {start_time:.2f}s")
+        else:
+            start_time = self.player.position() / 1000.0
+            self.show_status_message(f"Adding overlay at current position: {start_time:.2f}s")
+
+        thread = MediaOverlayThread(
+            base_video_path=self.videoPathLineEdit,
+            media_data=media_data,
+            output_path=output_path,
+            start_time=start_time,
+            parent=self
+        )
+
+        self.start_task(
+            thread,
+            on_complete=self.on_overlay_completed,
+            on_error=self.on_overlay_error,
+            on_progress=self.update_status_progress
+        )
+
+    def on_overlay_completed(self, output_path):
+        self.show_status_message("Media overlay applied successfully.")
+        self.loadVideoOutput(output_path)
+
+    def on_overlay_error(self, error_message):
+        self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
 
 
 def get_application_path():
