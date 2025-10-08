@@ -1,5 +1,5 @@
 import os
-from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtCore import Qt, pyqtSignal, QSize, QSettings
 from PyQt6.QtGui import QFont, QColor, QPainter, QPixmap, QFontInfo
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QTabWidget, QWidget, QFormLayout, QLineEdit,
@@ -29,16 +29,19 @@ class AddMediaDialog(QDialog):
         self.tab_text = QWidget()
         self.tab_image = QWidget()
         self.tab_gif = QWidget()
+        self.tab_pip = QWidget() # New Tab for PiP
 
         self.tabs.addTab(self.tab_text, "Text")
         self.tabs.addTab(self.tab_image, "Image")
         self.tabs.addTab(self.tab_gif, "GIF")
+        self.tabs.addTab(self.tab_pip, "Video PiP") # Add PiP tab
         self.settings_layout.addWidget(self.tabs)
         self.tabs.currentChanged.connect(self.update_preview)
 
         self._create_text_tab()
         self._create_image_tab()
         self._create_gif_tab()
+        self._create_pip_tab() # Create the new PiP tab
 
         # Dialog buttons (OK, Cancel)
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
@@ -62,7 +65,84 @@ class AddMediaDialog(QDialog):
         self.refresh_preview_button.clicked.connect(self.update_preview)
         self.preview_layout.addWidget(self.refresh_preview_button)
 
+        self.load_settings() # Load settings on init
         self.update_preview() # Initial preview
+
+    def save_settings(self):
+        """Saves the dialog's settings."""
+        settings = QSettings("Genius", "GeniusAI_AddMediaDialog")
+        settings.setValue("tab_index", self.tabs.currentIndex())
+
+        # Text Tab
+        settings.setValue("text/text", self.text_input.text())
+        settings.setValue("text/font", self.current_font)
+        settings.setValue("text/color", self.current_color)
+        settings.setValue("text/pos_x", self.pos_x_spinbox.value())
+        settings.setValue("text/pos_y", self.pos_y_spinbox.value())
+        settings.setValue("text/duration", self.duration_spinbox_text.value())
+
+        # Image Tab
+        settings.setValue("image/path", self.image_path_label.text())
+        settings.setValue("image/pos_x", self.image_pos_x_spinbox.value())
+        settings.setValue("image/pos_y", self.image_pos_y_spinbox.value())
+        settings.setValue("image/width", self.image_width_spinbox.value())
+        settings.setValue("image/height", self.image_height_spinbox.value())
+        settings.setValue("image/duration", self.duration_spinbox_image.value())
+
+        # GIF Tab
+        settings.setValue("gif/path", self.gif_path_label.text())
+        settings.setValue("gif/pos_x", self.gif_pos_x_spinbox.value())
+        settings.setValue("gif/pos_y", self.gif_pos_y_spinbox.value())
+        settings.setValue("gif/width", self.gif_width_spinbox.value())
+        settings.setValue("gif/height", self.gif_height_spinbox.value())
+        settings.setValue("gif/duration", self.duration_spinbox_gif.value())
+
+        # PiP Tab
+        settings.setValue("pip/path", self.pip_path_label.text())
+        settings.setValue("pip/position", self.pip_position_combobox.currentText())
+        settings.setValue("pip/size", self.pip_size_spinbox.value())
+        settings.setValue("pip/duration", self.duration_spinbox_pip.value())
+
+
+    def load_settings(self):
+        """Loads the dialog's settings."""
+        settings = QSettings("Genius", "GeniusAI_AddMediaDialog")
+
+        # Text Tab
+        self.text_input.setText(settings.value("text/text", "", type=str))
+        self.current_font = settings.value("text/font", QFont("Arial", 12))
+        self.font_label.setText(f"{self.current_font.family()}, {self.current_font.pointSize()}")
+        self.current_color = settings.value("text/color", QColor("white"))
+        self._update_color_label()
+        self.pos_x_spinbox.setValue(settings.value("text/pos_x", 0, type=int))
+        self.pos_y_spinbox.setValue(settings.value("text/pos_y", 0, type=int))
+        self.duration_spinbox_text.setValue(settings.value("text/duration", 5.0, type=float))
+
+        # Image Tab
+        self.image_path_label.setText(settings.value("image/path", "", type=str))
+        self.image_pos_x_spinbox.setValue(settings.value("image/pos_x", 0, type=int))
+        self.image_pos_y_spinbox.setValue(settings.value("image/pos_y", 0, type=int))
+        self.image_width_spinbox.setValue(settings.value("image/width", 100, type=int))
+        self.image_height_spinbox.setValue(settings.value("image/height", 100, type=int))
+        self.duration_spinbox_image.setValue(settings.value("image/duration", 5.0, type=float))
+
+        # GIF Tab
+        self.gif_path_label.setText(settings.value("gif/path", "", type=str))
+        self.gif_pos_x_spinbox.setValue(settings.value("gif/pos_x", 0, type=int))
+        self.gif_pos_y_spinbox.setValue(settings.value("gif/pos_y", 0, type=int))
+        self.gif_width_spinbox.setValue(settings.value("gif/width", 100, type=int))
+        self.gif_height_spinbox.setValue(settings.value("gif/height", 100, type=int))
+        self.duration_spinbox_gif.setValue(settings.value("gif/duration", 5.0, type=float))
+
+        # PiP Tab
+        self.pip_path_label.setText(settings.value("pip/path", "", type=str))
+        self.pip_position_combobox.setCurrentText(settings.value("pip/position", "Top Right", type=str))
+        self.pip_size_spinbox.setValue(settings.value("pip/size", 25, type=int))
+        self.duration_spinbox_pip.setValue(settings.value("pip/duration", 10.0, type=float))
+
+        # Set last opened tab
+        self.tabs.setCurrentIndex(settings.value("tab_index", 0, type=int))
+
 
     def preview_clicked(self, event):
         if not self.preview_label.pixmap() or self.preview_label.pixmap().isNull():
@@ -113,6 +193,8 @@ class AddMediaDialog(QDialog):
         elif current_tab_index == 2: # GIF
             self.gif_pos_x_spinbox.setValue(original_x)
             self.gif_pos_y_spinbox.setValue(original_y)
+        elif current_tab_index == 3: # PiP - Position is handled by combobox, but we could adapt this
+            pass # No direct X/Y spinboxes for PiP
 
         # The spinbox valueChanged signal will automatically call update_preview
 
@@ -142,9 +224,14 @@ class AddMediaDialog(QDialog):
             position = media_data['position']
             text = media_data['text']
 
+            # Use QFontInfo to get accurate size for positioning
+            font_info = QFontInfo(font)
+            text_height = font_info.pixelSize()
+
             painter.setFont(font)
             painter.setPen(color)
-            painter.drawText(position[0], position[1], text)
+            # Adjust y-position to account for text height so it's placed correctly
+            painter.drawText(position[0], position[1] + text_height, text)
 
         elif media_type == 'image' and media_data.get('path'):
             image_path = media_data['path']
@@ -164,6 +251,36 @@ class AddMediaDialog(QDialog):
                     position = media_data['position']
                     size = media_data['size']
                     painter.drawPixmap(position[0], position[1], size[0], size[1], overlay_pixmap)
+
+        elif media_type == 'video_pip' and media_data.get('path'):
+            # For PiP video, draw a placeholder rectangle in the preview
+            position_name = media_data['position_name']
+            size_percent = media_data['size_percent']
+
+            w = preview_pixmap.width()
+            h = preview_pixmap.height()
+
+            pip_w = int(w * (size_percent / 100.0))
+            pip_h = int(h * (size_percent / 100.0))
+
+            margin = 10 # 10px margin from the edges
+
+            if position_name == "Top Right":
+                x, y = w - pip_w - margin, margin
+            elif position_name == "Top Left":
+                x, y = margin, margin
+            elif position_name == "Bottom Right":
+                x, y = w - pip_w - margin, h - pip_h - margin
+            elif position_name == "Bottom Left":
+                x, y = margin, h - pip_h - margin
+            else: # Center
+                x, y = (w - pip_w) // 2, (h - pip_h) // 2
+
+            painter.setBrush(QColor(0, 0, 255, 100)) # Semi-transparent blue
+            painter.setPen(QColor("white"))
+            painter.drawRect(x, y, pip_w, pip_h)
+            painter.drawText(x, y, pip_w, pip_h, Qt.AlignmentFlag.AlignCenter, "PiP Video")
+
 
         painter.end()
 
@@ -325,6 +442,40 @@ class AddMediaDialog(QDialog):
         self.duration_spinbox_gif.setSuffix(" s")
         layout.addRow("Duration:", self.duration_spinbox_gif)
 
+    def _create_pip_tab(self):
+        layout = QFormLayout(self.tab_pip)
+
+        # File Path
+        file_layout = QHBoxLayout()
+        self.pip_path_label = QLineEdit()
+        self.pip_path_label.setReadOnly(True)
+        browse_button = QPushButton("Browse...")
+        browse_button.clicked.connect(lambda: self._browse_file(self.pip_path_label, "Videos (*.mp4 *.mov *.avi)"))
+        file_layout.addWidget(self.pip_path_label)
+        file_layout.addWidget(browse_button)
+        layout.addRow("Video File:", file_layout)
+
+        # Position
+        self.pip_position_combobox = QComboBox()
+        self.pip_position_combobox.addItems(["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Center"])
+        self.pip_position_combobox.currentTextChanged.connect(self.update_preview)
+        layout.addRow("Position:", self.pip_position_combobox)
+
+        # Size
+        self.pip_size_spinbox = QSpinBox()
+        self.pip_size_spinbox.setRange(5, 75)
+        self.pip_size_spinbox.setValue(25)
+        self.pip_size_spinbox.setSuffix(" %")
+        self.pip_size_spinbox.valueChanged.connect(self.update_preview)
+        layout.addRow("Size:", self.pip_size_spinbox)
+
+        # Duration
+        self.duration_spinbox_pip = QDoubleSpinBox()
+        self.duration_spinbox_pip.setRange(0.1, 600.0)
+        self.duration_spinbox_pip.setValue(10.0)
+        self.duration_spinbox_pip.setSuffix(" s")
+        layout.addRow("Duration:", self.duration_spinbox_pip)
+
     def _choose_font(self):
         font, ok = QFontDialog.getFont(self.current_font, self)
         if ok:
@@ -379,15 +530,24 @@ class AddMediaDialog(QDialog):
                 "size": (self.gif_width_spinbox.value(), self.gif_height_spinbox.value()),
                 "duration": self.duration_spinbox_gif.value(),
             }
+        elif current_tab_index == 3: # Video PiP
+            data = {
+                "type": "video_pip",
+                "path": self.pip_path_label.text(),
+                "position_name": self.pip_position_combobox.currentText(),
+                "size_percent": self.pip_size_spinbox.value(),
+                "duration": self.duration_spinbox_pip.value(),
+            }
         return data
 
     def accept(self):
         data = self.get_media_data()
         # Basic validation
-        if data['type'] in ['image', 'gif'] and not data.get('path'):
+        if data.get('type') in ['image', 'gif', 'video_pip'] and not data.get('path'):
             return # Don't accept if path is missing
-        if data['type'] == 'text' and not data.get('text'):
+        if data.get('type') == 'text' and not data.get('text'):
             return # Don't accept if text is missing
 
+        self.save_settings() # Save settings on accept
         self.media_added.emit(data)
         super().accept()
