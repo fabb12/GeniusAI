@@ -24,7 +24,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
 - [x] mettere tasto di esportazione word
-- [ ] metter sincro video nel riassunto
+- [x] metter sincro video nel riassunto
 -  
 - [x] tasto trasferimento da video player input a video player output
 - [x] migliorare funzionamento rettangolo ritaglio
@@ -71,10 +71,11 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiorna visualzizaione del dock progetto in base a se trovi nuovoi file , se ne trovi aggiorna la vista , inoltere mettei anche al funzione di elimna file con tasto desto sul file 
 - [x] quando crea nuovo progetto da la possiblia di sceleter anceh la cartella di dove salvare il progetto
 - [x] esport corerttamten il riassuti nel file docx , esportta tutte informazoni del riassunto scritto mantenendo il piu possible la formattazione
--quando cancello un file dal dock progetto e dal fila .gnai cancella solo dalla vista non dal file system 
-- aggiung funzoan import video da metter nel progetto '
-- tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
-- qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
+- [x] quando cancello un file dal dock progetto e dal fila .gnai cancella solo dalla vista non dal file system 
+- [x] aggiung funzoan import video da metter nel progetto '
+- [x] tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
+- [x] qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
+
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
