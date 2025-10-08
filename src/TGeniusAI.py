@@ -901,11 +901,6 @@ class VideoAudioManager(QMainWindow):
         self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
         self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
 
-        self.openFileInputButton = QPushButton('')
-        self.openFileInputButton.setIcon(QIcon(get_resource("load.png")))
-        self.openFileInputButton.setToolTip("Apri un nuovo video nell'input player")
-        self.openFileInputButton.clicked.connect(self.browseVideo)
-
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon(get_resource("play.png")))
         self.playButton.setToolTip("Riproduci/Pausa il video input")
@@ -993,10 +988,6 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.setAudioOutput(self.audioOutputOutput)
         self.playerOutput.setVideoOutput(self.videoOutputWidget)
 
-        self.openFileOutputButton = QPushButton('')
-        self.openFileOutputButton.setIcon(QIcon(get_resource("load.png")))
-        self.openFileOutputButton.setToolTip("Apri un nuovo video nell'output player")
-        self.openFileOutputButton.clicked.connect(self.browseVideoOutput)
 
         self.playButtonOutput = QPushButton('')
         self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
@@ -1022,7 +1013,6 @@ class VideoAudioManager(QMainWindow):
         stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
         playbackControlLayoutOutput = QHBoxLayout()
-        playbackControlLayoutOutput.addWidget(self.openFileOutputButton)
         playbackControlLayoutOutput.addWidget(self.playButtonOutput)
         playbackControlLayoutOutput.addWidget(stopButtonOutput)
         playbackControlLayoutOutput.addWidget(changeButtonOutput)
@@ -1087,7 +1077,6 @@ class VideoAudioManager(QMainWindow):
 
         # Layout di playback del Player Input
         playbackControlLayout = QHBoxLayout()
-        playbackControlLayout.addWidget(self.openFileInputButton)
         playbackControlLayout.addWidget(self.rewindButton)
         playbackControlLayout.addWidget(self.frameBackwardButton)
         playbackControlLayout.addWidget(self.playButton)

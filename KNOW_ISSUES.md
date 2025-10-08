@@ -75,6 +75,8 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiung funzoan import video da metter nel progetto '
 - [x] tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
 - [x] qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
+- inserire testo da metter nel video 
+- inserrie 
 
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
