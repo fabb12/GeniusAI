@@ -4560,7 +4560,6 @@ class VideoAudioManager(QMainWindow):
 
         save_options = options_dialog.getOptions()
 
-        # Imposta la directory di default e il nome del file
         default_dir = ""
         if self.current_project_path:
             default_dir = os.path.join(self.current_project_path, "clips")
@@ -4573,39 +4572,45 @@ class VideoAudioManager(QMainWindow):
 
         default_path = os.path.join(default_dir, default_filename) if default_dir else default_filename
 
-        # Apri sempre il dialogo file
         file_filter = "Video Files (*.mp4 *.mov *.avi)"
         fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", default_path, file_filter)
 
         if not fileName:
-            return # L'utente ha annullato
+            return
 
-        # Controlla se il salvataggio avviene nella cartella clips del progetto
         is_project_save = False
         if self.current_project_path:
             clips_dir = os.path.join(self.current_project_path, "clips")
-            # os.path.normpath per gestire eventuali differenze di slash
             if os.path.normpath(os.path.dirname(fileName)) == os.path.normpath(clips_dir):
                 is_project_save = True
 
         video_saver = VideoSaver(self)
-        rate = 1.0
-        if save_options['save_with_speed']:
-            rate = self.speedSpinBoxOutput.value()
-            if rate == 0: rate = 1.0
+        thread = None
 
-        if save_options['use_compression']:
-            thread = video_saver.save_compressed(
-                self.videoPathLineOutputEdit, fileName,
-                quality=save_options['compression_quality'], playback_rate=rate
+        if save_options.get('use_slow_motion', False):
+            thread = video_saver.save_with_slow_motion(
+                self.videoPathLineOutputEdit,
+                fileName,
+                factor=save_options['slow_motion_factor']
             )
         else:
-            thread = video_saver.save_original(
-                self.videoPathLineOutputEdit, fileName, playback_rate=rate
-            )
+            rate = 1.0
+            if save_options['save_with_speed']:
+                rate = self.speedSpinBoxOutput.value()
+                if rate == 0: rate = 1.0
 
-        # Passa il flag al callback per gestire l'aggiunta al progetto
-        self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=is_project_save), self.onSaveError, self.update_status_progress)
+            if save_options['use_compression']:
+                thread = video_saver.save_compressed(
+                    self.videoPathLineOutputEdit, fileName,
+                    quality=save_options['compression_quality'], playback_rate=rate
+                )
+            else:
+                thread = video_saver.save_original(
+                    self.videoPathLineOutputEdit, fileName, playback_rate=rate
+                )
+
+        if thread:
+            self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=is_project_save), self.onSaveError, self.update_status_progress)
 
     def onSaveCompleted(self, output_path, is_project_save=False):
         self.show_status_message(f"Video salvato con successo in: {os.path.basename(output_path)}")
