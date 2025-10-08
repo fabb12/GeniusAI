@@ -143,3 +143,35 @@ class ProjectManager:
             f.truncate()
 
         return True, "Clip renamed successfully"
+
+    def relink_clip(self, gnai_path, old_filename, new_filepath):
+        """
+        Ri-collega una clip offline a un nuovo percorso file.
+        """
+        if not os.path.exists(gnai_path):
+            return False, "File di progetto non trovato"
+        if not os.path.exists(new_filepath):
+            return False, "Nuovo file clip non trovato"
+
+        with open(gnai_path, 'r+') as f:
+            project_data = json.load(f)
+
+            clip_found = False
+            for clip in project_data.get("clips", []):
+                if clip.get("clip_filename") == old_filename:
+                    # Aggiorna i dettagli della clip
+                    clip["clip_filename"] = os.path.basename(new_filepath)
+                    clip["status"] = "online"
+                    clip["size"] = os.path.getsize(new_filepath)
+                    clip["last_seen"] = datetime.now().isoformat()
+                    clip_found = True
+                    break
+
+            if not clip_found:
+                return False, "Clip non trovata nel progetto"
+
+            f.seek(0)
+            json.dump(project_data, f, indent=4)
+            f.truncate()
+
+        return True, "Clip ricollegata con successo"

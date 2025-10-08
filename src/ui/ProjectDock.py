@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout, QInputDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout, QInputDialog, QFileDialog
 from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QTimer
 from PyQt6.QtGui import QIcon
 from src.ui.CustomDock import CustomDock
@@ -19,6 +19,7 @@ class ProjectDock(CustomDock):
     merge_clips_requested = pyqtSignal()
     open_folder_requested = pyqtSignal()
     delete_clip_requested = pyqtSignal(str)
+    relink_clip_requested = pyqtSignal(str, str)
     project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
 
     def __init__(self, title="Progetto", closable=True, parent=None):
@@ -52,37 +53,53 @@ class ProjectDock(CustomDock):
     def show_context_menu(self, position):
         """Mostra il menu contestuale per l'area delle clip."""
         item = self.tree_clips.itemAt(position)
-        if not self.project_dir or not item or item.isDisabled():
+        if not self.project_dir or not item or item.isDisabled() or not item.parent():
             return
 
-        file_path = item.data(0, Qt.ItemDataRole.UserRole)
-        if not file_path or not os.path.exists(file_path):
-            return
-
+        status = item.data(0, Qt.ItemDataRole.UserRole + 1)
         menu = QMenu()
 
-        open_input_action = menu.addAction("Apri nel player di input")
-        open_output_action = menu.addAction("Apri nel player di output")
-        menu.addSeparator()
-        rename_action = menu.addAction("Rinomina")
-        delete_action = menu.addAction("Rimuovi dal progetto")
+        if status == "offline":
+            relink_action = menu.addAction("Riaggancia file...")
+            remove_action = menu.addAction("Rimuovi dal progetto")
 
-        action = menu.exec(self.tree_clips.mapToGlobal(position))
+            action = menu.exec(self.tree_clips.mapToGlobal(position))
 
-        if action == open_input_action:
-            self.open_in_input_player_requested.emit(file_path)
-        elif action == open_output_action:
-            self.open_in_output_player_requested.emit(file_path)
-        elif action == rename_action:
-            old_filename = item.text(0)
-            base_name, extension = os.path.splitext(old_filename)
-            new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
-            if ok and new_base_name:
-                new_filename = new_base_name + extension
-                self.rename_clip_requested.emit(old_filename, new_filename)
-        elif action == delete_action:
-            clip_filename = item.text(0)
-            self.delete_clip_requested.emit(clip_filename)
+            if action == relink_action:
+                old_filename = item.text(0)
+                new_filepath, _ = QFileDialog.getOpenFileName(self, "Seleziona nuovo file clip", "", "Video Files (*.mp4 *.avi *.mov);;All Files (*)")
+                if new_filepath:
+                    self.relink_clip_requested.emit(old_filename, new_filepath)
+            elif action == remove_action:
+                clip_filename = item.text(0)
+                self.delete_clip_requested.emit(clip_filename)
+        else: # 'online' o altri stati
+            file_path = item.data(0, Qt.ItemDataRole.UserRole)
+            if not file_path or not os.path.exists(file_path):
+                return
+
+            open_input_action = menu.addAction("Apri nel player di input")
+            open_output_action = menu.addAction("Apri nel player di output")
+            menu.addSeparator()
+            rename_action = menu.addAction("Rinomina")
+            delete_action = menu.addAction("Rimuovi dal progetto")
+
+            action = menu.exec(self.tree_clips.mapToGlobal(position))
+
+            if action == open_input_action:
+                self.open_in_input_player_requested.emit(file_path)
+            elif action == open_output_action:
+                self.open_in_output_player_requested.emit(file_path)
+            elif action == rename_action:
+                old_filename = item.text(0)
+                base_name, extension = os.path.splitext(old_filename)
+                new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
+                if ok and new_base_name:
+                    new_filename = new_base_name + extension
+                    self.rename_clip_requested.emit(old_filename, new_filename)
+            elif action == delete_action:
+                clip_filename = item.text(0)
+                self.delete_clip_requested.emit(clip_filename)
 
     def _setup_ui(self):
         main_widget = QWidget()
@@ -210,17 +227,20 @@ class ProjectDock(CustomDock):
                 # Imposta l'icona in base allo stato
                 status = clip.get("status", "N/A")
                 if status == "online":
-                    item.setIcon(0, QIcon(get_resource("rec.png")))
+                    item.setIcon(0, QIcon(get_resource("rec.png"))) # Icona verde
                 elif status == "offline":
-                    item.setIcon(0, QIcon(get_resource("stop.png")))
+                    item.setIcon(0, QIcon(get_resource("stop.png"))) # Icona rossa
 
                 item.setText(0, clip.get("clip_filename", "N/A"))
                 item.setText(1, self._format_date(clip.get("creation_date")))
                 item.setText(2, self._format_duration(clip.get("duration")))
                 item.setText(3, self._format_size(clip.get("size")))
-                # Salva il percorso completo per un facile accesso
+
+                # Salva il percorso completo e lo stato per un facile accesso
                 full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
                 item.setData(0, Qt.ItemDataRole.UserRole, full_path)
+                item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
+
 
         # Carica file dalla cartella 'downloads' del progetto
         download_folder_path = os.path.join(project_dir, "downloads")
