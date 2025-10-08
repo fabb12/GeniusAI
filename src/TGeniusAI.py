@@ -6677,7 +6677,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Please load a video in the Input Player first.", error=True)
             return
 
-        dialog = AddMediaDialog(self)
+        dialog = AddMediaDialog(parent=self)
         dialog.media_added.connect(self.handle_media_added)
         dialog.exec()
 
