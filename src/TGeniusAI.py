@@ -173,11 +173,30 @@ class MediaOverlayThread(QThread):
                 self.progress.emit(30, "Creating text overlay...")
 
                 # Create text image with Pillow
-                font_path = self.media_data['font'].replace('-', ' ')
+                font_path_str = self.media_data['font'].replace('-', ' ')
+                font_size = self.media_data.get('fontsize', 12) # Default to 12 if not provided
+
                 try:
-                    font = ImageFont.truetype(f"{font_path}.ttf", self.media_data['fontsize'])
+                    # Attempt to load the selected font
+                    font = ImageFont.truetype(f"{font_path_str}.ttf", font_size)
                 except IOError:
-                    font = ImageFont.load_default() # Fallback font
+                    logging.warning(f"Could not find font: {font_path_str}.ttf. Trying a default font.")
+                    try:
+                        # Fallback 1: Try a common font like Arial
+                        font = ImageFont.truetype("arial.ttf", font_size)
+                    except IOError:
+                        # Fallback 2: Use the default Pillow font and specify the size
+                        logging.warning("Default font 'arial.ttf' not found. Using Pillow's load_default().")
+                        # load_default() returns a font object, but we need to ensure the size is correct.
+                        # The default font has a fixed size, so we can't pass the size directly.
+                        # This is a limitation of the default font. Let's try to get a font with size.
+                        try:
+                            # This is a bit of a hack, but might work on some systems
+                            font = ImageFont.truetype("sans-serif", font_size)
+                        except IOError:
+                             # Final fallback: Use Pillow's default font. It does not support resizing.
+                             font = ImageFont.load_default()
+
 
                 text = self.media_data['text']
 
