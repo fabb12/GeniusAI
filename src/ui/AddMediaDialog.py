@@ -358,7 +358,7 @@ class AddMediaDialog(QDialog):
                 "type": "text",
                 "text": self.text_input.text(),
                 "font": self.current_font.family(),
-                "fontsize": QFontInfo(self.current_font).pixelSize(),
+                "fontsize": self.current_font.pointSize(),
                 "color": self.current_color.name(),
                 "position": (self.pos_x_spinbox.value(), self.pos_y_spinbox.value()),
                 "duration": self.duration_spinbox_text.value(),
