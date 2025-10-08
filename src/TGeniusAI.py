@@ -29,7 +29,7 @@ from src.ui.InfoDock import InfoDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
-    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip
+    concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
@@ -221,7 +221,7 @@ class MediaOverlayThread(QThread):
 
             elif media_type == 'gif':
                 self.progress.emit(30, "Creating GIF overlay...")
-                overlay_clip = (VideoFileClip(self.media_data['path'], has_mask=True)
+                overlay_clip = (ImageSequenceClip(self.media_data['path'], with_mask=True)
                                 .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
                 if duration < overlay_clip.duration:
                     overlay_clip = overlay_clip.subclip(0, duration)
