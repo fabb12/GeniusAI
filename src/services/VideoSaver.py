@@ -4,6 +4,126 @@ import re
 import json
 import shutil
 from PyQt6.QtCore import QThread, pyqtSignal
+import cv2
+import numpy as np
+from moviepy.editor import VideoFileClip, AudioFileClip
+
+
+class OpticalFlowThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, source_path, target_path, factor, parent=None):
+        super().__init__(parent)
+        self.source_path = source_path
+        self.target_path = target_path
+        self.factor = int(factor)
+        self.running = True
+
+    def run(self):
+        temp_video_path = None
+        try:
+            self.progress.emit(0, "Inizializzazione slow motion con Optical Flow...")
+
+            # 1. Video processing with OpenCV
+            cap = cv2.VideoCapture(self.source_path)
+            if not cap.isOpened():
+                raise IOError("Impossibile aprire il file video.")
+
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            temp_video_path = os.path.splitext(self.target_path)[0] + "_temp_slow.mp4"
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            out = cv2.VideoWriter(temp_video_path, fourcc, fps * self.factor, (width, height))
+
+            ret, prev_frame = cap.read()
+            if not ret:
+                raise ValueError("Impossibile leggere il primo frame.")
+
+            prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+            frame_count = 1
+
+            while self.running:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                progress_percent = int((frame_count / total_frames) * 80)
+                self.progress.emit(progress_percent, f"Generazione frames: {frame_count}/{total_frames}")
+
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                flow = cv2.calcOpticalFlowFarneback(prev_gray, gray, None, 0.5, 3, 15, 3, 5, 1.2, 0)
+
+                out.write(prev_frame)
+
+                h, w = flow.shape[:2]
+                x, y = np.meshgrid(np.arange(w), np.arange(h))
+                for i in range(1, self.factor):
+                    if not self.running: break
+                    alpha = i / self.factor
+                    map_x = (x - (1 - alpha) * flow[..., 0]).astype(np.float32)
+                    map_y = (y - (1 - alpha) * flow[..., 1]).astype(np.float32)
+                    interp_frame = cv2.remap(frame, map_x, map_y, cv2.INTER_LINEAR)
+                    out.write(interp_frame)
+
+                if not self.running: break
+
+                prev_frame = frame
+                prev_gray = gray
+                frame_count += 1
+
+            if self.running:
+                out.write(prev_frame) # Scrive l'ultimo frame
+
+            cap.release()
+            out.release()
+
+            if not self.running:
+                self.error.emit("Operazione annullata.")
+                return
+
+            # 2. Audio processing with moviepy
+            self.progress.emit(85, "Processo audio...")
+            video_clip = VideoFileClip(temp_video_path)
+
+            try:
+                original_audio = VideoFileClip(self.source_path).audio
+                if original_audio:
+                    stretched_audio = original_audio.set_duration(video_clip.duration)
+                    final_clip = video_clip.set_audio(stretched_audio)
+                else:
+                    final_clip = video_clip
+            except Exception as e:
+                final_clip = video_clip
+
+
+            # 3. Write final video
+            self.progress.emit(90, "Salvataggio finale...")
+            final_clip.write_videofile(self.target_path, codec='libx264', audio_codec='aac')
+
+            self.progress.emit(100, "Completato")
+            self.completed.emit(self.target_path)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(str(e))
+        finally:
+            # Cleanup
+            if 'cap' in locals() and cap.isOpened(): cap.release()
+            if 'out' in locals() and out.isOpened(): out.release()
+            if 'video_clip' in locals(): video_clip.close()
+            if 'original_audio' in locals() and original_audio: original_audio.close()
+            if 'final_clip' in locals(): final_clip.close()
+            if temp_video_path and os.path.exists(temp_video_path):
+                os.remove(temp_video_path)
+
+    def stop(self):
+        self.running = False
+
 
 class FfmpegThread(QThread):
     """
@@ -112,6 +232,9 @@ class VideoSaver:
     """
     def __init__(self, parent=None):
         self.parent = parent
+
+    def save_with_slow_motion(self, source_path, target_path, factor):
+        return OpticalFlowThread(source_path, target_path, factor, self.parent)
 
     def save_original(self, source_path, target_path, playback_rate=1.0):
         if playback_rate == 1.0:

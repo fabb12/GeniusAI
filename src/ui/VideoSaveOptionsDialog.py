@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QLabel, QRadioButton,
-                             QGroupBox, QSlider, QDialogButtonBox, QHBoxLayout, QCheckBox)
+                             QGroupBox, QSlider, QDialogButtonBox, QHBoxLayout, QCheckBox, QSpinBox)
 from PyQt6.QtCore import Qt, QSettings
 import os
 
@@ -66,6 +66,21 @@ class VideoSaveOptionsDialog(QDialog):
         self.compressionGroup.setLayout(compressLayout)
         layout.addWidget(self.compressionGroup)
 
+        # Slow Motion options group
+        self.slowMotionGroup = QGroupBox("Effetto Slow Motion (Optical Flow)")
+        self.slowMotionGroup.setCheckable(True)
+        self.slowMotionGroup.setChecked(False)
+        slowMotionLayout = QHBoxLayout(self.slowMotionGroup)
+
+        slowMotionLayout.addWidget(QLabel("Fattore di rallentamento:"))
+        self.slowMotionFactorSpinBox = QSpinBox()
+        self.slowMotionFactorSpinBox.setRange(2, 5)
+        self.slowMotionFactorSpinBox.setValue(2)
+        self.slowMotionFactorSpinBox.setSuffix("x")
+        slowMotionLayout.addWidget(self.slowMotionFactorSpinBox)
+        slowMotionLayout.addStretch()
+        layout.addWidget(self.slowMotionGroup)
+
         # Enable/disable options based on selection
         self.originalRadio.toggled.connect(self.update_options_state)
         self.compressedRadio.toggled.connect(self.update_options_state)
@@ -87,7 +102,9 @@ class VideoSaveOptionsDialog(QDialog):
         return {
             'use_compression': self.compressedRadio.isChecked(),
             'compression_quality': self.qualitySlider.value(),
-            'save_with_speed': self.saveWithPlaybackSpeedCheck.isChecked()
+            'save_with_speed': self.saveWithPlaybackSpeedCheck.isChecked(),
+            'use_slow_motion': self.slowMotionGroup.isChecked(),
+            'slow_motion_factor': self.slowMotionFactorSpinBox.value()
         }
 
     def get_file_size_info(self):
