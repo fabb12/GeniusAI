@@ -6717,12 +6717,6 @@ class VideoAudioManager(QMainWindow):
             start_time = self.player.position() / 1000.0
             self.show_status_message(f"Adding overlay at current position: {start_time:.2f}s")
 
-        if media_data['type'] == 'text':
-            points = media_data['fontsize']
-            # Convert points to pixels (assuming 96 DPI)
-            pixels = int(points * 96 / 72)
-            media_data['fontsize'] = pixels
-
         thread = MediaOverlayThread(
             base_video_path=self.videoPathLineEdit,
             media_data=media_data,
