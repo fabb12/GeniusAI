@@ -33,6 +33,7 @@ from moviepy.editor import (
 )
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
+from PIL import Image, ImageDraw, ImageFont
 
 import numpy as np
 import proglog
@@ -170,13 +171,30 @@ class MediaOverlayThread(QThread):
 
             if media_type == 'text':
                 self.progress.emit(30, "Creating text overlay...")
+
+                # Create text image with Pillow
                 font_path = self.media_data['font'].replace('-', ' ')
-                overlay_clip = TextClip(
-                    self.media_data['text'],
-                    fontsize=self.media_data['fontsize'],
-                    color=self.media_data['color'],
-                    font=font_path
-                )
+                try:
+                    font = ImageFont.truetype(f"{font_path}.ttf", self.media_data['fontsize'])
+                except IOError:
+                    font = ImageFont.load_default() # Fallback font
+
+                text = self.media_data['text']
+
+                # Dummy draw to get text size
+                dummy_img = Image.new('RGB', (0, 0))
+                dummy_draw = ImageDraw.Draw(dummy_img)
+                left, top, right, bottom = dummy_draw.textbbox((0,0), text, font=font)
+                text_width = right - left
+                text_height = bottom - top
+
+                # Create image with a bit of padding
+                img = Image.new('RGBA', (text_width + 20, text_height + 20), (0, 0, 0, 0))
+                draw = ImageDraw.Draw(img)
+                draw.text((10, 10), text, font=font, fill=self.media_data['color'])
+
+                # Convert Pillow image to moviepy clip
+                overlay_clip = ImageClip(np.array(img))
             elif media_type == 'image':
                 self.progress.emit(30, "Creating image overlay...")
                 overlay_clip = (ImageClip(self.media_data['path'])
