@@ -9,6 +9,8 @@ from yt_dlp.postprocessor import FFmpegPostProcessor
 from src.config import FFMPEG_PATH
 
 
+import subprocess
+
 class DownloadThread(QThread):
     completed = pyqtSignal(list)  # Emits [path, title, language, date]
     error = pyqtSignal(str)
@@ -21,12 +23,26 @@ class DownloadThread(QThread):
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
         FFmpegPostProcessor._ffmpeg_location.set(FFMPEG_PATH)
         self.download_video = download_video
+        self.running = True
+        self.process = None
         if parent_window and hasattr(parent_window, 'get_temp_dir'):
             self.temp_dir = parent_window.get_temp_dir(prefix="downloads_")
         else:
             self.temp_dir = tempfile.mkdtemp(prefix="downloads_", dir=os.getcwd())
 
+    def stop(self):
+        self.running = False
+        if self.process:
+            try:
+                self.process.kill()
+                self.process = None
+                self.error.emit("Download annullato dall'utente.")
+            except Exception as e:
+                self.error.emit(f"Errore durante l'annullamento del download: {e}")
+
     def run(self):
+        if not self.running:
+            return
         # Controlla se è un URL di StreamingCommunity
         if self.is_streaming_community_url(self.url):
             # Prima ottieni l'URL del flusso
@@ -163,18 +179,33 @@ class DownloadThread(QThread):
 
         return None
 
+    def _execute_download(self, ydl_opts, url_or_info):
+        """Helper to execute download and capture subprocess."""
+        original_popen = subprocess.Popen
+
+        def custom_popen(*args, **kwargs):
+            self.process = original_popen(*args, **kwargs)
+            return self.process
+
+        subprocess.Popen = custom_popen
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                result = ydl.extract_info(url_or_info, download=True)
+                return result
+        finally:
+            subprocess.Popen = original_popen
+            self.process = None
+
+
     def download_from_stream_url(self, stream_url):
         """Scarica un video dall'URL del flusso usando yt-dlp"""
         try:
-            # Estrai un nome file di base dall'URL
+            if not self.running: return
             base_name = "video"
             match = re.search(r"playlist/(\d+)", stream_url)
             if match:
                 base_name = f"video_{match.group(1)}"
-
             output_path = os.path.join(self.temp_dir, f"{base_name}.mp4")
-
-            # Configura yt-dlp
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': output_path,
@@ -182,92 +213,78 @@ class DownloadThread(QThread):
                 'ffmpeg_location': self.ffmpeg_path,
                 'progress_hooks': [self.yt_progress_hook],
             }
-
-            # Esegui il download
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                ydl.download([stream_url])
-
-            # Emetti il segnale di completamento
-            self.completed.emit([output_path, base_name, "it", None])  # Lingua predefinita: italiano
-
+            self._execute_download(ydl_opts, stream_url)
+            if self.running:
+                self.completed.emit([output_path, base_name, "it", None])
         except Exception as e:
-            self.error.emit(f"Errore durante il download del video: {str(e)}")
+            if self.running:
+                self.error.emit(f"Errore durante il download del video: {str(e)}")
+
 
     def download_audio_only(self):
         """Download only the audio from a YouTube video and emit the title."""
+        if not self.running: return
         audio_options = {
             'format': 'bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',  # Change to mp3 for more universal playback
-                'preferredquality': '192',
-            }],
+            'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),
             'quiet': True,
             'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
-
         try:
-            with yt_dlp.YoutubeDL(audio_options) as ydl:
-                info = ydl.extract_info(self.url, download=True)
-                if 'id' in info:
-                    # Robustly find the output file
-                    files_in_temp = os.listdir(self.temp_dir)
-                    if not files_in_temp:
-                        self.error.emit("No file found in temporary directory after download.")
-                        return
-                    # Assuming the first file is the correct one, as the directory should be empty before download
-                    audio_file_path = os.path.join(self.temp_dir, files_in_temp[0])
-
-                    video_title = info.get('title', 'Unknown Title')
-                    video_language = info.get('language', 'Lingua non rilevata')
-                    upload_date = info.get('upload_date', None)
-                    self.completed.emit([audio_file_path, video_title, video_language, upload_date])
-                else:
-                    self.error.emit("Video ID not found.")
+            info = self._execute_download(audio_options, self.url)
+            if self.running and 'id' in info:
+                files_in_temp = os.listdir(self.temp_dir)
+                if not files_in_temp:
+                    self.error.emit("No file found in temporary directory after download.")
+                    return
+                audio_file_path = os.path.join(self.temp_dir, files_in_temp[0])
+                video_title = info.get('title', 'Unknown Title')
+                video_language = info.get('language', 'Lingua non rilevata')
+                upload_date = info.get('upload_date', None)
+                self.completed.emit([audio_file_path, video_title, video_language, upload_date])
+            elif self.running:
+                self.error.emit("Video ID not found.")
         except Exception as e:
-            self.error.emit(str(e))
+            if self.running:
+                self.error.emit(str(e))
 
     def download_video_file(self):
         """Download both audio and video from a YouTube video and emit the title."""
+        if not self.running: return
         video_options = {
             'format': 'bestvideo+bestaudio/best',
-            'postprocessors': [{
-                'key': 'FFmpegVideoConvertor',
-                'preferedformat': 'mp4',
-            }],
+            'postprocessors': [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}],
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),
             'quiet': True,
             'ffmpeg_location': self.ffmpeg_path,
             'progress_hooks': [self.yt_progress_hook],
         }
-
         try:
-            with yt_dlp.YoutubeDL(video_options) as ydl:
-                info = ydl.extract_info(self.url, download=True)
-                if 'id' in info:
-                    # Robustly find the output file
-                    files_in_temp = os.listdir(self.temp_dir)
-                    if not files_in_temp:
-                        self.error.emit("No file found in temporary directory after download.")
-                        return
-                    # Assuming the first file is the correct one
-                    video_file_path = os.path.join(self.temp_dir, files_in_temp[0])
-
-                    video_title = info.get('title', 'Unknown Title')
-                    video_language = info.get('language', 'Lingua non rilevata')
-                    upload_date = info.get('upload_date', None)
-                    self.completed.emit([video_file_path, video_title, video_language, upload_date])
-                else:
-                    self.error.emit("Video ID not found.")
+            info = self._execute_download(video_options, self.url)
+            if self.running and 'id' in info:
+                files_in_temp = os.listdir(self.temp_dir)
+                if not files_in_temp:
+                    self.error.emit("No file found in temporary directory after download.")
+                    return
+                video_file_path = os.path.join(self.temp_dir, files_in_temp[0])
+                video_title = info.get('title', 'Unknown Title')
+                video_language = info.get('language', 'Lingua non rilevata')
+                upload_date = info.get('upload_date', None)
+                self.completed.emit([video_file_path, video_title, video_language, upload_date])
+            elif self.running:
+                self.error.emit("Video ID not found.")
         except Exception as e:
-            self.error.emit(str(e))
+            if self.running:
+                self.error.emit(str(e))
 
     def yt_progress_hook(self, d):
         """Progress hook for yt_dlp download updates."""
+        if not self.running:
+            raise yt_dlp.utils.DownloadError("Download cancelled by user.")
+
         if d['status'] == 'downloading':
-            # Calculate progress as a percentage
             total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate')
             if total_bytes:
                 progress = int((d['downloaded_bytes'] / total_bytes) * 100)
@@ -276,5 +293,4 @@ class DownloadThread(QThread):
                 label = f"Download in corso: {progress}% di {total_mb:.2f}MB @ {speed_str}"
                 self.progress.emit(progress, label)
         elif d['status'] == 'finished':
-            # When finished, set progress to 100%
             self.progress.emit(100, "Download completato. Inizio elaborazione...")
