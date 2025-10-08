@@ -227,9 +227,9 @@ class ProjectDock(CustomDock):
                 # Imposta l'icona in base allo stato
                 status = clip.get("status", "N/A")
                 if status == "online":
-                    item.setIcon(0, QIcon(get_resource("rec.png"))) # Icona verde
+                    item.setIcon(0, QIcon(get_resource("online.png"))) # Icona verde
                 elif status == "offline":
-                    item.setIcon(0, QIcon(get_resource("stop.png"))) # Icona rossa
+                    item.setIcon(0, QIcon(get_resource("offline.png"))) # Icona rossa
 
                 item.setText(0, clip.get("clip_filename", "N/A"))
                 item.setText(1, self._format_date(clip.get("creation_date")))
