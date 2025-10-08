@@ -6301,38 +6301,46 @@ class VideoAudioManager(QMainWindow):
 
     def sync_project_clips_folder(self):
         """
-        Sincronizza il file .gnai con il contenuto effettivo della cartella 'clips'.
-        Aggiunge i nuovi file e rimuove quelli eliminati.
+        Sincronizza il file .gnai con la cartella 'clips', aggiornando lo stato dei file.
         """
         if not self.current_project_path or not self.projectDock.gnai_path:
             return
 
         clips_dir = os.path.join(self.current_project_path, "clips")
         if not os.path.isdir(clips_dir):
-            return
+            os.makedirs(clips_dir) # Crea la cartella se non esiste
 
         try:
-            # 1. Ottieni i file video presenti nella cartella
             disk_files = {f for f in os.listdir(clips_dir) if os.path.isfile(os.path.join(clips_dir, f)) and f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))}
 
-            # 2. Ottieni le clip registrate nel file .gnai
             project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
             if not project_data:
                 return
-            registered_clips = {c['clip_filename'] for c in project_data.get('clips', [])}
 
-            # 3. Confronta per trovare differenze
-            new_files = disk_files - registered_clips
-            deleted_files = registered_clips - disk_files
-
+            registered_clips_dict = {c['clip_filename']: c for c in project_data.get('clips', [])}
+            now = datetime.datetime.now().isoformat()
             changes_made = False
 
-            # 4. Aggiungi i nuovi file al progetto
-            if new_files:
-                self.show_status_message(f"Rilevati {len(new_files)} nuovi file. Aggiornamento in corso...")
-                for filename in new_files:
+            # Controlla lo stato dei file registrati
+            for filename, clip_data in registered_clips_dict.items():
+                if filename in disk_files:
+                    # Il file esiste, aggiorna lo stato a 'online' se necessario
+                    if clip_data.get('status') != 'online':
+                        clip_data['status'] = 'online'
+                        changes_made = True
+                    clip_data['last_seen'] = now
+                    disk_files.remove(filename) # Rimuovi dalla lista dei file non tracciati
+                else:
+                    # Il file non esiste più, aggiorna lo stato a 'offline'
+                    if clip_data.get('status') != 'offline':
+                        clip_data['status'] = 'offline'
+                        changes_made = True
+
+            # Aggiungi nuovi file trovati sul disco
+            if disk_files:
+                self.show_status_message(f"Rilevati {len(disk_files)} nuovi file. Aggiunta in corso...")
+                for filename in disk_files:
                     clip_path = os.path.join(clips_dir, filename)
-                    metadata_filename = os.path.splitext(filename)[0] + ".json"
                     try:
                         clip_info = VideoFileClip(clip_path)
                         duration = clip_info.duration
@@ -6340,28 +6348,28 @@ class VideoAudioManager(QMainWindow):
                         size = os.path.getsize(clip_path)
                         creation_date = datetime.datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
 
-                        self.project_manager.add_clip_to_project(
-                            self.projectDock.gnai_path, filename, metadata_filename,
-                            duration, size, creation_date
-                        )
+                        new_clip_data = {
+                            "clip_filename": filename,
+                            "metadata_filename": os.path.splitext(filename)[0] + ".json",
+                            "addedAt": now,
+                            "duration": duration,
+                            "size": size,
+                            "creation_date": creation_date,
+                            "status": "new",
+                            "last_seen": now
+                        }
+                        project_data["clips"].append(new_clip_data)
                         changes_made = True
                     except Exception as e:
                         logging.error(f"Impossibile aggiungere la nuova clip {filename}: {e}")
 
-            # 5. Rimuovi i file eliminati dal progetto
-            if deleted_files:
-                self.show_status_message(f"Rilevati {len(deleted_files)} file eliminati. Aggiornamento in corso...")
-                for filename in deleted_files:
-                    success, _ = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, filename)
-                    if success:
-                        changes_made = True
-
-            # 6. Ricarica il progetto per aggiornare la UI se ci sono state modifiche
+            # Salva e ricarica se ci sono state modifiche
             if changes_made:
+                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
                 self.load_project(self.projectDock.gnai_path)
-                self.show_status_message("Vista del progetto sincronizzata.")
+                self.show_status_message("Progetto sincronizzato con la cartella clips.")
             else:
-                # Anche se non ci sono modifiche, ricarica per coerenza
+                # Ricarica comunque per coerenza, nel caso qualcosa sia cambiato esternamente
                 self.load_project(self.projectDock.gnai_path)
 
         except Exception as e:
@@ -6369,29 +6377,59 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Errore durante la sincronizzazione della cartella.", error=True)
 
     def delete_project_clip(self, clip_filename):
-        """Rimuove una clip dal progetto senza eliminarla dal filesystem."""
+        """
+        Chiede all'utente come gestire l'eliminazione di una clip: solo dal progetto
+        o anche dal disco.
+        """
         if not self.current_project_path:
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Rimuovi Clip dal Progetto",
-            f"Sei sicuro di voler rimuovere la clip '{clip_filename}' dal progetto?\n\nIl file non verrà eliminato dal disco.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Rimuovi Clip")
+        msg_box.setText(f"Cosa vuoi fare con la clip '{clip_filename}'?")
+        msg_box.setIcon(QMessageBox.Icon.Question)
 
-        if reply == QMessageBox.StandardButton.Yes:
-            # 1. Rimuovi la clip solo dal file .gnai
+        remove_button = msg_box.addButton("Rimuovi solo dal Progetto", QMessageBox.ButtonRole.ActionRole)
+        delete_button = msg_box.addButton("Elimina da Progetto e Disco", QMessageBox.ButtonRole.DestructiveRole)
+        cancel_button = msg_box.addButton("Annulla", QMessageBox.ButtonRole.RejectRole)
+
+        msg_box.exec()
+
+        if msg_box.clickedButton() == remove_button:
+            # Rimuovi solo dal JSON
+            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+            if success:
+                self.load_project(self.projectDock.gnai_path)
+                self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
+            else:
+                self.show_status_message(f"Errore: {message}", error=True)
+
+        elif msg_box.clickedButton() == delete_button:
+            # Rimuovi dal JSON e dal disco
+            clip_path = os.path.join(self.current_project_path, "clips", clip_filename)
+
+            # Rimuovi dal JSON
             success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
             if not success:
-                self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
+                self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
                 return
 
-            # 2. Ricarica il progetto per aggiornare la UI
-            self.load_project(self.projectDock.gnai_path)
-            self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
+            # Rimuovi dal disco
+            try:
+                if os.path.exists(clip_path):
+                    os.remove(clip_path)
+                # Rimuovi anche il JSON associato, se esiste
+                json_path = os.path.splitext(clip_path)[0] + ".json"
+                if os.path.exists(json_path):
+                    os.remove(json_path)
+
+                self.load_project(self.projectDock.gnai_path)
+                self.show_status_message(f"Clip '{clip_filename}' eliminata dal progetto e dal disco.")
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
+                # Se l'eliminazione del file fallisce, è meglio ricaricare lo stato per coerenza
+                self.load_project(self.projectDock.gnai_path)
 
     def rename_project_clip(self, old_filename, new_filename):
         """Rinomina una clip nel progetto, aggiornando il filesystem e il file .gnai."""

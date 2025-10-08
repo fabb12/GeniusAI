@@ -206,6 +206,14 @@ class ProjectDock(CustomDock):
 
             for clip in project_clips:
                 item = QTreeWidgetItem(project_clips_root)
+
+                # Imposta l'icona in base allo stato
+                status = clip.get("status", "N/A")
+                if status == "online":
+                    item.setIcon(0, QIcon(get_resource("rec.png")))
+                elif status == "offline":
+                    item.setIcon(0, QIcon(get_resource("stop.png")))
+
                 item.setText(0, clip.get("clip_filename", "N/A"))
                 item.setText(1, self._format_date(clip.get("creation_date")))
                 item.setText(2, self._format_duration(clip.get("duration")))
