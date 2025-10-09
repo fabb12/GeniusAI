@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QSpinBox, QPushButton, QDialogButtonBox, QColorDialog, QFontDialog,
     QHBoxLayout, QLabel, QFileDialog, QComboBox, QDoubleSpinBox, QGroupBox
 )
+from .GifLibraryDialog import GifLibraryDialog
 
 class AddMediaDialog(QDialog):
     media_added = pyqtSignal(dict)
@@ -399,8 +400,9 @@ class AddMediaDialog(QDialog):
         file_layout = QHBoxLayout()
         self.gif_path_label = QLineEdit()
         self.gif_path_label.setReadOnly(True)
-        browse_button = QPushButton("Browse...")
-        browse_button.clicked.connect(lambda: self._browse_file(self.gif_path_label, "GIFs (*.gif)"))
+
+        browse_button = QPushButton("Browse Library...")
+        browse_button.clicked.connect(self._open_gif_library)
         file_layout.addWidget(self.gif_path_label)
         file_layout.addWidget(browse_button)
         layout.addRow("GIF File:", file_layout)
@@ -493,6 +495,14 @@ class AddMediaDialog(QDialog):
     def _update_color_label(self):
         self.color_label.setText(self.current_color.name())
         self.color_label.setStyleSheet(f"background-color: {self.current_color.name()}; color: {'black' if self.current_color.lightness() > 127 else 'white'}; padding: 2px;")
+
+    def _open_gif_library(self):
+        dialog = GifLibraryDialog(self)
+        if dialog.exec():
+            selected_path = dialog.get_selected_gif_path()
+            if selected_path:
+                self.gif_path_label.setText(selected_path)
+                self.update_preview()
 
     def _browse_file(self, label_widget, file_filter):
         file_name, _ = QFileDialog.getOpenFileName(self, "Select File", "", file_filter)
