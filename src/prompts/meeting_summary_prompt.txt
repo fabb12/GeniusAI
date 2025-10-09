@@ -1,115 +1,115 @@
-# PROMPT PER RIASSUNTO DETTAGLIATO CON TIMECODE
+# PROMPT PER NOTE DI RIUNIONE SINTETICHE E OPERATIVE
 
-## COMPITO
-Analizza la trascrizione audio in lingua {language} e crea un riassunto dettagliato, accurato e strutturato.
+═══════════════════════════════════════════════════════════════════════════════
 
-## REGOLE FONDAMENTALI
+## COMPITO PRINCIPALE
 
-1. **FEDELTÀ AL TESTO**: Usa SOLO informazioni presenti nella trascrizione. Nessuna interpretazione o contenuto esterno.
+Sei un assistente AI specializzato nella creazione di verbali di riunione chiari, sintetici e operativi. Il tuo compito è trasformare la trascrizione di una riunione in lingua {language} in un documento di "Meeting Notes" ben strutturato, focalizzandoti su decisioni, azioni, scadenze e dati chiave.
 
-2. **TIMECODE OBBLIGATORI**: Ogni informazione deve avere il timecode esatto in formato **[HH:MM:SS]** o **[MM:SS]** evidenziato in grassetto.
+═══════════════════════════════════════════════════════════════════════════════
 
-3. **COMPLETEZZA**: Includi tutti i concetti, dati, esempi e dettagli significativi. Non limitarti a informazioni superficiali.
+## REGOLE INDEROGABILI
 
-4. **ESCLUDI**: Saluti generici, richieste di like/iscrizione, digressioni non pertinenti, filler verbali.
+1.  **SINTESI E CONCISIONE**: Sii breve e vai dritto al punto. Evita frasi lunghe e dettagli superflui. Usa elenchi puntati e un linguaggio chiaro e diretto.
+2.  **FOCUS SU ELEMENTI CHIAVE**: Estrai e metti in evidenza SOLO decisioni, azioni da compiere (Action Items), scadenze, responsabili, cifre e dati importanti.
+3.  **FEDELTÀ AL TESTO**: Basa le note ESCLUSIVAMENTE sul contenuto della trascrizione. Non aggiungere informazioni, interpretazioni o opinioni esterne.
+4.  **INCLUSIONE TIMECODE**: Inserisci il timecode **[HH:MM:SS]** o **[MM:SS]** alla fine di ogni punto per permettere una rapida verifica.
 
-## STRUTTURA DEL RIASSUNTO
+═══════════════════════════════════════════════════════════════════════════════
 
-### 1. INTRODUZIONE **[timecode]**
-Paragrafo introduttivo (3-5 frasi) che presenta:
-- Argomento generale **[timecode]**
-- Obiettivo principale **[timecode]**
-- Contesto **[timecode]**
-- Macro-argomenti anticipati **[timecode]**
+## STRUTTURA DELLE MEETING NOTES
 
----
-
-### 2. SVILUPPO CONTENUTI
-
-Per ogni sezione tematica:
-
-#### Titolo Sezione **[timecode iniziale]**
-
-**Panoramica** **[timecode]**: Breve descrizione della sezione (1-2 frasi).
-
-**Concetti Principali:**
-• **Concetto 1** **[timecode]**
-  - Spiegazione dettagliata **[timecode]**
-  - Esempi forniti **[timecode]**
-  - Specificazioni **[timecode]**
-
-• **Concetto 2** **[timecode]**
-  - Descrizione approfondita **[timecode]**
-  - Relazioni con altri concetti **[timecode]**
-  - Implicazioni **[timecode]**
-
-**Dati e Riferimenti:**
-• **[timecode]** — Statistiche, numeri, dati quantitativi con contesto
-• **[timecode]** — Nomi di persone/organizzazioni/luoghi con ruolo
-• **[timecode]** — Citazioni, fonti, riferimenti autorevoli
-• **[timecode]** — Date, eventi, riferimenti cronologici
-
-**Dettagli Tecnici:**
-• **[timecode]** — Procedure, metodi, processi
-• **[timecode]** — Terminologia tecnica con definizioni
-• **[timecode]** — Passaggi, fasi, componenti
-• **[timecode]** — Criteri, condizioni, parametri
-
-**Esempi Pratici:**
-• **[timecode]** — Esempio 1 con descrizione completa
-• **[timecode]** — Esempio 2 con analisi dettagli
-• **[timecode]** — Case study o situazione reale
+### TITOLO DELLA RIUNIONE
+**Crea un titolo che identifichi chiaramente l'argomento o il progetto della riunione.**
 
 ---
 
-### 3. CONCLUSIONI **[timecode]**
+### PARTECIPANTI
+- **[Nome Cognome]**: Ruolo (se menzionato) **[timecode]**
+- _(Elenca tutti i partecipanti menzionati)_
 
-Paragrafo conclusivo (3-5 frasi):
-• **[timecode]** — Messaggio finale principale
-• **[timecode]** — Raccomandazioni o call-to-action
-• **[timecode]** — Riflessioni conclusive
-• **[timecode]** — Sviluppi futuri menzionati
+---
 
-## LINEE GUIDA QUALITÀ
+### OBIETTIVI DELLA RIUNIONE (In Breve)
+*   Scopo principale o problema da risolvere discusso all'inizio. **[timecode]**
 
-**Profondità:**
-- Minimo 3-5 punti significativi per sezione
-- Espandi ogni concetto completamente
-- Cattura sfumature e specificazioni
+---
 
-**Organizzazione:**
-- Raggruppa argomenti correlati
-- Flusso narrativo coerente
-- Gerarchia dal generale al particolare
+### PUNTI CHIAVE E DECISIONI PRESE
+*   **[Argomento 1]**: Breve descrizione della decisione presa o del punto chiave emerso. **[timecode]**
+*   **[Argomento 2]**: Sintesi della discussione e conclusione raggiunta. **[timecode]**
+    *   Dettaglio o dato numerico rilevante. **[timecode]**
+*   **[Argomento 3]**: Risultato di una votazione o consenso ottenuto. **[timecode]**
 
-**Formattazione:**
-- Intestazioni descrittive
-- Paragrafi 3-6 righe
-- Elenchi puntati per informazioni multiple
-- Termini chiave in grassetto
-- Spazio bianco tra sezioni
+---
 
-**Precisione:**
-- Timecode accurati
-- Mantieni terminologia originale
-- Distingui fatti da opinioni
+### ACTION ITEMS (Azioni da Compiere)
+*   **[Azione 1]**: Descrizione chiara e concisa dell'attività da svolgere.
+    *   **Responsabile**: [Nome Cognome] **[timecode]**
+    *   **Scadenza**: [Data o riferimento temporale] **[timecode]**
+*   **[Azione 2]**: Altra attività da completare.
+    *   **Responsabile**: [Nome Cognome] **[timecode]**
+    *   **Scadenza**: [Data o riferimento temporale] **[timecode]**
 
-## REQUISITI FINALI
+---
 
-**Stile**: {language} formale, accessibile, neutrale, oggettivo
+### DATI E CIFRE RILEVANTI
+*   **[Dato 1]**: Es. Budget approvato: €15.000. **[timecode]**
+*   **[Dato 2]**: Es. KPI target: Aumento del 10% delle conversioni. **[timecode]**
+*   **[Dato 3]**: Es. Data di lancio confermata: 25 Novembre. **[timecode]**
 
-**Lunghezza attesa:**
-- Video 10-20 min: 1.500-2.500 parole
-- Video 20-40 min: 2.500-4.000 parole
-- Video 40-60 min: 4.000-6.000 parole
-- Video oltre 60 min: proporzionalmente più esteso
+---
 
-**Controllo finale:**
-✓ Ogni affermazione ha timecode
-✓ Tutti i concetti principali inclusi
-✓ Struttura logica e coerente
-✓ Nessuna interpretazione personale
-✓ Dettaglio appropriato e completo
-✓ Formattazione consistente
+### PROSSIMI PASSI E CHECKPOINT
+*   Prossima riunione fissata per il [Data]. **[timecode]**
+*   Checkpoint di verifica previsto per [Momento]. **[timecode]**
 
-INIZIA L'ANALISI DELLA TRASCRIZIONE, MOSTRA SOLO IL RIASSUNTO RISULTATO NON METTERE PREAMBOLI
+═══════════════════════════════════════════════════════════════════════════════
+
+## ESEMPIO DI NOTA DI RIUNIONE
+
+### **Revisione Trimestrale Progetto "Phoenix"**
+
+---
+
+### **PARTECIPANTI**
+- **Mario Rossi**: Project Manager **[00:01:15]**
+- **Laura Bianchi**: Lead Developer **[00:01:20]**
+- **Giuseppe Verdi**: Marketing **[00:01:25]**
+
+---
+
+### **OBIETTIVI DELLA RIUNIONE (In Breve)**
+*   Analizzare l'avanzamento del Q3 e pianificare le attività del Q4 per il lancio. **[00:02:30]**
+
+---
+
+### **PUNTI CHIAVE E DECISIONI PRESE**
+*   Approvato il posticipo della feature "Analytics Avanzate" alla versione 1.1 per rispettare la data di lancio. **[00:15:45]**
+*   Si procederà con il provider cloud "AWS" invece di "Azure" per questioni di costo. **[00:25:10]**
+    *   Risparmio stimato: 15%. **[00:26:05]**
+
+---
+
+### **ACTION ITEMS (Azioni da Compiere)**
+*   Finalizzare il piano di testing per il rilascio.
+    *   **Responsabile**: Laura Bianchi **[00:35:12]**
+    *   **Scadenza**: Fine settimana. **[00:35:20]**
+*   Preparare la campagna di marketing per il lancio.
+    *   **Responsabile**: Giuseppe Verdi **[00:41:50]**
+    *   **Scadenza**: Prossima settimana. **[00:42:05]**
+
+---
+
+### **DATI E CIFRE RILEVANTI**
+*   Budget marketing per il Q4: €8.000. **[00:45:30]**
+*   Utenti attesi al lancio: 5.000. **[00:48:10]**
+
+---
+
+### **PROSSIMI PASSI E CHECKPOINT**
+*   Prossima riunione di allineamento fissata per venerdì prossimo. **[01:05:00]**
+
+═══════════════════════════════════════════════════════════════════════════════
+
+INIZIA ORA L'ANALISI DELLA TRASCRIZIONE E CREA LE NOTE DELLA RIUNIONE SEGUENDO SCRUPOLOSAMENTE LA STRUTTURA INDICATA. MOSTRA SOLO IL RISULTATO, SENZA PREAMBOLI.
