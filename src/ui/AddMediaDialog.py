@@ -400,12 +400,18 @@ class AddMediaDialog(QDialog):
         file_layout = QHBoxLayout()
         self.gif_path_label = QLineEdit()
         self.gif_path_label.setReadOnly(True)
-
-        browse_button = QPushButton("Browse Library...")
-        browse_button.clicked.connect(self._open_gif_library)
         file_layout.addWidget(self.gif_path_label)
-        file_layout.addWidget(browse_button)
+
+        browse_library_button = QPushButton("Browse Library...")
+        browse_library_button.clicked.connect(self._open_gif_library)
+        file_layout.addWidget(browse_library_button)
+
+        browse_file_button = QPushButton("Browse File...")
+        browse_file_button.clicked.connect(lambda: self._browse_file(self.gif_path_label, "GIFs (*.gif)"))
+        file_layout.addWidget(browse_file_button)
+
         layout.addRow("GIF File:", file_layout)
+
 
         # Position
         pos_layout = QHBoxLayout()
