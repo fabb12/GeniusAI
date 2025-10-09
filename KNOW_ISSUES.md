@@ -19,13 +19,11 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] non funziona generazione powerpoint 
 - [ ] sistemare cuffie
 - [ ] mettere webcam in pip'
-
 - [ ] mettere strumenti evidenziazione del testo nel riassunto
 - [x] sistemare watermark e puntatore cerchio
 - [ ] togliere video e mettere in file
 - [x] mettere tasto di esportazione word
-- [x] metter sincro video nel riassunto
--  
+- [x] metter sincro video nel riassunto 
 - [x] tasto trasferimento da video player input a video player output
 - [x] migliorare funzionamento rettangolo ritaglio
 - [x] mettere la barra di progressione quando uso la musica di sottofondo
@@ -42,8 +40,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiungi metti in loop la musica di sottofondo se video>audio
 - [x] aggiungere possibilità di mettere video in picture in picture, scegliendo la posizione da avere nel video finale 
 - [x] aggiungere la possibilità di poter inserire un immagine, scegliendo la posizione e dimensione 
-- [x] crea un nuovo menu con dentro , inserimento video pip e inserimento immagine 
-- 
+- [x] crea un nuovo menu con dentro , inserimento video pip e inserimento immagine
 - [x] migliora la visualizzazione della barra di riproduzione, da fare piu grande e con una grafica piu professionale 
 - [x] aggiugne barra di progresso quando taglio cancellazione
 - [ ] implementare integrazione della webcam, nelle imopstazione metti un tab nouvo per selezionare il tipo di webcam , se la web cam è attiva dovrei vedre qulel che registra nel player input 
@@ -75,9 +72,11 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiung funzoan import video da metter nel progetto '
 - [x] tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
 - [x] qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
-- inserire testo da metter nel video 
-- inserrie 
-
+- [ ] Taglia le pause più lunghe di 2 secondi e aggiungi una transizione morbida tra le clip.”
+- [ ] aggiungi transazioni automatiche
+- [ ] riconoscere oggetti, volti, luoghi, emozioni;
+- [ ] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
+mettere un titolo nel riassuto
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
