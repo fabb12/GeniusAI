@@ -1631,7 +1631,8 @@ class VideoAudioManager(QMainWindow):
         font = QFont(font_family, font_size)
 
         self.transcriptionTextArea.setFont(font)
-        self.summaryTextArea.setFont(font)
+        self.summaryDetailedTextArea.setFont(font)
+        self.summaryMeetingTextArea.setFont(font)
         if hasattr(self, 'audioAiTextArea'):
             self.audioAiTextArea.setFont(font)
 
@@ -2300,7 +2301,8 @@ class VideoAudioManager(QMainWindow):
 
     def highlight_selected_text(self):
         """Applies or removes the selected highlight color from the text."""
-        cursor = self.summaryTextArea.textCursor()
+        active_summary_area = self.get_current_summary_text_area()
+        cursor = active_summary_area.textCursor()
         if not cursor.hasSelection():
             return
 
@@ -2332,20 +2334,21 @@ class VideoAudioManager(QMainWindow):
         Alterna la visualizzazione dell'editor del riassunto tra testo formattato e sorgente HTML.
         """
         self.summary_view_is_raw = checked
-        self.summaryTextArea.blockSignals(True) # Blocca i segnali per evitare loop
+        active_summary_area = self.get_current_summary_text_area()
+        active_summary_area.blockSignals(True) # Blocca i segnali per evitare loop
 
         if checked:
             # Passa alla visualizzazione HTML grezzo
-            current_html = self.summaryTextArea.toHtml()
-            self.summaryTextArea.setPlainText(current_html)
+            current_html = active_summary_area.toHtml()
+            active_summary_area.setPlainText(current_html)
             self.toggleSummaryViewButton.setText("Mostra Testo")
         else:
             # Passa alla visualizzazione formattata
-            raw_html = self.summaryTextArea.toPlainText()
-            self.summaryTextArea.setHtml(raw_html)
+            raw_html = active_summary_area.toPlainText()
+            active_summary_area.setHtml(raw_html)
             self.toggleSummaryViewButton.setText("Mostra HTML")
 
-        self.summaryTextArea.blockSignals(False) # Riattiva i segnali
+        active_summary_area.blockSignals(False) # Riattiva i segnali
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
@@ -4038,10 +4041,15 @@ class VideoAudioManager(QMainWindow):
 
                 # Salva il contenuto della scheda attualmente attiva
                 current_tab_index = self.transcriptionTabWidget.currentIndex()
-                if current_tab_index == 0: # Scheda Trascrizione
+                if current_tab_index == 0:  # Trascrizione
                     text_to_save = self.transcriptionTextArea.toPlainText()
-                else: # Scheda Riassunto
-                    text_to_save = self.summaryTextArea.toPlainText()
+                elif current_tab_index == 1:  # Riassunto
+                    active_summary_area = self.get_current_summary_text_area()
+                    text_to_save = active_summary_area.toPlainText()
+                elif current_tab_index == 2:  # Audio AI
+                    text_to_save = self.audioAiTextArea.toPlainText()
+                else:
+                    text_to_save = ""
 
                 with open(path, 'w', encoding='utf-8') as f:
                     f.write(text_to_save)
@@ -4053,7 +4061,7 @@ class VideoAudioManager(QMainWindow):
                 metadata = {
                     "transcription_original": self.transcription_original,
                     "transcription_corrected": self.transcription_corrected,
-                    "riassunto_generato": self.summaryTextArea.toPlainText(),
+                    "summaries": self.summaries,
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
                 }
@@ -4078,8 +4086,9 @@ class VideoAudioManager(QMainWindow):
         """
         Esporta il contenuto del riassunto (con formattazione) in un documento Word.
         """
-        summary_html = self.summaryTextArea.toHtml()
-        if not self.summaryTextArea.document().toPlainText().strip():
+        active_summary_area = self.get_current_summary_text_area()
+        summary_html = active_summary_area.toHtml()
+        if not active_summary_area.document().toPlainText().strip():
             self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
 
@@ -6229,7 +6238,8 @@ class VideoAudioManager(QMainWindow):
         # 2. Pulisci le aree di testo
         self.transcriptionTextArea.clear()
         self.audioAiTextArea.clear()
-        self.summaryTextArea.clear()
+        self.summaryDetailedTextArea.clear()
+        self.summaryMeetingTextArea.clear()
 
         # 3. Resetta lo stato interno delle trascrizioni e dei riassunti
         self.transcription_original = ""
