@@ -90,7 +90,7 @@ MODEL_4_SONNET = "claude-sonnet-4-20250514"
 
 # Serie 3.x (Ancora validi e performanti)
 MODEL_3_7_SONNET = "claude-3-7-sonnet-20250219"
-MODEL_3_5_SONNET = "claude-3.5-sonnet-20240620"
+MODEL_3_5_SONNET = "claude-3-5-sonnet-20240620"
 MODEL_3_5_HAIKU = "claude-3-5-haiku-20241022"
 MODEL_3_OPUS = "claude-3-opus-20240229"
 MODEL_3_SONNET = "claude-3-sonnet-20240229"
