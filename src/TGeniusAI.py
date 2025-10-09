@@ -221,9 +221,29 @@ class MediaOverlayThread(QThread):
 
             elif media_type == 'gif':
                 self.progress.emit(30, "Creating GIF overlay...")
-                overlay_clip = (VideoFileClip(self.media_data['path'], has_mask=True)
+                gif_path = self.media_data['path']
+
+                # Use Pillow to extract frames from the GIF, which is more robust than relying on FFMPEG
+                with Image.open(gif_path) as img:
+                    frames = []
+                    try:
+                        while True:
+                            # Convert frame to RGBA to handle transparency correctly
+                            frames.append(np.array(img.convert('RGBA')))
+                            img.seek(img.tell() + 1)
+                    except EOFError:
+                        pass  # Reached the end of the frames
+
+                    # Get the duration of each frame from GIF metadata (in ms)
+                    frame_duration_ms = img.info.get('duration', 100)
+                    fps = 1000 / frame_duration_ms if frame_duration_ms > 0 else 10 # Default to 10 FPS if duration is 0
+
+                # Create the clip from the sequence of frames
+                overlay_clip = (ImageSequenceClip(frames, fps=fps)
                                 .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
-                if duration < overlay_clip.duration:
+
+                # Loop or trim the clip to match the desired duration
+                if overlay_clip.duration > duration:
                     overlay_clip = overlay_clip.subclip(0, duration)
                 else:
                     overlay_clip = overlay_clip.loop(duration=duration)
