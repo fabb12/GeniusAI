@@ -37,6 +37,11 @@ Sei un esperto di analisi testuale e sintesi dei contenuti. Il tuo compito è el
 
 ## STRUTTURA DETTAGLIATA DEL RIASSUNTO
 
+### TITOLO DEL RIASSUNTO
+**Crea un titolo breve, accattivante e descrittivo che riassuma l'argomento principale del contenuto.**
+
+---
+
 ### 1. INTRODUZIONE **[timecode]**
 
 Fornisci un paragrafo introduttivo (3-5 frasi) che:

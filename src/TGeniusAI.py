@@ -58,6 +58,7 @@ from src.ui.ScreenButton import ScreenButton
 from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
+from src.ui.ExportDialog import ExportDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -4084,7 +4085,8 @@ class VideoAudioManager(QMainWindow):
 
     def exportSummaryToWord(self):
         """
-        Esporta il contenuto del riassunto (con formattazione) in un documento Word.
+        Esporta il contenuto del riassunto (con formattazione) in un documento Word,
+        utilizzando un dialogo personalizzato per le opzioni.
         """
         active_summary_area = self.get_current_summary_text_area()
         summary_html = active_summary_area.toHtml()
@@ -4092,12 +4094,23 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
 
-        path, _ = QFileDialog.getSaveFileName(self, "Esporta Riassunto", "", "Word Document (*.docx)")
+        # Utilizza il nuovo dialogo di esportazione
+        dialog = ExportDialog(parent=self)
+        if not dialog.exec():
+            return  # L'utente ha annullato
+
+        options = dialog.get_options()
+        path = options['filepath']
+        remove_timestamps = options['remove_timestamps']
+
         if not path:
+            self.show_status_message("Percorso del file non valido.", error=True)
             return
 
-        if not path.endswith('.docx'):
-            path += '.docx'
+        if remove_timestamps:
+            # Rimuove i tag <font> che contengono i timecode
+            timestamp_pattern = re.compile(r'\s*<font color="#ADD8E6">\[.*?\]</font>\s*')
+            summary_html = timestamp_pattern.sub(' ', summary_html).strip()
 
         try:
             document = docx.Document()
