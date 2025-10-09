@@ -6016,8 +6016,15 @@ class VideoAudioManager(QMainWindow):
             self.recentMenu.addAction(action)
 
     def updateRecentProjects(self, newProject):
-        if newProject in self.recentProjects:
-            self.recentProjects.remove(newProject)
+        # Normalize the path for consistent comparison
+        newProject_norm = os.path.normpath(newProject)
+
+        # Create a new list excluding any existing instances of the project (case-insensitive on Windows)
+        if sys.platform == "win32":
+            self.recentProjects = [p for p in self.recentProjects if os.path.normpath(p).lower() != newProject_norm.lower()]
+        else:
+            self.recentProjects = [p for p in self.recentProjects if os.path.normpath(p) != newProject_norm]
+
 
         self.recentProjects.insert(0, newProject)
 
