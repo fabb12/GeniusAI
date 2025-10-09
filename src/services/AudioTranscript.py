@@ -14,26 +14,33 @@ class TranscriptionThread(QThread):
     completed = pyqtSignal(tuple)
     error = pyqtSignal(str)
 
-    def __init__(self, media_path, parent=None):
+    def __init__(self, media_path, parent=None, start_time=None, end_time=None):
         super().__init__(parent)
         self.media_path = media_path
         self._is_running = True
         self.partial_text = ""
+        self.start_time = start_time
+        self.end_time = end_time
 
     def run(self):
         standard_wav_path = None
         input_clip = None
         audio_clip_for_chunking = None
         try:
-            # Step 1: Standardize all input to a temporary WAV file.
-            self.progress.emit(5, "Standardizzazione audio...")
-
-            standard_wav_path = self.parent().get_temp_filepath(suffix=".wav")
+            self.progress.emit(5, "Estrazione e standardizzazione audio...")
 
             input_clip = AudioFileClip(self.media_path)
+
+            # Se sono specificati start_time e end_time, taglia la clip
+            if self.start_time is not None and self.end_time is not None:
+                self.progress.emit(6, f"Estrazione audio da {self.start_time:.2f}s a {self.end_time:.2f}s...")
+                input_clip = input_clip.subclip(self.start_time, self.end_time)
+
+            # Standardizza in un file WAV temporaneo
+            standard_wav_path = self.parent().get_temp_filepath(suffix=".wav")
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', logger=None)
             input_clip.close()
-            self.progress.emit(10, "Audio standardizzato.")
+            self.progress.emit(10, "Audio pronto per la trascrizione.")
 
             # Step 2: Process the standardized WAV file.
             audio_clip_for_chunking = AudioFileClip(standard_wav_path)
@@ -46,8 +53,11 @@ class TranscriptionThread(QThread):
 
             # Unified chunking logic for all audio lengths
             length = 30000  # 30 seconds
+            # Calcola l'offset iniziale basato sul tempo di inizio della trascrizione parziale
+            offset_ms = int(self.start_time * 1000) if self.start_time is not None else 0
+
             chunks = [
-                (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start)
+                (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start + offset_ms)
                 for start in range(0, int(duration * 1000), length)
             ]
 

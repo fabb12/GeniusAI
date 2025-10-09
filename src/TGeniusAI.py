@@ -5014,7 +5014,26 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun video selezionato.", error=True)
             return
 
-        thread = TranscriptionThread(self.videoPathLineEdit, self)
+        start_time_sec = None
+        end_time_sec = None
+
+        # Controlla se ci sono bookmark per una trascrizione parziale
+        if self.videoSlider.bookmarks:
+            # Trova l'inizio del primo bookmark e la fine dell'ultimo
+            min_start_ms = min(bm[0] for bm in self.videoSlider.bookmarks)
+            max_end_ms = max(bm[1] for bm in self.videoSlider.bookmarks)
+
+            start_time_sec = min_start_ms / 1000.0
+            end_time_sec = max_end_ms / 1000.0
+
+            self.show_status_message(f"Avvio trascrizione parziale da {start_time_sec:.2f}s a {end_time_sec:.2f}s.")
+
+        thread = TranscriptionThread(
+            self.videoPathLineEdit,
+            self,
+            start_time=start_time_sec,
+            end_time=end_time_sec
+        )
         self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
     def onTranscriptionComplete(self, result):
