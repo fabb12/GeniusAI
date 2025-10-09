@@ -64,6 +64,7 @@ from src.services.ShareVideo import VideoSharingManager
 from src.ui.MonitorPreview import MonitorPreview
 from src.managers.StreamToLogger import setup_logging
 from src.services.FrameExtractor import FrameExtractor
+from src.services.OperationalGuideThread import OperationalGuideThread
 from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
@@ -1270,7 +1271,14 @@ class VideoAudioManager(QMainWindow):
         self.saveAudioAIButton.setFixedSize(32, 32)
         self.saveAudioAIButton.setToolTip("Salva Testo Audio AI nel JSON associato")
         self.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
-        tools_grid_layout.addWidget(self.saveAudioAIButton, 0, 2) # Aggiunto qui
+        tools_grid_layout.addWidget(self.saveAudioAIButton, 0, 2)
+
+        self.generateGuideButton = QPushButton('')
+        self.generateGuideButton.setIcon(QIcon(get_resource("script.png")))
+        self.generateGuideButton.setFixedSize(32, 32)
+        self.generateGuideButton.setToolTip("Genera Guida Operativa dal Video")
+        self.generateGuideButton.clicked.connect(self.generate_operational_guide)
+        tools_grid_layout.addWidget(self.generateGuideButton, 0, 3)
 
         # groups_layout.addWidget(tools_group)
 
@@ -6608,6 +6616,45 @@ class VideoAudioManager(QMainWindow):
 
     def on_overlay_error(self, error_message):
         self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
+
+    def generate_operational_guide(self):
+        """
+        Starts the process of generating an operational guide from the current video.
+        """
+        if not self.videoPathLineEdit:
+            self.show_status_message("Carica un video prima di generare una guida operativa.", error=True)
+            return
+
+        # Use the same frame count as the video integration feature for consistency
+        num_frames = self.estrazioneFrameCountSpin.value()
+        language = self.languageComboBox.currentText()
+
+        thread = OperationalGuideThread(
+            video_path=self.videoPathLineEdit,
+            num_frames=num_frames,
+            language=language,
+            parent=self
+        )
+        self.start_task(
+            thread,
+            on_complete=self.on_operational_guide_completed,
+            on_error=self.on_operational_guide_error,
+            on_progress=self.update_status_progress
+        )
+
+    def on_operational_guide_completed(self, guide_text):
+        """
+        Handles the successful completion of the operational guide generation.
+        """
+        self.audioAiTextArea.setMarkdown(guide_text)
+        self.transcriptionTabWidget.setCurrentWidget(self.audio_ai_tab)
+        self.show_status_message("Guida operativa generata e visualizzata nella tab Audio AI.")
+
+    def on_operational_guide_error(self, error_message):
+        """
+        Handles errors that occur during the operational guide generation.
+        """
+        self.show_status_message(f"Errore durante la generazione della guida: {error_message}", error=True)
 
 
 def get_application_path():

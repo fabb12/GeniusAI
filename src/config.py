@@ -273,6 +273,7 @@ PROMPT_BROWSER_GUIDE = get_prompt_path("browser_guide_prompt.txt")
 PROMPT_YOUTUBE_SUMMARY = get_prompt_path("youtube_summary.txt")
 PROMPT_VIDEO_INTEGRATION = get_prompt_path("video_integration_prompt.txt")
 PROMPT_MEETING_SUMMARY = get_prompt_path("meeting_summary_prompt.txt")
+PROMPT_OPERATIONAL_GUIDE = get_prompt_path("prompt_operational_guide.txt")
 PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
 
 # --- Percorsi Risorse ---
