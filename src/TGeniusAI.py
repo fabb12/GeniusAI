@@ -667,7 +667,12 @@ class VideoAudioManager(QMainWindow):
         self.original_text = ""
         self.transcription_original = ""
         self.transcription_corrected = ""
-        self.summaries = {}
+        self.summaries = {
+            'detailed': '',
+            'meeting': '',
+            'detailed_integrated': '',
+            'meeting_integrated': ''
+        }
         self.active_summary_type = None
         self.summary_text = ""
         self.summary_generated = ""
@@ -1371,7 +1376,7 @@ class VideoAudioManager(QMainWindow):
         self.pasteSummaryToAudioAIButton.setIcon(QIcon(get_resource("paste.png")))
         self.pasteSummaryToAudioAIButton.setFixedSize(32, 32)
         self.pasteSummaryToAudioAIButton.setToolTip("Incolla riassunto nella tab Audio AI")
-        self.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.summaryTextArea))
+        self.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.get_current_summary_text_area()))
         top_controls_layout.addWidget(self.pasteSummaryToAudioAIButton)
 
         self.saveSummaryButton = QPushButton('')
@@ -1423,10 +1428,24 @@ class VideoAudioManager(QMainWindow):
 
         summary_layout.addWidget(summary_controls_group)
 
-        self.summaryTextArea = CustomTextEdit(self)
-        self.summaryTextArea.setPlaceholderText("Il riassunto generato dall'AI apparirà qui...")
-        self.summaryTextArea.timestampDoubleClicked.connect(self.sincronizza_video) # Connetti il segnale
-        summary_layout.addWidget(self.summaryTextArea)
+        # Crea il QTabWidget per i riassunti
+        self.summaryTabWidget = QTabWidget()
+        self.summaryTabWidget.setToolTip("Visualizza i diversi tipi di riassunto generati.")
+
+        # Tab per il Riassunto Dettagliato
+        self.summaryDetailedTextArea = CustomTextEdit(self)
+        self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
+        self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
+
+        # Tab per le Note Riunione
+        self.summaryMeetingTextArea = CustomTextEdit(self)
+        self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
+        self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
+
+        summary_layout.addWidget(self.summaryTabWidget)
+
 
         self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
         self.transcriptionTabWidget.addTab(self.audio_ai_tab, "Audio AI")
@@ -1582,7 +1601,17 @@ class VideoAudioManager(QMainWindow):
 
         # Connetti i segnali per il cambio di font
         self.transcriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.summaryTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+
+    def get_current_summary_text_area(self):
+        """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
+        current_index = self.summaryTabWidget.currentIndex()
+        if current_index == 0:
+            return self.summaryDetailedTextArea
+        elif current_index == 1:
+            return self.summaryMeetingTextArea
+        return self.summaryDetailedTextArea # Fallback
 
     def apply_and_save_font_settings(self, size=None):
         """
@@ -1731,7 +1760,17 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun video caricato.", error=True)
             return
 
-        if not self.summary_generated or not self.summary_generated.strip():
+        # Determina quale riassunto integrare in base al tab attivo
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        if current_tab_index == 0:
+            summary_to_integrate = self.summaries.get('detailed', '')
+            self.active_summary_type = 'detailed'
+        else:
+            summary_to_integrate = self.summaries.get('meeting', '')
+            self.active_summary_type = 'meeting'
+
+
+        if not summary_to_integrate or not summary_to_integrate.strip():
             self.show_status_message("È necessario generare un riassunto standard prima di poterlo integrare.", error=True)
             return
 
@@ -1740,21 +1779,29 @@ class VideoAudioManager(QMainWindow):
             video_path=self.videoPathLineEdit,
             num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
-            current_summary_html=self.summary_generated, # Passa l'HTML
+            current_summary_html=summary_to_integrate, # Passa l'HTML
             parent=self
         )
         self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
 
     def onIntegrazioneComplete(self, summary):
-        self.summary_generated_integrated = summary
-        self.summaries['integrative_summary'] = summary
-        self.summary_text = self.summary_generated_integrated
+        if not self.active_summary_type:
+            return # Non dovrebbe succedere
+
+        # Salva il riassunto integrato nel dizionario
+        integrated_key = f"{self.active_summary_type}_integrated"
+        self.summaries[integrated_key] = summary
+
+        # Aggiorna la variabile di visualizzazione e la UI
+        self.summary_text = summary
         self.update_summary_view()
         self.integrazioneToggle.setEnabled(True)
         self.integrazioneToggle.setChecked(True)
         self.show_status_message("Integrazione delle informazioni dal video completata.")
+
+        # Salva l'intero dizionario dei riassunti nel JSON
         update_data = {
-            "summary_generated_integrated": summary,
+            "summaries": self.summaries,
             "summary_date": datetime.datetime.now().isoformat()
         }
         self._update_json_file(self.videoPathLineEdit, update_data)
@@ -1768,10 +1815,15 @@ class VideoAudioManager(QMainWindow):
         Alterna la visualizzazione nell'area del riassunto tra il riassunto standard
         e quello integrato con le informazioni del video.
         """
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+
         if checked:
-            self.summary_text = self.summary_generated_integrated
+            # Mostra la versione integrata, se esiste
+            self.summary_text = self.summaries.get(f"{summary_type}_integrated", self.summaries.get(summary_type, ''))
         else:
-            self.summary_text = self.summary_generated
+            # Mostra la versione non integrata
+            self.summary_text = self.summaries.get(summary_type, '')
 
         self.update_summary_view()
 
@@ -1925,7 +1977,9 @@ class VideoAudioManager(QMainWindow):
             return
 
         self.original_text = current_text
-        self.current_summary_type = 'meeting'
+        self.active_summary_type = 'meeting'
+        self.summaryTabWidget.setCurrentIndex(1)
+
 
         thread = MeetingSummarizer(
             current_text,
@@ -1940,7 +1994,8 @@ class VideoAudioManager(QMainWindow):
             return
 
         self.original_text = current_text
-        self.current_summary_type = 'text'
+        self.active_summary_type = 'detailed'
+        self.summaryTabWidget.setCurrentIndex(0)
 
         thread = ProcessTextAI(
             mode="summary",
@@ -1971,7 +2026,7 @@ class VideoAudioManager(QMainWindow):
         if not self.transcription_original:
             self.transcription_original = current_text
 
-        self.current_summary_type = 'transcription_fix' # Tipo specifico per questa azione
+        self.active_summary_type = 'transcription_fix' # Tipo specifico per questa azione
 
         thread = ProcessTextAI(
             mode="fix",
@@ -1987,7 +2042,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         self.original_text = current_text
-        self.current_summary_type = 'fix' # Assumendo che questo sia un tipo valido
+        self.active_summary_type = 'transcription_fix' # Assumendo che questo sia un tipo valido
 
         thread = ProcessTextAI(
             mode="fix",
@@ -2026,24 +2081,6 @@ class VideoAudioManager(QMainWindow):
         else:
             self.transcription_original = self.transcriptionTextArea.toHtml()
 
-    def _sync_summary_state_from_ui(self):
-        """
-        Sincronizza le variabili di stato del riassunto con il contenuto della UI,
-        tenendo conto della modalità di visualizzazione (grezza o formattata).
-        """
-        if self.summary_view_is_raw:
-            # Se siamo in modalità HTML grezzo, il testo semplice è la nostra fonte di verità
-            current_html = self.summaryTextArea.toPlainText()
-        else:
-            # Altrimenti, prendiamo l'HTML renderizzato
-            current_html = self.summaryTextArea.toHtml()
-
-        if self.integrazioneToggle.isEnabled() and self.integrazioneToggle.isChecked():
-            self.summary_generated_integrated = current_html
-        else:
-            self.summary_generated = current_html
-        self.summary_text = current_html # Aggiorna anche la variabile di visualizzazione
-
     def save_transcription_to_json(self):
         """
         Salva solo il contenuto della scheda Trascrizione nel file JSON.
@@ -2064,21 +2101,18 @@ class VideoAudioManager(QMainWindow):
 
     def save_summary_to_json(self):
         """
-        Salva solo il contenuto della scheda Riassunto nel file JSON.
+        Salva tutti i riassunti (dettagliato, meeting, integrati) nel file JSON associato.
         """
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
             self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
             return
 
-        self._sync_summary_state_from_ui()
-
         update_data = {
-            "summary_generated": self.summary_generated,
-            "summary_generated_integrated": self.summary_generated_integrated,
+            "summaries": self.summaries,
             "last_save_date": datetime.datetime.now().isoformat()
         }
         self._update_json_file(self.videoPathLineEdit, update_data)
-        self.show_status_message("Riassunto salvato nel file JSON.", timeout=3000)
+        self.show_status_message("Riassunti salvati nel file JSON.", timeout=3000)
 
     def save_audio_ai_to_json(self):
         """
@@ -2110,14 +2144,17 @@ class VideoAudioManager(QMainWindow):
 
         # 1. Sincronizza lo stato interno con la UI utilizzando i metodi helper
         self._sync_transcription_state_from_ui()
-        self._sync_summary_state_from_ui()
+
+        # Aggiorna il dizionario summaries con il contenuto corrente delle text area
+        self.summaries['detailed'] = self.summaryDetailedTextArea.toHtml()
+        self.summaries['meeting'] = self.summaryMeetingTextArea.toHtml()
+
 
         # 2. Salva lo stato aggiornato
         update_data = {
             "transcription_original": self.transcription_original,
             "transcription_corrected": self.transcription_corrected,
-            "summary_generated": self.summary_generated,
-            "summary_generated_integrated": self.summary_generated_integrated,
+            "summaries": self.summaries,
             "audio_ai_text": self.audioAiTextArea.toPlainText(),
             "last_save_date": datetime.datetime.now().isoformat()
         }
@@ -2194,34 +2231,38 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionTextArea.setPlainText(result.get('transcription_raw', ''))
             return
 
-        if hasattr(self, 'current_summary_type') and self.current_summary_type:
-            if self.current_summary_type == 'transcription_fix':
+        if self.active_summary_type:
+            if self.active_summary_type == 'transcription_fix':
                 self.transcription_corrected = result
                 self.transcriptionTextArea.setPlainText(result)
                 self.show_status_message("Correzione del testo completata.")
                 # Abilita il toggle per mostrare/nascondere la correzione
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
-            else:
+            else: # This handles 'detailed' and 'meeting' summaries
                 # Converti il risultato Markdown in HTML prima di memorizzarlo e visualizzarlo
                 html_summary = markdown.markdown(result)
-                self.summaries[self.current_summary_type] = html_summary
-                self.active_summary_type = self.current_summary_type
+                self.summaries[self.active_summary_type] = html_summary
 
-                self.summary_generated = html_summary
+                # Also clear the integrated version since a new base summary was generated
+                integrated_key = f"{self.active_summary_type}_integrated"
+                self.summaries[integrated_key] = ""
+
+
                 self.summary_text = html_summary
-                self.update_summary_view()
+                self.update_summary_view() # This will update the currently active tab
 
                 self.integrazioneToggle.setChecked(False)
-                self.transcriptionTabWidget.setCurrentIndex(1)
+                # We don't need to switch the main tab, only the summary sub-tab, which is already done.
+                # self.transcriptionTabWidget.setCurrentIndex(1)
 
                 update_data = {
-                    "summary_generated": html_summary,
+                    "summaries": self.summaries, # Save the whole dictionary
                     "summary_date": datetime.datetime.now().isoformat()
                 }
                 self._update_json_file(self.videoPathLineEdit, update_data)
 
-            self.current_summary_type = None
+            self.active_summary_type = None
 
     def update_summary_view(self):
         """
@@ -2232,6 +2273,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         html_content = self.summary_text
+        target_text_area = self.get_current_summary_text_area()
 
         # Pattern robusto per trovare vari formati di timecode come [00:01:15.3] o [01:15]
         timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
@@ -2247,9 +2289,9 @@ class VideoAudioManager(QMainWindow):
         styled_html = timestamp_pattern.sub(style_match, temp_html)
 
         # Imposta l'HTML finale nell'area di testo
-        self.summaryTextArea.blockSignals(True)
-        self.summaryTextArea.setHtml(styled_html)
-        self.summaryTextArea.blockSignals(False)
+        target_text_area.blockSignals(True)
+        target_text_area.setHtml(styled_html)
+        target_text_area.blockSignals(False)
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
@@ -4269,8 +4311,12 @@ class VideoAudioManager(QMainWindow):
             "transcription_raw": "", # Mantenuto per retrocompatibilità
             "transcription_original": "",
             "transcription_corrected": "",
-            "summary_generated": "",
-            "summary_generated_integrated": "",
+            "summaries": {
+                "detailed": "",
+                "meeting": "",
+                "detailed_integrated": "",
+                "meeting_integrated": ""
+            },
             "summary_date": None,
             "generated_audios": [],
             "video_notes": []
@@ -4990,21 +5036,32 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
-        # Carica entrambi i tipi di riassunto
-        self.summary_generated = data.get('summary_generated', '')
-        self.summary_generated_integrated = data.get('summary_generated_integrated', '')
-
-        # Decide quale riassunto mostrare e imposta lo stato del toggle
-        if self.summary_generated_integrated:
-            self.summary_text = self.summary_generated_integrated
-            self.integrazioneToggle.setEnabled(True)
-            self.integrazioneToggle.setChecked(True)
+        # Carica i riassunti, gestendo la retrocompatibilità
+        if 'summaries' in data:
+            self.summaries = data.get('summaries', self.summaries)
         else:
-            self.summary_text = self.summary_generated
-            self.integrazioneToggle.setEnabled(False)
-            self.integrazioneToggle.setChecked(False)
+            # Retrocompatibilità: migra i vecchi campi nel nuovo dizionario
+            self.summaries['detailed'] = data.get('summary_generated', '')
+            self.summaries['detailed_integrated'] = data.get('summary_generated_integrated', '')
+            # Lascia gli altri campi vuoti
+            self.summaries['meeting'] = ''
+            self.summaries['meeting_integrated'] = ''
 
-        self.update_summary_view()
+
+        # Popola le aree di testo dei riassunti
+        self.summaryDetailedTextArea.setHtml(self.summaries.get('detailed_integrated') or self.summaries.get('detailed', ''))
+        self.summaryMeetingTextArea.setHtml(self.summaries.get('meeting_integrated') or self.summaries.get('meeting', ''))
+
+        # Applica lo stile ai timestamp in entrambe le aree
+        self._style_existing_timestamps(self.summaryDetailedTextArea)
+        self._style_existing_timestamps(self.summaryMeetingTextArea)
+
+        # Imposta lo stato del toggle di integrazione in base al tab visibile
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        active_summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+        has_integrated_summary = bool(self.summaries.get(f"{active_summary_type}_integrated", ''))
+        self.integrazioneToggle.setEnabled(has_integrated_summary)
+        self.integrazioneToggle.setChecked(has_integrated_summary)
 
         # Imposta la lingua nella combobox
         language_code = data.get("language")
