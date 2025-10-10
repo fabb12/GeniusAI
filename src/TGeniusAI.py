@@ -86,6 +86,7 @@ from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
 from src.managers.ProjectManager import ProjectManager
 from src.ui.ProjectDock import ProjectDock
+from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.services.utils import remove_timestamps_from_html
 import docx
@@ -865,6 +866,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
+        self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -6766,6 +6768,59 @@ class VideoAudioManager(QMainWindow):
 
     def on_overlay_error(self, error_message):
         self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
+
+    def start_batch_transcription(self):
+        """
+        Starts the batch transcription process for all online videos in the current project.
+        """
+        if not self.current_project_path or not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto attivo. Caricare un progetto prima di avviare la trascrizione batch.", error=True)
+            return
+
+        clips = self.projectDock.project_data.get("clips", [])
+        online_clips = [c for c in clips if c.get("status") == "online"]
+
+        if not online_clips:
+            self.show_status_message("Nessuna clip video online trovata nel progetto da trascrivere.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        video_paths = [os.path.join(clips_dir, c["clip_filename"]) for c in online_clips]
+
+        # Clear the transcription area before starting
+        self.transcriptionTextArea.clear()
+        self.show_status_message(f"Avvio trascrizione per {len(video_paths)} video...")
+
+        thread = BatchTranscriptionThread(video_paths, parent=self)
+        self.start_task(
+            thread,
+            on_complete=self._on_batch_transcription_finished,
+            on_error=self.on_batch_transcription_error,
+            on_progress=self._on_batch_progress
+        )
+        # We need to connect the specific signal for individual file completion
+        thread.file_transcribed.connect(self._on_single_transcription_complete)
+
+    def _on_batch_progress(self, current, total, message):
+        """Updates the status bar with batch progress."""
+        progress_percentage = int((current / total) * 100)
+        self.update_status_progress(progress_percentage, message)
+
+    def _on_single_transcription_complete(self, filename, text):
+        """Appends the result of a single transcription to the text area."""
+        separator = f"\n\n--- Trascrizione per: {filename} ---\n\n"
+        self.transcriptionTextArea.append(separator)
+        self.transcriptionTextArea.append(text)
+
+    def _on_batch_transcription_finished(self, result=None):
+        """Handles the completion of the entire batch process."""
+        self.show_status_message("Trascrizione batch di tutti i video completata.", timeout=10000)
+
+    def on_batch_transcription_error(self, error_message):
+        """Handles errors reported during the batch transcription."""
+        # The error is already displayed by finish_task, but we can log it here.
+        logging.error(f"Errore durante la trascrizione batch: {error_message}")
+
 
     def generate_operational_guide(self):
         """
