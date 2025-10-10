@@ -4108,30 +4108,21 @@ class VideoAudioManager(QMainWindow):
             self._export_to_pdf(summary_html, path)
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF utilizzando fpdf2."""
+        """Esporta il contenuto HTML in un file PDF utilizzando fpdf2 e il font DejaVu incluso."""
         try:
             pdf = FPDF()
             pdf.add_page()
 
-            # Tenta di aggiungere un font Unicode. L'ordine di preferenza è DejaVu, poi Arial.
-            font_found = False
-            # Assumiamo che i nomi dei file dei font siano standard (es. "DejaVuSans.ttf")
-            font_files = {"DejaVu": "DejaVuSans.ttf", "Arial": "arial.ttf"}
-            for family, filename in font_files.items():
-                try:
-                    # fpdf2 cercherà il font nei percorsi di sistema se non è un file locale
-                    pdf.add_font(family, "", filename, uni=True)
-                    pdf.set_font(family, size=12)
-                    font_found = True
-                    logging.info(f"Using font '{family}' for PDF export.")
-                    break
-                except (RuntimeError, FileNotFoundError):
-                    logging.debug(f"Font '{filename}' not found, trying next.")
+            # Usa il font DejaVuSans.ttf incluso nelle risorse per garantire la compatibilità Unicode.
+            font_path = get_resource("fonts/DejaVuSans.ttf")
 
-            if not font_found:
-                logging.warning("Nessun font Unicode di sistema trovato. Fallback su 'Times'. "
-                                "I caratteri speciali potrebbero non essere visualizzati correttamente.")
-                pdf.set_font("Times", size=12)
+            if not os.path.exists(font_path):
+                self.show_status_message("Font DejaVuSans.ttf non trovato nelle risorse dell'applicazione.", error=True)
+                logging.error(f"Font non trovato al percorso: {font_path}")
+                return
+
+            pdf.add_font("DejaVu", "", font_path, uni=True)
+            pdf.set_font("DejaVu", size=12)
 
             pdf.write_html(html_content)
 
