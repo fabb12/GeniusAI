@@ -90,7 +90,7 @@ from src.services.VideoCompositing import VideoCompositingThread
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
-from weasyprint import HTML
+from xhtml2pdf import pisa
 
 
 class ProjectClipsMergeThread(QThread):
@@ -4122,7 +4122,15 @@ class VideoAudioManager(QMainWindow):
     def _export_to_pdf(self, html_content, path):
         """Esporta il contenuto HTML in un file PDF."""
         try:
-            HTML(string=html_content).write_pdf(path)
+            with open(path, "w+b") as result_file:
+                # Convert HTML to PDF
+                pisa_status = pisa.CreatePDF(
+                        html_content,                # the HTML to convert
+                        dest=result_file)           # file handle to receive result
+
+            if pisa_status.err:
+                raise Exception(f"Errore durante la conversione in PDF: {pisa_status.err}")
+
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
         except Exception as e:
             self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
