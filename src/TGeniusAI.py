@@ -2271,14 +2271,17 @@ class VideoAudioManager(QMainWindow):
         # Decide whether to show or hide timestamps
         if self.showTimecodeSummaryCheckbox.isChecked():
             # Style timestamps to be visible
-            timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+            # This regex is now consistent with the removal logic
+            timestamp_pattern = re.compile(r'(\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\])')
             def style_match(match):
                 return f"<font color='#ADD8E6'>{match.group(1)}</font>"
 
+            # First, unstyle any previously styled timestamps to ensure we don't double-wrap them.
             temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', html_content, flags=re.IGNORECASE)
+            # Now, apply the style to all raw timestamps.
             processed_html = timestamp_pattern.sub(style_match, temp_html)
         else:
-            # Remove timestamps
+            # Remove timestamps using the updated utility function
             processed_html = remove_timestamps_from_html(html_content)
 
         target_widget.blockSignals(True)
