@@ -2110,6 +2110,8 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
             return
 
+        self._sync_ui_to_master_summary()
+
         update_data = {
             "summaries": self.summaries,
             "last_save_date": datetime.datetime.now().isoformat()
@@ -2147,11 +2149,7 @@ class VideoAudioManager(QMainWindow):
 
         # 1. Sincronizza lo stato interno con la UI utilizzando i metodi helper
         self._sync_transcription_state_from_ui()
-
-        # Aggiorna il dizionario summaries con il contenuto corrente delle text area
-        self.summaries['detailed'] = self.summaryDetailedTextArea.toHtml()
-        self.summaries['meeting'] = self.summaryMeetingTextArea.toHtml()
-
+        self._sync_ui_to_master_summary() # Sincronizza i riassunti
 
         # 2. Salva lo stato aggiornato
         update_data = {
@@ -2231,31 +2229,53 @@ class VideoAudioManager(QMainWindow):
     def _update_text_area_view(self, text_area, full_html_content, show_timestamps):
         """
         Aggiorna la visualizzazione di un'area di testo, mostrando o nascondendo
-        i timecode in modo non distruttivo.
+        i timecode e impostando lo stato di sola lettura per prevenire la perdita di dati.
         """
         text_area.blockSignals(True)
-        if show_timestamps:
-            # Mostra i timecode. Il full_html_content dovrebbe già averli.
-            # Assicuriamoci che siano stilizzati correttamente.
-            timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}\])')
-            def style_match(match):
-                return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+        try:
+            if show_timestamps:
+                text_area.setHtml(full_html_content or "")
+                text_area.setReadOnly(False)
+            else:
+                cleaned_html = remove_timestamps_from_html(full_html_content or "")
+                text_area.setHtml(cleaned_html)
+                text_area.setReadOnly(True)
+        finally:
+            text_area.blockSignals(False)
 
-            # Prima rimuovi eventuali stili per evitare duplicazioni, poi applica quello nuovo.
-            temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', full_html_content, flags=re.IGNORECASE)
-            processed_html = timestamp_pattern.sub(style_match, temp_html)
-            text_area.setHtml(processed_html)
-        else:
-            # Nascondi i timecode usando la funzione di utilità.
-            cleaned_html = remove_timestamps_from_html(full_html_content)
-            text_area.setHtml(cleaned_html)
-        text_area.blockSignals(False)
+    def update_summary_view(self, index=None):
+        """
+        Aggiorna la vista del riassunto attivo in base allo stato dei toggle.
+        Questa funzione è ora la fonte unica di verità per aggiornare la UI.
+        """
+        if not hasattr(self, 'summaries'):
+            return
 
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+        target_widget = self.get_current_summary_text_area()
 
-    def updateProgressDialog(self, value, label):
-        if not self.progressDialog.wasCanceled():
-            self.progressDialog.setValue(value)
-            self.progressDialog.setLabelText(label)
+        is_integrated_view = self.integrazioneToggle.isChecked()
+        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+
+        html_content = self.summaries.get(summary_key, "")
+
+        self._update_text_area_view(target_widget, html_content, self.showTimecodeSummaryCheckbox.isChecked())
+
+    def _sync_ui_to_master_summary(self):
+        """
+        Sincronizza il contenuto della UI (se modificabile) con la copia master
+        nel dizionario self.summaries. Da chiamare prima di ogni salvataggio.
+        """
+        for i, summary_type in enumerate(['detailed', 'meeting']):
+            widget = self.summaryDetailedTextArea if i == 0 else self.summaryMeetingTextArea
+            if not widget.isReadOnly():
+                # Aggiorna sia la versione normale che quella integrata se necessario
+                # Nota: questo presuppone che l'utente modifichi una versione alla volta.
+                # Se l'integrazione è attiva, salviamo nella chiave integrata.
+                is_integrated = self.integrazioneToggle.isChecked() and self.summaryTabWidget.currentIndex() == i
+                summary_key = f"{summary_type}_integrated" if is_integrated else summary_type
+                self.summaries[summary_key] = widget.toHtml()
 
     def onProcessComplete(self, result):
         if isinstance(result, dict):
@@ -2270,30 +2290,15 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                # Convert Markdown to HTML
                 html_summary = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-
-                # Store the new HTML summary
                 self.summaries[self.active_summary_type] = html_summary
-
-                # Clear any previous integrated summary for this type
                 integrated_key = f"{self.active_summary_type}_integrated"
                 self.summaries[integrated_key] = ""
 
-                # Get the correct text area to update
-                target_widget = self.get_current_summary_text_area()
-
-                # Directly set the new HTML content in the UI
-                target_widget.setHtml(html_summary)
-
-                # Disable and uncheck the integration toggle as this is a new summary
                 self.integrazioneToggle.setChecked(False)
                 self.integrazioneToggle.setEnabled(False)
-
-                # Update the view to handle timestamp visibility
                 self.update_summary_view()
 
-                # Save the updated summaries to the JSON file
                 update_data = {
                     "summaries": self.summaries,
                     "summary_date": datetime.datetime.now().isoformat()
@@ -2301,37 +2306,6 @@ class VideoAudioManager(QMainWindow):
                 self._update_json_file(self.videoPathLineEdit, update_data)
 
             self.active_summary_type = None
-
-    def update_summary_view(self, checked=None):
-        """
-        Updates the summary view based on the state of the 'integrazione' and 'showTimecode' checkboxes.
-        This function now reads the current state from the UI first to prevent data loss.
-        """
-        if not hasattr(self, 'summaries'):
-            return
-
-        # 1. Get the current UI state
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-        target_widget = self.get_current_summary_text_area()
-        current_html_from_ui = target_widget.toHtml()
-
-        # 2. Determine which 'master' copy to update based on the integration toggle
-        is_integrated_view = self.integrazioneToggle.isChecked()
-        if is_integrated_view:
-            summary_key = f"{summary_type}_integrated"
-        else:
-            summary_key = summary_type
-
-        # 3. Update the master copy in self.summaries with the current, edited content
-        self.summaries[summary_key] = current_html_from_ui
-
-        # 4. Now that the master copy is updated, use it to update the view
-        # The html_content is now the most recent version from the UI
-        html_content = self.summaries[summary_key]
-
-        # 5. Use the unified view update function to show/hide timestamps
-        self._update_text_area_view(target_widget, html_content, self.showTimecodeSummaryCheckbox.isChecked())
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
@@ -4125,9 +4099,14 @@ class VideoAudioManager(QMainWindow):
         """
         Esporta il contenuto del riassunto (con formattazione) in un documento Word o PDF,
         utilizzando un dialogo personalizzato per le opzioni.
+        L'esportazione è coerente con la visualizzazione corrente (con o senza timecode).
         """
         active_summary_area = self.get_current_summary_text_area()
-        summary_html = active_summary_area.toHtml()
+
+        # Prende l'HTML direttamente dal widget, così riflette lo stato corrente
+        # (con o senza timecode, a seconda di cosa vede l'utente).
+        html_to_export = active_summary_area.toHtml()
+
         if not active_summary_area.document().toPlainText().strip():
             self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
@@ -4144,15 +4123,10 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Percorso del file non valido.", error=True)
             return
 
-        # Determina il contenuto da esportare in base allo stato del checkbox
-        export_html = summary_html
-        if not self.showTimecodeSummaryCheckbox.isChecked():
-            export_html = remove_timestamps_from_html(summary_html)
-
         if file_format == 'docx':
-            self._export_to_docx(export_html, path)
+            self._export_to_docx(html_to_export, path)
         elif file_format == 'pdf':
-            self._export_to_pdf(export_html, path)
+            self._export_to_pdf(html_to_export, path)
 
     def _export_to_pdf(self, html_content, path):
         """Esporta il contenuto HTML in un file PDF utilizzando fpdf2 e il font DejaVu incluso."""
