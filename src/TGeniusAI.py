@@ -94,6 +94,164 @@ from docx.shared import RGBColor
 from fpdf import FPDF
 
 
+class BatchTranscriptionThread(QThread):
+    progress = pyqtSignal(int, str)
+    file_completed = pyqtSignal(str, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, clips_paths, main_window, parent=None):
+        super().__init__(parent)
+        self.clips_paths = clips_paths
+        self.main_window = main_window
+        self.running = True
+        self._current_transcription_thread = None
+
+    def run(self):
+        total_clips = len(self.clips_paths)
+        full_transcription = ""
+
+        for i, clip_path in enumerate(self.clips_paths):
+            if not self.running:
+                self.error.emit("Processo annullato dall'utente.")
+                return
+
+            self.progress.emit(int((i / total_clips) * 100), f"Trascrizione di {os.path.basename(clip_path)} ({i+1}/{total_clips})...")
+
+            self._current_transcription_thread = TranscriptionThread(clip_path, self.main_window)
+
+            result = None
+            error_message = None
+
+            def on_complete(res):
+                nonlocal result
+                result = res
+                local_loop.quit()
+
+            def on_error(err):
+                nonlocal error_message
+                error_message = err
+                local_loop.quit()
+
+            local_loop = QEventLoop()
+            self._current_transcription_thread.completed.connect(on_complete)
+            self._current_transcription_thread.error.connect(on_error)
+
+            self._current_transcription_thread.start()
+            local_loop.exec()
+
+            if error_message:
+                error_msg = f"Errore durante la trascrizione di {os.path.basename(clip_path)}: {error_message}"
+                logging.error(error_msg)
+                continue
+
+            try:
+                json_path, _ = result
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                clip_transcription = data.get('transcription_raw', '')
+
+                separator = f"\n\n--- Trascrizione per: {os.path.basename(clip_path)} ---\n\n"
+                full_transcription += separator + clip_transcription
+
+                self.file_completed.emit(clip_path, clip_transcription)
+
+            except Exception as e:
+                error_msg = f"Errore nella gestione del risultato per {os.path.basename(clip_path)}: {e}"
+                logging.error(error_msg)
+                continue
+
+        if self.running:
+            self.progress.emit(100, "Tutte le trascrizioni sono state completate.")
+            self.completed.emit(full_transcription)
+
+    def stop(self):
+        self.running = False
+        if self._current_transcription_thread and self._current_transcription_thread.isRunning():
+            self._current_transcription_thread.stop()
+
+
+class BatchSummarizationThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str, str)
+    error = pyqtSignal(str)
+
+    def __init__(self, full_transcript, main_window, parent=None):
+        super().__init__(parent)
+        self.full_transcript = full_transcript
+        self.main_window = main_window
+        self.running = True
+
+    def run(self):
+        try:
+            if not self.running: return
+
+            # Step 1: Generate Detailed Summary
+            self.progress.emit(10, "Generazione riassunto dettagliato...")
+            detailed_summary = self._run_summary_process(
+                ProcessTextAI(mode="summary", language=self.main_window.languageComboBox.currentText(), prompt_vars={'text': self.full_transcript})
+            )
+            if detailed_summary is None:
+                if self.running: self.error.emit("Generazione riassunto dettagliato fallita o annullata.")
+                return
+
+            if not self.running: return
+
+            # Step 2: Generate Meeting Summary
+            self.progress.emit(50, "Generazione riassunto riunione...")
+            meeting_summary = self._run_summary_process(
+                MeetingSummarizer(self.full_transcript, self.main_window.languageComboBox.currentText())
+            )
+            if meeting_summary is None:
+                if self.running: self.error.emit("Generazione riassunto riunione fallita o annullata.")
+                return
+
+            if self.running:
+                self.progress.emit(100, "Riassunti completati.")
+                self.completed.emit(detailed_summary, meeting_summary)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(f"Errore imprevisto durante la generazione dei riassunti: {e}")
+
+    def _run_summary_process(self, summary_thread_instance):
+        """Helper to run a summary thread and wait for its result."""
+        result = None
+        error_message = None
+
+        def on_complete(res):
+            nonlocal result
+            result = res
+            local_loop.quit()
+
+        def on_error(err):
+            nonlocal error_message
+            error_message = err
+            local_loop.quit()
+
+        local_loop = QEventLoop()
+        summary_thread_instance.completed.connect(on_complete)
+        summary_thread_instance.error.connect(on_error)
+
+        # We need to call start_task on the main window to manage this sub-thread
+        # but we can't do that directly. We will just run the thread directly.
+        summary_thread_instance.start()
+        local_loop.exec()
+
+        if not self.running:
+            summary_thread_instance.stop()
+            return None
+
+        if error_message:
+            logging.error(f"Errore nel sotto-processo di riassunto: {error_message}")
+            return None
+
+        return result
+
+    def stop(self):
+        self.running = False
+
+
 class ProjectClipsMergeThread(QThread):
     progress = pyqtSignal(int, str)
     completed = pyqtSignal(str)
@@ -865,6 +1023,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
+        self.projectDock.transcribe_all_clips_requested.connect(self.start_batch_transcription)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -4859,6 +5018,66 @@ class VideoAudioManager(QMainWindow):
         # a meno che non ci sia una logica specifica da eseguire in caso di errore.
         pass
 
+    def start_batch_transcription(self):
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di avviare la trascrizione.", error=True)
+            return
+
+        project_data = self.projectDock.project_data
+        if not project_data or "clips" not in project_data:
+            self.show_status_message("Nessuna clip trovata nel progetto.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        online_clips = [os.path.join(clips_dir, c['clip_filename']) for c in project_data['clips'] if c.get('status') == 'online' and os.path.exists(os.path.join(clips_dir, c['clip_filename']))]
+
+        if not online_clips:
+            self.show_status_message("Nessuna clip video online trovata nel progetto da trascrivere.", error=True)
+            return
+
+        self.transcriptionTextArea.clear()
+        self.show_status_message(f"Avvio trascrizione per {len(online_clips)} clip...")
+
+        thread = BatchTranscriptionThread(online_clips, self)
+        self.start_task(thread, self.on_batch_transcription_completed, self.onProcessError, self.update_status_progress)
+
+    def on_batch_transcription_completed(self, full_transcript):
+        self.transcriptionTextArea.setPlainText(full_transcript)
+        self._style_existing_timestamps(self.transcriptionTextArea)
+        self.show_status_message("Trascrizione completata. Avvio generazione riassunti...", timeout=10000)
+
+        # Ora avvia il thread per i riassunti
+        summarization_thread = BatchSummarizationThread(full_transcript, self)
+        self.start_task(summarization_thread, self.on_batch_summarization_completed, self.onProcessError, self.update_status_progress)
+
+    def on_batch_summarization_completed(self, detailed_summary, meeting_summary):
+        """
+        Salva la trascrizione completa e i riassunti nel file di progetto .gnai.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Errore: nessun progetto attivo per salvare i riassunti.", error=True)
+            return
+
+        project_data = self.projectDock.project_data
+        if not project_data:
+            self.show_status_message("Errore: dati del progetto non validi.", error=True)
+            return
+
+        # Aggiungi i nuovi dati al dizionario del progetto
+        project_data['batch_transcription_full'] = self.transcriptionTextArea.toPlainText() # Salva il testo semplice
+        project_data['batch_summary_detailed'] = detailed_summary
+        project_data['batch_summary_meeting'] = meeting_summary
+        project_data['last_batch_transcription_date'] = datetime.datetime.now().isoformat()
+
+        # Salva l'intero oggetto project_data aggiornato
+        success, message = self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+
+        if success:
+            self.show_status_message("Trascrizione e riassunti salvati con successo nel progetto.", timeout=10000)
+            # Potresti voler ricaricare il progetto per aggiornare qualsiasi vista che potrebbe dipendere da questi dati
+            self.load_project(self.projectDock.gnai_path)
+        else:
+            self.show_status_message(f"Errore durante il salvataggio del progetto: {message}", error=True)
 
     def handleTextChange(self):
         if self.transcriptionTextArea.signalsBlocked():

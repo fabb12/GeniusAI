@@ -21,6 +21,7 @@ class ProjectDock(CustomDock):
     delete_clip_requested = pyqtSignal(str)
     relink_clip_requested = pyqtSignal(str, str)
     project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
+    transcribe_all_clips_requested = pyqtSignal()
 
     def __init__(self, title="Progetto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -136,6 +137,11 @@ class ProjectDock(CustomDock):
         self.btn_merge_clips = QPushButton("Unisci Clip")
         self.btn_merge_clips.setToolTip("Unisci tutte le clip in un unico video.")
         buttons_layout.addWidget(self.btn_merge_clips)
+
+        self.btn_transcribe_all = QPushButton("Trascrivi Tutti")
+        self.btn_transcribe_all.setToolTip("Trascrive tutti i video nel progetto.")
+        self.btn_transcribe_all.clicked.connect(self.transcribe_all_clips_requested.emit)
+        buttons_layout.addWidget(self.btn_transcribe_all)
 
         buttons_layout.addStretch()
 
