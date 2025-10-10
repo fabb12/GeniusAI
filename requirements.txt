@@ -34,4 +34,4 @@ langchain_openai
 langchain_anthropic
 Pillow
 docx2pdf
-xhtml2pdf
+fpdf2
