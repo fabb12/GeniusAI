@@ -2286,34 +2286,34 @@ class VideoAudioManager(QMainWindow):
 
     def update_summary_view(self, checked=None):
         """
-        Updates the summary view based on the state of the 'integrazione' and 'showTimecode' checkboxes.
-        This function now reads the current state from the UI first to prevent data loss.
+        Updates the summary view to show or hide timestamps non-destructively.
+        When timestamps are hidden, the text area becomes read-only to prevent data loss.
         """
         if not hasattr(self, 'summaries'):
             return
 
-        # 1. Get the current UI state
         current_tab_index = self.summaryTabWidget.currentIndex()
         summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
         target_widget = self.get_current_summary_text_area()
-        current_html_from_ui = target_widget.toHtml()
 
-        # 2. Determine which 'master' copy to update based on the integration toggle
+        # Determine which 'master' copy to use based on the integration toggle
         is_integrated_view = self.integrazioneToggle.isChecked()
-        if is_integrated_view:
-            summary_key = f"{summary_type}_integrated"
-        else:
-            summary_key = summary_type
+        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
 
-        # 3. Update the master copy in self.summaries with the current, edited content
-        self.summaries[summary_key] = current_html_from_ui
+        # If we are hiding timestamps, first save the current state of the editor
+        # to the master copy. This ensures any edits made while timestamps are visible are kept.
+        if not self.showTimecodeSummaryCheckbox.isChecked():
+            self.summaries[summary_key] = target_widget.toHtml()
 
-        # 4. Now that the master copy is updated, use it to update the view
-        # The html_content is now the most recent version from the UI
-        html_content = self.summaries[summary_key]
+        # Get the master content
+        html_content = self.summaries.get(summary_key, "")
 
-        # 5. Use the unified view update function to show/hide timestamps
+        # Update the view using the master content
         self._update_text_area_view(target_widget, html_content, self.showTimecodeSummaryCheckbox.isChecked())
+
+        # Set read-only state based on timestamp visibility to prevent accidental data loss
+        is_read_only = not self.showTimecodeSummaryCheckbox.isChecked()
+        target_widget.setReadOnly(is_read_only)
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
