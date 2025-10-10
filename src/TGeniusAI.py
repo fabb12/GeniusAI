@@ -2267,15 +2267,30 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                html_summary = markdown.markdown(result)
+                # Convert Markdown to HTML
+                html_summary = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+
+                # Store the new HTML summary
                 self.summaries[self.active_summary_type] = html_summary
+
+                # Clear any previous integrated summary for this type
                 integrated_key = f"{self.active_summary_type}_integrated"
                 self.summaries[integrated_key] = ""
 
+                # Get the correct text area to update
+                target_widget = self.get_current_summary_text_area()
+
+                # Directly set the new HTML content in the UI
+                target_widget.setHtml(html_summary)
+
+                # Disable and uncheck the integration toggle as this is a new summary
                 self.integrazioneToggle.setChecked(False)
                 self.integrazioneToggle.setEnabled(False)
+
+                # Update the view to handle timestamp visibility
                 self.update_summary_view()
 
+                # Save the updated summaries to the JSON file
                 update_data = {
                     "summaries": self.summaries,
                     "summary_date": datetime.datetime.now().isoformat()
