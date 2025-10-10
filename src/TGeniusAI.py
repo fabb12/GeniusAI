@@ -4116,7 +4116,7 @@ class VideoAudioManager(QMainWindow):
             # Tenta di aggiungere un font Unicode. L'ordine di preferenza è DejaVu, poi Arial.
             font_found = False
             # Assumiamo che i nomi dei file dei font siano standard (es. "DejaVuSans.ttf")
-            font_files = {"DejaVu": "DejaVuSans.ttf", "Arial": "Arial.ttf"}
+            font_files = {"DejaVu": "DejaVuSans.ttf", "Arial": "arial.ttf"}
             for family, filename in font_files.items():
                 try:
                     # fpdf2 cercherà il font nei percorsi di sistema se non è un file locale
@@ -4125,7 +4125,7 @@ class VideoAudioManager(QMainWindow):
                     font_found = True
                     logging.info(f"Using font '{family}' for PDF export.")
                     break
-                except RuntimeError:
+                except (RuntimeError, FileNotFoundError):
                     logging.debug(f"Font '{filename}' not found, trying next.")
 
             if not font_found:
@@ -4148,21 +4148,25 @@ class VideoAudioManager(QMainWindow):
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
 
-            # Process all relevant block-level elements
-            for element in soup.body.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'], recursive=False):
-                if element.name.startswith('h'):
-                    level = int(element.name[1])
-                    p = document.add_heading(level=level)
-                else:
-                    p = document.add_paragraph()
+            # Process all relevant block-level elements by iterating through body children
+            for element in soup.body.children:
+                if not hasattr(element, 'name') or not element.name:
+                    continue  # Skip NavigableString objects etc.
 
-                self._add_html_to_doc(element, p)
+                if element.name.startswith('h') and element.name[1:].isdigit():
+                    level = int(element.name[1:])
+                    p = document.add_heading(level=level)
+                    self._add_html_to_doc(element, p)
+                elif element.name == 'p':
+                    p = document.add_paragraph()
+                    self._add_html_to_doc(element, p)
 
             document.save(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
         except Exception as e:
             self.show_status_message(f"Impossibile esportare il riassunto: {e}", error=True)
-            logging.error(f"Errore durante l'esportazione in Word: {e}")
+            import traceback
+            logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
 
     def _add_html_to_doc(self, element, paragraph):
         """
@@ -4172,30 +4176,27 @@ class VideoAudioManager(QMainWindow):
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
+                # Apply styles from all parents
                 parent = element
-                # Applica stili ereditati dai tag genitori (es. <b>, <i>, <font>, <span>)
                 while parent and parent.name != 'body':
                     if parent.name in ['b', 'strong']:
                         run.bold = True
                     if parent.name in ['i', 'em']:
                         run.italic = True
-                    # Gestisce il colore del testo (es. per i timecode)
                     if parent.name == 'font' and 'color' in parent.attrs:
                         color_str = parent['color'].lstrip('#')
-                        if len(color_str) == 6: # Formato esadecimale RRGGBB
+                        if len(color_str) == 6:
                             run.font.color.rgb = RGBColor.from_string(color_str)
-                    # Gestisce il colore di sfondo (evidenziazione)
                     if parent.name == 'span' and 'style' in parent.attrs:
                         style = parent['style'].replace(" ", "")
                         if 'background-color:' in style:
-                            # Cerca il colore corrispondente nella configurazione
                             for color_name, color_data in self.highlight_colors.items():
                                 if f"background-color:{color_data['hex']}" in style:
                                     run.font.highlight_color = color_data['docx']
                                     break
                     parent = parent.parent
             elif child.name:
-                # Se il figlio è un tag, continua la ricorsione
+                # Recursive call for child tags
                 self._add_html_to_doc(child, paragraph)
 
     def loadText(self):
