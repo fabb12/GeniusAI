@@ -2202,23 +2202,51 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
     def handleTimecodeToggle(self, checked):
-        # Applica la logica solo all'area di testo dell'Audio AI
-        self.timecodeEnabled = checked
-        text_area = self.audioAiTextArea # Target solo l'area AI
+        """
+        Gestisce il toggle per l'inserimento/visualizzazione dei timecode in modo non distruttivo.
+        """
+        # Il contenuto "master" è sempre quello con i timecode.
+        # La visualizzazione è solo una maschera.
+        current_html_with_timestamps = self.audioAiTextArea.toHtml()
 
-        text_area.setReadOnly(checked)
+        # Se l'utente sta attivando i timecode, significa che la vista corrente non li ha.
+        # Dobbiamo calcolarli e salvarli come stato "master".
         if checked:
-            # Salva l'HTML corrente e applica i timecode
-            original_html = text_area.toHtml()
-            # Salva l'originale in un attributo dinamico per evitare conflitti
-            setattr(self, f"original_html_for_{text_area.objectName()}", original_html)
-            updated_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(original_html)
-            text_area.setHtml(updated_html)
+            # Rimuoviamo eventuali vecchi timestamp per sicurezza prima di ricalcolare
+            text_without_timestamps = remove_timestamps_from_html(current_html_with_timestamps)
+            # Calcoliamo i nuovi timestamp basandoci sul testo pulito
+            self.original_audio_ai_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(text_without_timestamps)
         else:
-            # Ripristina l'HTML originale
-            original_html = getattr(self, f"original_html_for_{text_area.objectName()}", "")
-            if original_html:
-                text_area.setHtml(original_html)
+            # Se l'utente sta disattivando i timecode, il testo visualizzato li contiene.
+            # Questo testo è la nostra versione più aggiornata e con i timestamp.
+            # Lo salviamo come stato "master".
+            self.original_audio_ai_html = current_html_with_timestamps
+
+        # Aggiorniamo la vista in base allo stato del checkbox
+        self._update_text_area_view(self.audioAiTextArea, self.original_audio_ai_html, checked)
+
+    def _update_text_area_view(self, text_area, full_html_content, show_timestamps):
+        """
+        Aggiorna la visualizzazione di un'area di testo, mostrando o nascondendo
+        i timecode in modo non distruttivo.
+        """
+        text_area.blockSignals(True)
+        if show_timestamps:
+            # Mostra i timecode. Il full_html_content dovrebbe già averli.
+            # Assicuriamoci che siano stilizzati correttamente.
+            timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}\])')
+            def style_match(match):
+                return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+            # Prima rimuovi eventuali stili per evitare duplicazioni, poi applica quello nuovo.
+            temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', full_html_content, flags=re.IGNORECASE)
+            processed_html = timestamp_pattern.sub(style_match, temp_html)
+            text_area.setHtml(processed_html)
+        else:
+            # Nascondi i timecode usando la funzione di utilità.
+            cleaned_html = remove_timestamps_from_html(full_html_content)
+            text_area.setHtml(cleaned_html)
+        text_area.blockSignals(False)
 
 
     def updateProgressDialog(self, value, label):
@@ -2270,25 +2298,8 @@ class VideoAudioManager(QMainWindow):
         # Determine the base HTML content based on the integration toggle
         html_content = self.summaries.get(f"{summary_type}_integrated", "") if self.integrazioneToggle.isChecked() else self.summaries.get(summary_type, "")
 
-        # Decide whether to show or hide timestamps
-        if self.showTimecodeSummaryCheckbox.isChecked():
-            # Style timestamps to be visible
-            # This regex is now consistent with the removal logic
-            timestamp_pattern = re.compile(r'(\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\])')
-            def style_match(match):
-                return f"<font color='#ADD8E6'>{match.group(1)}</font>"
-
-            # First, unstyle any previously styled timestamps to ensure we don't double-wrap them.
-            temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', html_content, flags=re.IGNORECASE)
-            # Now, apply the style to all raw timestamps.
-            processed_html = timestamp_pattern.sub(style_match, temp_html)
-        else:
-            # Remove timestamps using the updated utility function
-            processed_html = remove_timestamps_from_html(html_content)
-
-        target_widget.blockSignals(True)
-        target_widget.setHtml(processed_html)
-        target_widget.blockSignals(False)
+        # Use the unified view update function
+        self._update_text_area_view(target_widget, html_content, self.showTimecodeSummaryCheckbox.isChecked())
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
@@ -4089,10 +4100,9 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
 
-        # Utilizza il nuovo dialogo di esportazione
         dialog = ExportDialog(parent=self)
         if not dialog.exec():
-            return  # L'utente ha annullato
+            return
 
         options = dialog.get_options()
         path = options['filepath']
@@ -4102,12 +4112,15 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Percorso del file non valido.", error=True)
             return
 
-        # Il contenuto HTML riflette già la scelta dell'utente (timecode visibili o no),
-        # quindi lo esportiamo direttamente.
+        # Determina il contenuto da esportare in base allo stato del checkbox
+        export_html = summary_html
+        if not self.showTimecodeSummaryCheckbox.isChecked():
+            export_html = remove_timestamps_from_html(summary_html)
+
         if file_format == 'docx':
-            self._export_to_docx(summary_html, path)
+            self._export_to_docx(export_html, path)
         elif file_format == 'pdf':
-            self._export_to_pdf(summary_html, path)
+            self._export_to_pdf(export_html, path)
 
     def _export_to_pdf(self, html_content, path):
         """Esporta il contenuto HTML in un file PDF utilizzando fpdf2 e il font DejaVu incluso."""
@@ -4954,16 +4967,15 @@ class VideoAudioManager(QMainWindow):
                         time_for_sentence = len(words) / words_per_second
                         cumulative_time += time_for_sentence
 
-                        # Correctly calculate hours, minutes, and seconds
-                        hours = int(cumulative_time // 3600)
-                        minutes = int((cumulative_time % 3600) // 60)
-                        seconds = cumulative_time % 60
+                        # Calculate minutes and seconds
+                        minutes = int(cumulative_time // 60)
+                        seconds = int(cumulative_time % 60)
 
                         # Create new paragraph for the sentence
                         new_p = soup.new_tag('p')
 
-                        # Create and add timestamp with HH:MM:SS.d format using <font> tag for better compatibility
-                        timestamp_font_str = f"<font color='#ADD8E6'>[{hours:02d}:{minutes:02d}:{seconds:04.1f}]</font> "
+                        # Create and add timestamp with [MM:SS] format using <font> tag
+                        timestamp_font_str = f"<font color='#ADD8E6'>[{minutes:02d}:{seconds:02d}]</font> "
                         timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
                         new_p.append(timestamp_node)
 
@@ -4986,14 +4998,13 @@ class VideoAudioManager(QMainWindow):
                     time_for_sentence = len(words) / words_per_second
                     cumulative_time += time_for_sentence
 
-                    # Correctly calculate hours, minutes, and seconds
-                    hours = int(cumulative_time // 3600)
-                    minutes = int((cumulative_time % 3600) // 60)
-                    seconds = cumulative_time % 60
+                    # Calculate minutes and seconds
+                    minutes = int(cumulative_time // 60)
+                    seconds = int(cumulative_time % 60)
 
                     new_p = soup.new_tag('p')
-                    # Create and add timestamp with HH:MM:SS.d format using <font> tag
-                    timestamp_font_str = f"<font color='#ADD8E6'>[{hours:02d}:{minutes:02d}:{seconds:04.1f}]</font> "
+                    # Create and add timestamp with [MM:SS] format using <font> tag
+                    timestamp_font_str = f"<font color='#ADD8E6'>[{minutes:02d}:{seconds:02d}]</font> "
                     timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
                     new_p.append(timestamp_node)
                     for snode in current_sentence_nodes:
