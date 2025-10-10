@@ -4124,7 +4124,22 @@ class VideoAudioManager(QMainWindow):
             pdf.add_font("DejaVu", "", font_path, uni=True)
             pdf.set_font("DejaVu", size=12)
 
-            pdf.write_html(html_content)
+            # Pulisci l'HTML prima di scriverlo nel PDF
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # Rimuovi i tag di stile che contengono il CSS indesiderato
+            for style in soup.find_all('style'):
+                style.decompose()
+
+            # Estrai solo il contenuto del body per evitare di scrivere tag html/head
+            if soup.body:
+                # Usiamo decode_contents() per ottenere solo ciò che è DENTRO il body
+                body_content = soup.body.decode_contents()
+            else:
+                # Fallback nel caso in cui l'HTML non abbia un body esplicito
+                body_content = str(soup)
+
+            pdf.write_html(body_content)
 
             pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
