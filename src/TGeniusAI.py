@@ -1454,6 +1454,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
+        # Connect the tab change signal to the update function
+        self.summaryTabWidget.currentChanged.connect(self.update_summary_view)
+
         summary_layout.addWidget(self.summaryTabWidget)
 
 
