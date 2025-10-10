@@ -12,7 +12,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -6807,10 +6807,29 @@ class VideoAudioManager(QMainWindow):
         self.update_status_progress(progress_percentage, message)
 
     def _on_single_transcription_complete(self, filename, text):
-        """Appends the result of a single transcription to the text area."""
-        separator = f"\n\n--- Trascrizione per: {filename} ---\n\n"
-        self.transcriptionTextArea.append(separator)
-        self.transcriptionTextArea.append(text)
+        """
+        Appends the result of a single transcription to the text area,
+        handling both plain text and HTML content.
+        """
+        cursor = self.transcriptionTextArea.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.transcriptionTextArea.setTextCursor(cursor)
+
+        separator = f"<br><hr><h3>Trascrizione per: {filename}</h3>"
+        cursor.insertHtml(separator)
+
+        # Move cursor again to be sure we are at the end
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.transcriptionTextArea.setTextCursor(cursor)
+
+        # Check if the text is likely HTML
+        if '<' in text and '>' in text:
+            cursor.insertHtml(text)
+        else:
+            cursor.insertText(text)
+
+        # Ensure there's a newline after the inserted block
+        cursor.insertHtml("<br>")
 
     def _on_batch_transcription_finished(self, result=None):
         """Handles the completion of the entire batch process."""
