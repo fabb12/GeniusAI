@@ -4205,23 +4205,31 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante l'esportazione in PDF con fpdf2: {e}\n{traceback.format_exc()}")
 
     def _export_to_docx(self, summary_html, path):
-        """Esporta il contenuto HTML in un file DOCX."""
+        """Esporta il contenuto HTML in un file DOCX, gestendo paragrafi, titoli e liste."""
         try:
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
 
-            # Process all relevant block-level elements by iterating through body children
+            if not soup.body:
+                self.show_status_message("HTML non valido per l'esportazione.", error=True)
+                return
+
             for element in soup.body.children:
                 if not hasattr(element, 'name') or not element.name:
-                    continue  # Skip NavigableString objects etc.
+                    continue
 
                 if element.name.startswith('h') and element.name[1:].isdigit():
                     level = int(element.name[1:])
-                    p = document.add_heading(level=level)
-                    self._add_html_to_doc(element, p)
+                    p = document.add_heading(level=min(level, 4)) # Limita a 4 livelli di heading
+                    self._add_runs_to_paragraph(element, p)
                 elif element.name == 'p':
                     p = document.add_paragraph()
-                    self._add_html_to_doc(element, p)
+                    self._add_runs_to_paragraph(element, p)
+                elif element.name in ['ul', 'ol']:
+                    for li in element.find_all('li', recursive=False):
+                        # Aggiunge ogni <li> come un paragrafo con lo stile "List Bullet"
+                        p = document.add_paragraph(style='List Bullet')
+                        self._add_runs_to_paragraph(li, p)
 
             document.save(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
@@ -4230,36 +4238,45 @@ class VideoAudioManager(QMainWindow):
             import traceback
             logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
 
-    def _add_html_to_doc(self, element, paragraph):
+    def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Funzione di supporto ricorsiva per analizzare l'HTML e aggiungerlo al documento Word,
-        preservando la formattazione come grassetto, corsivo, colore del testo e colore di sfondo.
+        Analizza ricorsivamente un elemento HTML e aggiunge 'run' formattati a un paragrafo DOCX.
         """
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
-                # Apply styles from all parents
-                parent = element
-                while parent and parent.name != 'body':
-                    if parent.name in ['b', 'strong']:
-                        run.bold = True
-                    if parent.name in ['i', 'em']:
-                        run.italic = True
-                    if parent.name == 'font' and 'color' in parent.attrs:
-                        color_str = parent['color'].lstrip('#')
-                        if len(color_str) == 6:
-                            run.font.color.rgb = RGBColor.from_string(color_str)
-                    if parent.name == 'span' and 'style' in parent.attrs:
-                        style = parent['style'].replace(" ", "")
-                        if 'background-color:' in style:
-                            for color_name, color_data in self.highlight_colors.items():
-                                if f"background-color:{color_data['hex']}" in style:
-                                    run.font.highlight_color = color_data['docx']
-                                    break
-                    parent = parent.parent
+                self._apply_styles_to_run(element, run)
             elif child.name:
-                # Recursive call for child tags
-                self._add_html_to_doc(child, paragraph)
+                # Per i tag nidificati, creiamo un nuovo 'run' e applichiamo gli stili
+                # da tutti i suoi parent.
+                nested_text = child.get_text()
+                if nested_text:
+                    run = paragraph.add_run(nested_text)
+                    self._apply_styles_to_run(child, run)
+
+    def _apply_styles_to_run(self, element, run):
+        """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
+        current = element
+        while current:
+            if current.name in ['b', 'strong']:
+                run.bold = True
+            if current.name in ['i', 'em']:
+                run.italic = True
+            if current.name == 'font' and 'color' in current.attrs:
+                color_str = current['color'].lstrip('#')
+                if len(color_str) == 6:
+                    try:
+                        run.font.color.rgb = RGBColor.from_string(color_str)
+                    except ValueError:
+                        logging.warning(f"Invalid color string for docx: {color_str}")
+            if current.name == 'span' and 'style' in current.attrs:
+                style = current['style'].replace(" ", "")
+                if 'background-color:' in style:
+                    for color_name, color_data in self.highlight_colors.items():
+                        if f"background-color:{color_data['hex']}" in style:
+                            run.font.highlight_color = color_data['docx']
+                            break
+            current = current.parent
 
     def loadText(self):
         path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
