@@ -7,7 +7,7 @@ screeninfo
 pycountry
 SpeechRecognition
 openai-whisper
-numba==0.59.1
+numba
 llvmlite>=0.42.0
 yt-dlp
 anthropic
