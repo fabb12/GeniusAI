@@ -33,3 +33,4 @@ python-docx
 langchain_openai
 langchain_anthropic
 Pillow
+docx2pdf
