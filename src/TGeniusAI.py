@@ -87,6 +87,7 @@ from src.services.VideoIntegrator import VideoIntegrationThread
 from src.managers.ProjectManager import ProjectManager
 from src.ui.ProjectDock import ProjectDock
 from src.services.VideoCompositing import VideoCompositingThread
+from src.services.utils import remove_timestamps_from_html
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
@@ -4110,9 +4111,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         if remove_timestamps:
-            # Rimuove i tag <font> che contengono i timecode, gestendo virgolette opzionali e case-insensitivity
-            timestamp_pattern = re.compile(r'\s*<font color=["\']?#ADD8E6["\']?>\[.*?\]</font>\s*', re.IGNORECASE)
-            summary_html = timestamp_pattern.sub(' ', summary_html).strip()
+            summary_html = remove_timestamps_from_html(summary_html)
 
         if file_format == 'docx':
             self._export_to_docx(summary_html, path)
