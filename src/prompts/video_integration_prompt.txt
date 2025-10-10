@@ -32,4 +32,4 @@ Il riassunto arricchito in HTML deve diventare:
 **Informazioni Estratte dai Frame (con timecode):**
 {frame_info}
 
-Genera ora il **UNICO Riassunto Finale Integrato in HTML** in {language}. Ricorda: il risultato deve essere una versione HTML arricchita del riassunto originale, non due testi separati. Integra organicamente tutte le nuove informazioni con i relativi timecode, preservando scrupolosamente tutta la formattazione HTML esistente.
+Genera ora il **UNICO Riassunto Finale Integrato in HTML** in {language}. Ricorda: il risultato deve essere una versione HTML arricchita del riassunto originale, non due testi separati. Integra organicamente tutte le nuove informazioni con i relativi timecode, preservando scrupolosamente tutta la formattazione HTML esistente.MOSTRA SOLO IL RISULTATO, SENZA PREAMBOLI.
