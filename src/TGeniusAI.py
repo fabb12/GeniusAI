@@ -90,6 +90,7 @@ from src.services.VideoCompositing import VideoCompositingThread
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
+from xhtml2pdf import pisa
 
 
 class ProjectClipsMergeThread(QThread):
@@ -4083,9 +4084,9 @@ class VideoAudioManager(QMainWindow):
             logging.error(f"Errore durante il salvataggio del file: {e}")
             QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file:\n{e}")
 
-    def exportSummaryToWord(self):
+    def export_summary(self):
         """
-        Esporta il contenuto del riassunto (con formattazione) in un documento Word,
+        Esporta il contenuto del riassunto (con formattazione) in un documento Word o PDF,
         utilizzando un dialogo personalizzato per le opzioni.
         """
         active_summary_area = self.get_current_summary_text_area()
@@ -4101,6 +4102,7 @@ class VideoAudioManager(QMainWindow):
 
         options = dialog.get_options()
         path = options['filepath']
+        file_format = options['format']
         remove_timestamps = options['remove_timestamps']
 
         if not path:
@@ -4108,18 +4110,47 @@ class VideoAudioManager(QMainWindow):
             return
 
         if remove_timestamps:
-            # Rimuove i tag <font> che contengono i timecode
-            timestamp_pattern = re.compile(r'\s*<font color="#ADD8E6">\[.*?\]</font>\s*')
+            # Rimuove i tag <font> che contengono i timecode, gestendo virgolette opzionali e case-insensitivity
+            timestamp_pattern = re.compile(r'\s*<font color=["\']?#ADD8E6["\']?>\[.*?\]</font>\s*', re.IGNORECASE)
             summary_html = timestamp_pattern.sub(' ', summary_html).strip()
 
+        if file_format == 'docx':
+            self._export_to_docx(summary_html, path)
+        elif file_format == 'pdf':
+            self._export_to_pdf(summary_html, path)
+
+    def _export_to_pdf(self, html_content, path):
+        """Esporta il contenuto HTML in un file PDF."""
+        try:
+            with open(path, "w+b") as result_file:
+                # Convert HTML to PDF
+                pisa_status = pisa.CreatePDF(
+                        html_content,                # the HTML to convert
+                        dest=result_file)           # file handle to receive result
+
+            if pisa_status.err:
+                raise Exception(f"Errore durante la conversione in PDF: {pisa_status.err}")
+
+            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+        except Exception as e:
+            self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
+            logging.error(f"Errore durante l'esportazione in PDF: {e}")
+
+    def _export_to_docx(self, summary_html, path):
+        """Esporta il contenuto HTML in un file DOCX."""
         try:
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
 
-            for element in soup.body.contents:
-                if element.name == 'p':
+            # Process all relevant block-level elements
+            for element in soup.body.find_all(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'], recursive=False):
+                if element.name.startswith('h'):
+                    level = int(element.name[1])
+                    p = document.add_heading(level=level)
+                else:
                     p = document.add_paragraph()
-                    self._add_html_to_doc(element, p)
+
+                self._add_html_to_doc(element, p)
 
             document.save(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
@@ -4581,9 +4612,9 @@ class VideoAudioManager(QMainWindow):
 
         # Creazione del menu Export
         exportMenu = menuBar.addMenu('&Export')
-        exportWordAction = QAction('Esporta riassunto in Word', self)
-        exportWordAction.triggered.connect(self.exportSummaryToWord)
-        exportMenu.addAction(exportWordAction)
+        exportAction = QAction('Esporta Riepilogo...', self)
+        exportAction.triggered.connect(self.export_summary)
+        exportMenu.addAction(exportAction)
 
         # Creazione del menu Insert
         insertMenu = menuBar.addMenu('&Insert')
@@ -5014,7 +5045,26 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun video selezionato.", error=True)
             return
 
-        thread = TranscriptionThread(self.videoPathLineEdit, self)
+        start_time_sec = None
+        end_time_sec = None
+
+        # Controlla se ci sono bookmark per una trascrizione parziale
+        if self.videoSlider.bookmarks:
+            # Trova l'inizio del primo bookmark e la fine dell'ultimo
+            min_start_ms = min(bm[0] for bm in self.videoSlider.bookmarks)
+            max_end_ms = max(bm[1] for bm in self.videoSlider.bookmarks)
+
+            start_time_sec = min_start_ms / 1000.0
+            end_time_sec = max_end_ms / 1000.0
+
+            self.show_status_message(f"Avvio trascrizione parziale da {start_time_sec:.2f}s a {end_time_sec:.2f}s.")
+
+        thread = TranscriptionThread(
+            self.videoPathLineEdit,
+            self,
+            start_time=start_time_sec,
+            end_time=end_time_sec
+        )
         self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
     def onTranscriptionComplete(self, result):
