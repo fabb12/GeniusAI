@@ -64,8 +64,7 @@ hiddenimports = (
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
      'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
-     'src.services', 'src.managers', 'src.recorder', 'src.config',
-     'reportlab.graphics.barcode.code128']
+     'src.services', 'src.managers', 'src.recorder', 'src.config']
 )
 
 datas = (
@@ -144,7 +143,24 @@ a = Analysis(
     hiddenimports=hiddenimports,
     hookspath=[],
     runtime_hooks=[],
-    excludes=['PyQt5'],
+    excludes=[
+        'PyQt5',
+        'PyQt6.Qt3DAnimation',
+        'PyQt6.Qt3DCore',
+        'PyQt6.Qt3DExtras',
+        'PyQt6.Qt3DInput',
+        'PyQt6.Qt3DLogic',
+        'PyQt6.Qt3DRender',
+        'PyQt6.QtWebEngineCore',
+        'PyQt6.QtWebEngineWidgets',
+        'PyQt6.QtWebEngineQuick',
+        'PyQt6.QtQuick3D',
+        'PyQt6.QtSql',
+        'PyQt6.QtNetworkAuth',
+        'PyQt6.QtWebSockets',
+        'PyQt6.QtScxml',
+        'PyQt6.QtTest',
+    ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,

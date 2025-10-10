@@ -91,7 +91,7 @@ from src.services.utils import remove_timestamps_from_html
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
-from xhtml2pdf import pisa
+from fpdf import FPDF
 
 
 class ProjectClipsMergeThread(QThread):
@@ -4119,21 +4119,39 @@ class VideoAudioManager(QMainWindow):
             self._export_to_pdf(summary_html, path)
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF."""
+        """Esporta il contenuto HTML in un file PDF utilizzando fpdf2."""
         try:
-            with open(path, "w+b") as result_file:
-                # Convert HTML to PDF
-                pisa_status = pisa.CreatePDF(
-                        html_content,                # the HTML to convert
-                        dest=result_file)           # file handle to receive result
+            pdf = FPDF()
+            pdf.add_page()
 
-            if pisa_status.err:
-                raise Exception(f"Errore durante la conversione in PDF: {pisa_status.err}")
+            # Tenta di aggiungere un font Unicode. L'ordine di preferenza è DejaVu, poi Arial.
+            font_found = False
+            # Assumiamo che i nomi dei file dei font siano standard (es. "DejaVuSans.ttf")
+            font_files = {"DejaVu": "DejaVuSans.ttf", "Arial": "Arial.ttf"}
+            for family, filename in font_files.items():
+                try:
+                    # fpdf2 cercherà il font nei percorsi di sistema se non è un file locale
+                    pdf.add_font(family, "", filename, uni=True)
+                    pdf.set_font(family, size=12)
+                    font_found = True
+                    logging.info(f"Using font '{family}' for PDF export.")
+                    break
+                except RuntimeError:
+                    logging.debug(f"Font '{filename}' not found, trying next.")
 
+            if not font_found:
+                logging.warning("Nessun font Unicode di sistema trovato. Fallback su 'Times'. "
+                                "I caratteri speciali potrebbero non essere visualizzati correttamente.")
+                pdf.set_font("Times", size=12)
+
+            pdf.write_html(html_content)
+
+            pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
         except Exception as e:
             self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
-            logging.error(f"Errore durante l'esportazione in PDF: {e}")
+            import traceback
+            logging.error(f"Errore durante l'esportazione in PDF con fpdf2: {e}\n{traceback.format_exc()}")
 
     def _export_to_docx(self, summary_html, path):
         """Esporta il contenuto HTML in un file DOCX."""
