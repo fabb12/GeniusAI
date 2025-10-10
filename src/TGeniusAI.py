@@ -1419,6 +1419,11 @@ class VideoAudioManager(QMainWindow):
         self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
         bottom_controls_layout.addWidget(self.integrazioneToggle)
 
+        self.showTimecodeSummaryCheckbox = QCheckBox("Mostra timecode")
+        self.showTimecodeSummaryCheckbox.setChecked(True)
+        self.showTimecodeSummaryCheckbox.toggled.connect(self.update_summary_view)
+        bottom_controls_layout.addWidget(self.showTimecodeSummaryCheckbox)
+
         self.toggleSummaryViewButton = QPushButton("Mostra HTML")
         self.toggleSummaryViewButton.setToolTip("Alterna tra la visualizzazione formattata e il codice sorgente HTML")
         self.toggleSummaryViewButton.setCheckable(True)
@@ -1797,10 +1802,9 @@ class VideoAudioManager(QMainWindow):
         self.summaries[integrated_key] = summary
 
         # Aggiorna la variabile di visualizzazione e la UI
-        self.summary_text = summary
-        self.update_summary_view()
         self.integrazioneToggle.setEnabled(True)
         self.integrazioneToggle.setChecked(True)
+        self.update_summary_view()
         self.show_status_message("Integrazione delle informazioni dal video completata.")
 
         # Salva l'intero dizionario dei riassunti nel JSON
@@ -1819,16 +1823,6 @@ class VideoAudioManager(QMainWindow):
         Alterna la visualizzazione nell'area del riassunto tra il riassunto standard
         e quello integrato con le informazioni del video.
         """
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-
-        if checked:
-            # Mostra la versione integrata, se esiste
-            self.summary_text = self.summaries.get(f"{summary_type}_integrated", self.summaries.get(summary_type, ''))
-        else:
-            # Mostra la versione non integrata
-            self.summary_text = self.summaries.get(summary_type, '')
-
         self.update_summary_view()
 
     def toggle_recording_indicator(self):
@@ -2240,62 +2234,56 @@ class VideoAudioManager(QMainWindow):
                 self.transcription_corrected = result
                 self.transcriptionTextArea.setPlainText(result)
                 self.show_status_message("Correzione del testo completata.")
-                # Abilita il toggle per mostrare/nascondere la correzione
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
-            else: # This handles 'detailed' and 'meeting' summaries
-                # Converti il risultato Markdown in HTML prima di memorizzarlo e visualizzarlo
+            else:
                 html_summary = markdown.markdown(result)
                 self.summaries[self.active_summary_type] = html_summary
-
-                # Also clear the integrated version since a new base summary was generated
                 integrated_key = f"{self.active_summary_type}_integrated"
                 self.summaries[integrated_key] = ""
 
-
-                self.summary_text = html_summary
-                self.update_summary_view() # This will update the currently active tab
-
                 self.integrazioneToggle.setChecked(False)
-                # We don't need to switch the main tab, only the summary sub-tab, which is already done.
-                # self.transcriptionTabWidget.setCurrentIndex(1)
+                self.integrazioneToggle.setEnabled(False)
+                self.update_summary_view()
 
                 update_data = {
-                    "summaries": self.summaries, # Save the whole dictionary
+                    "summaries": self.summaries,
                     "summary_date": datetime.datetime.now().isoformat()
                 }
                 self._update_json_file(self.videoPathLineEdit, update_data)
 
             self.active_summary_type = None
 
-    def update_summary_view(self):
+    def update_summary_view(self, checked=None):
         """
-        Aggiorna la visualizzazione dell'area di testo del riassunto con il contenuto HTML,
-        applicando una colorazione azzurra ai timecode.
+        Updates the summary view based on the state of the 'integrazione' and 'showTimecode' checkboxes.
         """
-        if not hasattr(self, 'summary_text'):
+        if not hasattr(self, 'summaries'):
             return
 
-        html_content = self.summary_text
-        target_text_area = self.get_current_summary_text_area()
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+        target_widget = self.get_current_summary_text_area()
 
-        # Pattern robusto per trovare vari formati di timecode come [00:01:15.3] o [01:15]
-        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+        # Determine the base HTML content based on the integration toggle
+        html_content = self.summaries.get(f"{summary_type}_integrated", "") if self.integrazioneToggle.isChecked() else self.summaries.get(summary_type, "")
 
-        # Funzione per sostituire il timecode con la versione stilizzata
-        def style_match(match):
-            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+        # Decide whether to show or hide timestamps
+        if self.showTimecodeSummaryCheckbox.isChecked():
+            # Style timestamps to be visible
+            timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+            def style_match(match):
+                return f"<font color='#ADD8E6'>{match.group(1)}</font>"
 
-        # Prima rimuoviamo eventuali tag di stile preesistenti per evitare doppioni,
-        # poi applichiamo quello nuovo.
-        # Questo passaggio è importante se la funzione viene chiamata più volte sullo stesso testo.
-        temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', html_content if html_content else "")
-        styled_html = timestamp_pattern.sub(style_match, temp_html)
+            temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', html_content, flags=re.IGNORECASE)
+            processed_html = timestamp_pattern.sub(style_match, temp_html)
+        else:
+            # Remove timestamps
+            processed_html = remove_timestamps_from_html(html_content)
 
-        # Imposta l'HTML finale nell'area di testo
-        target_text_area.blockSignals(True)
-        target_text_area.setHtml(styled_html)
-        target_text_area.blockSignals(False)
+        target_widget.blockSignals(True)
+        target_widget.setHtml(processed_html)
+        target_widget.blockSignals(False)
 
     def onProcessError(self, error_message):
         # This is now a generic error handler for AI text processes.
@@ -4104,15 +4092,13 @@ class VideoAudioManager(QMainWindow):
         options = dialog.get_options()
         path = options['filepath']
         file_format = options['format']
-        remove_timestamps = options['remove_timestamps']
 
         if not path:
             self.show_status_message("Percorso del file non valido.", error=True)
             return
 
-        if remove_timestamps:
-            summary_html = remove_timestamps_from_html(summary_html)
-
+        # Il contenuto HTML riflette già la scelta dell'utente (timecode visibili o no),
+        # quindi lo esportiamo direttamente.
         if file_format == 'docx':
             self._export_to_docx(summary_html, path)
         elif file_format == 'pdf':

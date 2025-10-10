@@ -43,11 +43,6 @@ class ExportDialog(QDialog):
         # Initialize with the correct extension
         self.update_filepath_extension()
 
-        # Options
-        self.remove_timestamps_checkbox = QCheckBox("Rimuovi i timecode dal documento")
-        self.remove_timestamps_checkbox.setChecked(True)
-        layout.addWidget(self.remove_timestamps_checkbox)
-
         # Dialog buttons
         self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         self.button_box.accepted.connect(self.accept)
@@ -104,6 +99,5 @@ class ExportDialog(QDialog):
 
         return {
             "filepath": self.path_edit.text(),
-            "format": file_format,
-            "remove_timestamps": self.remove_timestamps_checkbox.isChecked()
+            "format": file_format
         }
