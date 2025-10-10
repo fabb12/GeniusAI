@@ -2287,18 +2287,32 @@ class VideoAudioManager(QMainWindow):
     def update_summary_view(self, checked=None):
         """
         Updates the summary view based on the state of the 'integrazione' and 'showTimecode' checkboxes.
+        This function now reads the current state from the UI first to prevent data loss.
         """
         if not hasattr(self, 'summaries'):
             return
 
+        # 1. Get the current UI state
         current_tab_index = self.summaryTabWidget.currentIndex()
         summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
         target_widget = self.get_current_summary_text_area()
+        current_html_from_ui = target_widget.toHtml()
 
-        # Determine the base HTML content based on the integration toggle
-        html_content = self.summaries.get(f"{summary_type}_integrated", "") if self.integrazioneToggle.isChecked() else self.summaries.get(summary_type, "")
+        # 2. Determine which 'master' copy to update based on the integration toggle
+        is_integrated_view = self.integrazioneToggle.isChecked()
+        if is_integrated_view:
+            summary_key = f"{summary_type}_integrated"
+        else:
+            summary_key = summary_type
 
-        # Use the unified view update function
+        # 3. Update the master copy in self.summaries with the current, edited content
+        self.summaries[summary_key] = current_html_from_ui
+
+        # 4. Now that the master copy is updated, use it to update the view
+        # The html_content is now the most recent version from the UI
+        html_content = self.summaries[summary_key]
+
+        # 5. Use the unified view update function to show/hide timestamps
         self._update_text_area_view(target_widget, html_content, self.showTimecodeSummaryCheckbox.isChecked())
 
     def onProcessError(self, error_message):
