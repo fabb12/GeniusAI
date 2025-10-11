@@ -2116,6 +2116,12 @@ class VideoAudioManager(QMainWindow):
         # nel dizionario 'self.summaries' prima di salvarle su file.
         # Get the currently active summary text area
         active_summary_widget = self.get_current_summary_text_area()
+
+        # NON SALVARE se la vista è filtrata (sola lettura) per evitare la perdita di dati
+        if active_summary_widget.isReadOnly():
+            self.show_status_message("Salvataggio disabilitato in vista filtrata per prevenire la perdita di dati.", timeout=4000)
+            return
+
         current_tab_index = self.summaryTabWidget.currentIndex()
         summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
 
@@ -2160,15 +2166,23 @@ class VideoAudioManager(QMainWindow):
 
         logging.info(f"Salvataggio di tutti i contenuti nel JSON per {self.videoPathLineEdit}...")
 
-        # 1. Sincronizza lo stato interno con la UI utilizzando i metodi helper
+        # 1. Sincronizza lo stato interno della trascrizione con la UI
         self._sync_transcription_state_from_ui()
 
-        # Aggiorna il dizionario summaries con il contenuto corrente delle text area
-        self.summaries['detailed'] = self.summaryDetailedTextArea.toHtml()
-        self.summaries['meeting'] = self.summaryMeetingTextArea.toHtml()
+        # 2. Gestisci il salvataggio del riassunto in modo sicuro
+        active_summary_widget = self.get_current_summary_text_area()
+        # Se il widget attivo NON è in sola lettura, aggiorna la voce corrispondente in self.summaries
+        if not active_summary_widget.isReadOnly():
+            current_tab_index = self.summaryTabWidget.currentIndex()
+            summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+            # Aggiorna solo il tipo di riassunto correntemente visualizzato
+            # per evitare di sovrascrivere l'altro con dati potenzialmente vecchi dalla UI.
+            is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
+            summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+            self.summaries[summary_key] = active_summary_widget.toHtml()
+        # Se è in sola lettura, non facciamo nulla, preservando i dati già presenti in self.summaries.
 
-
-        # 2. Salva lo stato aggiornato
+        # 3. Prepara e salva i dati aggiornati
         update_data = {
             "transcription_original": self.transcription_original,
             "transcription_corrected": self.transcription_corrected,
