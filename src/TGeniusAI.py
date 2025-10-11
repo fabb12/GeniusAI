@@ -1249,7 +1249,7 @@ class VideoAudioManager(QMainWindow):
         self.resetButton.setIcon(QIcon(get_resource("reset.png")))
         self.resetButton.setFixedSize(32, 32)
         self.resetButton.setToolTip("Pulisci")
-        self.resetButton.clicked.connect(lambda: self.transcriptionTextArea.clear())
+        self.resetButton.clicked.connect(lambda: self.singleTranscriptionTextArea.clear())
         file_actions_layout.addWidget(self.resetButton)
 
         self.fixTranscriptionButton = QPushButton('')
@@ -1264,7 +1264,7 @@ class VideoAudioManager(QMainWindow):
         self.pasteToAudioAIButton.setIcon(QIcon(get_resource("paste.png")))
         self.pasteToAudioAIButton.setFixedSize(32, 32)
         self.pasteToAudioAIButton.setToolTip("Incolla nella tab Audio AI")
-        self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.transcriptionTextArea))
+        self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.singleTranscriptionTextArea))
         file_actions_layout.addWidget(self.pasteToAudioAIButton)
 
         groups_layout.addWidget(file_actions_group)
@@ -1327,11 +1327,25 @@ class VideoAudioManager(QMainWindow):
 
         #--------------------
 
-        self.transcriptionTextArea = CustomTextEdit(self)
-        self.transcriptionTextArea.setPlaceholderText("La trascrizione del video apparirà qui...")
-        self.transcriptionTextArea.textChanged.connect(self.handleTextChange)
-        self.transcriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        transcription_layout.addWidget(self.transcriptionTextArea)
+        # Crea il QTabWidget annidato per le trascrizioni
+        self.transcriptionTabs = QTabWidget()
+        self.transcriptionTabs.setToolTip("Visualizza la trascrizione singola o multipla.")
+
+        # Tab per la Trascrizione Singola
+        self.singleTranscriptionTextArea = CustomTextEdit(self)
+        self.singleTranscriptionTextArea.setPlaceholderText("La trascrizione del video corrente apparirà qui...")
+        self.singleTranscriptionTextArea.textChanged.connect(self.handleTextChange)
+        self.singleTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.transcriptionTabs.addTab(self.singleTranscriptionTextArea, "Trascrizione Singola")
+
+        # Tab per la Trascrizione Multipla
+        self.batchTranscriptionTextArea = CustomTextEdit(self)
+        self.batchTranscriptionTextArea.setPlaceholderText("I risultati della trascrizione multipla appariranno qui...")
+        self.batchTranscriptionTextArea.setReadOnly(True) # Inizialmente in sola lettura
+        self.batchTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.transcriptionTabs.addTab(self.batchTranscriptionTextArea, "Trascrizione Multipla")
+
+        transcription_layout.addWidget(self.transcriptionTabs)
 
         self.transcriptionTabWidget.addTab(transcription_tab, "Trascrizione")
 
@@ -1666,7 +1680,7 @@ class VideoAudioManager(QMainWindow):
         self.apply_and_save_font_settings()
 
         # Connetti i segnali per il cambio di font
-        self.transcriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        self.singleTranscriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
 
@@ -1694,7 +1708,8 @@ class VideoAudioManager(QMainWindow):
         font = QFont(font_family, font_size)
 
         text_areas = [
-            self.transcriptionTextArea,
+            self.singleTranscriptionTextArea,
+            self.batchTranscriptionTextArea,
             self.summaryDetailedTextArea,
             self.summaryMeetingTextArea,
             self.summaryDetailedIntegratedTextArea,
@@ -1821,17 +1836,17 @@ class VideoAudioManager(QMainWindow):
         Alterna la visualizzazione nella casella di testo della trascrizione
         tra la versione originale e quella corretta.
         """
-        self.transcriptionTextArea.blockSignals(True)
+        self.singleTranscriptionTextArea.blockSignals(True)
         if checked:
             # Mostra il testo corretto, se disponibile
             if self.transcription_corrected:
                 # Converti il Markdown salvato in HTML per la visualizzazione
                 html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
-                self.transcriptionTextArea.setHtml(html_content)
+                self.singleTranscriptionTextArea.setHtml(html_content)
         else:
             # Mostra il testo originale con formattazione
-            self.transcriptionTextArea.setHtml(self.transcription_original)
-        self.transcriptionTextArea.blockSignals(False)
+            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+        self.singleTranscriptionTextArea.blockSignals(False)
 
     def integraInfoVideo(self):
         if not self.videoPathLineEdit:
@@ -2035,7 +2050,7 @@ class VideoAudioManager(QMainWindow):
         self.playerOutput.play()
 
     def summarizeMeeting(self):
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         if not current_text.strip():
             self.show_status_message("Inserisci la trascrizione della riunione da riassumere.", error=True)
             return
@@ -2052,7 +2067,7 @@ class VideoAudioManager(QMainWindow):
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def processTextWithAI(self):
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         if not current_text.strip():
             self.show_status_message("Inserisci del testo da riassumere.", error=True)
             return
@@ -2081,7 +2096,7 @@ class VideoAudioManager(QMainWindow):
         """
         Avvia il processo di correzione del testo nella tab di trascrizione.
         """
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         if not current_text.strip():
             self.show_status_message("La trascrizione è vuota. Non c'è nulla da correggere.", error=True)
             return
@@ -2100,7 +2115,7 @@ class VideoAudioManager(QMainWindow):
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def fixTextWithAI(self):
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         if not current_text.strip():
             self.show_status_message("Inserisci del testo da correggere.", error=True)
             return
@@ -2142,11 +2157,11 @@ class VideoAudioManager(QMainWindow):
         """Sincronizza le variabili di stato della trascrizione con il contenuto della UI."""
         if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
             # Se la vista corretta è attiva, converti il suo HTML in Markdown prima di salvarlo
-            html_content = self.transcriptionTextArea.toHtml()
+            html_content = self.singleTranscriptionTextArea.toHtml()
             self.transcription_corrected = markdownify(html_content, heading_style="ATX")
         else:
             # Altrimenti, salva l'HTML della trascrizione originale
-            self.transcription_original = self.transcriptionTextArea.toHtml()
+            self.transcription_original = self.singleTranscriptionTextArea.toHtml()
 
     def save_transcription_to_json(self):
         """
@@ -2382,8 +2397,8 @@ class VideoAudioManager(QMainWindow):
         if isinstance(result, dict):
             # Questo gestisce i risultati della trascrizione che arrivano come dizionario
             self.transcription_original = result.get('transcription_raw', '')
-            self.transcriptionTextArea.setHtml(self.transcription_original)
-            self._style_existing_timestamps(self.transcriptionTextArea)
+            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+            self._style_existing_timestamps(self.singleTranscriptionTextArea)
             self.transcription_corrected = "" # Resetta la correzione
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
@@ -2395,7 +2410,7 @@ class VideoAudioManager(QMainWindow):
                 self.transcription_corrected = result
                 # Converti il Markdown in HTML per la visualizzazione
                 html_content = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-                self.transcriptionTextArea.setHtml(html_content)
+                self.singleTranscriptionTextArea.setHtml(html_content)
                 self.show_status_message("Correzione del testo completata.")
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
@@ -2596,7 +2611,7 @@ class VideoAudioManager(QMainWindow):
 
     def openPptxDialog(self):
         """Apre il dialogo per la generazione della presentazione PowerPoint."""
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         if not current_text.strip():
             self.show_status_message("Il campo della trascrizione è vuoto. Inserisci del testo prima di generare una presentazione.", error=True)
             return
@@ -4141,7 +4156,7 @@ class VideoAudioManager(QMainWindow):
                 # Salva il contenuto della scheda attualmente attiva
                 current_tab_index = self.transcriptionTabWidget.currentIndex()
                 if current_tab_index == 0:  # Trascrizione
-                    text_to_save = self.transcriptionTextArea.toPlainText()
+                    text_to_save = self.singleTranscriptionTextArea.toPlainText()
                 elif current_tab_index == 1:  # Riassunto
                     active_summary_area = self.get_current_summary_text_area()
                     text_to_save = active_summary_area.toPlainText()
@@ -4353,7 +4368,7 @@ class VideoAudioManager(QMainWindow):
                 try:
                     with open(path, 'r', encoding='utf-8') as file:
                         text_loaded = file.read()
-                    self.transcriptionTextArea.setPlainText(text_loaded)
+                    self.singleTranscriptionTextArea.setPlainText(text_loaded)
                     logging.debug("File di testo caricato correttamente!")
                 except Exception as e:
                     logging.error(f"Errore durante il caricamento del file di testo: {e}")
@@ -4728,6 +4743,7 @@ class VideoAudioManager(QMainWindow):
 
         # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
         self._manage_video_json(video_path)
+        self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
 
     def loadVideoOutput(self, video_path):
 
@@ -5129,7 +5145,7 @@ class VideoAudioManager(QMainWindow):
 
 
     def handleTextChange(self):
-        if self.transcriptionTextArea.signalsBlocked():
+        if self.singleTranscriptionTextArea.signalsBlocked():
             return
 
         # Avvia il timer di salvataggio automatico
@@ -5144,7 +5160,7 @@ class VideoAudioManager(QMainWindow):
 
         # La logica del timecode e del rilevamento lingua rimane
         # Usa il testo semplice per il rilevamento della lingua per evitare problemi con l'HTML
-        plain_text = self.transcriptionTextArea.toPlainText()
+        plain_text = self.singleTranscriptionTextArea.toPlainText()
         if plain_text.strip():
             # La logica del timecode è stata rimossa da qui perché deve essere
             # gestita esclusivamente dal toggle nella tab "Audio AI" e non
@@ -5343,9 +5359,10 @@ class VideoAudioManager(QMainWindow):
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             # Carica il testo e poi applica lo stile
-            self.transcriptionTextArea.setPlainText(data.get('transcription_raw', ''))
-            self._style_existing_timestamps(self.transcriptionTextArea)
+            self.singleTranscriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+            self._style_existing_timestamps(self.singleTranscriptionTextArea)
             self.onProcessComplete(data)
+            self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
             logging.error(f"Failed to load transcription JSON {json_path}: {e}")
@@ -5369,13 +5386,13 @@ class VideoAudioManager(QMainWindow):
         # Decide quale testo mostrare e imposta lo stato del toggle
         if self.transcription_corrected:
             html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
-            self.transcriptionTextArea.setHtml(html_content)
+            self.singleTranscriptionTextArea.setHtml(html_content)
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
             # Carica l'HTML per preservare la formattazione
-            self.transcriptionTextArea.setHtml(self.transcription_original)
-            self._style_existing_timestamps(self.transcriptionTextArea) # Applica stile
+            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+            self._style_existing_timestamps(self.singleTranscriptionTextArea) # Applica stile
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
@@ -6607,7 +6624,8 @@ class VideoAudioManager(QMainWindow):
         self.releaseOutputVideo()
 
         # 2. Pulisci le aree di testo
-        self.transcriptionTextArea.clear()
+        self.singleTranscriptionTextArea.clear()
+        self.batchTranscriptionTextArea.clear()
         self.audioAiTextArea.clear()
         self.summaryDetailedTextArea.clear()
         self.summaryMeetingTextArea.clear()
@@ -7087,8 +7105,9 @@ class VideoAudioManager(QMainWindow):
         clips_dir = os.path.join(self.current_project_path, "clips")
         video_paths = [os.path.join(clips_dir, c["clip_filename"]) for c in online_clips]
 
-        # Clear the transcription area before starting
-        self.transcriptionTextArea.clear()
+        # Clear the batch transcription area and switch to its tab
+        self.batchTranscriptionTextArea.clear()
+        self.transcriptionTabs.setCurrentWidget(self.batchTranscriptionTextArea)
         self.show_status_message(f"Avvio trascrizione per {len(video_paths)} video...")
 
         thread = BatchTranscriptionThread(video_paths, parent=self)
@@ -7111,16 +7130,16 @@ class VideoAudioManager(QMainWindow):
         Appends the result of a single transcription to the text area,
         handling both plain text and HTML content.
         """
-        cursor = self.transcriptionTextArea.textCursor()
+        cursor = self.batchTranscriptionTextArea.textCursor()
         cursor.movePosition(QTextCursor.MoveOperation.End)
-        self.transcriptionTextArea.setTextCursor(cursor)
+        self.batchTranscriptionTextArea.setTextCursor(cursor)
 
         separator = f"<br><hr><h3>Trascrizione per: {filename}</h3>"
         cursor.insertHtml(separator)
 
         # Move cursor again to be sure we are at the end
         cursor.movePosition(QTextCursor.MoveOperation.End)
-        self.transcriptionTextArea.setTextCursor(cursor)
+        self.batchTranscriptionTextArea.setTextCursor(cursor)
 
         # Check if the text is likely HTML
         if '<' in text and '>' in text:
