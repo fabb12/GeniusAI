@@ -1267,6 +1267,14 @@ class VideoAudioManager(QMainWindow):
         self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.singleTranscriptionTextArea))
         file_actions_layout.addWidget(self.pasteToAudioAIButton)
 
+        # Pulsante per creare riassunto combinato dalla tab batch
+        self.createCombinedSummaryFromBatchButton = QPushButton('')
+        self.createCombinedSummaryFromBatchButton.setIcon(QIcon(get_resource("combine.png")))
+        self.createCombinedSummaryFromBatchButton.setFixedSize(32, 32)
+        self.createCombinedSummaryFromBatchButton.setToolTip("Crea un riassunto combinato dal testo nella tab Trascrizione Multipla")
+        self.createCombinedSummaryFromBatchButton.clicked.connect(self.generate_summary_from_batch_tab)
+        file_actions_layout.addWidget(self.createCombinedSummaryFromBatchButton)
+
         groups_layout.addWidget(file_actions_group)
 
         # --- Gruppo 2: Strumenti ---
@@ -1442,14 +1450,6 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
         top_controls_layout.addStretch()
-
-        # Pulsante per creare riassunto combinato
-        self.createCombinedSummaryButton = QPushButton('')
-        self.createCombinedSummaryButton.setIcon(QIcon(get_resource("combine.png")))
-        self.createCombinedSummaryButton.setFixedSize(32, 32)
-        self.createCombinedSummaryButton.setToolTip("Crea un riassunto combinato dalle clip selezionate nel progetto")
-        self.createCombinedSummaryButton.clicked.connect(self.create_combined_summary)
-        top_controls_layout.addWidget(self.createCombinedSummaryButton)
 
         summary_controls_layout.addLayout(top_controls_layout)
 
@@ -2437,14 +2437,14 @@ class VideoAudioManager(QMainWindow):
 
             self.active_summary_type = None
 
-    def create_combined_summary(self):
-        if not self.current_project_path:
-            self.show_status_message("Apri un progetto prima di creare un riassunto combinato.", error=True)
-            return
-
-        selected_items = self.projectDock.tree_clips.selectedItems()
-        if not selected_items:
-            self.show_status_message("Seleziona almeno una clip dal pannello Progetto.", error=True)
+    def generate_summary_from_batch_tab(self):
+        """
+        Genera un riassunto combinato utilizzando il testo presente nella
+        scheda "Trascrizione Multipla".
+        """
+        combined_text = self.batchTranscriptionTextArea.toPlainText()
+        if not combined_text.strip():
+            self.show_status_message("La scheda 'Trascrizione Multipla' è vuota. Non c'è nulla da riassumere.", error=True)
             return
 
         summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto Combinato",
@@ -2456,35 +2456,15 @@ class VideoAudioManager(QMainWindow):
         summary_key = 'detailed' if summary_type == "Dettagliato" else 'meeting'
         self.active_summary_type = f"{summary_key}_combined"
 
-        all_summaries_text = []
-        source_files = []
-        for item in selected_items:
-            clip_filename = item.text(0)
-            json_path = os.path.join(self.current_project_path, "clips", os.path.splitext(clip_filename)[0] + ".json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, 'r', encoding='utf-8') as f:
-                        data = json.load(f)
-                    summary_text = data.get("summaries", {}).get(summary_key, "")
-                    if summary_text:
-                        all_summaries_text.append(f"--- Riassunto da {clip_filename} ---\n{summary_text}")
-                        source_files.append(clip_filename)
-                except Exception as e:
-                    logging.error(f"Errore nel leggere il riassunto da {json_path}: {e}")
-
-        if not all_summaries_text:
-            self.show_status_message("Nessun riassunto del tipo selezionato trovato per le clip scelte.", error=True)
-            return
-
-        self.combined_summary["source_files"] = source_files
-        combined_text = "\n\n".join(all_summaries_text)
+        # Pulisce i file sorgente precedenti perché ora la fonte è il testo della tab
+        self.combined_summary["source_files"] = ["Testo da Trascrizione Multipla"]
 
         thread = ProcessTextAI(
             mode="combined_summary",
             language=self.languageComboBox.currentText(),
             prompt_vars={'text': combined_text}
         )
-        # Usiamo un callback specifico per il riassunto combinato
+        # Usiamo lo stesso callback del riassunto combinato precedente
         self.start_task(thread, self.on_combined_summary_complete, self.onProcessError, self.update_status_progress)
 
     def on_combined_summary_complete(self, result):
