@@ -126,7 +126,10 @@ class CropThread(QThread):
                 fps=video.fps,
                 codec='libx264',
                 audio_codec='aac',
-                logger=logger
+                audio_fps=44100,
+                pixel_format='yuv420p',
+                logger=logger,
+                ffmpeg_params=['-fflags', '+genpts']
             )
 
             if self.running:
