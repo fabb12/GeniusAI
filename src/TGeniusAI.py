@@ -2114,7 +2114,16 @@ class VideoAudioManager(QMainWindow):
 
         # Assicura che le ultime modifiche dalla UI (se editabile) siano state salvate
         # nel dizionario 'self.summaries' prima di salvarle su file.
-        self._update_summary_view()
+        # Get the currently active summary text area
+        active_summary_widget = self.get_current_summary_text_area()
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+
+        # Update the correct key in the summaries dictionary based on the active tab
+        # and whether the integrated view is active.
+        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
+        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+        self.summaries[summary_key] = active_summary_widget.toHtml()
 
         update_data = {
             "summaries": self.summaries,
@@ -2319,13 +2328,6 @@ class VideoAudioManager(QMainWindow):
         current_tab_index = self.summaryTabWidget.currentIndex()
         summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
 
-        # If the view is writable (timestamps are shown), first persist any user edits
-        # back to the master data before re-rendering.
-        if not target_widget.isReadOnly():
-            is_integrated_view_before_update = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-            key_to_update = f"{summary_type}_integrated" if is_integrated_view_before_update else summary_type
-            if key_to_update in self.summaries:
-                 self.summaries[key_to_update] = target_widget.toHtml()
 
         # Determine which master content to display
         is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
