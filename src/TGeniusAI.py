@@ -93,6 +93,7 @@ import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
 from fpdf import FPDF
+from markdownify import markdownify
 
 
 class ProjectClipsMergeThread(QThread):
@@ -676,16 +677,24 @@ class VideoAudioManager(QMainWindow):
         self.original_text = ""
         self.transcription_original = ""
         self.transcription_corrected = ""
+        # Struttura dati per i riassunti del singolo file.
+        # Conterrà solo testo Markdown grezzo, mai HTML.
         self.summaries = {
-            'detailed': '',
-            'meeting': '',
-            'detailed_integrated': '',
-            'meeting_integrated': ''
+            "detailed": "",
+            "meeting": "",
+            "detailed_integrated": "",
+            "meeting_integrated": ""
         }
-        self.active_summary_type = None
-        self.summary_text = ""
-        self.summary_generated = ""
-        self.summary_generated_integrated = ""
+
+        # Struttura dati per i riassunti combinati da più file.
+        self.combined_summary = {
+            "source_files": [],
+            "detailed_combined": "",
+            "meeting_combined": "",
+            "detailed_combined_integrated": "",
+            "meeting_combined_integrated": ""
+        }
+        self.active_summary_type = None # e.g., 'detailed', 'meeting_combined'
         self.original_audio_ai_html = ""
 
 
@@ -1418,6 +1427,15 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
         top_controls_layout.addStretch()
+
+        # Pulsante per creare riassunto combinato
+        self.createCombinedSummaryButton = QPushButton('')
+        self.createCombinedSummaryButton.setIcon(QIcon(get_resource("combine.png")))
+        self.createCombinedSummaryButton.setFixedSize(32, 32)
+        self.createCombinedSummaryButton.setToolTip("Crea un riassunto combinato dalle clip selezionate nel progetto")
+        self.createCombinedSummaryButton.clicked.connect(self.create_combined_summary)
+        top_controls_layout.addWidget(self.createCombinedSummaryButton)
+
         summary_controls_layout.addLayout(top_controls_layout)
 
         # Layout orizzontale per le checkbox
@@ -1461,6 +1479,20 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
+
+        # Tab per il Riassunto Dettagliato Combinato
+        self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
+        self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
+        self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
+
+        # Tab per le Note Riunione Combinato
+        self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
+        self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
+        self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
 
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
@@ -1632,7 +1664,11 @@ class VideoAudioManager(QMainWindow):
             return self.summaryDetailedTextArea
         elif current_index == 1:
             return self.summaryMeetingTextArea
-        return self.summaryDetailedTextArea # Fallback
+        elif current_index == 2:
+            return self.summaryCombinedDetailedTextArea
+        elif current_index == 3:
+            return self.summaryCombinedMeetingTextArea
+        return None # Fallback se l'indice non è valido
 
     def apply_and_save_font_settings(self, size=None):
         """
@@ -1651,11 +1687,18 @@ class VideoAudioManager(QMainWindow):
 
         font = QFont(font_family, font_size)
 
-        self.transcriptionTextArea.setFont(font)
-        self.summaryDetailedTextArea.setFont(font)
-        self.summaryMeetingTextArea.setFont(font)
+        text_areas = [
+            self.transcriptionTextArea,
+            self.summaryDetailedTextArea,
+            self.summaryMeetingTextArea,
+            self.summaryCombinedDetailedTextArea,
+            self.summaryCombinedMeetingTextArea
+        ]
         if hasattr(self, 'audioAiTextArea'):
-            self.audioAiTextArea.setFont(font)
+            text_areas.append(self.audioAiTextArea)
+
+        for area in text_areas:
+            area.setFont(font)
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
@@ -2171,6 +2214,7 @@ class VideoAudioManager(QMainWindow):
             "transcription_original": self.transcription_original,
             "transcription_corrected": self.transcription_corrected,
             "summaries": self.summaries,
+            "combined_summary": self.combined_summary,
             "audio_ai_text": self.audioAiTextArea.toPlainText(),
             "last_save_date": datetime.datetime.now().isoformat()
         }
@@ -2296,25 +2340,48 @@ class VideoAudioManager(QMainWindow):
 
     def _sync_active_summary_to_model(self):
         """
-        Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati (self.summaries).
+        Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati.
         Questo è il "salvataggio" effettivo dalla vista al modello.
+        Viene attivato da un timer (debounce) per non salvare ad ogni tasto.
         """
         active_widget = self.get_current_summary_text_area()
 
         # CRUCIALE: non salvare se il widget è in sola lettura.
         # Questo previene la perdita di dati quando la vista è filtrata (es. timecode nascosti).
-        if active_widget.isReadOnly():
-            logging.debug("Sync to model skipped: widget is read-only.")
+        if not active_widget or active_widget.isReadOnly():
+            logging.debug("Sync to model skipped: widget is read-only or not available.")
             return
 
-        summary_key = self._get_current_summary_key()
+        # Determina la chiave corretta in base al tab attivo
+        is_combined = "Combinato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex())
+        if is_combined:
+            data_source = self.combined_summary
+            summary_type = 'detailed_combined' if "Dettagliato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex()) else 'meeting_combined'
+        else:
+            data_source = self.summaries
+            summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
+
+        # Determina se la vista è integrata
+        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
+        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+
+        # Salva il contenuto del widget, convertito in Markdown, nel modello dati.
         if summary_key:
-            self.summaries[summary_key] = active_widget.toHtml()
-            logging.debug(f"Synced UI to model for key: {summary_key}")
+            html_content = active_widget.toHtml()
+            # Converte l'HTML in Markdown, preservando la formattazione di base.
+            markdown_content = markdownify(html_content, heading_style="ATX")
+            data_source[summary_key] = markdown_content
+            logging.debug(f"Synced UI to model for key: {summary_key} after converting to Markdown.")
 
     def onProcessComplete(self, result):
         if isinstance(result, dict):
-            self.transcriptionTextArea.setPlainText(result.get('transcription_raw', ''))
+            # Questo gestisce i risultati della trascrizione che arrivano come dizionario
+            self.transcription_original = result.get('transcription_raw', '')
+            self.transcriptionTextArea.setHtml(self.transcription_original)
+            self._style_existing_timestamps(self.transcriptionTextArea)
+            self.transcription_corrected = "" # Resetta la correzione
+            self.transcriptionViewToggle.setEnabled(False)
+            self.transcriptionViewToggle.setChecked(False)
             return
 
         if self.active_summary_type:
@@ -2325,25 +2392,24 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                # Convert Markdown to HTML
-                html_summary = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+                # Salva il risultato grezzo (Markdown) nel modello dati.
+                # Questa è la nuova fonte di verità.
+                self.summaries[self.active_summary_type] = result
 
-                # Store the new HTML summary in the master dictionary
-                self.summaries[self.active_summary_type] = html_summary
-
-                # Clear any previous integrated summary for this type, as it's now obsolete
+                # Invalida il riassunto integrato corrispondente.
                 integrated_key = f"{self.active_summary_type}_integrated"
                 if integrated_key in self.summaries:
                     self.summaries[integrated_key] = ""
 
-                # Disable and uncheck the integration toggle as this is a new base summary
+                # Disabilita il toggle di integrazione.
                 self.integrazioneToggle.setChecked(False)
                 self.integrazioneToggle.setEnabled(False)
 
-                # The single point of truth for updating the UI
+                # Chiama il metodo di aggiornamento della vista, che ora leggerà
+                # dal modello e genererà l'HTML dinamicamente.
                 self._update_summary_view()
 
-                # Save the updated summaries to the JSON file
+                # Salva i dati aggiornati nel file JSON.
                 update_data = {
                     "summaries": self.summaries,
                     "summary_date": datetime.datetime.now().isoformat()
@@ -2352,38 +2418,122 @@ class VideoAudioManager(QMainWindow):
 
             self.active_summary_type = None
 
+    def create_combined_summary(self):
+        if not self.current_project_path:
+            self.show_status_message("Apri un progetto prima di creare un riassunto combinato.", error=True)
+            return
+
+        selected_items = self.projectDock.tree.selectedItems()
+        if not selected_items:
+            self.show_status_message("Seleziona almeno una clip dal pannello Progetto.", error=True)
+            return
+
+        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto Combinato",
+                                                "Scegli il tipo di riassunto da generare:",
+                                                ["Dettagliato", "Note Riunione"], 0, False)
+        if not ok:
+            return
+
+        summary_key = 'detailed' if summary_type == "Dettagliato" else 'meeting'
+        self.active_summary_type = f"{summary_key}_combined"
+
+        all_summaries_text = []
+        source_files = []
+        for item in selected_items:
+            clip_filename = item.text(0)
+            json_path = os.path.join(self.current_project_path, "clips", os.path.splitext(clip_filename)[0] + ".json")
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    summary_text = data.get("summaries", {}).get(summary_key, "")
+                    if summary_text:
+                        all_summaries_text.append(f"--- Riassunto da {clip_filename} ---\n{summary_text}")
+                        source_files.append(clip_filename)
+                except Exception as e:
+                    logging.error(f"Errore nel leggere il riassunto da {json_path}: {e}")
+
+        if not all_summaries_text:
+            self.show_status_message("Nessun riassunto del tipo selezionato trovato per le clip scelte.", error=True)
+            return
+
+        self.combined_summary["source_files"] = source_files
+        combined_text = "\n\n".join(all_summaries_text)
+
+        thread = ProcessTextAI(
+            mode="combined_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': combined_text}
+        )
+        # Usiamo un callback specifico per il riassunto combinato
+        self.start_task(thread, self.on_combined_summary_complete, self.onProcessError, self.update_status_progress)
+
+    def on_combined_summary_complete(self, result):
+        """Gestisce il completamento della generazione del riassunto combinato."""
+        if self.active_summary_type:
+            # Salva il risultato nel modello dati
+            self.combined_summary[self.active_summary_type] = result
+
+            # Aggiorna la vista per mostrare il nuovo riassunto
+            self._update_summary_view()
+
+            # Salva i dati nel JSON del video ATTUALMENTE caricato.
+            # Questo è un compromesso, ma permette la persistenza.
+            if self.videoPathLineEdit:
+                update_data = {"combined_summary": self.combined_summary}
+                self._update_json_file(self.videoPathLineEdit, update_data)
+                self.show_status_message("Riassunto combinato generato e salvato.")
+            else:
+                self.show_status_message("Riassunto combinato generato. Salvalo manualmente o caricando un video.", error=True)
+
+            self.active_summary_type = None
+
     def _update_summary_view(self):
         """
-        Centralized method to update the summary view.
-        It reads the master data, applies view settings (timestamps), and updates the UI.
-        This is the single source of truth for displaying summaries.
+        Metodo centralizzato per aggiornare la vista del riassunto.
+        Legge i dati grezzi dal modello, applica le opzioni di visualizzazione (es. timecode)
+        e aggiorna la UI. Questa è l'unica fonte di verità per la visualizzazione dei riassunti.
         """
-        if not hasattr(self, 'summaries'):
-            return
+        if not hasattr(self, 'summaries'): return
 
         target_widget = self.get_current_summary_text_area()
-        if not target_widget:
-            return
+        if not target_widget: return
 
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+        # Determina quale riassunto visualizzare (singolo o combinato)
+        current_tab_widget = self.summaryTabWidget.currentWidget()
+        is_combined = "Combinato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex())
 
+        if is_combined:
+            data_source = self.combined_summary
+            summary_type = 'detailed_combined' if "Dettagliato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex()) else 'meeting_combined'
+        else:
+            data_source = self.summaries
+            summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
 
-        # Determine which master content to display
-        summary_key = self._get_current_summary_key()
-        html_content = self.summaries.get(summary_key, "")
+        # Determina se visualizzare la versione integrata
+        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
+        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
 
-        # Apply view transformations (e.g., hiding timestamps)
+        # 1. Leggi il testo Markdown grezzo dal modello dati
+        raw_markdown = data_source.get(summary_key, "")
+
+        # 2. Converti il Markdown in HTML
+        html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
+
+        # 3. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
         show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
-        display_html = remove_timestamps_from_html(html_content) if not show_timestamps else html_content
+        display_html = html_content
+        if not show_timestamps:
+            display_html = remove_timestamps_from_html(display_html)
 
-        # Update the UI
+        # 4. Aggiorna la UI
         target_widget.blockSignals(True)
         target_widget.setHtml(display_html)
         target_widget.blockSignals(False)
 
-        # IMPORTANT: Make the editor read-only when timestamps are hidden to prevent
-        # saving a "filtered" view and causing data loss.
+        # 5. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
+        # per prevenire la perdita di dati (salvataggio di una vista parziale).
+        # L'utente può modificare solo quando vede il contenuto completo (con timecode).
         target_widget.setReadOnly(not show_timestamps)
 
     def onProcessError(self, error_message):
@@ -4125,10 +4275,14 @@ class VideoAudioManager(QMainWindow):
             else: # Default a JSON
                 if file_ext != ".json": path += ".json"
 
+                # Sincronizza l'ultimo stato del riassunto dalla UI al modello
+                self._sync_active_summary_to_model()
+
                 metadata = {
                     "transcription_original": self.transcription_original,
                     "transcription_corrected": self.transcription_corrected,
                     "summaries": self.summaries,
+                    "combined_summary": self.combined_summary,
                     "transcription_date": datetime.datetime.now().isoformat(),
                     "language": self.languageComboBox.currentData()
                 }
@@ -4580,7 +4734,6 @@ class VideoAudioManager(QMainWindow):
             "language": "N/A",
             "video_date": video_date,
             "transcription_date": None,
-            "transcription_raw": "", # Mantenuto per retrocompatibilità
             "transcription_original": "",
             "transcription_corrected": "",
             "summaries": {
@@ -4588,6 +4741,13 @@ class VideoAudioManager(QMainWindow):
                 "meeting": "",
                 "detailed_integrated": "",
                 "meeting_integrated": ""
+            },
+            "combined_summary": {
+                "source_files": [],
+                "detailed_combined": "",
+                "meeting_combined": "",
+                "detailed_combined_integrated": "",
+                "meeting_combined_integrated": ""
             },
             "summary_date": None,
             "generated_audios": [],
@@ -5336,24 +5496,30 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionViewToggle.setChecked(False)
 
         # Carica i riassunti, gestendo la retrocompatibilità
-        if 'summaries' in data:
-            self.summaries = data.get('summaries', self.summaries)
-        else:
-            # Retrocompatibilità: migra i vecchi campi nel nuovo dizionario
-            self.summaries['detailed'] = data.get('summary_generated', '')
-            self.summaries['detailed_integrated'] = data.get('summary_generated_integrated', '')
-            # Lascia gli altri campi vuoti
-            self.summaries['meeting'] = ''
-            self.summaries['meeting_integrated'] = ''
+        self.summaries = data.get('summaries', {})
+        if not self.summaries: # Se 'summaries' è vuoto o non esiste
+             self.summaries['detailed'] = data.get('summary_generated', '')
+             self.summaries['detailed_integrated'] = data.get('summary_generated_integrated', '')
 
+        self.combined_summary = data.get('combined_summary', {
+            "source_files": [], "detailed_combined": "", "meeting_combined": "",
+            "detailed_combined_integrated": "", "meeting_combined_integrated": ""
+        })
 
-        # Popola le aree di testo dei riassunti
-        self.summaryDetailedTextArea.setHtml(self.summaries.get('detailed_integrated') or self.summaries.get('detailed', ''))
-        self.summaryMeetingTextArea.setHtml(self.summaries.get('meeting_integrated') or self.summaries.get('meeting', ''))
+        # Aggiorna la vista per tutti i tab. _update_summary_view è la fonte di verità.
+        self._update_summary_view()
 
-        # Applica lo stile ai timestamp in entrambe le aree
-        self._style_existing_timestamps(self.summaryDetailedTextArea)
-        self._style_existing_timestamps(self.summaryMeetingTextArea)
+        # Popola le aree di testo dei riassunti (ora gestito da _update_summary_view)
+        # self.summaryDetailedTextArea.setHtml(self.summaries.get('detailed', ''))
+        # self.summaryMeetingTextArea.setHtml(self.summaries.get('meeting', ''))
+        # self.summaryCombinedDetailedTextArea.setHtml(self.combined_summary.get('detailed_combined', ''))
+        # self.summaryCombinedMeetingTextArea.setHtml(self.combined_summary.get('meeting_combined', ''))
+
+        # Applica lo stile ai timestamp (ora gestito da _update_summary_view)
+        # self._style_existing_timestamps(self.summaryDetailedTextArea)
+        # self._style_existing_timestamps(self.summaryMeetingTextArea)
+        # self._style_existing_timestamps(self.summaryCombinedDetailedTextArea)
+        # self._style_existing_timestamps(self.summaryCombinedMeetingTextArea)
 
         # Imposta lo stato del toggle di integrazione in base al tab visibile
         current_tab_index = self.summaryTabWidget.currentIndex()
@@ -6567,15 +6733,22 @@ class VideoAudioManager(QMainWindow):
         self.audioAiTextArea.clear()
         self.summaryDetailedTextArea.clear()
         self.summaryMeetingTextArea.clear()
+        self.summaryCombinedDetailedTextArea.clear()
+        self.summaryCombinedMeetingTextArea.clear()
+
 
         # 3. Resetta lo stato interno delle trascrizioni e dei riassunti
         self.transcription_original = ""
         self.transcription_corrected = ""
-        self.summaries = {}
+        self.summaries = {
+            "detailed": "", "meeting": "",
+            "detailed_integrated": "", "meeting_integrated": ""
+        }
+        self.combined_summary = {
+            "source_files": [], "detailed_combined": "", "meeting_combined": "",
+            "detailed_combined_integrated": "", "meeting_combined_integrated": ""
+        }
         self.active_summary_type = None
-        self.summary_text = ""
-        self.summary_generated = ""
-        self.summary_generated_integrated = ""
         self.original_audio_ai_html = ""
         self.transcriptionViewToggle.setChecked(False)
         self.transcriptionViewToggle.setEnabled(False)
