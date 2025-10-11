@@ -1,4 +1,29 @@
 import re
+import os
+import datetime
+
+def generate_unique_filename(filepath):
+    """
+    Checks if a file exists at the given path. If it does, appends a timestamp
+    to the filename to make it unique.
+    """
+    if not os.path.exists(filepath):
+        return filepath
+
+    directory, filename = os.path.split(filepath)
+    name, ext = os.path.splitext(filename)
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    new_filename = f"{name}_{timestamp}{ext}"
+    new_filepath = os.path.join(directory, new_filename)
+
+    # In the rare case the timestamped file also exists, add a counter
+    counter = 1
+    while os.path.exists(new_filepath):
+        new_filename = f"{name}_{timestamp}_{counter}{ext}"
+        new_filepath = os.path.join(directory, new_filename)
+        counter += 1
+
+    return new_filepath
 
 def remove_timestamps_from_html(html_content):
     """

@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip
+from src.services.utils import generate_unique_filename
 
 class VideoProcessingThread(QThread):
     progress = pyqtSignal(int, str)
@@ -17,7 +18,7 @@ class VideoProcessingThread(QThread):
     def __init__(self, source_path, target_path, options, parent=None):
         super().__init__(parent)
         self.source_path = source_path
-        self.target_path = target_path
+        self.target_path = generate_unique_filename(target_path)
         self.options = options
         self.process = None
         self.running = True
@@ -233,7 +234,7 @@ class CopyThread(QThread):
     def __init__(self, src, dst, parent=None):
         super().__init__(parent)
         self.src = src
-        self.dst = dst
+        self.dst = generate_unique_filename(dst)
 
     def run(self):
         try:

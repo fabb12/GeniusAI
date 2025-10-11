@@ -88,7 +88,7 @@ from src.managers.ProjectManager import ProjectManager
 from src.ui.ProjectDock import ProjectDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
-from src.services.utils import remove_timestamps_from_html
+from src.services.utils import remove_timestamps_from_html, generate_unique_filename
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
@@ -104,7 +104,7 @@ class ProjectClipsMergeThread(QThread):
     def __init__(self, clips_paths, output_path, parent=None):
         super().__init__(parent)
         self.clips_paths = clips_paths
-        self.output_path = output_path
+        self.output_path = generate_unique_filename(output_path)
         self.running = True
 
     def run(self):
@@ -158,7 +158,7 @@ class MediaOverlayThread(QThread):
         super().__init__(parent)
         self.base_video_path = base_video_path
         self.media_data = media_data
-        self.output_path = output_path
+        self.output_path = generate_unique_filename(output_path)
         self.start_time = start_time
         self.running = True
 
@@ -2858,7 +2858,7 @@ class VideoAudioManager(QMainWindow):
             base_name = os.path.splitext(os.path.basename(media_path))[0]
             directory = os.path.dirname(media_path)
             ext = ".mp3" if is_audio_only else ".mp4"
-            output_path = os.path.join(directory, f"{base_name}_cut{ext}")
+            output_path = generate_unique_filename(os.path.join(directory, f"{base_name}_cut{ext}"))
 
             if is_audio_only:
                 final_media.write_audiofile(output_path)
@@ -6362,8 +6362,8 @@ class VideoAudioManager(QMainWindow):
         base_name = os.path.splitext(os.path.basename(media_path))[0]
         directory = os.path.dirname(media_path)
         ext = '.mp3' if is_audio else '.mp4'
-        output_path1 = os.path.join(directory, f"{base_name}_part1{ext}")
-        output_path2 = os.path.join(directory, f"{base_name}_part2{ext}")
+        output_path1 = generate_unique_filename(os.path.join(directory, f"{base_name}_part1{ext}"))
+        output_path2 = generate_unique_filename(os.path.join(directory, f"{base_name}_part2{ext}"))
 
         thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
         self.start_task(thread, self.onCutCompleted, self.onCutError, self.update_status_progress)
