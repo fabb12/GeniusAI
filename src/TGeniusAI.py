@@ -1440,22 +1440,10 @@ class VideoAudioManager(QMainWindow):
 
         # Layout orizzontale per le checkbox
         bottom_controls_layout = QHBoxLayout()
-        self.integrazioneToggle = QCheckBox("Visualizza dopo integrazione")
-        self.integrazioneToggle.setEnabled(False)
-        self.integrazioneToggle.toggled.connect(self.toggleIntegrazioneView)
-        bottom_controls_layout.addWidget(self.integrazioneToggle)
-
         self.showTimecodeSummaryCheckbox = QCheckBox("Mostra timecode")
         self.showTimecodeSummaryCheckbox.setChecked(True)
         self.showTimecodeSummaryCheckbox.toggled.connect(self._update_summary_view)
         bottom_controls_layout.addWidget(self.showTimecodeSummaryCheckbox)
-
-        self.toggleSummaryViewButton = QPushButton("Mostra HTML")
-        self.toggleSummaryViewButton.setToolTip("Alterna tra la visualizzazione formattata e il codice sorgente HTML")
-        self.toggleSummaryViewButton.setCheckable(True)
-        self.toggleSummaryViewButton.toggled.connect(self.toggle_summary_view_mode)
-        bottom_controls_layout.addWidget(self.toggleSummaryViewButton)
-        self.summary_view_is_raw = False # Stato iniziale
 
         bottom_controls_layout.addStretch()
         summary_controls_layout.addLayout(bottom_controls_layout)
@@ -1858,8 +1846,6 @@ class VideoAudioManager(QMainWindow):
         self.summaries[integrated_key] = summary
 
         # Aggiorna la variabile di visualizzazione e la UI
-        self.integrazioneToggle.setEnabled(True)
-        self.integrazioneToggle.setChecked(True)
         self.update_summary_view()
         self.show_status_message("Integrazione delle informazioni dal video completata.")
 
@@ -1872,14 +1858,6 @@ class VideoAudioManager(QMainWindow):
 
     def onIntegrazioneError(self, error_message):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
-        self.integrazioneToggle.setEnabled(False)
-
-    def toggleIntegrazioneView(self, checked):
-        """
-        Alterna la visualizzazione nell'area del riassunto tra il riassunto standard
-        e quello integrato con le informazioni del video.
-        """
-        self._update_summary_view()
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -2362,8 +2340,7 @@ class VideoAudioManager(QMainWindow):
             summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
 
         # Determina se la vista è integrata
-        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+        summary_key = summary_type
 
         # Salva il contenuto del widget, convertito in Markdown, nel modello dati.
         if summary_key:
@@ -2510,9 +2487,7 @@ class VideoAudioManager(QMainWindow):
             data_source = self.summaries
             summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
 
-        # Determina se visualizzare la versione integrata
-        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+        summary_key = summary_type
 
         # 1. Leggi il testo Markdown grezzo dal modello dati
         raw_markdown = data_source.get(summary_key, "")
@@ -5521,12 +5496,6 @@ class VideoAudioManager(QMainWindow):
         # self._style_existing_timestamps(self.summaryCombinedDetailedTextArea)
         # self._style_existing_timestamps(self.summaryCombinedMeetingTextArea)
 
-        # Imposta lo stato del toggle di integrazione in base al tab visibile
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        active_summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-        has_integrated_summary = bool(self.summaries.get(f"{active_summary_type}_integrated", ''))
-        self.integrazioneToggle.setEnabled(has_integrated_summary)
-        self.integrazioneToggle.setChecked(has_integrated_summary)
 
         # Imposta la lingua nella combobox
         language_code = data.get("language")
@@ -6752,8 +6721,6 @@ class VideoAudioManager(QMainWindow):
         self.original_audio_ai_html = ""
         self.transcriptionViewToggle.setChecked(False)
         self.transcriptionViewToggle.setEnabled(False)
-        self.integrazioneToggle.setChecked(False)
-        self.integrazioneToggle.setEnabled(False)
 
         # 4. Resetta i percorsi e lo stato del progetto
         self.current_project_path = None
