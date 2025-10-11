@@ -1,6 +1,7 @@
 import os
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip
+from src.services.utils import generate_unique_filename
 
 class VideoCuttingThread(QThread):
     progress = pyqtSignal(int, str)
@@ -13,7 +14,7 @@ class VideoCuttingThread(QThread):
         self.media_path = media_path
         self.start_time = start_time
         self.end_time = end_time
-        self.output_path = output_path
+        self.output_path = generate_unique_filename(output_path)
         self.use_watermark = use_watermark
         self.watermark_path = watermark_path
         self.watermark_size = watermark_size

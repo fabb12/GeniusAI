@@ -2,9 +2,11 @@ import re
 import os
 import tempfile
 import subprocess
+import datetime
 from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip
 from proglog import ProgressBarLogger
+from src.services.utils import generate_unique_filename
 
 class CropLogger(ProgressBarLogger):
     def __init__(self, progress_signal, thread):
@@ -113,11 +115,13 @@ class CropThread(QThread):
                 original_filename = os.path.basename(self.video_path)
                 base, ext = os.path.splitext(original_filename)
                 ext = ext if ext else '.mp4'
-                output_filename = f"cropped_{base}{ext}"
-                output_path = os.path.join(clip_dir, output_filename)
+                output_filename = f"{base}_cropped{ext}"
+                output_path = generate_unique_filename(os.path.join(clip_dir, output_filename))
             else:
-                fd, output_path = tempfile.mkstemp(suffix='.mp4', prefix='cropped_')
-                os.close(fd)
+                # Still use unique filename for temp files to be safe
+                temp_dir = tempfile.gettempdir()
+                output_filename = f"cropped_{os.path.splitext(os.path.basename(self.video_path))[0]}.mp4"
+                output_path = generate_unique_filename(os.path.join(temp_dir, output_filename))
 
             logger = CropLogger(self.progress, self)
 
