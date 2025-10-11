@@ -85,6 +85,7 @@ from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
 from src.managers.ProjectManager import ProjectManager
+from src.managers.BookmarkManager import BookmarkManager
 from src.ui.ProjectDock import ProjectDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
@@ -580,6 +581,7 @@ class VideoAudioManager(QMainWindow):
         super().__init__()
 
         self.project_manager = ProjectManager(base_dir="projects")
+        self.bookmark_manager = BookmarkManager(self)
         self.current_project_path = None
 
         setup_logging()
@@ -1000,13 +1002,13 @@ class VideoAudioManager(QMainWindow):
         self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
         self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
         self.clearBookmarksButton.clicked.connect(self.clearBookmarks)
-        self.cutButton.clicked.connect(self.cutVideoBetweenBookmarks)
+        self.cutButton.clicked.connect(self.bookmark_manager.cut_all_bookmarks)
         self.cropButton.clicked.connect(self.open_crop_dialog)
         self.rewindButton.clicked.connect(self.rewind5Seconds)
         self.forwardButton.clicked.connect(self.forward5Seconds)
         self.frameBackwardButton.clicked.connect(self.frameBackward)
         self.frameForwardButton.clicked.connect(self.frameForward)
-        self.deleteButton.clicked.connect(self.deleteVideoSegment)
+        self.deleteButton.clicked.connect(self.bookmark_manager.delete_all_bookmarks)
 
         self.currentTimeLabel = QLabel('00:00')
         self.currentTimeLabel.setToolTip("Mostra il tempo corrente del video input")
@@ -1125,7 +1127,6 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.frameForwardButton)
         playbackControlLayout.addWidget(self.setStartBookmarkButton)
         playbackControlLayout.addWidget(self.setEndBookmarkButton)
-        playbackControlLayout.addWidget(self.clearBookmarksButton)
         playbackControlLayout.addWidget(self.cutButton)
         playbackControlLayout.addWidget(self.cropButton)
         playbackControlLayout.addWidget(self.deleteButton)
@@ -2625,65 +2626,6 @@ class VideoAudioManager(QMainWindow):
         root_folder_path = os.path.dirname(os.path.abspath(__file__))
         QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
 
-    def deleteVideoSegment(self):
-        if not self.videoSlider.bookmarks:
-            self.show_status_message("Per favore, imposta almeno un bookmark prima di eliminare.", error=True)
-            return
-
-        media_path = self.videoPathLineEdit
-        if not media_path:
-            self.show_status_message("Per favore, seleziona un file prima di eliminarne una parte.", error=True)
-            return
-
-        is_audio_only = self.isAudioOnly(media_path)
-
-        try:
-            if is_audio_only:
-                media_clip = AudioFileClip(media_path)
-            else:
-                media_clip = VideoFileClip(media_path)
-
-            clips_to_keep = []
-            last_end_time = 0.0
-            for start_ms, end_ms in sorted(self.videoSlider.bookmarks):
-                start_time = start_ms / 1000.0
-                end_time = end_ms / 1000.0
-                if start_time > last_end_time:
-                    clips_to_keep.append(media_clip.subclip(last_end_time, start_time))
-                last_end_time = end_time
-
-            if last_end_time < media_clip.duration:
-                clips_to_keep.append(media_clip.subclip(last_end_time))
-
-            if not clips_to_keep:
-                self.show_status_message("Nessuna parte del video da conservare. L'operazione cancellerebbe l'intero file.", error=True)
-                return
-
-            if is_audio_only:
-                final_media = concatenate_audioclips(clips_to_keep)
-                ext = ".mp3"
-            else:
-                final_media = concatenate_videoclips(clips_to_keep)
-                ext = ".mp4"
-
-            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")
-            output_dir = os.path.dirname(media_path)
-            output_name = f"modified_{timestamp}{ext}"
-            output_path = os.path.join(output_dir, output_name)
-
-            if is_audio_only:
-                final_media.write_audiofile(output_path)
-            else:
-                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            self.show_status_message(f"Parti del file eliminate. File salvato.")
-            self.loadVideoOutput(output_path)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante l'eliminazione", str(e))
-        finally:
-            if 'media_clip' in locals():
-                media_clip.close()
     def insertPause(self):
         cursor = self.audioAiTextArea.textCursor()
         pause_time = self.pauseTimeEdit.text().strip()
@@ -2821,67 +2763,6 @@ class VideoAudioManager(QMainWindow):
     def clearBookmarks(self):
         self.videoSlider.resetBookmarks()
 
-    def cutVideoBetweenBookmarks(self):
-        if not self.videoSlider.bookmarks:
-            self.show_status_message("Per favore, imposta almeno un bookmark prima di tagliare.", error=True)
-            return
-
-        media_path = self.videoPathLineEdit
-        if not media_path:
-            self.show_status_message("Per favore, seleziona un file prima di tagliarlo.", error=True)
-            return
-
-        is_audio_only = self.isAudioOnly(media_path)
-
-        clips = []
-        final_media = None
-        try:
-            if is_audio_only:
-                media_clip = AudioFileClip(media_path)
-            else:
-                media_clip = VideoFileClip(media_path)
-
-            for start_ms, end_ms in self.videoSlider.bookmarks:
-                start_time = start_ms / 1000.0
-                end_time = end_ms / 1000.0
-                clips.append(media_clip.subclip(start_time, end_time))
-
-            if not clips:
-                self.show_status_message("Nessun clip valido da tagliare.", error=True)
-                return
-
-            if is_audio_only:
-                final_media = concatenate_audioclips(clips)
-            else:
-                final_media = concatenate_videoclips(clips)
-
-            base_name = os.path.splitext(os.path.basename(media_path))[0]
-            directory = os.path.dirname(media_path)
-            ext = ".mp3" if is_audio_only else ".mp4"
-            output_path = generate_unique_filename(os.path.join(directory, f"{base_name}_cut{ext}"))
-
-            if is_audio_only:
-                final_media.write_audiofile(output_path)
-            else:
-                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            self.show_status_message(f"File tagliato salvato in: {os.path.basename(output_path)}")
-            self.loadVideoOutput(output_path)
-
-        except Exception as e:
-            QMessageBox.critical(self, "Errore durante il taglio", str(e))
-            return
-        finally:
-            if 'media_clip' in locals():
-                media_clip.close()
-            if final_media:
-                if is_audio_only:
-                    final_media.close()
-                else: # Video
-                    if hasattr(final_media, 'audio') and final_media.audio:
-                        final_media.audio.close()
-                    if hasattr(final_media, 'mask') and final_media.mask:
-                        final_media.mask.close()
 
 
     def setVolume(self, value):
@@ -5442,27 +5323,19 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun video selezionato.", error=True)
             return
 
-        start_time_sec = None
-        end_time_sec = None
-
-        # Controlla se ci sono bookmark per una trascrizione parziale
+        # Se sono presenti dei bookmark, usa il BookmarkManager per la trascrizione sequenziale.
         if self.videoSlider.bookmarks:
-            # Trova l'inizio del primo bookmark e la fine dell'ultimo
-            min_start_ms = min(bm[0] for bm in self.videoSlider.bookmarks)
-            max_end_ms = max(bm[1] for bm in self.videoSlider.bookmarks)
-
-            start_time_sec = min_start_ms / 1000.0
-            end_time_sec = max_end_ms / 1000.0
-
-            self.show_status_message(f"Avvio trascrizione parziale da {start_time_sec:.2f}s a {end_time_sec:.2f}s.")
-
-        thread = TranscriptionThread(
-            self.videoPathLineEdit,
-            self,
-            start_time=start_time_sec,
-            end_time=end_time_sec
-        )
-        self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
+            self.bookmark_manager.transcribe_all_bookmarks()
+        else:
+            # Altrimenti, esegui la trascrizione dell'intero video come prima.
+            self.show_status_message("Nessun bookmark trovato, avvio trascrizione dell'intero video.")
+            thread = TranscriptionThread(
+                self.videoPathLineEdit,
+                self,
+                start_time=None,
+                end_time=None
+            )
+            self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
     def onTranscriptionComplete(self, result):
         json_path, temp_files = result
