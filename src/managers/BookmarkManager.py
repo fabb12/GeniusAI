@@ -206,8 +206,8 @@ class BookmarkManager:
         self.main_window.show_status_message(f"Trascrizione del segmento {self.current_bookmark_index + 1}/{len(self.bookmarks_to_transcribe)}...")
 
         thread = TranscriptionThread(
-            video_path=self.main_window.videoPathLineEdit,
-            parent=self.main_window,
+            media_path=self.main_window.videoPathLineEdit.text(),
+            main_window=self.main_window,
             start_time=start_time_sec,
             end_time=end_time_sec
         )
