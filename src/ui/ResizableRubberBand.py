@@ -17,6 +17,10 @@ class ResizableRubberBand(QWidget):
         self.min_size = 20  # Minimum crop size
 
         self.setGeometry(QRect(100, 100, 200, 150))
+
+    def setGeometry(self, rect):
+        """ Override setGeometry to update handles whenever it's called. """
+        super().setGeometry(rect)
         self.update_handles()
 
     def update_handles(self):
@@ -41,9 +45,11 @@ class ResizableRubberBand(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.drag_start_position = event.pos()
+            # Use global position for stable reference, map to parent
+            self.drag_start_position = self.mapToParent(event.pos())
             self.drag_start_geometry = self.geometry()
             self.is_resizing = False
+            self.is_dragging = False # Reset dragging state
 
             # Check if a handle is clicked
             for i, handle in enumerate(self.handles):
@@ -51,32 +57,33 @@ class ResizableRubberBand(QWidget):
                     self.is_resizing = True
                     self.is_dragging = True
                     self.resize_handle = i
-                    break
+                    return # Stop processing
 
             # If not resizing, check if the main body is clicked for dragging
-            if not self.is_resizing and self.rect().contains(event.pos()):
+            if self.rect().contains(event.pos()):
                 self.is_dragging = True
-
-        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         if self.is_dragging:
-            delta = event.pos() - self.drag_start_position
+            # Map current mouse position to parent's coordinate system
+            current_pos = self.mapToParent(event.pos())
+            delta = current_pos - self.drag_start_position
+
             if self.is_resizing:
-                self.resize_geometry(delta)
+                 # For resizing, we need the delta relative to the widget's corner
+                local_delta = event.pos() - self.mapFromParent(self.drag_start_position)
+                self.resize_geometry(local_delta)
             else:  # Moving
-                new_pos = self.drag_start_geometry.topLeft() + delta
+                new_top_left = self.drag_start_geometry.topLeft() + delta
                 parent_rect = self.parent().rect()
 
-                # Clamp the new position to stay within the parent's boundaries
-                new_pos.setX(max(0, min(new_pos.x(), parent_rect.width() - self.width())))
-                new_pos.setY(max(0, min(new_pos.y(), parent_rect.height() - self.height())))
+                # Clamp movement within the parent
+                new_top_left.setX(max(0, min(new_top_left.x(), parent_rect.right() - self.width())))
+                new_top_left.setY(max(0, min(new_top_left.y(), parent_rect.bottom() - self.height())))
 
-                self.move(new_pos)
+                self.move(new_top_left)
 
-        # Update cursor based on position, even if not dragging
         self.update_cursor(event.pos())
-        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -85,43 +92,46 @@ class ResizableRubberBand(QWidget):
             self.resize_handle = None
             self.update_handles() # Final update
         self.update_cursor(event.pos()) # Update cursor on release
-        super().mouseReleaseEvent(event)
 
     def resize_geometry(self, delta):
-        rect = self.drag_start_geometry
-        new_rect = QRect(rect)
+        rect = QRect(self.drag_start_geometry)
         parent_rect = self.parent().rect()
 
-        # Horizontal adjustments
-        if self.resize_handle in [0, 2, 6]: # Left handles
-            new_rect.setLeft(rect.left() + delta.x())
-        elif self.resize_handle in [1, 3, 7]: # Right handles
-            new_rect.setRight(rect.right() + delta.x())
-
-        # Vertical adjustments
-        if self.resize_handle in [0, 1, 4]: # Top handles
-            new_rect.setTop(rect.top() + delta.y())
-        elif self.resize_handle in [2, 3, 5]: # Bottom handles
-            new_rect.setBottom(rect.bottom() + delta.y())
+        # Adjust geometry based on the handle being dragged
+        if self.resize_handle == 0:  # Top-left
+            rect.setTopLeft(rect.topLeft() + delta)
+        elif self.resize_handle == 1:  # Top-right
+            rect.setTopRight(rect.topRight() + delta)
+        elif self.resize_handle == 2:  # Bottom-left
+            rect.setBottomLeft(rect.bottomLeft() + delta)
+        elif self.resize_handle == 3:  # Bottom-right
+            rect.setBottomRight(rect.bottomRight() + delta)
+        elif self.resize_handle == 4:  # Top
+            rect.setTop(rect.top() + delta.y())
+        elif self.resize_handle == 5:  # Bottom
+            rect.setBottom(rect.bottom() + delta.y())
+        elif self.resize_handle == 6:  # Left
+            rect.setLeft(rect.left() + delta.x())
+        elif self.resize_handle == 7:  # Right
+            rect.setRight(rect.right() + delta.x())
 
         # --- Validation and Correction ---
 
         # 1. Enforce minimum size (prevent inversion)
-        if new_rect.width() < self.min_size:
+        if rect.width() < self.min_size:
             if self.resize_handle in [0, 2, 6]: # Dragging left edge
-                new_rect.setLeft(new_rect.right() - self.min_size)
+                rect.setLeft(rect.right() - self.min_size)
             else: # Dragging right edge
-                new_rect.setRight(new_rect.left() + self.min_size)
+                rect.setRight(rect.left() + self.min_size)
 
-        if new_rect.height() < self.min_size:
+        if rect.height() < self.min_size:
             if self.resize_handle in [0, 1, 4]: # Dragging top edge
-                new_rect.setTop(new_rect.bottom() - self.min_size)
+                rect.setTop(rect.bottom() - self.min_size)
             else: # Dragging bottom edge
-                new_rect.setBottom(new_rect.top() + self.min_size)
+                rect.setBottom(rect.top() + self.min_size)
 
         # 2. Constrain to parent boundaries
-        # Ensure the new rectangle is within the parent's bounds
-        final_rect = new_rect.intersected(parent_rect)
+        final_rect = rect.intersected(parent_rect)
 
         self.setGeometry(final_rect.normalized())
         self.update() # Request a repaint
