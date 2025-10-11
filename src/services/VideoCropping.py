@@ -86,13 +86,14 @@ class CropThread(QThread):
             video = VideoFileClip(self.video_path)
             video_width, video_height = video.size
 
-            scale_factor = 2
-            x1 = int(self.crop_rect.x() * scale_factor)
-            y1 = int(self.crop_rect.y() * scale_factor)
-            x2 = int((self.crop_rect.x() + self.crop_rect.width()) * scale_factor)
-            y2 = int((self.crop_rect.y() + self.crop_rect.height()) * scale_factor)
+            x1 = self.crop_rect.x()
+            y1 = self.crop_rect.y()
+            x2 = self.crop_rect.x() + self.crop_rect.width()
+            y2 = self.crop_rect.y() + self.crop_rect.height()
 
-            x1, y1, x2, y2 = max(0, x1), max(0, y1), min(video_width, x2), min(video_height, y2)
+            # Ensure coordinates are within the video dimensions
+            x1, y1 = max(0, x1), max(0, y1)
+            x2, y2 = min(video_width, x2), min(video_height, y2)
 
             if x1 >= x2 or y1 >= y2:
                 self.error.emit("L'area di ritaglio non è valida.")
