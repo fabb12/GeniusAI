@@ -6320,6 +6320,35 @@ class VideoAudioManager(QMainWindow):
         self._clear_workspace()
         self.load_project(filePath)
 
+    def _load_most_recent_clip(self):
+        """Finds and loads the most recent clip from the current project."""
+        if not self.projectDock.project_data:
+            return
+
+        all_clips = self.projectDock.project_data.get("clips", []) + self.projectDock.project_data.get("audio_clips", [])
+        if not all_clips:
+            return
+
+        def get_date(clip):
+            try:
+                date_str = clip.get("creation_date")
+                if date_str:
+                    return datetime.datetime.fromisoformat(date_str)
+            except (ValueError, TypeError):
+                pass  # Ignore parsing errors
+            return datetime.datetime.min  # Fallback for max()
+
+        most_recent_clip = max(all_clips, key=get_date)
+        clip_filename = most_recent_clip.get("clip_filename")
+
+        if clip_filename:
+            is_audio = any(c.get('clip_filename') == clip_filename for c in self.projectDock.project_data.get('audio_clips', []))
+            subfolder = "audio" if is_audio else "clips"
+            clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
+
+            if os.path.exists(clip_path):
+                self.loadVideo(clip_path, clip_filename)
+
     def loadRecentFiles(self):
         """Carica la lista dei file recenti da QSettings."""
         settings = QSettings("Genius", "GeniusAI")
@@ -6583,29 +6612,8 @@ class VideoAudioManager(QMainWindow):
         if not self.projectDock.isVisible():
             self.projectDock.show()
 
-        # Automatically load the most recent clip
-        all_clips = project_data.get("clips", []) + project_data.get("audio_clips", [])
-        if all_clips:
-            def get_date(clip):
-                try:
-                    date_str = clip.get("creation_date")
-                    if date_str:
-                        return datetime.datetime.fromisoformat(date_str)
-                except (ValueError, TypeError):
-                    pass # Ignore parsing errors
-                return datetime.datetime.min # Fallback for max()
-
-            most_recent_clip = max(all_clips, key=get_date)
-            clip_filename = most_recent_clip.get("clip_filename")
-
-            if clip_filename:
-                # Determine if it's an audio or video clip to find it in the correct subfolder
-                is_audio = any(c.get('clip_filename') == clip_filename for c in project_data.get('audio_clips', []))
-                subfolder = "audio" if is_audio else "clips"
-                clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
-
-                if os.path.exists(clip_path):
-                    self.loadVideo(clip_path, clip_filename) # Pass title as well
+        # Asynchronously load the most recent clip to avoid blocking the UI
+        QTimer.singleShot(100, self._load_most_recent_clip)
 
     def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
