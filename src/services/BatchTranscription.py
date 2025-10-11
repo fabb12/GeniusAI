@@ -62,7 +62,7 @@ class BatchTranscriptionThread(QThread):
             self.last_result = None
             self.last_error = None
 
-            single_file_thread = TranscriptionThread(video_path, self.main_window)
+            single_file_thread = TranscriptionThread(video_path, parent=self.main_window)
             single_file_thread.completed.connect(self._on_single_completed)
             single_file_thread.error.connect(self._on_single_error)
             single_file_thread.completed.connect(loop.quit)
