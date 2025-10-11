@@ -11,12 +11,18 @@ class ExportDialog(QDialog):
     A dialog for configuring file export options, including file path,
     format (Word or PDF), and whether to remove timestamps.
     """
-    def __init__(self, default_filename="summary", parent=None):
+    def __init__(self, default_filename="summary", parent=None, project_path=None):
         super().__init__(parent)
         self.setWindowTitle("Esporta Riepilogo")
         self.setMinimumWidth(450)
 
-        self.default_basename = default_filename
+        # If a project path is provided, create an 'exported' subfolder
+        if project_path and os.path.isdir(project_path):
+            export_dir = os.path.join(project_path, "exported")
+            os.makedirs(export_dir, exist_ok=True)
+            self.default_basename = os.path.join(export_dir, default_filename)
+        else:
+            self.default_basename = default_filename
 
         # Main layout
         layout = QVBoxLayout(self)

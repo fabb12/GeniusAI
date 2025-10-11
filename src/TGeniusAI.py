@@ -4118,7 +4118,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
             return
 
-        dialog = ExportDialog(parent=self)
+        dialog = ExportDialog(parent=self, project_path=self.current_project_path)
         if not dialog.exec():
             return
 
