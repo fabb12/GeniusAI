@@ -6928,11 +6928,16 @@ class VideoAudioManager(QMainWindow):
             # Salva e ricarica se ci sono state modifiche
             if changes_made:
                 self.project_manager.save_project(self.projectDock.gnai_path, project_data)
-                self.load_project(self.projectDock.gnai_path)
+
+            # Ricarica solo i dati del progetto e aggiorna la vista del dock,
+            # evitando di chiamare self.load_project() che causerebbe un loop.
+            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+            if project_data:
+                self.projectDock.load_project_data(project_data, self.current_project_path, self.projectDock.gnai_path)
+
+            if changes_made:
                 self.show_status_message("Progetto sincronizzato con la cartella clips.")
-            else:
-                # Ricarica comunque per coerenza, nel caso qualcosa sia cambiato esternamente
-                self.load_project(self.projectDock.gnai_path)
+
 
         except Exception as e:
             logging.error(f"Errore durante la sincronizzazione della cartella clips: {e}")
