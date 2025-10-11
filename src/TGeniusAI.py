@@ -4429,6 +4429,10 @@ class VideoAudioManager(QMainWindow):
             base_name = os.path.splitext(os.path.basename(video_path))[0]
             audio_filename = f"{base_name}.mp3"
             audio_dir = os.path.join(self.current_project_path, "audio")
+
+            if not os.path.exists(audio_dir):
+                os.mkdir(audio_dir)
+
             output_path = os.path.join(audio_dir, audio_filename)
 
             if os.path.exists(output_path):
