@@ -1800,13 +1800,17 @@ class VideoAudioManager(QMainWindow):
         Alterna la visualizzazione nella casella di testo della trascrizione
         tra la versione originale e quella corretta.
         """
+        self.transcriptionTextArea.blockSignals(True)
         if checked:
             # Mostra il testo corretto, se disponibile
             if self.transcription_corrected:
-                self.transcriptionTextArea.setPlainText(self.transcription_corrected)
+                # Converti il Markdown salvato in HTML per la visualizzazione
+                html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+                self.transcriptionTextArea.setHtml(html_content)
         else:
             # Mostra il testo originale con formattazione
             self.transcriptionTextArea.setHtml(self.transcription_original)
+        self.transcriptionTextArea.blockSignals(False)
 
     def integraInfoVideo(self):
         if not self.videoPathLineEdit:
@@ -2109,8 +2113,11 @@ class VideoAudioManager(QMainWindow):
     def _sync_transcription_state_from_ui(self):
         """Sincronizza le variabili di stato della trascrizione con il contenuto della UI."""
         if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
-            self.transcription_corrected = self.transcriptionTextArea.toPlainText()
+            # Se la vista corretta è attiva, converti il suo HTML in Markdown prima di salvarlo
+            html_content = self.transcriptionTextArea.toHtml()
+            self.transcription_corrected = markdownify(html_content, heading_style="ATX")
         else:
+            # Altrimenti, salva l'HTML della trascrizione originale
             self.transcription_original = self.transcriptionTextArea.toHtml()
 
     def save_transcription_to_json(self):
@@ -2363,8 +2370,11 @@ class VideoAudioManager(QMainWindow):
 
         if self.active_summary_type:
             if self.active_summary_type == 'transcription_fix':
+                # Salva il risultato grezzo (Markdown)
                 self.transcription_corrected = result
-                self.transcriptionTextArea.setPlainText(result)
+                # Converti il Markdown in HTML per la visualizzazione
+                html_content = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+                self.transcriptionTextArea.setHtml(html_content)
                 self.show_status_message("Correzione del testo completata.")
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
@@ -5460,7 +5470,8 @@ class VideoAudioManager(QMainWindow):
 
         # Decide quale testo mostrare e imposta lo stato del toggle
         if self.transcription_corrected:
-            self.transcriptionTextArea.setPlainText(self.transcription_corrected)
+            html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+            self.transcriptionTextArea.setHtml(html_content)
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
