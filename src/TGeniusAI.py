@@ -1797,7 +1797,7 @@ class VideoAudioManager(QMainWindow):
             num_frames=self.infoFrameCountSpin.value(),
             language=self.languageInput.currentText(),
             combined_mode=self.combinedAnalysisCheckbox.isChecked(),
-            parent_for_transcription=self
+            main_window=self
         )
         self.analyzer.analysis_complete.connect(self.onAnalysisComplete)
         self.analyzer.analysis_error.connect(self.onAnalysisError)
@@ -5458,7 +5458,7 @@ class VideoAudioManager(QMainWindow):
 
         thread = TranscriptionThread(
             self.videoPathLineEdit,
-            self,
+            main_window=self,
             start_time=start_time_sec,
             end_time=end_time_sec
         )
@@ -7218,7 +7218,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTextArea.clear()
         self.show_status_message(f"Avvio trascrizione per {len(video_paths)} video...")
 
-        thread = BatchTranscriptionThread(video_paths, parent=self)
+        thread = BatchTranscriptionThread(video_paths, main_window=self)
         self.start_task(
             thread,
             on_complete=self._on_batch_transcription_finished,

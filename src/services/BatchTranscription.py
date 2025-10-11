@@ -19,10 +19,10 @@ class BatchTranscriptionThread(QThread):
     # Signal for reporting errors
     error = pyqtSignal(str)
 
-    def __init__(self, video_paths, parent=None):
+    def __init__(self, video_paths, main_window, parent=None):
         super().__init__(parent)
         self.video_paths = video_paths
-        self.main_window = parent  # The parent is expected to be the main window
+        self.main_window = main_window
         self._is_running = True
         self.last_result = None
         self.last_error = None
@@ -62,7 +62,7 @@ class BatchTranscriptionThread(QThread):
             self.last_result = None
             self.last_error = None
 
-            single_file_thread = TranscriptionThread(video_path, parent=self.main_window)
+            single_file_thread = TranscriptionThread(video_path, main_window=self.main_window)
             single_file_thread.completed.connect(self._on_single_completed)
             single_file_thread.error.connect(self._on_single_error)
             single_file_thread.completed.connect(loop.quit)

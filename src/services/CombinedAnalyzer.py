@@ -81,13 +81,13 @@ class CombinedAnalyzer(QObject):
     analysis_error = pyqtSignal(str)
     progress_update = pyqtSignal(str)
 
-    def __init__(self, video_path, num_frames, language, combined_mode, parent_for_transcription, parent=None):
+    def __init__(self, video_path, num_frames, language, combined_mode, main_window, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.num_frames = num_frames
         self.language = language
         self.combined_mode = combined_mode
-        self.parent_for_transcription = parent_for_transcription
+        self.main_window = main_window
         self.results = {}
 
     def start_analysis(self):
@@ -98,7 +98,7 @@ class CombinedAnalyzer(QObject):
             self.frame_thread.error.connect(self.on_part_error)
             self.frame_thread.start()
 
-            self.audio_thread = TranscriptionThread(self.video_path, self.parent_for_transcription)
+            self.audio_thread = TranscriptionThread(self.video_path, main_window=self.main_window)
             self.audio_thread.transcription_complete.connect(lambda transcript, files: self.on_part_finished('audio', transcript, files))
             self.audio_thread.error_occurred.connect(self.on_part_error)
             self.audio_thread.start()
