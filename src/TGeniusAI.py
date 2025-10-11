@@ -5354,8 +5354,8 @@ class VideoAudioManager(QMainWindow):
         Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
         Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
         """
-        # Pattern per trovare timestamp come [00:00:02.4] o [00:00]
-        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\]|\[\d+:\d+:\d+(\.\d)?\])')
+        # Pattern per trovare timestamp come [00:00] - [00:05] o [00:00:02.4]
+        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}\] - \[\d{2}:\d{2}\]|\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\])')
 
         current_html = text_edit.toHtml()
 

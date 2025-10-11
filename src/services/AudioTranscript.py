@@ -63,15 +63,23 @@ class TranscriptionThread(QThread):
 
             total_chunks = len(chunks)
 
-            for index, (chunk, start_time) in enumerate(chunks):
+            for index, (chunk, start_time_ms) in enumerate(chunks):
                 if not self._is_running:
                     self.save_transcription_to_json(transcription, language_video)
                     return
 
-                text, _, _ = self.transcribeAudioChunk(chunk, start_time)
-                current_time_seconds = start_time // 1000
-                start_mins, start_secs = divmod(current_time_seconds, 60)
-                transcription += f"[{start_mins:02d}:{start_secs:02d}]\n{text}\n\n"
+                text, _, _ = self.transcribeAudioChunk(chunk, start_time_ms)
+
+                # Calcola i timestamp di inizio e fine
+                start_seconds = start_time_ms // 1000
+                end_seconds = start_seconds + int(chunk.duration)
+                start_mins, start_secs = divmod(start_seconds, 60)
+                end_mins, end_secs = divmod(end_seconds, 60)
+
+                # Formatta il timestamp come [MM:SS] - [MM:SS]
+                timestamp = f"[{start_mins:02d}:{start_secs:02d}] - [{end_mins:02d}:{end_secs:02d}]"
+                transcription += f"{timestamp}\n{text}\n\n"
+
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
                 self.progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
