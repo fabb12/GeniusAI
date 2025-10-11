@@ -2733,28 +2733,6 @@ class VideoAudioManager(QMainWindow):
             self.perform_crop(crop_rect)
 
     def get_frame_at(self, position_ms):
-        try:
-            position_sec = position_ms / 1000.0
-            video_clip = VideoFileClip(self.videoPathLineEdit)
-
-            if not (0 <= position_sec <= video_clip.duration):
-                return None
-
-            frame = video_clip.get_frame(position_sec)
-
-            height, width, channel = frame.shape
-            bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
-
-            pixmap = QPixmap.fromImage(q_image)
-            # Scale pixmap to half size for the dialog
-            return pixmap.scaled(pixmap.width() // 2, pixmap.height() // 2, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-
-        except Exception as e:
-            print(f"Error getting frame at {position_ms}ms: {e}")
-            return None
-
-    def get_frame_at(self, position_ms):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
             return None
         try:

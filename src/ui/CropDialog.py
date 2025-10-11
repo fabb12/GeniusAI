@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-from PyQt6.QtGui import QPixmap, QIcon
+from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt, QRect
 from .ResizableRubberBand import ResizableRubberBand
+from screeninfo import get_monitors
 
 class CropDialog(QDialog):
     def __init__(self, pixmap: QPixmap, parent=None):
@@ -9,23 +10,38 @@ class CropDialog(QDialog):
         self.setWindowTitle("Ritaglia Video")
         self.setModal(True)
 
-        self.pixmap = pixmap
+        self.original_pixmap = pixmap
         self.parent_window = parent
+        self.scale_factor = 1.0
+
+        # Scale down the pixmap if it's larger than the screen
+        monitor = get_monitors()[0]
+        screen_width = monitor.width
+        screen_height = monitor.height
+
+        self.display_pixmap = self.original_pixmap
+        if self.original_pixmap.width() > screen_width or self.original_pixmap.height() > screen_height:
+            self.display_pixmap = self.original_pixmap.scaled(
+                screen_width - 100, screen_height - 200, # Leave some margin
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
 
         main_layout = QVBoxLayout(self)
 
         self.image_label = QLabel()
-        self.image_label.setPixmap(self.pixmap)
-        self.image_label.setMinimumSize(self.pixmap.size())
+        self.image_label.setPixmap(self.display_pixmap)
+        self.image_label.setMinimumSize(self.display_pixmap.size())
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.rubber_band = ResizableRubberBand(self.image_label)
 
-        # Center the rubber band initially and store the geometry
-        rb_width = self.pixmap.width() // 2
-        rb_height = self.pixmap.height() // 2
-        rb_x = (self.pixmap.width() - rb_width) // 2
-        rb_y = (self.pixmap.height() - rb_height) // 2
+        # Center the rubber band initially (now smaller)
+        rb_width = self.display_pixmap.width() // 4
+        rb_height = self.display_pixmap.height() // 4
+        rb_x = (self.display_pixmap.width() - rb_width) // 2
+        rb_y = (self.display_pixmap.height() - rb_height) // 2
         self.initial_rb_geometry = QRect(rb_x, rb_y, rb_width, rb_height)
         self.rubber_band.setGeometry(self.initial_rb_geometry)
 
@@ -64,18 +80,50 @@ class CropDialog(QDialog):
         self.rubber_band.setGeometry(self.initial_rb_geometry)
 
     def get_crop_rect(self):
-        return self.rubber_band.geometry()
+        # Return the crop rectangle relative to the original pixmap size
+        geom = self.rubber_band.geometry()
+        return QRect(
+            int(geom.x() * self.scale_factor),
+            int(geom.y() * self.scale_factor),
+            int(geom.width() * self.scale_factor),
+            int(geom.height() * self.scale_factor)
+        )
 
     def showEvent(self, event):
         super().showEvent(event)
         self.rubber_band.show()
 
     def update_pixmap(self, pixmap):
+        # This logic should be re-evaluated if frame-by-frame update is needed,
+        # as it currently only scales the first frame. For now, it's sufficient.
         if pixmap:
-            self.pixmap = pixmap
-            self.image_label.setPixmap(self.pixmap)
-            self.image_label.setMinimumSize(self.pixmap.size())
-            self.rubber_band.setGeometry(self.initial_rb_geometry) # Reset rubber band on new frame
+            self.original_pixmap = pixmap
+            # Re-apply the same scaling logic as in __init__
+            monitor = get_monitors()[0]
+            screen_width = monitor.width
+            screen_height = monitor.height
+
+            self.display_pixmap = self.original_pixmap
+            if self.original_pixmap.width() > screen_width or self.original_pixmap.height() > screen_height:
+                self.display_pixmap = self.original_pixmap.scaled(
+                    screen_width - 100, screen_height - 200,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
+            else:
+                self.scale_factor = 1.0
+
+            self.image_label.setPixmap(self.display_pixmap)
+            self.image_label.setMinimumSize(self.display_pixmap.size())
+            # Reset rubber band on new frame
+            rb_width = self.display_pixmap.width() // 4
+            rb_height = self.display_pixmap.height() // 4
+            rb_x = (self.display_pixmap.width() - rb_width) // 2
+            rb_y = (self.display_pixmap.height() - rb_height) // 2
+            self.initial_rb_geometry = QRect(rb_x, rb_y, rb_width, rb_height)
+            self.rubber_band.setGeometry(self.initial_rb_geometry)
+
 
     def next_frame(self):
         if self.parent_window:
