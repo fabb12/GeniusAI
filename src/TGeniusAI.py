@@ -867,6 +867,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
         self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
+        self.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -4350,6 +4351,118 @@ class VideoAudioManager(QMainWindow):
             # Ricarica il progetto per aggiornare la vista
             self.load_project(self.projectDock.gnai_path)
 
+    def import_audio_to_project(self):
+        """
+        Apre un dialogo per selezionare file audio e li importa nel progetto corrente.
+        I file audio vengono copiati nella cartella 'audio' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di importare audio.", error=True)
+            return
+
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Importa Audio nel Progetto",
+            "", # Default directory
+            "Audio Files (*.mp3 *.wav *.aac *.m4a *.flac)"
+        )
+
+        if not file_paths:
+            return # User cancelled
+
+        audio_dir = os.path.join(self.current_project_path, "audio")
+        os.makedirs(audio_dir, exist_ok=True)
+
+        imported_count = 0
+        for src_path in file_paths:
+            try:
+                clip_filename = os.path.basename(src_path)
+                dest_path = os.path.join(audio_dir, clip_filename)
+
+                if os.path.exists(dest_path):
+                    logging.warning(f"Il file '{clip_filename}' esiste già nella cartella audio. Importazione saltata.")
+                    continue
+
+                shutil.copy2(src_path, dest_path)
+
+                metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+                clip_info = AudioFileClip(dest_path)
+                duration = clip_info.duration
+                clip_info.close()
+
+                size = os.path.getsize(dest_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(dest_path)).isoformat()
+
+                self.project_manager.add_audio_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                imported_count += 1
+
+            except Exception as e:
+                logging.error(f"Errore durante l'importazione del file audio {src_path}: {e}")
+                self.show_status_message(f"Errore durante l'importazione di {os.path.basename(src_path)}.", error=True)
+
+        if imported_count > 0:
+            self.show_status_message(f"Importati {imported_count} file audio con successo.")
+            self.load_project(self.projectDock.gnai_path)
+
+    def separate_audio_from_video(self, video_path):
+        """
+        Estrae l'audio da un file video e lo salva nella cartella 'audio' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        try:
+            video_clip = VideoFileClip(video_path)
+            if not video_clip.audio:
+                self.show_status_message("Il video selezionato non ha una traccia audio.", error=True)
+                return
+
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            audio_filename = f"{base_name}.mp3"
+            audio_dir = os.path.join(self.current_project_path, "audio")
+            output_path = os.path.join(audio_dir, audio_filename)
+
+            if os.path.exists(output_path):
+                self.show_status_message(f"Un file audio con nome '{audio_filename}' esiste già.", error=True)
+                return
+
+            self.show_status_message("Estrazione audio in corso...")
+            video_clip.audio.write_audiofile(output_path)
+            video_clip.close()
+
+            # Aggiungi la nuova clip audio al progetto
+            metadata_filename = f"{base_name}.json"
+            audio_clip_info = AudioFileClip(output_path)
+            duration = audio_clip_info.duration
+            audio_clip_info.close()
+            size = os.path.getsize(output_path)
+            creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+
+            self.project_manager.add_audio_clip_to_project(
+                self.projectDock.gnai_path,
+                audio_filename,
+                metadata_filename,
+                duration,
+                size,
+                creation_date
+            )
+
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Audio estratto e aggiunto al progetto: {audio_filename}")
+
+        except Exception as e:
+            logging.error(f"Errore durante la separazione dell'audio: {e}")
+            self.show_status_message(f"Errore durante la separazione dell'audio: {e}", error=True)
+
     def isAudioOnly(self, file_path):
         """Check if the file is likely audio-only based on the extension."""
         audio_extensions = {'.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'}
@@ -4651,6 +4764,11 @@ class VideoAudioManager(QMainWindow):
         importVideoAction.setStatusTip('Importa file video locali nel progetto corrente')
         importVideoAction.triggered.connect(self.import_videos_to_project)
         importMenu.addAction(importVideoAction)
+
+        importAudioAction = QAction('Importa Audio nel Progetto...', self)
+        importAudioAction.setStatusTip('Importa file audio locali nel progetto corrente')
+        importAudioAction.triggered.connect(self.import_audio_to_project)
+        importMenu.addAction(importAudioAction)
 
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
@@ -6567,11 +6685,16 @@ class VideoAudioManager(QMainWindow):
     def delete_project_clip(self, clip_filename):
         """
         Chiede all'utente come gestire l'eliminazione di una clip: solo dal progetto
-        o anche dal disco.
+        o anche dal disco. Gestisce sia clip video che audio.
         """
         if not self.current_project_path:
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
+
+        # Determina se è una clip audio o video per costruire il percorso corretto
+        is_audio = any(clip['clip_filename'] == clip_filename for clip in self.projectDock.project_data.get('audio_clips', []))
+        subfolder = "audio" if is_audio else "clips"
+        clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
 
         msg_box = QMessageBox(self)
         msg_box.setWindowTitle("Rimuovi Clip")
@@ -6595,19 +6718,14 @@ class VideoAudioManager(QMainWindow):
 
         elif msg_box.clickedButton() == delete_button:
             # Rimuovi dal JSON e dal disco
-            clip_path = os.path.join(self.current_project_path, "clips", clip_filename)
-
-            # Rimuovi dal JSON
             success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
             if not success:
                 self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
                 return
 
-            # Rimuovi dal disco
             try:
                 if os.path.exists(clip_path):
                     os.remove(clip_path)
-                # Rimuovi anche il JSON associato, se esiste
                 json_path = os.path.splitext(clip_path)[0] + ".json"
                 if os.path.exists(json_path):
                     os.remove(json_path)
@@ -6616,7 +6734,6 @@ class VideoAudioManager(QMainWindow):
                 self.show_status_message(f"Clip '{clip_filename}' eliminata dal progetto e dal disco.")
             except Exception as e:
                 self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
-                # Se l'eliminazione del file fallisce, è meglio ricaricare lo stato per coerenza
                 self.load_project(self.projectDock.gnai_path)
 
     def rename_project_clip(self, old_filename, new_filename):
@@ -6625,23 +6742,25 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
-        clips_dir = os.path.join(self.current_project_path, "clips")
+        is_audio = any(clip['clip_filename'] == old_filename for clip in self.projectDock.project_data.get('audio_clips', []))
+        subfolder = "audio" if is_audio else "clips"
+        clips_dir = os.path.join(self.current_project_path, subfolder)
 
-        old_video_path = os.path.join(clips_dir, old_filename)
-        new_video_path = os.path.join(clips_dir, new_filename)
+        old_clip_path = os.path.join(clips_dir, old_filename)
+        new_clip_path = os.path.join(clips_dir, new_filename)
 
-        old_json_path = os.path.splitext(old_video_path)[0] + ".json"
-        new_json_path = os.path.splitext(new_video_path)[0] + ".json"
+        old_json_path = os.path.splitext(old_clip_path)[0] + ".json"
+        new_json_path = os.path.splitext(new_clip_path)[0] + ".json"
 
         # Controlla se il nuovo nome file esiste già
-        if os.path.exists(new_video_path):
+        if os.path.exists(new_clip_path):
             self.show_status_message(f"Un file con nome '{new_filename}' esiste già.", error=True)
             return
 
         try:
-            # 1. Rinomina il file video
-            if os.path.exists(old_video_path):
-                os.rename(old_video_path, new_video_path)
+            # 1. Rinomina il file video/audio
+            if os.path.exists(old_clip_path):
+                os.rename(old_clip_path, new_clip_path)
 
             # 2. Rinomina il file JSON associato
             if os.path.exists(old_json_path):
@@ -6654,8 +6773,8 @@ class VideoAudioManager(QMainWindow):
             if not success:
                 # Se l'aggiornamento del .gnai fallisce, tenta di ripristinare i nomi dei file
                 self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
-                if os.path.exists(new_video_path):
-                    os.rename(new_video_path, old_video_path)
+                if os.path.exists(new_clip_path):
+                    os.rename(new_clip_path, old_clip_path)
                 if os.path.exists(new_json_path):
                     os.rename(new_json_path, old_json_path)
                 return
@@ -6667,8 +6786,8 @@ class VideoAudioManager(QMainWindow):
         except Exception as e:
             self.show_status_message(f"Errore durante la rinomina del file: {e}", error=True)
             # Tenta di ripristinare se qualcosa va storto
-            if os.path.exists(new_video_path) and not os.path.exists(old_video_path):
-                 os.rename(new_video_path, old_video_path)
+            if os.path.exists(new_clip_path) and not os.path.exists(old_clip_path):
+                 os.rename(new_clip_path, old_clip_path)
             if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
                  os.rename(new_json_path, old_json_path)
 

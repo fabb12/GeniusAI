@@ -22,6 +22,7 @@ class ProjectDock(CustomDock):
     relink_clip_requested = pyqtSignal(str, str)
     project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
     batch_transcribe_requested = pyqtSignal()
+    separate_audio_requested = pyqtSignal(str)
 
     def __init__(self, title="Progetto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -82,6 +83,12 @@ class ProjectDock(CustomDock):
             open_input_action = menu.addAction("Apri nel player di input")
             open_output_action = menu.addAction("Apri nel player di output")
             menu.addSeparator()
+
+            # Add "Separate Audio" only for video files (not in "Audio Clips" parent)
+            if item.parent() and item.parent().text(0) != "Clip Audio":
+                separate_audio_action = menu.addAction("Separa Audio")
+                menu.addSeparator()
+
             rename_action = menu.addAction("Rinomina")
             delete_action = menu.addAction("Rimuovi dal progetto")
 
@@ -91,6 +98,8 @@ class ProjectDock(CustomDock):
                 self.open_in_input_player_requested.emit(file_path)
             elif action == open_output_action:
                 self.open_in_output_player_requested.emit(file_path)
+            elif 'separate_audio_action' in locals() and action == separate_audio_action:
+                self.separate_audio_requested.emit(file_path)
             elif action == rename_action:
                 old_filename = item.text(0)
                 base_name, extension = os.path.splitext(old_filename)
@@ -122,7 +131,7 @@ class ProjectDock(CustomDock):
         self.btn_open_folder.clicked.connect(self.open_folder_requested.emit)
         project_info_layout.addWidget(self.btn_open_folder)
 
-        clips_group = QGroupBox("Clip Video")
+        clips_group = QGroupBox("Clip Progetto")
         clips_layout = QVBoxLayout(clips_group)
 
         self.tree_clips = QTreeWidget()
@@ -171,13 +180,20 @@ class ProjectDock(CustomDock):
         # Altrimenti, gestisci come una clip di progetto
         if self.project_data and self.project_dir:
             metadata_filename = ""
-            for clip in self.project_data.get("clips", []):
+            clip_list_name = "clips"
+            subfolder = "clips"
+
+            if item.parent() and item.parent().text(0) == "Clip Audio":
+                clip_list_name = "audio_clips"
+                subfolder = "audio"
+
+            for clip in self.project_data.get(clip_list_name, []):
                 if clip.get("clip_filename") == clip_filename:
                     metadata_filename = clip.get("metadata_filename")
                     break
 
             # Costruisci il percorso completo per le clip di progetto
-            project_clip_path = os.path.join(self.project_dir, "clips", clip_filename)
+            project_clip_path = os.path.join(self.project_dir, subfolder, clip_filename)
             self.clip_selected.emit(project_clip_path, metadata_filename)
 
     def _format_duration(self, seconds):
@@ -224,7 +240,7 @@ class ProjectDock(CustomDock):
 
         if project_clips:
             project_clips_root = QTreeWidgetItem(self.tree_clips)
-            project_clips_root.setText(0, "Clip del Progetto")
+            project_clips_root.setText(0, "Clip Video")
             project_clips_root.setExpanded(True)
 
             for clip in project_clips:
@@ -244,6 +260,37 @@ class ProjectDock(CustomDock):
 
                 # Salva il percorso completo e lo stato per un facile accesso
                 full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
+                item.setData(0, Qt.ItemDataRole.UserRole, full_path)
+                item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
+
+        # Carica clip audio del progetto
+        audio_clips = sorted(project_data.get("audio_clips", []), key=lambda x: x.get("creation_date", ""))
+        audio_dir = os.path.join(project_dir, "audio")
+        if os.path.exists(audio_dir):
+            self.file_watcher.addPath(audio_dir)
+
+        if audio_clips:
+            audio_clips_root = QTreeWidgetItem(self.tree_clips)
+            audio_clips_root.setText(0, "Clip Audio")
+            audio_clips_root.setExpanded(True)
+
+            for clip in audio_clips:
+                item = QTreeWidgetItem(audio_clips_root)
+
+                # Imposta l'icona in base allo stato
+                status = clip.get("status", "N/A")
+                if status == "online":
+                    item.setIcon(0, QIcon(get_resource("online.png"))) # Icona verde
+                elif status == "offline":
+                    item.setIcon(0, QIcon(get_resource("offline.png"))) # Icona rossa
+
+                item.setText(0, clip.get("clip_filename", "N/A"))
+                item.setText(1, self._format_date(clip.get("creation_date")))
+                item.setText(2, self._format_duration(clip.get("duration")))
+                item.setText(3, self._format_size(clip.get("size")))
+
+                # Salva il percorso completo e lo stato per un facile accesso
+                full_path = os.path.join(audio_dir, clip.get("clip_filename", ""))
                 item.setData(0, Qt.ItemDataRole.UserRole, full_path)
                 item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
 
