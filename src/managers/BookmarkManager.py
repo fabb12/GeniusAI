@@ -75,6 +75,13 @@ class BookmarkCutThread(QThread):
                     if hasattr(final_media, 'audio') and final_media.audio: final_media.audio.close()
                     if hasattr(final_media, 'mask') and final_media.mask: final_media.mask.close()
                     if hasattr(final_media, 'close'): final_media.close()
+            if final_media:
+                if self.is_audio_only:
+                    if hasattr(final_media, 'close'): final_media.close()
+                else:
+                    if hasattr(final_media, 'audio') and final_media.audio: final_media.audio.close()
+                    if hasattr(final_media, 'mask') and final_media.mask: final_media.mask.close()
+                    if hasattr(final_media, 'close'): final_media.close()
 
     def stop(self):
         self.running = False
@@ -121,7 +128,7 @@ class BookmarkDeleteThread(QThread):
 
             if not self.running: return
             self.progress.emit(60, "Unione dei segmenti da conservare...")
-            final_media = concatenate_audioclips(clips_to_keep) if self.is_audio_only else concatenate_videoclips(clips_to_keep)
+            final_media = concatenate_audioclips(clips_to_keep) if self.is_audio_only else concatenate_videoclips(clips_to_keep, method="compose")
 
             ext = ".mp3" if self.is_audio_only else ".mp4"
             output_path = generate_unique_filename(os.path.join(os.path.dirname(self.media_path), f"modified_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}{ext}"))
