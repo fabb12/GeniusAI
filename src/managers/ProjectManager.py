@@ -29,17 +29,20 @@ class ProjectManager:
              project_path = os.path.join(self.base_dir, project_name)
 
         clips_path = os.path.join(project_path, "clips")
+        audio_path = os.path.join(project_path, "audio")
 
         if os.path.exists(project_path):
             return None, "Project already exists"
 
         os.makedirs(clips_path)
+        os.makedirs(audio_path)
 
         gnai_path = os.path.join(project_path, f"{project_name}.gnai")
         project_data = {
             "projectName": project_name,
             "createdAt": datetime.now().isoformat(),
-            "clips": []
+            "clips": [],
+            "audio_clips": []
         }
 
         with open(gnai_path, 'w') as f:
@@ -86,6 +89,39 @@ class ProjectManager:
             f.truncate()
 
         return True, "Clip added successfully"
+
+    def add_audio_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date, status="new"):
+        if not os.path.exists(gnai_path):
+            return False, "Project file not found"
+
+        with open(gnai_path, 'r+') as f:
+            project_data = json.load(f)
+
+            # Evita di aggiungere clip duplicati
+            if any(c['clip_filename'] == clip_filename for c in project_data.get('audio_clips', [])):
+                return True, "Audio clip already in project"
+
+            now = datetime.now().isoformat()
+            clip_info = {
+                "clip_filename": clip_filename,
+                "metadata_filename": metadata_filename,
+                "addedAt": now,
+                "duration": duration,
+                "size": size,
+                "creation_date": creation_date,
+                "status": status,
+                "last_seen": now
+            }
+
+            if "audio_clips" not in project_data:
+                project_data["audio_clips"] = []
+            project_data["audio_clips"].append(clip_info)
+
+            f.seek(0)
+            json.dump(project_data, f, indent=4)
+            f.truncate()
+
+        return True, "Audio clip added successfully"
 
     def save_project(self, gnai_path, project_data):
         """
