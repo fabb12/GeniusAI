@@ -14,9 +14,10 @@ class TranscriptionThread(QThread):
     completed = pyqtSignal(tuple)
     error = pyqtSignal(str)
 
-    def __init__(self, media_path, parent=None, start_time=None, end_time=None):
+    def __init__(self, media_path, parent=None, start_time=None, end_time=None, main_window=None):
         super().__init__(parent)
         self.media_path = media_path
+        self.main_window = main_window if main_window else parent
         self._is_running = True
         self.partial_text = ""
         self.start_time = start_time
@@ -37,7 +38,7 @@ class TranscriptionThread(QThread):
                 input_clip = input_clip.subclip(self.start_time, self.end_time)
 
             # Standardizza in un file WAV temporaneo
-            standard_wav_path = self.parent().get_temp_filepath(suffix=".wav")
+            standard_wav_path = self.main_window.get_temp_filepath(suffix=".wav")
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', logger=None)
             input_clip.close()
             self.progress.emit(10, "Audio pronto per la trascrizione.")
@@ -48,7 +49,7 @@ class TranscriptionThread(QThread):
             if duration <= 0:
                 raise ValueError("La durata dell'audio è non valida o negativa.")
 
-            language_video = self.parent().languageComboBox.currentData()
+            language_video = self.main_window.languageComboBox.currentData()
             transcription = ""
 
             # Unified chunking logic for all audio lengths
@@ -129,13 +130,13 @@ class TranscriptionThread(QThread):
         recognizer = sr.Recognizer()
         temp_audio_file_path = None
         try:
-            temp_audio_file_path = self.parent().get_temp_filepath(suffix=".wav")
+            temp_audio_file_path = self.main_window.get_temp_filepath(suffix=".wav")
             audio_chunk.write_audiofile(temp_audio_file_path, codec='pcm_s16le', logger=None)
 
             with sr.AudioFile(temp_audio_file_path) as source:
                 audio_data = recognizer.record(source)
 
-            language_video = self.parent().languageComboBox.currentData()
+            language_video = self.main_window.languageComboBox.currentData()
             locale = self.get_locale_from_language(language_video)
             text = recognizer.recognize_google(audio_data, language=locale)
             return text, start_time, language_video
