@@ -12,7 +12,8 @@ from dotenv import load_dotenv
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
-    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION
+    PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION,
+    PROMPT_COMBINED_ANALYSIS
 )
 
 load_dotenv()
@@ -43,7 +44,7 @@ class ProcessTextAI(QThread):
         self.result = None
 
         # Valida la modalità
-        valid_modes = ["summary", "fix", "youtube_summary", "video_integration"]
+        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary"]
         if mode not in valid_modes:
             raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
@@ -95,6 +96,8 @@ class ProcessTextAI(QThread):
             prompt_file_path = PROMPT_YOUTUBE_SUMMARY
         elif self.mode == "video_integration":
             prompt_file_path = PROMPT_VIDEO_INTEGRATION
+        elif self.mode == "combined_summary":
+            prompt_file_path = PROMPT_COMBINED_ANALYSIS
         else:
             error_msg = f"Modalità non valida: {self.mode}"
             logging.error(error_msg)
