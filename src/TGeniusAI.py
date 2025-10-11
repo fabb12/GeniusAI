@@ -2737,15 +2737,12 @@ class VideoAudioManager(QMainWindow):
             return None
         try:
             position_sec = position_ms / 1000.0
-            video_clip = VideoFileClip(self.videoPathLineEdit)
+            with VideoFileClip(self.videoPathLineEdit) as video_clip:
+                # Ensure the position is within the video duration
+                if not (0 <= position_sec <= video_clip.duration):
+                    return None
 
-            # Ensure the position is within the video duration
-            if not (0 <= position_sec <= video_clip.duration):
-                video_clip.close()
-                return None
-
-            frame = video_clip.get_frame(position_sec)
-            video_clip.close()
+                frame = video_clip.get_frame(position_sec)
 
             height, width, channel = frame.shape
             bytes_per_line = 3 * width
