@@ -2,11 +2,149 @@ import os
 import datetime
 import logging
 from PyQt6.QtWidgets import QMessageBox
+from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 from src.services.utils import generate_unique_filename
-
 from src.services.AudioTranscript import TranscriptionThread
 import json
+
+class BookmarkCutThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, bookmarks, media_path, is_audio_only, parent=None):
+        super().__init__(parent)
+        self.bookmarks = bookmarks
+        self.media_path = media_path
+        self.is_audio_only = is_audio_only
+        self.running = True
+
+    def run(self):
+        final_media = None
+        media_clip = None
+        try:
+            self.progress.emit(5, "Caricamento media...")
+            media_clip = AudioFileClip(self.media_path) if self.is_audio_only else VideoFileClip(self.media_path)
+
+            total_segments = len(self.bookmarks)
+            clips = []
+
+            for i, (start_ms, end_ms) in enumerate(sorted(self.bookmarks)):
+                if not self.running: return
+                progress_percent = 10 + int((i / total_segments) * 50)
+                self.progress.emit(progress_percent, f"Estrazione segmento {i+1}/{total_segments}...")
+
+                start_time = start_ms / 1000.0
+                end_time = end_ms / 1000.0
+                clips.append(media_clip.subclip(start_time, end_time))
+
+            if not clips:
+                self.error.emit("Nessun clip valido da tagliare.")
+                return
+
+            if not self.running: return
+            self.progress.emit(60, "Unione dei segmenti...")
+            final_media = concatenate_audioclips(clips) if self.is_audio_only else concatenate_videoclips(clips, method="compose")
+
+            base_name = os.path.splitext(os.path.basename(self.media_path))[0]
+            directory = os.path.dirname(self.media_path)
+            ext = ".mp3" if self.is_audio_only else ".mp4"
+            output_path = generate_unique_filename(os.path.join(directory, f"{base_name}_cut{ext}"))
+
+            if not self.running: return
+            self.progress.emit(80, "Salvataggio file finale...")
+            if self.is_audio_only:
+                final_media.write_audiofile(output_path, logger=None)
+            else:
+                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=None)
+
+            if self.running:
+                self.progress.emit(100, "Completato.")
+                self.completed.emit(output_path)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(str(e))
+        finally:
+            if media_clip: media_clip.close()
+            if final_media:
+                if self.is_audio_only:
+                    if hasattr(final_media, 'close'): final_media.close()
+                else:
+                    if hasattr(final_media, 'audio') and final_media.audio: final_media.audio.close()
+                    if hasattr(final_media, 'mask') and final_media.mask: final_media.mask.close()
+                    if hasattr(final_media, 'close'): final_media.close()
+
+    def stop(self):
+        self.running = False
+
+class BookmarkDeleteThread(QThread):
+    progress = pyqtSignal(int, str)
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+
+    def __init__(self, bookmarks, media_path, is_audio_only, parent=None):
+        super().__init__(parent)
+        self.bookmarks = bookmarks
+        self.media_path = media_path
+        self.is_audio_only = is_audio_only
+        self.running = True
+
+    def run(self):
+        media_clip = None
+        try:
+            self.progress.emit(5, "Caricamento media...")
+            media_clip = AudioFileClip(self.media_path) if self.is_audio_only else VideoFileClip(self.media_path)
+
+            clips_to_keep = []
+            last_end_time = 0.0
+            total_segments = len(self.bookmarks)
+
+            for i, (start_ms, end_ms) in enumerate(sorted(self.bookmarks)):
+                if not self.running: return
+                progress_percent = 10 + int((i / total_segments) * 50)
+                self.progress.emit(progress_percent, f"Analisi segmento da rimuovere {i+1}/{total_segments}...")
+
+                start_time = start_ms / 1000.0
+                end_time = end_ms / 1000.0
+                if start_time > last_end_time:
+                    clips_to_keep.append(media_clip.subclip(last_end_time, start_time))
+                last_end_time = end_time
+
+            if last_end_time < media_clip.duration:
+                clips_to_keep.append(media_clip.subclip(last_end_time))
+
+            if not clips_to_keep:
+                self.error.emit("L'operazione cancellerebbe l'intero file.")
+                return
+
+            if not self.running: return
+            self.progress.emit(60, "Unione dei segmenti da conservare...")
+            final_media = concatenate_audioclips(clips_to_keep) if self.is_audio_only else concatenate_videoclips(clips_to_keep)
+
+            ext = ".mp3" if self.is_audio_only else ".mp4"
+            output_path = generate_unique_filename(os.path.join(os.path.dirname(self.media_path), f"modified_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}{ext}"))
+
+            if not self.running: return
+            self.progress.emit(80, "Salvataggio file modificato...")
+            if self.is_audio_only:
+                final_media.write_audiofile(output_path, logger=None)
+            else:
+                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac', logger=None)
+
+            if self.running:
+                self.progress.emit(100, "Completato.")
+                self.completed.emit(output_path)
+
+        except Exception as e:
+            if self.running:
+                self.error.emit(str(e))
+        finally:
+            if media_clip: media_clip.close()
+
+    def stop(self):
+        self.running = False
 
 class BookmarkManager:
     def __init__(self, main_window):
@@ -142,10 +280,6 @@ class BookmarkManager:
         self._transcribe_next_segment()
 
     def cut_all_bookmarks(self):
-        """
-        Cuts all bookmarked segments from the media and saves them as a new file.
-        This logic is moved from TGeniusAI.py.
-        """
         bookmarks = self.main_window.videoSlider.bookmarks
         if not bookmarks:
             self.main_window.show_status_message("Nessun bookmark impostato per il taglio.", error=True)
@@ -157,52 +291,16 @@ class BookmarkManager:
             return
 
         is_audio_only = self.main_window.isAudioOnly(media_path)
-        clips = []
-        final_media = None
-        try:
-            media_clip = AudioFileClip(media_path) if is_audio_only else VideoFileClip(media_path)
 
-            for start_ms, end_ms in sorted(bookmarks):
-                start_time = start_ms / 1000.0
-                end_time = end_ms / 1000.0
-                clips.append(media_clip.subclip(start_time, end_time))
-
-            if not clips:
-                self.main_window.show_status_message("Nessun clip valido da tagliare.", error=True)
-                return
-
-            final_media = concatenate_audioclips(clips) if is_audio_only else concatenate_videoclips(clips, method="compose")
-
-            base_name = os.path.splitext(os.path.basename(media_path))[0]
-            directory = os.path.dirname(media_path)
-            ext = ".mp3" if is_audio_only else ".mp4"
-            output_path = generate_unique_filename(os.path.join(directory, f"{base_name}_cut{ext}"))
-
-            if is_audio_only:
-                final_media.write_audiofile(output_path)
-            else:
-                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            self.main_window.show_status_message(f"File tagliato salvato in: {os.path.basename(output_path)}")
-            self.main_window.loadVideoOutput(output_path)
-
-        except Exception as e:
-            QMessageBox.critical(self.main_window, "Errore durante il taglio", str(e))
-        finally:
-            if 'media_clip' in locals(): media_clip.close()
-            if final_media:
-                if is_audio_only:
-                    if hasattr(final_media, 'close'): final_media.close()
-                else:
-                    if hasattr(final_media, 'audio') and final_media.audio: final_media.audio.close()
-                    if hasattr(final_media, 'mask') and final_media.mask: final_media.mask.close()
-                    if hasattr(final_media, 'close'): final_media.close()
+        thread = BookmarkCutThread(bookmarks, media_path, is_audio_only, self.main_window)
+        self.main_window.start_task(
+            thread,
+            on_complete=self._on_operation_completed,
+            on_error=self._on_operation_error,
+            on_progress=self.main_window.update_status_progress
+        )
 
     def delete_all_bookmarks(self):
-        """
-        Deletes all bookmarked segments from the media and saves the result.
-        This logic is moved from TGeniusAI.py.
-        """
         bookmarks = self.main_window.videoSlider.bookmarks
         if not bookmarks:
             self.main_window.show_status_message("Nessun bookmark impostato per l'eliminazione.", error=True)
@@ -214,39 +312,18 @@ class BookmarkManager:
             return
 
         is_audio_only = self.main_window.isAudioOnly(media_path)
-        try:
-            media_clip = AudioFileClip(media_path) if is_audio_only else VideoFileClip(media_path)
-            clips_to_keep = []
-            last_end_time = 0.0
 
-            for start_ms, end_ms in sorted(bookmarks):
-                start_time = start_ms / 1000.0
-                end_time = end_ms / 1000.0
-                if start_time > last_end_time:
-                    clips_to_keep.append(media_clip.subclip(last_end_time, start_time))
-                last_end_time = end_time
+        thread = BookmarkDeleteThread(bookmarks, media_path, is_audio_only, self.main_window)
+        self.main_window.start_task(
+            thread,
+            on_complete=self._on_operation_completed,
+            on_error=self._on_operation_error,
+            on_progress=self.main_window.update_status_progress
+        )
 
-            if last_end_time < media_clip.duration:
-                clips_to_keep.append(media_clip.subclip(last_end_time))
+    def _on_operation_completed(self, output_path):
+        self.main_window.show_status_message(f"Operazione completata. File salvato in: {os.path.basename(output_path)}")
+        self.main_window.loadVideoOutput(output_path)
 
-            if not clips_to_keep:
-                self.main_window.show_status_message("L'operazione cancellerebbe l'intero file.", error=True)
-                return
-
-            final_media = concatenate_audioclips(clips_to_keep) if is_audio_only else concatenate_videoclips(clips_to_keep)
-
-            ext = ".mp3" if is_audio_only else ".mp4"
-            output_path = generate_unique_filename(os.path.join(os.path.dirname(media_path), f"modified_{datetime.datetime.now().strftime('%Y%m%d%H%M%S%f')}{ext}"))
-
-            if is_audio_only:
-                final_media.write_audiofile(output_path)
-            else:
-                final_media.write_videofile(output_path, codec='libx264', audio_codec='aac')
-
-            self.main_window.show_status_message("Parti del file eliminate. File salvato.")
-            self.main_window.loadVideoOutput(output_path)
-
-        except Exception as e:
-            QMessageBox.critical(self.main_window, "Errore durante l'eliminazione", str(e))
-        finally:
-            if 'media_clip' in locals(): media_clip.close()
+    def _on_operation_error(self, error_message):
+        self.main_window.show_status_message(f"Errore durante l'operazione: {error_message}", error=True)
