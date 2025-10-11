@@ -1267,14 +1267,6 @@ class VideoAudioManager(QMainWindow):
         self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.singleTranscriptionTextArea))
         file_actions_layout.addWidget(self.pasteToAudioAIButton)
 
-        # Pulsante per creare riassunto combinato dalla tab batch
-        self.createCombinedSummaryFromBatchButton = QPushButton('')
-        self.createCombinedSummaryFromBatchButton.setIcon(QIcon(get_resource("combine.png")))
-        self.createCombinedSummaryFromBatchButton.setFixedSize(32, 32)
-        self.createCombinedSummaryFromBatchButton.setToolTip("Crea un riassunto combinato dal testo nella tab Trascrizione Multipla")
-        self.createCombinedSummaryFromBatchButton.clicked.connect(self.generate_summary_from_batch_tab)
-        file_actions_layout.addWidget(self.createCombinedSummaryFromBatchButton)
-
         groups_layout.addWidget(file_actions_group)
 
         # --- Gruppo 2: Strumenti ---
@@ -1450,6 +1442,14 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
         top_controls_layout.addStretch()
+
+        # Pulsante per creare riassunto combinato
+        self.createCombinedSummaryButton = QPushButton('')
+        self.createCombinedSummaryButton.setIcon(QIcon(get_resource("combine.png")))
+        self.createCombinedSummaryButton.setFixedSize(32, 32)
+        self.createCombinedSummaryButton.setToolTip("Crea un riassunto combinato dal testo nella tab Trascrizione Multipla")
+        self.createCombinedSummaryButton.clicked.connect(self.generate_summary_from_batch_tab)
+        top_controls_layout.addWidget(self.createCombinedSummaryButton)
 
         summary_controls_layout.addLayout(top_controls_layout)
 
