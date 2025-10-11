@@ -4718,6 +4718,11 @@ class VideoAudioManager(QMainWindow):
         saveProjectAction.triggered.connect(self.save_project)
         fileMenu.addAction(saveProjectAction)
 
+        closeProjectAction = QAction('&Close Project', self)
+        closeProjectAction.setStatusTip('Close the current project and clear the workspace')
+        closeProjectAction.triggered.connect(self._clear_workspace)
+        fileMenu.addAction(closeProjectAction)
+
         fileMenu.addSeparator()
 
         openAction = QAction('&Open Video/Audio', self)
