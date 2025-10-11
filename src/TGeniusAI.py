@@ -2400,7 +2400,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Apri un progetto prima di creare un riassunto combinato.", error=True)
             return
 
-        selected_items = self.projectDock.tree.selectedItems()
+        selected_items = self.projectDock.tree_clips.selectedItems()
         if not selected_items:
             self.show_status_message("Seleziona almeno una clip dal pannello Progetto.", error=True)
             return
