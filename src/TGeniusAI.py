@@ -627,6 +627,11 @@ class VideoAudioManager(QMainWindow):
         self.autosave_timer.setSingleShot(True)
         self.autosave_timer.timeout.connect(self.autosave_transcription)
 
+        # Timer per il salvataggio automatico dei riassunti (debounced)
+        self.summary_autosave_timer = QTimer(self)
+        self.summary_autosave_timer.setSingleShot(True)
+        self.summary_autosave_timer.timeout.connect(self._sync_active_summary_to_model)
+
         # Timer per il salvataggio automatico nel file JSON
         self.json_autosave_timer = QTimer(self)
         self.json_autosave_timer.timeout.connect(lambda: self.save_all_tabs_to_json(show_message=False))
@@ -1447,12 +1452,14 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea = CustomTextEdit(self)
         self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
         self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
         # Tab per le Note Riunione
         self.summaryMeetingTextArea = CustomTextEdit(self)
         self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
         # Connect the tab change signal to the update function
@@ -2112,25 +2119,10 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
             return
 
-        # Assicura che le ultime modifiche dalla UI (se editabile) siano state salvate
-        # nel dizionario 'self.summaries' prima di salvarle su file.
-        # Get the currently active summary text area
-        active_summary_widget = self.get_current_summary_text_area()
-
-        # NON SALVARE se la vista è filtrata (sola lettura) per evitare la perdita di dati
-        if active_summary_widget.isReadOnly():
-            self.show_status_message("Salvataggio disabilitato in vista filtrata per prevenire la perdita di dati.", timeout=4000)
-            return
-
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-
-        # Update the correct key in the summaries dictionary based on the active tab
-        # and whether the integrated view is active.
-        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
-        self.summaries[summary_key] = active_summary_widget.toHtml()
-
+        # Ora, self.summaries è sempre aggiornato grazie al meccanismo di autosave.
+        # Possiamo salvarlo direttamente senza leggere dalla UI.
+        # Questo previene la sovrascrittura accidentale dei dati.
+        self._sync_active_summary_to_model() # Assicura che l'ultimo cambiamento sia salvato
         update_data = {
             "summaries": self.summaries,
             "last_save_date": datetime.datetime.now().isoformat()
@@ -2169,18 +2161,10 @@ class VideoAudioManager(QMainWindow):
         # 1. Sincronizza lo stato interno della trascrizione con la UI
         self._sync_transcription_state_from_ui()
 
-        # 2. Gestisci il salvataggio del riassunto in modo sicuro
-        active_summary_widget = self.get_current_summary_text_area()
-        # Se il widget attivo NON è in sola lettura, aggiorna la voce corrispondente in self.summaries
-        if not active_summary_widget.isReadOnly():
-            current_tab_index = self.summaryTabWidget.currentIndex()
-            summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-            # Aggiorna solo il tipo di riassunto correntemente visualizzato
-            # per evitare di sovrascrivere l'altro con dati potenzialmente vecchi dalla UI.
-            is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-            summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
-            self.summaries[summary_key] = active_summary_widget.toHtml()
-        # Se è in sola lettura, non facciamo nulla, preservando i dati già presenti in self.summaries.
+        # 2. Sincronizza l'ultimo stato del riassunto dalla UI al modello.
+        #    La funzione _sync_active_summary_to_model contiene già la logica di sicurezza
+        #    per non salvare se il widget è in sola lettura.
+        self._sync_active_summary_to_model()
 
         # 3. Prepara e salva i dati aggiornati
         update_data = {
@@ -2286,6 +2270,48 @@ class VideoAudioManager(QMainWindow):
             self.progressDialog.setValue(value)
             self.progressDialog.setLabelText(label)
 
+    def _get_current_summary_key(self):
+        """
+        Determina la chiave corretta per il dizionario self.summaries in base allo stato della UI.
+        Restituisce una stringa come 'detailed', 'meeting_integrated', ecc.
+        """
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
+
+        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
+        if is_integrated_view:
+            return f"{summary_type}_integrated"
+        else:
+            return summary_type
+
+    def _on_summary_text_changed(self):
+        """
+        Slot che viene chiamato quando il testo in una delle aree di riassunto cambia.
+        Avvia un timer per salvare le modifiche dopo un breve ritardo, per evitare
+        di salvare ad ogni singolo tasto premuto (debouncing).
+        """
+        if self.summary_autosave_timer.isActive():
+            self.summary_autosave_timer.stop()
+        self.summary_autosave_timer.start(1500) # 1.5 secondi di ritardo
+
+    def _sync_active_summary_to_model(self):
+        """
+        Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati (self.summaries).
+        Questo è il "salvataggio" effettivo dalla vista al modello.
+        """
+        active_widget = self.get_current_summary_text_area()
+
+        # CRUCIALE: non salvare se il widget è in sola lettura.
+        # Questo previene la perdita di dati quando la vista è filtrata (es. timecode nascosti).
+        if active_widget.isReadOnly():
+            logging.debug("Sync to model skipped: widget is read-only.")
+            return
+
+        summary_key = self._get_current_summary_key()
+        if summary_key:
+            self.summaries[summary_key] = active_widget.toHtml()
+            logging.debug(f"Synced UI to model for key: {summary_key}")
+
     def onProcessComplete(self, result):
         if isinstance(result, dict):
             self.transcriptionTextArea.setPlainText(result.get('transcription_raw', ''))
@@ -2344,8 +2370,7 @@ class VideoAudioManager(QMainWindow):
 
 
         # Determine which master content to display
-        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-        summary_key = f"{summary_type}_integrated" if is_integrated_view else summary_type
+        summary_key = self._get_current_summary_key()
         html_content = self.summaries.get(summary_key, "")
 
         # Apply view transformations (e.g., hiding timestamps)
