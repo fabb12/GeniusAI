@@ -101,6 +101,9 @@ class CropThread(QThread):
 
             cropped_video = video.crop(x1=x1, y1=y1, x2=x2, y2=y2)
 
+            # Ensure the duration of the cropped video is the same as the original
+            cropped_video = cropped_video.set_duration(video.duration)
+
             if self.project_path:
                 clip_dir = os.path.join(self.project_path, "clips")
                 os.makedirs(clip_dir, exist_ok=True)
