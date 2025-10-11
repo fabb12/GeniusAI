@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtCore import Qt, QRect, QSize
 from .ResizableRubberBand import ResizableRubberBand
 from screeninfo import get_monitors
 
@@ -14,25 +14,34 @@ class CropDialog(QDialog):
         self.parent_window = parent
         self.scale_factor = 1.0
 
-        # Scale down the pixmap if it's larger than the screen
+        # Set the dialog size to half of the screen
         monitor = get_monitors()[0]
-        screen_width = monitor.width
-        screen_height = monitor.height
+        dialog_width = monitor.width // 2
+        dialog_height = monitor.height // 2
 
-        self.display_pixmap = self.original_pixmap
-        if self.original_pixmap.width() > screen_width or self.original_pixmap.height() > screen_height:
-            self.display_pixmap = self.original_pixmap.scaled(
-                screen_width - 100, screen_height - 200, # Leave some margin
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
+        # We set the size of the dialog directly.
+        self.resize(dialog_width, dialog_height)
+
+        # Scale the pixmap to fit within the dialog, preserving aspect ratio
+        self.display_pixmap = self.original_pixmap.scaled(
+            dialog_width,
+            dialog_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+
+        # Recalculate scale factor based on the actual scaling
+        if self.display_pixmap.width() > 0:
+             self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
+        else:
+             self.scale_factor = 1.0
 
         main_layout = QVBoxLayout(self)
+        main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.image_label = QLabel()
         self.image_label.setPixmap(self.display_pixmap)
-        self.image_label.setMinimumSize(self.display_pixmap.size())
+        self.image_label.setFixedSize(self.display_pixmap.size())
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.rubber_band = ResizableRubberBand(self.image_label)
@@ -94,28 +103,26 @@ class CropDialog(QDialog):
         self.rubber_band.show()
 
     def update_pixmap(self, pixmap):
-        # This logic should be re-evaluated if frame-by-frame update is needed,
-        # as it currently only scales the first frame. For now, it's sufficient.
         if pixmap:
             self.original_pixmap = pixmap
-            # Re-apply the same scaling logic as in __init__
-            monitor = get_monitors()[0]
-            screen_width = monitor.width
-            screen_height = monitor.height
 
-            self.display_pixmap = self.original_pixmap
-            if self.original_pixmap.width() > screen_width or self.original_pixmap.height() > screen_height:
-                self.display_pixmap = self.original_pixmap.scaled(
-                    screen_width - 100, screen_height - 200,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation
-                )
-                self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
+            # Get the dialog's current size to fit the new pixmap
+            dialog_size = self.size()
+
+            self.display_pixmap = self.original_pixmap.scaled(
+                dialog_size.width(),
+                dialog_size.height(),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            if self.display_pixmap.width() > 0:
+                 self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
             else:
-                self.scale_factor = 1.0
+                 self.scale_factor = 1.0
 
             self.image_label.setPixmap(self.display_pixmap)
-            self.image_label.setMinimumSize(self.display_pixmap.size())
+            self.image_label.setFixedSize(self.display_pixmap.size())
+
             # Reset rubber band on new frame
             rb_width = self.display_pixmap.width() // 4
             rb_height = self.display_pixmap.height() // 4
@@ -123,7 +130,6 @@ class CropDialog(QDialog):
             rb_y = (self.display_pixmap.height() - rb_height) // 2
             self.initial_rb_geometry = QRect(rb_x, rb_y, rb_width, rb_height)
             self.rubber_band.setGeometry(self.initial_rb_geometry)
-
 
     def next_frame(self):
         if self.parent_window:
@@ -134,3 +140,10 @@ class CropDialog(QDialog):
         if self.parent_window:
             new_pixmap = self.parent_window.get_previous_frame()
             self.update_pixmap(new_pixmap)
+
+    def keyPressEvent(self, event):
+        """Accept the dialog when Enter or Return is pressed."""
+        if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
+            self.accept()
+        else:
+            super().keyPressEvent(event)
