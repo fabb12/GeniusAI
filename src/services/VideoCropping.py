@@ -50,6 +50,7 @@ class CropThread(QThread):
         self.project_path = project_path
         self.process = None
         self.running = True
+        self.original_popen = None
 
     def stop(self):
         self.running = False
@@ -63,18 +64,20 @@ class CropThread(QThread):
 
     def _monkey_patch_subprocess(self):
         """Sostituisce temporaneamente subprocess.Popen per catturare il processo ffmpeg."""
-        original_popen = subprocess.Popen
+        self.original_popen = subprocess.Popen
         def custom_popen(*args, **kwargs):
             # Assicurati che CREATE_NO_WINDOW sia usato se su Windows
             if os.name == 'nt':
                 kwargs.setdefault('creationflags', subprocess.CREATE_NO_WINDOW)
-            self.process = original_popen(*args, **kwargs)
+            self.process = self.original_popen(*args, **kwargs)
             return self.process
         subprocess.Popen = custom_popen
 
     def _unpatch_subprocess(self):
         """Ripristina l'originale subprocess.Popen."""
-        subprocess.Popen = subprocess.Popen.__self__
+        if self.original_popen:
+            subprocess.Popen = self.original_popen
+            self.original_popen = None
 
 
     def run(self):
@@ -120,10 +123,10 @@ class CropThread(QThread):
 
             cropped_video.write_videofile(
                 output_path,
+                fps=video.fps,
                 codec='libx264',
                 audio_codec='aac',
-                logger=logger,
-                ffmpeg_params=['-async', '1', '-shortest']
+                logger=logger
             )
 
             if self.running:
@@ -138,5 +141,5 @@ class CropThread(QThread):
                 self.error.emit(str(e))
         finally:
             # Ripristina sempre la funzione originale
-            subprocess.Popen = subprocess.Popen.__self__
+            self._unpatch_subprocess()
             self.process = None
