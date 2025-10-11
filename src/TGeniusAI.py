@@ -2520,8 +2520,12 @@ class VideoAudioManager(QMainWindow):
         # 3. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
         show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
         display_html = html_content
-        if not show_timestamps:
-            display_html = remove_timestamps_from_html(display_html)
+        if show_timestamps:
+            # Se dobbiamo mostrare i timestamp, assicuriamoci che siano colorati.
+            display_html = self._style_timestamps_in_html(html_content)
+        else:
+            # Altrimenti, rimuovili per la visualizzazione.
+            display_html = remove_timestamps_from_html(html_content)
 
         # 4. Aggiorna la UI
         target_widget.blockSignals(True)
@@ -5371,25 +5375,34 @@ class VideoAudioManager(QMainWindow):
 
         return new_body.decode_contents()
 
+    def _style_timestamps_in_html(self, html_content):
+        """
+        Applies a consistent style to all timestamps within an HTML string.
+        It finds timestamps and wraps them in a colored <font> tag.
+        """
+        # Pattern to find timestamps like [00:00] - [00:05] or [00:00:02.4] or [00:00]
+        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\](?: - \[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\])?)')
+
+        # Function to wrap matches in a styled font tag
+        def style_match(match):
+            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+        # First, remove any existing timestamp styling to prevent nested tags
+        unstyle_pattern = re.compile(r"<font color='#ADD8E6'>(.*?)</font>", re.IGNORECASE)
+        unstyled_html = unstyle_pattern.sub(r'\1', html_content)
+
+        # Apply the new style
+        styled_html = timestamp_pattern.sub(style_match, unstyled_html)
+
+        return styled_html
+
     def _style_existing_timestamps(self, text_edit):
         """
         Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
         Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
         """
-        # Pattern per trovare timestamp come [00:00] - [00:05] o [00:00:02.4]
-        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}\] - \[\d{2}:\d{2}\]|\[\d{2}:\d{2}:\d{2}(?:\.\d)?\]|\[\d{2}:\d{2}(?:\.\d)?\])')
-
         current_html = text_edit.toHtml()
-
-        # Sostituisce ogni timestamp trovato con la versione stilizzata
-        def style_match(match):
-            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
-
-        # Per evitare di stilizzare più volte, prima rimuoviamo i tag <font> esistenti
-        current_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', current_html)
-
-        # Riapplichiamo lo stile
-        new_html = timestamp_pattern.sub(style_match, current_html)
+        new_html = self._style_timestamps_in_html(current_html)
 
         if new_html != current_html:
             # Salva la posizione del cursore
