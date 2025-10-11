@@ -1468,6 +1468,20 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
+        # Tab per il Riassunto Dettagliato (Integrato)
+        self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
+        self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
+        self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
+
+        # Tab per le Note Riunione (Integrato)
+        self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
+        self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
+        self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
+
         # Tab per il Riassunto Dettagliato Combinato
         self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
@@ -1484,6 +1498,16 @@ class VideoAudioManager(QMainWindow):
 
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
+
+        # Map widgets to their data keys for easier management
+        self.summary_widget_map = {
+            self.summaryDetailedTextArea: "detailed",
+            self.summaryMeetingTextArea: "meeting",
+            self.summaryDetailedIntegratedTextArea: "detailed_integrated",
+            self.summaryMeetingIntegratedTextArea: "meeting_integrated",
+            self.summaryCombinedDetailedTextArea: "detailed_combined",
+            self.summaryCombinedMeetingTextArea: "meeting_combined",
+        }
 
         summary_layout.addWidget(self.summaryTabWidget)
 
@@ -1647,16 +1671,9 @@ class VideoAudioManager(QMainWindow):
 
     def get_current_summary_text_area(self):
         """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
-        current_index = self.summaryTabWidget.currentIndex()
-        if current_index == 0:
-            return self.summaryDetailedTextArea
-        elif current_index == 1:
-            return self.summaryMeetingTextArea
-        elif current_index == 2:
-            return self.summaryCombinedDetailedTextArea
-        elif current_index == 3:
-            return self.summaryCombinedMeetingTextArea
-        return None # Fallback se l'indice non è valido
+        # Mappatura diretta dall'indice del widget al widget stesso.
+        # Questo è più robusto dei controlli if/elif basati sull'indice.
+        return self.summaryTabWidget.currentWidget()
 
     def apply_and_save_font_settings(self, size=None):
         """
@@ -1679,14 +1696,17 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionTextArea,
             self.summaryDetailedTextArea,
             self.summaryMeetingTextArea,
+            self.summaryDetailedIntegratedTextArea,
+            self.summaryMeetingIntegratedTextArea,
             self.summaryCombinedDetailedTextArea,
-            self.summaryCombinedMeetingTextArea
+            self.summaryCombinedMeetingTextArea,
         ]
         if hasattr(self, 'audioAiTextArea'):
             text_areas.append(self.audioAiTextArea)
 
         for area in text_areas:
-            area.setFont(font)
+            if area: # Assicura che l'area esista prima di applicare il font
+                area.setFont(font)
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
@@ -1845,9 +1865,16 @@ class VideoAudioManager(QMainWindow):
         integrated_key = f"{self.active_summary_type}_integrated"
         self.summaries[integrated_key] = summary
 
-        # Aggiorna la variabile di visualizzazione e la UI
-        self.update_summary_view()
+        # Aggiorna la vista per mostrare il nuovo contenuto
+        self._update_summary_view()
         self.show_status_message("Integrazione delle informazioni dal video completata.")
+
+        # Passa automaticamente al tab corretto per mostrare il risultato
+        if self.active_summary_type == 'detailed':
+            self.summaryTabWidget.setCurrentWidget(self.summaryDetailedIntegratedTextArea)
+        elif self.active_summary_type == 'meeting':
+            self.summaryTabWidget.setCurrentWidget(self.summaryMeetingIntegratedTextArea)
+
 
         # Salva l'intero dizionario dei riassunti nel JSON
         update_data = {
@@ -2294,17 +2321,10 @@ class VideoAudioManager(QMainWindow):
 
     def _get_current_summary_key(self):
         """
-        Determina la chiave corretta per il dizionario self.summaries in base allo stato della UI.
-        Restituisce una stringa come 'detailed', 'meeting_integrated', ecc.
+        Determina la chiave corretta per il dizionario dei riassunti in base al tab attivo.
         """
-        current_tab_index = self.summaryTabWidget.currentIndex()
-        summary_type = 'detailed' if current_tab_index == 0 else 'meeting'
-
-        is_integrated_view = self.integrazioneToggle.isChecked() and self.integrazioneToggle.isEnabled()
-        if is_integrated_view:
-            return f"{summary_type}_integrated"
-        else:
-            return summary_type
+        active_widget = self.summaryTabWidget.currentWidget()
+        return self.summary_widget_map.get(active_widget)
 
     def _on_summary_text_changed(self):
         """
@@ -2377,10 +2397,6 @@ class VideoAudioManager(QMainWindow):
                 integrated_key = f"{self.active_summary_type}_integrated"
                 if integrated_key in self.summaries:
                     self.summaries[integrated_key] = ""
-
-                # Disabilita il toggle di integrazione.
-                self.integrazioneToggle.setChecked(False)
-                self.integrazioneToggle.setEnabled(False)
 
                 # Chiama il metodo di aggiornamento della vista, che ora leggerà
                 # dal modello e genererà l'HTML dinamicamente.
@@ -2476,18 +2492,14 @@ class VideoAudioManager(QMainWindow):
         target_widget = self.get_current_summary_text_area()
         if not target_widget: return
 
-        # Determina quale riassunto visualizzare (singolo o combinato)
-        current_tab_widget = self.summaryTabWidget.currentWidget()
-        is_combined = "Combinato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex())
+        summary_key = self._get_current_summary_key()
+        if not summary_key: return
 
-        if is_combined:
+        # Determina quale dizionario usare (singolo, combinato)
+        if "combined" in summary_key:
             data_source = self.combined_summary
-            summary_type = 'detailed_combined' if "Dettagliato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex()) else 'meeting_combined'
         else:
             data_source = self.summaries
-            summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
-
-        summary_key = summary_type
 
         # 1. Leggi il testo Markdown grezzo dal modello dati
         raw_markdown = data_source.get(summary_key, "")
