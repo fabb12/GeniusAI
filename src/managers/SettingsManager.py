@@ -75,7 +75,6 @@ class DockSettingsManager:
         elif workspace_name == "Trascrizione":
             self.docks['videoPlayerDock'].setVisible(True)
             self.docks['transcriptionDock'].setVisible(True)
-            self.docks['videoNotesDock'].setVisible(True)
             self.docks['projectDock'].setVisible(True)
         elif workspace_name == "Default":
             self.docks['videoNotesDock'].setVisible(True)
