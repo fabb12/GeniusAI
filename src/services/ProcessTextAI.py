@@ -114,14 +114,14 @@ class ProcessTextAI(QThread):
                 prompt_template = f.read()
 
             # Logica di formattazione condizionale
-            if self.mode == "video_integration":
-                # La modalità nuova usa un template completo
+            if self.mode in ["video_integration", "combined_summary"]:
+                # Queste modalità usano un template completo con più variabili
                 format_data = self.prompt_vars.copy()
                 format_data['language'] = self.language
                 system_prompt_content = prompt_template.format(**format_data)
-                user_prompt = "Procedi con la generazione del riassunto integrato come da istruzioni."
+                user_prompt = "Procedi con la generazione del contenuto come da istruzioni."
             else:
-                # Le modalità esistenti hanno un template semplice e il testo è separato
+                # Le altre modalità hanno un template semplice e una singola variabile 'text'
                 system_prompt_content = prompt_template.format(language=self.language)
                 if 'text' not in self.prompt_vars:
                     raise ValueError(f"La modalità '{self.mode}' richiede una variabile 'text' in prompt_vars.")
