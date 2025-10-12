@@ -7195,7 +7195,7 @@ class VideoAudioManager(QMainWindow):
     def on_batch_summary_completed(self, summary_text):
         """
         Saves the generated batch summary directly to the correct field
-        in the .gnai project file.
+        in the .gnai project file and displays it in the UI.
         """
         if not self.projectDock.gnai_path or not self.active_summary_type:
             self.active_summary_type = None
@@ -7218,6 +7218,14 @@ class VideoAudioManager(QMainWindow):
         # Save the updated project data back to the .gnai file
         self.project_manager.save_project(self.projectDock.gnai_path, project_data)
         self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato con successo nel file di progetto.", timeout=5000)
+
+        # Display the summary in the correct UI tab
+        if self.active_summary_type == "combinedDetailed":
+            self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
+            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
+        elif self.active_summary_type == "combinedMeeting":
+            self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
+            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
 
         # Reset the active summary type
         self.active_summary_type = None
