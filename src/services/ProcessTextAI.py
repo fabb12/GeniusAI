@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION,
-    PROMPT_COMBINED_ANALYSIS
+    PROMPT_COMBINED_ANALYSIS, PROMPT_COMBINED_SUMMARY_TEXT_ONLY
 )
 
 load_dotenv()
@@ -44,7 +44,7 @@ class ProcessTextAI(QThread):
         self.result = None
 
         # Valida la modalità
-        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary"]
+        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary", "combined_summary_text_only"]
         if mode not in valid_modes:
             raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
@@ -98,6 +98,8 @@ class ProcessTextAI(QThread):
             prompt_file_path = PROMPT_VIDEO_INTEGRATION
         elif self.mode == "combined_summary":
             prompt_file_path = PROMPT_COMBINED_ANALYSIS
+        elif self.mode == "combined_summary_text_only":
+            prompt_file_path = PROMPT_COMBINED_SUMMARY_TEXT_ONLY
         else:
             error_msg = f"Modalità non valida: {self.mode}"
             logging.error(error_msg)
@@ -122,11 +124,15 @@ class ProcessTextAI(QThread):
                 user_prompt = "Procedi con la generazione del contenuto come da istruzioni."
             else:
                 # Le altre modalità hanno un template semplice e una singola variabile 'text'
-                system_prompt_content = prompt_template.format(language=self.language)
-                if 'text' not in self.prompt_vars:
-                    raise ValueError(f"La modalità '{self.mode}' richiede una variabile 'text' in prompt_vars.")
-                text_to_process = self.prompt_vars['text']
-                user_prompt = f"Testo da elaborare ({self.mode}):\n{text_to_process}\n\n---\nOutput:"
+                if self.mode == "combined_summary_text_only":
+                    system_prompt_content = prompt_template.format(language=self.language, text=self.prompt_vars.get('text', ''))
+                    user_prompt = "Procedi con la generazione del riassunto come da istruzioni."
+                else:
+                    system_prompt_content = prompt_template.format(language=self.language)
+                    if 'text' not in self.prompt_vars:
+                        raise ValueError(f"La modalità '{self.mode}' richiede una variabile 'text' in prompt_vars.")
+                    text_to_process = self.prompt_vars['text']
+                    user_prompt = f"Testo da elaborare ({self.mode}):\n{text_to_process}\n\n---\nOutput:"
 
         except Exception as e:
             logging.exception(f"Errore lettura/formattazione prompt '{prompt_file_path}'")

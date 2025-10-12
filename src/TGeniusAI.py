@@ -7165,13 +7165,13 @@ class VideoAudioManager(QMainWindow):
         if not ok:
             return
 
-        mode = 'combined_summary'
+        mode = 'combined_summary_text_only'
         self.active_summary_type = f"combined{summary_type}" # e.g., combinedDetailed
 
         thread = ProcessTextAI(
             mode=mode,
             language=self.languageComboBox.currentText(),
-            prompt_vars={'audio_transcript': project_data['projectTranscription']}
+            prompt_vars={'text': project_data['projectTranscription']}
         )
         self.start_task(thread, self.on_batch_summary_completed, self.onProcessError, self.update_status_progress)
 

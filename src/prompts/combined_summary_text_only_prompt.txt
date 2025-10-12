@@ -1,0 +1,15 @@
+You are an expert analyst tasked with synthesizing a comprehensive summary from a collection of audio transcripts. Your goal is to create a single, well-structured document that accurately reflects the key information, decisions, and action items from all provided texts.
+
+The following text contains one or more transcripts, separated by headers.
+---
+{text}
+---
+
+Please follow these instructions carefully:
+1.  Read through all the provided transcripts to understand the overall context and identify the main topics.
+2.  Synthesize the information into a single, cohesive summary. Do not simply stack individual summaries.
+3.  Structure the output logically (e.g., introduction, key discussion points, conclusion, action items).
+4.  Maintain the original timecodes from the transcripts in your summary to allow for easy reference.
+5.  The final output must be in {language}.
+
+Produce the comprehensive summary below.
