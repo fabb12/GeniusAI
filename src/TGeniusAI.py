@@ -3116,14 +3116,21 @@ class VideoAudioManager(QMainWindow):
 
 
     def applyFreezeFramePause(self):
-        video_path = self.videoPathLineEdit
+        selected_player = self.playerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            video_path = self.videoPathLineEdit
+            player = self.player
+        else:
+            video_path = self.videoPathLineOutputEdit
+            player = self.playerOutput
+
         if not video_path or not os.path.exists(video_path):
             self.show_status_message("Carica un video prima di applicare una pausa.", error=True)
             return
 
         try:
             pause_duration = int(self.pauseVideoDurationLineEdit.text())
-            start_time = self.player.position() / 1000.0
+            start_time = player.position() / 1000.0
 
             video_clip = VideoFileClip(video_path)
             freeze_frame = video_clip.get_frame(start_time)
@@ -3155,6 +3162,19 @@ class VideoAudioManager(QMainWindow):
 
     def createAudioDock(self):
         dock = CustomDock("Gestione Audio e Video", closable=True)
+
+        # Main widget and layout for the dock
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+
+        # Player Selection GroupBox
+        player_selection_group = QGroupBox("Applica a")
+        player_selection_layout = QHBoxLayout(player_selection_group)
+        self.playerSelectionCombo = QComboBox()
+        self.playerSelectionCombo.addItems(["Player Input", "Player Output"])
+        self.playerSelectionCombo.setToolTip("Scegli a quale player applicare le seguenti operazioni.")
+        player_selection_layout.addWidget(self.playerSelectionCombo)
+        main_layout.addWidget(player_selection_group)
 
         # Creazione del QTabWidget
         tab_widget = QTabWidget()
@@ -3217,8 +3237,11 @@ class VideoAudioManager(QMainWindow):
         video_merge_tab.setLayout(video_merge_layout)
         tab_widget.addTab(video_merge_tab, "Unisci Video")
 
-        # Aggiunta del QTabWidget al dock
-        dock.addWidget(tab_widget)
+        # Add the tab_widget to the main layout
+        main_layout.addWidget(tab_widget)
+
+        # Aggiunta del main_widget al dock
+        dock.addWidget(main_widget)
 
         return dock
 
@@ -3361,7 +3384,14 @@ class VideoAudioManager(QMainWindow):
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     def mergeVideo(self):
-        base_video_path = self.videoPathLineEdit
+        selected_player = self.playerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            base_video_path = self.videoPathLineEdit
+            player = self.player
+        else:
+            base_video_path = self.videoPathLineOutputEdit
+            player = self.playerOutput
+
         merge_video_path = self.mergeVideoPathLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
@@ -3371,7 +3401,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Seleziona un video da unire.", error=True)
             return
 
-        position_ms = self.player.position()
+        position_ms = player.position()
         timecode = self.formatTimecode(position_ms)
 
         thread = VideoMergeThread(
@@ -3485,7 +3515,14 @@ class VideoAudioManager(QMainWindow):
             self.audio_buttons[0].setChecked(True)
 
     def applyBackgroundAudioToVideo(self):
-        video_path = self.videoPathLineEdit
+        selected_player = self.playerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            video_path = self.videoPathLineEdit
+        else:
+            # Note: self.videoPathLineOutputEdit is a string variable holding the path,
+            # not a QLineEdit widget.
+            video_path = self.videoPathLineOutputEdit
+
         background_audio_path = self.backgroundAudioPathLineEdit.text()
         slider_value = self.volumeSliderBack.value()
         background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
@@ -3514,7 +3551,14 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore durante l'applicazione dell'audio di sottofondo: {error_message}", error=True)
 
     def applyAudioWithPauses(self):
-        video_path = self.videoPathLineEdit
+        selected_player = self.playerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            video_path = self.videoPathLineEdit
+            player = self.player
+        else:
+            video_path = self.videoPathLineOutputEdit
+            player = self.playerOutput
+
         pause_duration_str = self.pauseAudioDurationLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
@@ -3527,7 +3571,7 @@ class VideoAudioManager(QMainWindow):
 
         try:
             pause_duration = float(pause_duration_str)
-            start_time = self.player.position() / 1000.0
+            start_time = player.position() / 1000.0
 
             video_clip = VideoFileClip(video_path)
 
@@ -5593,7 +5637,14 @@ class VideoAudioManager(QMainWindow):
 
     def handle_apply_main_audio(self):
         """Handles the 'Applica Audio Principale' button click."""
-        video_path = self.videoPathLineEdit
+        selected_player = self.playerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            video_path = self.videoPathLineEdit
+            player = self.player
+        else:
+            video_path = self.videoPathLineOutputEdit
+            player = self.playerOutput
+
         new_audio_path = self.audioPathLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
@@ -5604,7 +5655,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun file audio selezionato.", error=True)
             return
 
-        start_time_sec = self.player.position() / 1000.0
+        start_time_sec = player.position() / 1000.0
 
         thread = AudioProcessingThread(
             video_path,
