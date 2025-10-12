@@ -7216,24 +7216,33 @@ class VideoAudioManager(QMainWindow):
         if 'projectSummaries' not in project_data:
             project_data['projectSummaries'] = {}
 
-        # Save the summary to the correct field (e.g., 'combinedDetailed' or 'combinedMeeting')
-        project_data['projectSummaries'][self.active_summary_type] = summary_text
+        # The gnai_key is what's used in the .gnai file (e.g., "combinedDetailed")
+        gnai_key = self.active_summary_type
+        project_data['projectSummaries'][gnai_key] = summary_text
 
         # Save the updated project data back to the .gnai file
         self.project_manager.save_project(self.projectDock.gnai_path, project_data)
-        self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato con successo nel file di progetto.", timeout=5000)
+        self.show_status_message(f"Riassunto '{gnai_key}' salvato con successo nel file di progetto.", timeout=5000)
 
-        # Update the in-memory data model
-        self.combined_summary[self.active_summary_type] = summary_text
+        # CORREZIONE: Mappa la chiave del file .gnai alla chiave del modello dati interno
+        # e aggiorna il modello dati e la UI.
+        model_key = None
+        if gnai_key == "combinedDetailed":
+            model_key = "detailed_combined"
+        elif gnai_key == "combinedMeeting":
+            model_key = "meeting_combined"
 
-        # Refresh the UI from the data model
-        self._update_summary_view()
+        if model_key:
+            self.combined_summary[model_key] = summary_text
 
-        # Switch to the correct tab to show the result
-        if self.active_summary_type == "combinedDetailed":
-            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
-        elif self.active_summary_type == "combinedMeeting":
-            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
+            # Refresh the UI from the updated data model
+            self._update_summary_view()
+
+            # Switch to the correct tab to show the result
+            if model_key == "detailed_combined":
+                self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
+            elif model_key == "meeting_combined":
+                self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
 
         # Reset the active summary type
         self.active_summary_type = None
