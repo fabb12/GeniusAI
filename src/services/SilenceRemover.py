@@ -5,7 +5,7 @@ from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 
 class SilenceRemoverThread(QThread):
-    finished = pyqtSignal(str)
+    completed = pyqtSignal(str)
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
 
@@ -81,7 +81,7 @@ class SilenceRemoverThread(QThread):
             os.remove(temp_audio_path)
 
             self.progress.emit(100)
-            self.finished.emit(self.output_path)
+            self.completed.emit(self.output_path)
 
         except Exception as e:
             # Clean up temp file on error
