@@ -5,6 +5,7 @@ from src.ui.CustomDock import CustomDock
 from src.config import get_resource
 import datetime
 import os
+import json
 from pathlib import Path
 
 class ProjectDock(CustomDock):
@@ -136,10 +137,14 @@ class ProjectDock(CustomDock):
         clips_layout = QVBoxLayout(clips_group)
 
         self.tree_clips = QTreeWidget()
-        self.tree_clips.setColumnCount(4)
-        self.tree_clips.setHeaderLabels(["Nome File", "Data", "Durata", "Dimensione"])
+        self.tree_clips.setColumnCount(6)
+        self.tree_clips.setHeaderLabels(["Nome File", "Data", "Durata", "Dimensione", "Trascrizione", "Riassunto"])
         self.tree_clips.setToolTip("Fai doppio click su una clip per caricarla.")
-        self.tree_clips.header().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        header = self.tree_clips.header()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch) # Stretch "Nome File"
+
         clips_layout.addWidget(self.tree_clips)
 
         # Layout per i pulsanti sotto la lista delle clip
@@ -238,70 +243,66 @@ class ProjectDock(CustomDock):
 
         self.tree_clips.clear()
 
-        # Carica clip del progetto
+        # Funzione helper per popolare le righe dell'albero
+        def populate_tree(clips, subfolder, root_text):
+            if not clips:
+                return
+
+            root_item = QTreeWidgetItem(self.tree_clips)
+            root_item.setText(0, root_text)
+            root_item.setExpanded(True)
+
+            clips_dir = os.path.join(project_dir, subfolder)
+            if os.path.exists(clips_dir):
+                self.file_watcher.addPath(clips_dir)
+
+            for clip in clips:
+                item = QTreeWidgetItem(root_item)
+                clip_filename = clip.get("clip_filename", "N/A")
+                full_path = os.path.join(clips_dir, clip_filename)
+
+                # --- Carica dati JSON ---
+                has_transcription = "❌"
+                has_summary = "❌"
+                json_path = os.path.splitext(full_path)[0] + ".json"
+                if os.path.exists(json_path):
+                    try:
+                        with open(json_path, 'r', encoding='utf-8') as f:
+                            json_data = json.load(f)
+                        if json_data.get("transcription_original") or json_data.get("transcription_corrected"):
+                            has_transcription = "✔️"
+                        if json_data.get("summaries", {}).get("detailed") or json_data.get("summaries", {}).get("meeting"):
+                            has_summary = "✔️"
+                    except (json.JSONDecodeError, IOError):
+                        pass # Il file JSON potrebbe essere corrotto o vuoto
+
+                # Imposta l'icona in base allo stato
+                status = clip.get("status", "N/A")
+                if status == "online":
+                    item.setIcon(0, QIcon(get_resource("online.png")))
+                elif status == "offline":
+                    item.setIcon(0, QIcon(get_resource("offline.png")))
+
+                item.setText(0, clip_filename)
+                item.setToolTip(0, full_path) # Tooltip con percorso completo
+                item.setText(1, self._format_date(clip.get("creation_date")))
+                item.setText(2, self._format_duration(clip.get("duration")))
+                item.setText(3, self._format_size(clip.get("size")))
+                item.setText(4, has_transcription)
+                item.setText(5, has_summary)
+
+                # Salva il percorso completo e lo stato per un facile accesso
+                item.setData(0, Qt.ItemDataRole.UserRole, full_path)
+                item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
+
+        # Carica clip video e audio
         project_clips = sorted(project_data.get("clips", []), key=lambda x: x.get("creation_date", ""))
-        clips_dir = os.path.join(project_dir, "clips")
-        if os.path.exists(clips_dir):
-            self.file_watcher.addPath(clips_dir)
+        populate_tree(project_clips, "clips", "Clip Video")
 
-        if project_clips:
-            project_clips_root = QTreeWidgetItem(self.tree_clips)
-            project_clips_root.setText(0, "Clip Video")
-            project_clips_root.setExpanded(True)
-
-            for clip in project_clips:
-                item = QTreeWidgetItem(project_clips_root)
-
-                # Imposta l'icona in base allo stato
-                status = clip.get("status", "N/A")
-                if status == "online":
-                    item.setIcon(0, QIcon(get_resource("online.png"))) # Icona verde
-                elif status == "offline":
-                    item.setIcon(0, QIcon(get_resource("offline.png"))) # Icona rossa
-
-                item.setText(0, clip.get("clip_filename", "N/A"))
-                item.setText(1, self._format_date(clip.get("creation_date")))
-                item.setText(2, self._format_duration(clip.get("duration")))
-                item.setText(3, self._format_size(clip.get("size")))
-
-                # Salva il percorso completo e lo stato per un facile accesso
-                full_path = os.path.join(clips_dir, clip.get("clip_filename", ""))
-                item.setData(0, Qt.ItemDataRole.UserRole, full_path)
-                item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
-
-        # Carica clip audio del progetto
         audio_clips = sorted(project_data.get("audio_clips", []), key=lambda x: x.get("creation_date", ""))
-        audio_dir = os.path.join(project_dir, "audio")
-        if os.path.exists(audio_dir):
-            self.file_watcher.addPath(audio_dir)
+        populate_tree(audio_clips, "audio", "Clip Audio")
 
-        if audio_clips:
-            audio_clips_root = QTreeWidgetItem(self.tree_clips)
-            audio_clips_root.setText(0, "Clip Audio")
-            audio_clips_root.setExpanded(True)
-
-            for clip in audio_clips:
-                item = QTreeWidgetItem(audio_clips_root)
-
-                # Imposta l'icona in base allo stato
-                status = clip.get("status", "N/A")
-                if status == "online":
-                    item.setIcon(0, QIcon(get_resource("online.png"))) # Icona verde
-                elif status == "offline":
-                    item.setIcon(0, QIcon(get_resource("offline.png"))) # Icona rossa
-
-                item.setText(0, clip.get("clip_filename", "N/A"))
-                item.setText(1, self._format_date(clip.get("creation_date")))
-                item.setText(2, self._format_duration(clip.get("duration")))
-                item.setText(3, self._format_size(clip.get("size")))
-
-                # Salva il percorso completo e lo stato per un facile accesso
-                full_path = os.path.join(audio_dir, clip.get("clip_filename", ""))
-                item.setData(0, Qt.ItemDataRole.UserRole, full_path)
-                item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
-
-
-        # Carica file dalla cartella 'downloads' del progetto
+        # Carica file dalla cartella 'downloads' del progetto (invariato)
         download_folder_path = os.path.join(project_dir, "downloads")
         if os.path.exists(download_folder_path):
             download_root = QTreeWidgetItem(self.tree_clips)
@@ -315,11 +316,12 @@ class ProjectDock(CustomDock):
                 if os.path.isfile(file_path) and os.path.splitext(filename)[1].lower() in media_extensions:
                     item = QTreeWidgetItem(download_root)
                     item.setText(0, filename)
+                    item.setToolTip(0, file_path)
 
                     try:
                         stat = os.stat(file_path)
                         item.setText(1, self._format_date(datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()))
-                        item.setText(2, "N/A") # Durata non calcolata per performance
+                        item.setText(2, "N/A")
                         item.setText(3, self._format_size(stat.st_size))
                         item.setData(0, Qt.ItemDataRole.UserRole, file_path)
                     except (OSError, ValueError):

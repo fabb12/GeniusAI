@@ -25,7 +25,6 @@ from PyQt6.QtWidgets import (
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
-from src.ui.InfoDock import InfoDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
@@ -866,15 +865,10 @@ class VideoAudioManager(QMainWindow):
         self.audioDock.setToolTip("Dock per la gestione Audio/Video")
         area.addDock(self.audioDock, 'left')
 
-        self.infoDock = InfoDock()
-        self.infoDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.infoDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.infoDock, 'right', self.transcriptionDock)
-
         self.projectDock = ProjectDock()
         self.projectDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.projectDock.setStyleSheet(self.styleSheet())
-        area.addDock(self.projectDock, 'right', self.infoDock)
+        area.addDock(self.projectDock, 'right', self.transcriptionDock)
         self.projectDock.clip_selected.connect(self.load_project_clip)
         self.projectDock.open_folder_requested.connect(self.open_project_folder)
         self.projectDock.delete_clip_requested.connect(self.delete_project_clip)
@@ -1546,7 +1540,6 @@ class VideoAudioManager(QMainWindow):
             'recordingDock': self.recordingDock,
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
-            'infoDock': self.infoDock,
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock
         }
@@ -2283,8 +2276,6 @@ class VideoAudioManager(QMainWindow):
             with open(json_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
             logging.info(f"File JSON {json_path} aggiornato con successo.")
-            # Aggiorna il dock informativo
-            self.infoDock.update_info(data)
         except Exception as e:
             logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
 
@@ -2897,7 +2888,6 @@ class VideoAudioManager(QMainWindow):
         self.recordingDock.setStyleSheet(style)
         self.audioDock.setStyleSheet(style)
         self.videoPlayerOutput.setStyleSheet(style)
-        self.infoDock.setStyleSheet(style)
         self.videoNotesDock.setStyleSheet(style)
 
     def createVideoNotesDock(self):
@@ -5008,7 +4998,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
         self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
-        self.actionToggleInfoDock = self.createToggleAction(self.infoDock, 'Mostra/Nascondi Info Video')
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
 
@@ -5019,7 +5008,6 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleEditingDock)
         viewMenu.addAction(self.actionToggleRecordingDock)
         viewMenu.addAction(self.actionToggleAudioDock)
-        viewMenu.addAction(self.actionToggleInfoDock)
         viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
 
@@ -5097,7 +5085,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
-        self.actionToggleInfoDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -5108,7 +5095,6 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
         self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
-        self.actionToggleInfoDock.setChecked(self.infoDock.isVisible())
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
 
@@ -5412,9 +5398,6 @@ class VideoAudioManager(QMainWindow):
             index = self.languageComboBox.findData(language_code)
             if index != -1:
                 self.languageComboBox.setCurrentIndex(index)
-
-        # Aggiorna il dock informativo
-        self.infoDock.update_info(data)
 
         # Carica le note video
         self.load_video_notes_from_json(data)
@@ -6638,7 +6621,6 @@ class VideoAudioManager(QMainWindow):
         self.current_audio_path = None
 
         # 5. Pulisci i dock informativi
-        self.infoDock.clear_info()
         self.projectDock.clear_project()
 
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
