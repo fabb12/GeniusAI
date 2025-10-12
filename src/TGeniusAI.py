@@ -6723,8 +6723,12 @@ class VideoAudioManager(QMainWindow):
         # Carica i riassunti combinati e la trascrizione del progetto dal file .gnai
         project_summaries = project_data.get('projectSummaries', {})
         if project_summaries:
-            self.summaryCombinedDetailedTextArea.setMarkdown(project_summaries.get('combinedDetailed', ''))
-            self.summaryCombinedMeetingTextArea.setMarkdown(project_summaries.get('combinedMeeting', ''))
+            # CORREZIONE: Mappa le chiavi del file .gnai alle chiavi del modello dati interno.
+            # Gestisce anche la chiave deprecata 'combinedDettagliato' per retrocompatibilità.
+            detailed_summary = project_summaries.get('combinedDetailed', project_summaries.get('combinedDettagliato', ''))
+            self.combined_summary['detailed_combined'] = detailed_summary
+            self.combined_summary['meeting_combined'] = project_summaries.get('combinedMeeting', '')
+            self._update_summary_view() # Aggiorna la UI dal modello dati
             logging.info("Riassunti combinati caricati dal progetto.")
 
         project_transcription = project_data.get('projectTranscription', '')
@@ -7252,12 +7256,16 @@ class VideoAudioManager(QMainWindow):
         self.project_manager.save_project(self.projectDock.gnai_path, project_data)
         self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato con successo nel file di progetto.", timeout=5000)
 
-        # Display the summary in the correct UI tab
+        # Update the in-memory data model
+        self.combined_summary[self.active_summary_type] = summary_text
+
+        # Refresh the UI from the data model
+        self._update_summary_view()
+
+        # Switch to the correct tab to show the result
         if self.active_summary_type == "combinedDetailed":
-            self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
             self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
         elif self.active_summary_type == "combinedMeeting":
-            self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
             self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
 
         # Reset the active summary type
