@@ -22,6 +22,7 @@ class ProjectDock(CustomDock):
     relink_clip_requested = pyqtSignal(str, str)
     project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
     batch_transcribe_requested = pyqtSignal()
+    batch_summarize_requested = pyqtSignal()
     separate_audio_requested = pyqtSignal(str)
 
     def __init__(self, title="Progetto", closable=True, parent=None):
@@ -151,6 +152,11 @@ class ProjectDock(CustomDock):
         self.btn_batch_transcribe.setToolTip("Trascrive tutti i video nel progetto.")
         self.btn_batch_transcribe.clicked.connect(self.batch_transcribe_requested.emit)
         buttons_layout.addWidget(self.btn_batch_transcribe)
+
+        self.btn_batch_summarize = QPushButton("Genera Riassunto Multiplo")
+        self.btn_batch_summarize.setToolTip("Genera un riassunto combinato da tutte le trascrizioni.")
+        self.btn_batch_summarize.clicked.connect(self.batch_summarize_requested.emit)
+        buttons_layout.addWidget(self.btn_batch_summarize)
 
         buttons_layout.addStretch()
 
