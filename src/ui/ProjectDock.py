@@ -60,7 +60,13 @@ class ProjectDock(CustomDock):
         if not self.project_dir or not item or item.isDisabled() or not item.parent():
             return
 
+        # Estrai tutti i dati necessari dall'item PRIMA di mostrare il menu.
+        # Questo previene un RuntimeError se l'item viene cancellato dall'azione del menu.
         status = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        file_path = item.data(0, Qt.ItemDataRole.UserRole)
+        clip_filename = item.text(0)
+        is_audio_clip = item.parent().text(0) == "Clip Audio"
+
         menu = QMenu()
 
         if status == "offline":
@@ -70,24 +76,23 @@ class ProjectDock(CustomDock):
             action = menu.exec(self.tree_clips.mapToGlobal(position))
 
             if action == relink_action:
-                old_filename = item.text(0)
                 new_filepath, _ = QFileDialog.getOpenFileName(self, "Seleziona nuovo file clip", "", "Video Files (*.mp4 *.avi *.mov);;All Files (*)")
                 if new_filepath:
-                    self.relink_clip_requested.emit(old_filename, new_filepath)
+                    self.relink_clip_requested.emit(clip_filename, new_filepath) # Usa la variabile locale
             elif action == remove_action:
-                clip_filename = item.text(0)
-                self.delete_clip_requested.emit(clip_filename)
-        else: # 'online' o altri stati
-            file_path = item.data(0, Qt.ItemDataRole.UserRole)
+                self.delete_clip_requested.emit(clip_filename) # Usa la variabile locale
+
+        else:  # 'online' o altri stati
             if not file_path or not os.path.exists(file_path):
+                 # Anche se è online, il file potrebbe essere stato spostato/cancellato
                 return
 
             open_input_action = menu.addAction("Apri nel player di input")
             open_output_action = menu.addAction("Apri nel player di output")
             menu.addSeparator()
 
-            # Add "Separate Audio" only for video files (not in "Audio Clips" parent)
-            if item.parent() and item.parent().text(0) != "Clip Audio":
+            # Aggiungi "Separa Audio" solo per le clip video
+            if not is_audio_clip:
                 separate_audio_action = menu.addAction("Separa Audio")
                 menu.addSeparator()
 
@@ -103,15 +108,13 @@ class ProjectDock(CustomDock):
             elif 'separate_audio_action' in locals() and action == separate_audio_action:
                 self.separate_audio_requested.emit(file_path)
             elif action == rename_action:
-                old_filename = item.text(0)
-                base_name, extension = os.path.splitext(old_filename)
+                base_name, extension = os.path.splitext(clip_filename)
                 new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
                 if ok and new_base_name:
                     new_filename = new_base_name + extension
-                    self.rename_clip_requested.emit(old_filename, new_filename)
+                    self.rename_clip_requested.emit(clip_filename, new_filename)
             elif action == delete_action:
-                clip_filename = item.text(0)
-                self.delete_clip_requested.emit(clip_filename)
+                self.delete_clip_requested.emit(clip_filename) # Usa la variabile locale
 
     def _setup_ui(self):
         main_widget = QWidget()
