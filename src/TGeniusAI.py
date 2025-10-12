@@ -245,8 +245,8 @@ class MediaOverlayThread(QThread):
                     frame_duration_ms = img.info.get('duration', 100)
                     fps = 1000 / frame_duration_ms if frame_duration_ms > 0 else 10 # Default to 10 FPS if duration is 0
 
-                # Create the clip from the sequence of frames
-                overlay_clip = (ImageSequenceClip(frames, fps=fps)
+                # Create the clip from the sequence of frames, preserving transparency
+                overlay_clip = (ImageSequenceClip(frames, fps=fps, with_mask=True)
                                 .resize(width=self.media_data['size'][0], height=self.media_data['size'][1]))
 
                 # Loop or trim the clip to match the desired duration
@@ -2795,25 +2795,34 @@ class VideoAudioManager(QMainWindow):
 
     def get_frame_at(self, position_ms):
         if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            logging.warning("get_frame_at called with no valid video path.")
             return None
+
+        cap = cv2.VideoCapture(self.videoPathLineEdit)
+        if not cap.isOpened():
+            logging.error(f"Failed to open video file with OpenCV: {self.videoPathLineEdit}")
+            return None
+
         try:
-            position_sec = position_ms / 1000.0
-            with VideoFileClip(self.videoPathLineEdit) as video_clip:
-                # Ensure the position is within the video duration
-                if not (0 <= position_sec <= video_clip.duration):
-                    return None
+            # Imposta la posizione del frame in millisecondi
+            cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
+            success, frame = cap.read()
 
-                frame = video_clip.get_frame(position_sec)
-
-            height, width, channel = frame.shape
-            bytes_per_line = 3 * width
-            q_image = QImage(frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
-            pixmap = QPixmap.fromImage(q_image)
-
-            return pixmap
+            if success:
+                # Converte il frame da BGR (formato di OpenCV) a RGB
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                height, width, channel = rgb_frame.shape
+                bytes_per_line = 3 * width
+                q_image = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+                return QPixmap.fromImage(q_image)
+            else:
+                logging.warning(f"Failed to read frame at {position_ms}ms from {self.videoPathLineEdit}")
+                return None
         except Exception as e:
-            logging.error(f"Error getting frame at {position_ms}ms: {e}")
+            logging.error(f"Error getting frame at {position_ms}ms with OpenCV: {e}")
             return None
+        finally:
+            cap.release()
 
     def get_current_fps(self):
         try:
