@@ -1443,15 +1443,6 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
         top_controls_layout.addStretch()
-
-        # Pulsante per creare riassunto combinato
-        self.createCombinedSummaryButton = QPushButton('')
-        self.createCombinedSummaryButton.setIcon(QIcon(get_resource("combine.png")))
-        self.createCombinedSummaryButton.setFixedSize(32, 32)
-        self.createCombinedSummaryButton.setToolTip("Crea un riassunto combinato dal testo nella tab Trascrizione Multipla")
-        self.createCombinedSummaryButton.clicked.connect(self.generate_summary_from_batch_tab)
-        top_controls_layout.addWidget(self.createCombinedSummaryButton)
-
         summary_controls_layout.addLayout(top_controls_layout)
 
         # Layout orizzontale per le checkbox
