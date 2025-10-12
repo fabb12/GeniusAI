@@ -42,7 +42,12 @@ class ProjectManager:
             "projectName": project_name,
             "createdAt": datetime.now().isoformat(),
             "clips": [],
-            "audio_clips": []
+            "audio_clips": [],
+            "projectTranscription": "",
+            "projectSummaries": {
+                "combinedDetailed": "",
+                "combinedMeeting": ""
+            }
         }
 
         with open(gnai_path, 'w') as f:

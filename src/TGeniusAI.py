@@ -883,6 +883,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
         self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
+        self.projectDock.batch_summarize_requested.connect(self.start_batch_summarization)
         self.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
@@ -7093,12 +7094,14 @@ class VideoAudioManager(QMainWindow):
         thread = BatchTranscriptionThread(video_paths, parent=self)
         self.start_task(
             thread,
-            on_complete=self._on_batch_transcription_finished,
+            on_complete=lambda: self.show_status_message("Batch transcription process finished."), # Generic completion
             on_error=self.on_batch_transcription_error,
             on_progress=self._on_batch_progress
         )
         # We need to connect the specific signal for individual file completion
         thread.file_transcribed.connect(self._on_single_transcription_complete)
+        # Connect the new signal for the combined result
+        thread.batch_completed.connect(self._on_batch_transcription_finished)
 
     def _on_batch_progress(self, current, total, message):
         """Updates the status bar with batch progress."""
@@ -7130,14 +7133,67 @@ class VideoAudioManager(QMainWindow):
         # Ensure there's a newline after the inserted block
         cursor.insertHtml("<br>")
 
-    def _on_batch_transcription_finished(self, result=None):
-        """Handles the completion of the entire batch process."""
-        self.show_status_message("Trascrizione batch di tutti i video completata.", timeout=10000)
+    def _on_batch_transcription_finished(self, combined_text):
+        """Saves the combined transcription to the project file."""
+        if self.projectDock.gnai_path:
+            project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+            if not error:
+                project_data['projectTranscription'] = combined_text
+                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+                self.show_status_message("Trascrizione batch completata e salvata nel progetto.", timeout=5000)
+            else:
+                self.show_status_message("Errore nel salvataggio della trascrizione batch.", error=True)
 
     def on_batch_transcription_error(self, error_message):
         """Handles errors reported during the batch transcription."""
         # The error is already displayed by finish_task, but we can log it here.
         logging.error(f"Errore durante la trascrizione batch: {error_message}")
+
+    def start_batch_summarization(self):
+        """Starts the batch summarization process."""
+        if not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+        if error or not project_data.get('projectTranscription'):
+            self.show_status_message("Nessuna trascrizione di progetto trovata. Eseguire prima la trascrizione batch.", error=True)
+            return
+
+        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto", "Scegli il tipo di riassunto:", ["Dettagliato", "Meeting"], 0, False)
+        if not ok:
+            return
+
+        mode = 'combined_summary'
+        self.active_summary_type = f"combined{summary_type}" # e.g., combinedDetailed
+
+        thread = ProcessTextAI(
+            mode=mode,
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': project_data['projectTranscription']}
+        )
+        self.start_task(thread, self.on_batch_summary_completed, self.onProcessError, self.update_status_progress)
+
+    def on_batch_summary_completed(self, summary_text):
+        """Saves the generated batch summary to the project file."""
+        if self.projectDock.gnai_path and self.active_summary_type:
+            project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+            if not error:
+                if 'projectSummaries' not in project_data:
+                    project_data['projectSummaries'] = {}
+                project_data['projectSummaries'][self.active_summary_type] = summary_text
+                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+                self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato nel progetto.", timeout=5000)
+                # Optionally, display the summary in the UI
+                if self.active_summary_type == "combinedDetailed":
+                    self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
+                    self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
+                elif self.active_summary_type == "combinedMeeting":
+                    self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
+                    self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
+            else:
+                self.show_status_message("Errore nel salvataggio del riassunto batch.", error=True)
+        self.active_summary_type = None
 
 
     def generate_operational_guide(self):

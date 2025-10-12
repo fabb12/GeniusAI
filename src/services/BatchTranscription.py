@@ -13,6 +13,9 @@ class BatchTranscriptionThread(QThread):
     # Signal emitted when a single file has been successfully transcribed (file_path, transcribed_text)
     file_transcribed = pyqtSignal(str, str)
 
+    # Signal emitted with the full combined text when the batch is complete
+    batch_completed = pyqtSignal(str)
+
     # Signal emitted when the entire batch is complete
     completed = pyqtSignal()
 
@@ -29,6 +32,8 @@ class BatchTranscriptionThread(QThread):
 
     def run(self):
         total_files = len(self.video_paths)
+        all_transcriptions = []
+
         if total_files == 0:
             self.completed.emit()
             return
@@ -41,6 +46,7 @@ class BatchTranscriptionThread(QThread):
             self.progress.emit(i + 1, total_files, f"Checking {i+1}/{total_files}: {os.path.basename(video_path)}...")
 
             json_path = os.path.splitext(video_path)[0] + ".json"
+            transcribed_text = ""
             if os.path.exists(json_path):
                 try:
                     with open(json_path, 'r', encoding='utf-8') as f:
@@ -50,6 +56,7 @@ class BatchTranscriptionThread(QThread):
                     if transcribed_text and transcribed_text.strip():
                         self.progress.emit(i + 1, total_files, f"Found existing transcription for {os.path.basename(video_path)}.")
                         self.file_transcribed.emit(os.path.basename(video_path), transcribed_text)
+                        all_transcriptions.append(transcribed_text)
                         QThread.msleep(100) # Give UI time to update
                         continue # Skip to the next file
                 except (json.JSONDecodeError, Exception) as e:
@@ -84,12 +91,16 @@ class BatchTranscriptionThread(QThread):
                     with open(result_json_path, 'r', encoding='utf-8') as f:
                         data = json.load(f)
                     transcribed_text = data.get('transcription_original') or data.get('transcription_raw', '')
-                    self.file_transcribed.emit(os.path.basename(video_path), transcribed_text)
+                    if transcribed_text:
+                        all_transcriptions.append(transcribed_text)
+                        self.file_transcribed.emit(os.path.basename(video_path), transcribed_text)
                 except (FileNotFoundError, json.JSONDecodeError, Exception) as e:
                     self.error.emit(f"Could not read result for {os.path.basename(video_path)}: {e}")
 
         if self._is_running:
             self.progress.emit(total_files, total_files, "Batch transcription complete.")
+            combined_text = "\n\n---\n\n".join(all_transcriptions)
+            self.batch_completed.emit(combined_text)
             self.completed.emit()
 
     def _on_single_completed(self, result):
