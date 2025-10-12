@@ -34,6 +34,7 @@ from moviepy.editor import (
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
+import cv2
 
 import numpy as np
 import proglog
