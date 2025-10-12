@@ -7161,30 +7161,90 @@ class VideoAudioManager(QMainWindow):
         thread = ProcessTextAI(
             mode=mode,
             language=self.languageComboBox.currentText(),
-            prompt_vars={'text': project_data['projectTranscription']}
+            prompt_vars={'audio_transcript': project_data['projectTranscription']}
         )
         self.start_task(thread, self.on_batch_summary_completed, self.onProcessError, self.update_status_progress)
 
     def on_batch_summary_completed(self, summary_text):
-        """Saves the generated batch summary to the project file."""
-        if self.projectDock.gnai_path and self.active_summary_type:
-            project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
-            if not error:
-                if 'projectSummaries' not in project_data:
-                    project_data['projectSummaries'] = {}
-                project_data['projectSummaries'][self.active_summary_type] = summary_text
-                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
-                self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato nel progetto.", timeout=5000)
-                # Optionally, display the summary in the UI
-                if self.active_summary_type == "combinedDetailed":
-                    self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
-                    self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
-                elif self.active_summary_type == "combinedMeeting":
-                    self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
-                    self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
+        """
+        Saves the generated batch summary to the project file and also parses
+        and saves individual summaries back to their respective clip JSON files.
+        """
+        if not self.projectDock.gnai_path or not self.active_summary_type:
+            self.active_summary_type = None
+            return
+
+        # 1. Save the full combined summary to the main project .gnai file
+        project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+        if error:
+            self.show_status_message(f"Errore nel caricamento del progetto per salvare il riassunto: {error}", error=True)
+            self.active_summary_type = None
+            return
+
+        if 'projectSummaries' not in project_data:
+            project_data['projectSummaries'] = {}
+        project_data['projectSummaries'][self.active_summary_type] = summary_text
+        self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+        self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato nel progetto.", timeout=5000)
+
+        # 2. Parse and save individual summaries back to clip JSONs
+        summary_type_key = 'detailed' if 'Detailed' in self.active_summary_type else 'meeting'
+        # Regex to find summaries for each file. It looks for a "Source:" line and captures everything until the next "Source:".
+        # It uses a non-greedy match `(.+?)` and the DOTALL flag to span multiple lines.
+        # The lookahead `(?=Source:|\Z)` ensures it stops at the next source or the end of the string.
+        pattern = re.compile(r"Source: (.+?)\n(.+?)(?=\nSource:|\Z)", re.DOTALL)
+        matches = pattern.findall(summary_text)
+
+        for match in matches:
+            filename = match[0].strip()
+            individual_summary = match[1].strip()
+
+            # Find the full path for the clip
+            clip_path = self.project_manager.get_clip_path_by_filename(self.projectDock.gnai_path, filename)
+            if clip_path:
+                self.save_summary_to_clip_json(clip_path, summary_type_key, individual_summary)
             else:
-                self.show_status_message("Errore nel salvataggio del riassunto batch.", error=True)
+                logging.warning(f"Could not find clip path for filename '{filename}' while saving individual summary.")
+
+        # 3. Optionally, display the full summary in the UI
+        if self.active_summary_type == "combinedDetailed":
+            self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
+            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
+        elif self.active_summary_type == "combinedMeeting":
+            self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
+            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
+
+        # 4. Reset the active summary type
         self.active_summary_type = None
+
+    def save_summary_to_clip_json(self, clip_path, summary_type, summary_content):
+        """
+        Salva un tipo specifico di riassunto nel file JSON di una clip.
+        """
+        if not clip_path or not os.path.exists(clip_path):
+            logging.warning(f"Salvataggio riassunto saltato: percorso clip non valido - {clip_path}")
+            return
+
+        json_path = os.path.splitext(clip_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            logging.warning(f"Salvataggio riassunto saltato: file JSON non trovato per {clip_path}")
+            return
+
+        try:
+            with open(json_path, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'summaries' not in data or not isinstance(data['summaries'], dict):
+                    data['summaries'] = {}
+
+                data['summaries'][summary_type] = summary_content
+                data['summary_date'] = datetime.datetime.now().isoformat()
+
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.truncate()
+            logging.info(f"Riassunto '{summary_type}' salvato per {os.path.basename(clip_path)}")
+        except (IOError, json.JSONDecodeError) as e:
+            logging.error(f"Errore durante il salvataggio del riassunto nel file JSON {json_path}: {e}")
 
 
     def generate_operational_guide(self):

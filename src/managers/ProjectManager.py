@@ -216,3 +216,18 @@ class ProjectManager:
             f.truncate()
 
         return True, "Clip ricollegata con successo"
+
+    def get_clip_path_by_filename(self, gnai_path, filename):
+        """
+        Restituisce il percorso completo di una clip dato il suo nome di file.
+        """
+        if not gnai_path or not os.path.exists(gnai_path):
+            return None
+
+        project_dir = os.path.dirname(gnai_path)
+        clips_dir = os.path.join(project_dir, "clips")
+        clip_path = os.path.join(clips_dir, filename)
+
+        if os.path.exists(clip_path):
+            return clip_path
+        return None
