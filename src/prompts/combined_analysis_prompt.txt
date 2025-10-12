@@ -1,20 +1,17 @@
-You are an expert in video analysis. Your task is to integrate a visual summary from keyframes into a main summary derived from an audio transcript. The goal is to enrich the main summary with visual details without altering its core structure or adding a separate "visual summary" section.
-
-Here is the main summary from the audio transcript:
----
+Prompt 1:
+Sei un esperto nell'analisi di contenuti video. Il tuo compito è integrare un riassunto visivo ricavato dai keyframe in un riassunto principale derivato dalla trascrizione audio. L'obiettivo è arricchire il riassunto principale con dettagli visivi senza alterarne la struttura di base o aggiungere una sezione separata denominata "riassunto visivo".
+Ecco il riassunto principale dalla trascrizione audio:
 {audio_transcript}
----
-
-Here are the visual details from the keyframes:
----
+Ecco i dettagli visivi dai keyframe (con timecode nel formato [00:03:03]):
 {frame_summary}
----
+Segui attentamente queste istruzioni:
 
-Please follow these instructions carefully:
-1.  Read the main summary to understand its structure and content.
-2.  Use the visual details to add relevant information to the existing paragraphs of the main summary.
-3.  Do not create new paragraphs or sections for the visual information.
-4.  The final output should be a single, cohesive summary in {language} that seamlessly combines both sources.
-5.  Ensure the original tone and style of the main summary are preserved.
+Leggi il riassunto principale per comprenderne la struttura e il contenuto.
+Utilizza i dettagli visivi per aggiungere informazioni pertinenti ai paragrafi esistenti del riassunto principale.
+Non creare nuovi paragrafi o sezioni per le informazioni visive.
+L'output finale deve essere un unico riassunto coeso in {language} che combini perfettamente entrambe le fonti.
+Assicurati che il tono e lo stile originali del riassunto principale siano preservati.
+Quando menzioni elementi visivi specifici, includi il timecode nel formato [00:03:03] per riferimento temporale.
+Non includere preamboli, introduzioni o spiegazioni. Fornisci solo il testo del riassunto integrato.
 
-Produce the integrated summary below.
+Produci il riassunto integrato qui sotto.
