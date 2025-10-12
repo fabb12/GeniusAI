@@ -95,6 +95,34 @@ class ProjectManager:
 
         return True, "Clip added successfully"
 
+    def add_clip_to_project_from_path(self, gnai_path, clip_path, status="new"):
+        """
+        Extracts metadata from a clip path and adds it to the project.
+        """
+        if not os.path.exists(clip_path):
+            return False, "Clip file not found"
+
+        try:
+            from moviepy.editor import VideoFileClip
+            with VideoFileClip(clip_path) as clip_info:
+                duration = clip_info.duration
+            size = os.path.getsize(clip_path)
+            creation_date = datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
+            clip_filename = os.path.basename(clip_path)
+            metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+            return self.add_clip_to_project(
+                gnai_path,
+                clip_filename,
+                metadata_filename,
+                duration,
+                size,
+                creation_date,
+                status
+            )
+        except Exception as e:
+            return False, f"Failed to process clip metadata: {e}"
+
     def add_audio_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date, status="new"):
         if not os.path.exists(gnai_path):
             return False, "Project file not found"
