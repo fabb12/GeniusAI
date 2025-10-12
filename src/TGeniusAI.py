@@ -7217,7 +7217,7 @@ class VideoAudioManager(QMainWindow):
                 logging.warning(f"Could not find clip path for filename '{filename}' while saving individual summary.")
 
         # 3. Optionally, display the full summary in the UI
-        if self.active_summary_type == "combinedDetailed":
+        if self.active_summary_type == "combinedDettagliato":
             self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
             self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
         elif self.active_summary_type == "combinedMeeting":
