@@ -2272,6 +2272,12 @@ class VideoAudioManager(QMainWindow):
         if self.transcription_corrected:
             data["transcription_corrected"] = self.transcription_corrected
 
+        # Rimuovi le chiavi obsolete per la pulizia del formato
+        if 'combined_summary' in data:
+            del data['combined_summary']
+        if 'transcription_raw' in data:
+            del data['transcription_raw']
+
         # Salva i dati aggiornati
         try:
             with open(json_path, 'w', encoding='utf-8') as f:
@@ -4621,13 +4627,6 @@ class VideoAudioManager(QMainWindow):
                 "detailed_integrated": "",
                 "meeting_integrated": ""
             },
-            "combined_summary": {
-                "source_files": [],
-                "detailed_combined": "",
-                "meeting_combined": "",
-                "detailed_combined_integrated": "",
-                "meeting_combined_integrated": ""
-            },
             "summary_date": None,
             "generated_audios": [],
             "video_notes": []
@@ -5384,10 +5383,12 @@ class VideoAudioManager(QMainWindow):
              self.summaries['detailed'] = data.get('summary_generated', '')
              self.summaries['detailed_integrated'] = data.get('summary_generated_integrated', '')
 
-        self.combined_summary = data.get('combined_summary', {
-            "source_files": [], "detailed_combined": "", "meeting_combined": "",
-            "detailed_combined_integrated": "", "meeting_combined_integrated": ""
-        })
+        # Rimosso il caricamento di 'combined_summary' dal JSON del singolo clip.
+        # Questa informazione è ora gestita a livello di progetto nel file .gnai.
+        # self.combined_summary = data.get('combined_summary', {
+        #     "source_files": [], "detailed_combined": "", "meeting_combined": "",
+        #     "detailed_combined_integrated": "", "meeting_combined_integrated": ""
+        # })
 
         # Aggiorna la vista per tutti i tab. _update_summary_view è la fonte di verità.
         self._update_summary_view()
@@ -6686,12 +6687,19 @@ class VideoAudioManager(QMainWindow):
         if not self.projectDock.isVisible():
             self.projectDock.show()
 
-        # Carica i riassunti combinati dal file di progetto
+        # Carica i riassunti combinati e la trascrizione del progetto dal file .gnai
         project_summaries = project_data.get('projectSummaries', {})
         if project_summaries:
-            self.summaryCombinedDetailedTextArea.setMarkdown(project_summaries.get('combinedDettagliato', ''))
+            # CORREZIONE: Chiave errata 'combinedDettagliato' -> 'combinedDetailed'
+            self.summaryCombinedDetailedTextArea.setMarkdown(project_summaries.get('combinedDetailed', ''))
             self.summaryCombinedMeetingTextArea.setMarkdown(project_summaries.get('combinedMeeting', ''))
             logging.info("Riassunti combinati caricati dal progetto.")
+
+        project_transcription = project_data.get('projectTranscription', '')
+        if project_transcription:
+            # CORREZIONE: Carica la trascrizione del progetto come testo semplice, non HTML
+            self.batchTranscriptionTextArea.setPlainText(project_transcription)
+            logging.info("Trascrizione del progetto caricata.")
 
         # Asynchronously load the most recent clip to avoid blocking the UI
         QTimer.singleShot(100, self._load_most_recent_clip)
