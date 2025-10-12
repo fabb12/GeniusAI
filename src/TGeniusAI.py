@@ -3176,93 +3176,13 @@ class VideoAudioManager(QMainWindow):
 
         audioPauseGroup = self.createAudioPauseGroup()
         videoPauseGroup = self.createVideoPauseGroup()
+        silenceRemoverGroup = self.createSilenceRemoverGroup() # New group
 
         add_pause_layout.addWidget(audioPauseGroup)
         add_pause_layout.addWidget(videoPauseGroup)
+        add_pause_layout.addWidget(silenceRemoverGroup) # Added to this tab
+        add_pause_layout.addStretch() # Add stretch to push widgets up
         tab_widget.addTab(add_pause_tab, "Aggiungi/Pausa")
-
-        # Quarto tab: Rimuovi Silenzi
-        silence_remover_tab = QWidget()
-        silence_remover_layout = QVBoxLayout(silence_remover_tab)
-
-        # Silence Threshold
-        silence_remover_layout.addWidget(QLabel("Soglia Silenzio (dBFS):"))
-        self.silence_threshold_spinbox = QDoubleSpinBox()
-        self.silence_threshold_spinbox.setRange(-100.0, 0.0)
-        self.silence_threshold_spinbox.setValue(-40.0)
-        self.silence_threshold_spinbox.setSuffix(" dB")
-        self.silence_threshold_spinbox.setToolTip("Livello di volume al di sotto del quale l'audio è considerato silenzioso. Valori più bassi (es. -50dB) sono più severi.")
-        silence_remover_layout.addWidget(self.silence_threshold_spinbox)
-
-        # Minimum Silence Duration
-        silence_remover_layout.addWidget(QLabel("Durata Minima Silenzio (ms):"))
-        self.min_silence_duration_spinbox = QSpinBox()
-        self.min_silence_duration_spinbox.setRange(100, 10000)
-        self.min_silence_duration_spinbox.setValue(500)
-        self.min_silence_duration_spinbox.setSuffix(" ms")
-        self.min_silence_duration_spinbox.setToolTip("La durata minima di un silenzio per essere rimosso. Utile per non tagliare le pause naturali del parlato.")
-        silence_remover_layout.addWidget(self.min_silence_duration_spinbox)
-
-        # --- Action Button ---
-        self.start_silence_removal_button = QPushButton("Avvia Elaborazione Rimuovi Silenzi")
-        self.start_silence_removal_button.setIcon(QIcon(get_resource("taglia.png")))
-        self.start_silence_removal_button.setToolTip("Avvia il processo di rimozione dei silenzi dal video caricato nel Player Input.")
-        self.start_silence_removal_button.clicked.connect(self.start_silence_removal)
-        silence_remover_layout.addWidget(self.start_silence_removal_button)
-
-        tab_widget.addTab(silence_remover_tab, "Rimuovi Silenzi")
-
-    def start_silence_removal(self):
-        """Starts the silence removal process."""
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            self.show_status_message("Carica un video nel Player Input prima di rimuovere i silenzi.", error=True)
-            return
-
-        if not self.current_project_path:
-            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di procedere.", error=True)
-            return
-
-        video_path = self.videoPathLineEdit
-        silence_threshold = self.silence_threshold_spinbox.value()
-        min_silence_len = self.min_silence_duration_spinbox.value()
-
-        # Generate a unique output path in the project's clips folder
-        base_name = os.path.splitext(os.path.basename(video_path))[0]
-        output_filename = f"{base_name}_silence_removed_{int(time.time())}.mp4"
-        output_path = os.path.join(self.current_project_path, "clips", output_filename)
-
-        thread = SilenceRemoverThread(
-            video_path=video_path,
-            silence_threshold_db=silence_threshold,
-            min_silence_len_ms=min_silence_len,
-            output_path=output_path,
-            parent=self
-        )
-
-        # We use the generic start_task to handle progress bar and cancellation
-        self.start_task(
-            thread,
-            on_complete=self.on_silence_removal_complete,
-            on_error=self.on_silence_removal_error,
-            on_progress=lambda p: self.update_status_progress(p, f"Rimozione silenzi: {p}%")
-        )
-
-    def on_silence_removal_complete(self, output_path):
-        """Handles the completion of the silence removal process."""
-        self.show_status_message(f"Video senza silenzi creato: {os.path.basename(output_path)}")
-
-        # Add the new clip to the project
-        self.project_manager.add_clip_to_project_from_path(self.projectDock.gnai_path, output_path)
-
-        # Refresh the project dock to show the new clip
-        self.load_project(self.projectDock.gnai_path)
-
-        # Optionally, load the new video into the output player
-        self.loadVideoOutput(output_path)
-
-    def on_silence_removal_error(self, error_message):
-        """Handles errors during the silence removal process."""
-        self.show_status_message(f"Errore durante la rimozione dei silenzi: {error_message}", error=True)
 
         # Secondo tab: Selezione Audio
         audio_selection_tab = QWidget()
@@ -3319,46 +3239,88 @@ class VideoAudioManager(QMainWindow):
 
         return dock
 
-    def create_silence_remover_dock(self):
-        """Creates the 'Remove Silences' dock widget."""
-        dock = CustomDock("Rimuovi Silenzi", closable=True)
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-
-        # --- Settings Group ---
-        settings_group = QGroupBox("Impostazioni di Rimozione Silenzio")
-        settings_layout = QGridLayout(settings_group)
+    def createSilenceRemoverGroup(self):
+        silence_remover_group = QGroupBox("Rimuovi Silenzi")
+        silence_remover_layout = QVBoxLayout(silence_remover_group)
 
         # Silence Threshold
-        settings_layout.addWidget(QLabel("Soglia Silenzio (dBFS):"), 0, 0)
+        silence_remover_layout.addWidget(QLabel("Soglia Silenzio (dBFS):"))
         self.silence_threshold_spinbox = QDoubleSpinBox()
         self.silence_threshold_spinbox.setRange(-100.0, 0.0)
         self.silence_threshold_spinbox.setValue(-40.0)
         self.silence_threshold_spinbox.setSuffix(" dB")
         self.silence_threshold_spinbox.setToolTip("Livello di volume al di sotto del quale l'audio è considerato silenzioso. Valori più bassi (es. -50dB) sono più severi.")
-        settings_layout.addWidget(self.silence_threshold_spinbox, 0, 1)
+        silence_remover_layout.addWidget(self.silence_threshold_spinbox)
 
         # Minimum Silence Duration
-        settings_layout.addWidget(QLabel("Durata Minima Silenzio (ms):"), 1, 0)
+        silence_remover_layout.addWidget(QLabel("Durata Minima Silenzio (ms):"))
         self.min_silence_duration_spinbox = QSpinBox()
         self.min_silence_duration_spinbox.setRange(100, 10000)
         self.min_silence_duration_spinbox.setValue(500)
         self.min_silence_duration_spinbox.setSuffix(" ms")
         self.min_silence_duration_spinbox.setToolTip("La durata minima di un silenzio per essere rimosso. Utile per non tagliare le pause naturali del parlato.")
-        settings_layout.addWidget(self.min_silence_duration_spinbox, 1, 1)
-
-        layout.addWidget(settings_group)
+        silence_remover_layout.addWidget(self.min_silence_duration_spinbox)
 
         # --- Action Button ---
-        self.start_silence_removal_button = QPushButton("Avvia Elaborazione")
+        self.start_silence_removal_button = QPushButton("Avvia Elaborazione Rimuovi Silenzi")
         self.start_silence_removal_button.setIcon(QIcon(get_resource("taglia.png")))
         self.start_silence_removal_button.setToolTip("Avvia il processo di rimozione dei silenzi dal video caricato nel Player Input.")
         self.start_silence_removal_button.clicked.connect(self.start_silence_removal)
-        layout.addWidget(self.start_silence_removal_button)
+        silence_remover_layout.addWidget(self.start_silence_removal_button)
 
-        layout.addStretch()
-        dock.addWidget(widget)
-        return dock
+        return silence_remover_group
+
+    def start_silence_removal(self):
+        """Starts the silence removal process."""
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Carica un video nel Player Input prima di rimuovere i silenzi.", error=True)
+            return
+
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di procedere.", error=True)
+            return
+
+        video_path = self.videoPathLineEdit
+        silence_threshold = self.silence_threshold_spinbox.value()
+        min_silence_len = self.min_silence_duration_spinbox.value()
+
+        # Generate a unique output path in the project's clips folder
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_filename = f"{base_name}_silence_removed_{int(time.time())}.mp4"
+        output_path = os.path.join(self.current_project_path, "clips", output_filename)
+
+        thread = SilenceRemoverThread(
+            video_path=video_path,
+            silence_threshold_db=silence_threshold,
+            min_silence_len_ms=min_silence_len,
+            output_path=output_path,
+            parent=self
+        )
+
+        # We use the generic start_task to handle progress bar and cancellation
+        self.start_task(
+            thread,
+            on_complete=self.on_silence_removal_complete,
+            on_error=self.on_silence_removal_error,
+            on_progress=lambda p: self.update_status_progress(p, f"Rimozione silenzi: {p}%")
+        )
+
+    def on_silence_removal_complete(self, output_path):
+        """Handles the completion of the silence removal process."""
+        self.show_status_message(f"Video senza silenzi creato: {os.path.basename(output_path)}")
+
+        # Add the new clip to the project
+        self.project_manager.add_clip_to_project_from_path(self.projectDock.gnai_path, output_path)
+
+        # Refresh the project dock to show the new clip
+        self.load_project(self.projectDock.gnai_path)
+
+        # Optionally, load the new video into the output player
+        self.loadVideoOutput(output_path)
+
+    def on_silence_removal_error(self, error_message):
+        """Handles errors during the silence removal process."""
+        self.show_status_message(f"Errore durante la rimozione dei silenzi: {error_message}", error=True)
 
     def createAudioReplacementGroup(self):
         audioReplacementGroup = QGroupBox("Sostituzione audio principale")
