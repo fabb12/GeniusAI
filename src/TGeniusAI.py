@@ -6690,14 +6690,12 @@ class VideoAudioManager(QMainWindow):
         # Carica i riassunti combinati e la trascrizione del progetto dal file .gnai
         project_summaries = project_data.get('projectSummaries', {})
         if project_summaries:
-            # CORREZIONE: Chiave errata 'combinedDettagliato' -> 'combinedDetailed'
             self.summaryCombinedDetailedTextArea.setMarkdown(project_summaries.get('combinedDetailed', ''))
             self.summaryCombinedMeetingTextArea.setMarkdown(project_summaries.get('combinedMeeting', ''))
             logging.info("Riassunti combinati caricati dal progetto.")
 
         project_transcription = project_data.get('projectTranscription', '')
         if project_transcription:
-            # CORREZIONE: Carica la trascrizione del progetto come testo semplice, non HTML
             self.batchTranscriptionTextArea.setPlainText(project_transcription)
             logging.info("Trascrizione del progetto caricata.")
 
@@ -7176,12 +7174,16 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessuna trascrizione di progetto trovata. Eseguire prima la trascrizione batch.", error=True)
             return
 
-        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto", "Scegli il tipo di riassunto:", ["Dettagliato", "Meeting"], 0, False)
+        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto", "Scegli il tipo di riassunto:", ["Dettagliato", "Note Riunione"], 0, False)
         if not ok:
             return
 
         mode = 'combined_summary_text_only'
-        self.active_summary_type = f"combined{summary_type}" # e.g., combinedDetailed
+        # CORREZIONE: Imposta la chiave corretta per il salvataggio
+        if summary_type == "Dettagliato":
+            self.active_summary_type = "combinedDetailed"
+        else: # Note Riunione
+            self.active_summary_type = "combinedMeeting"
 
         thread = ProcessTextAI(
             mode=mode,
@@ -7192,54 +7194,32 @@ class VideoAudioManager(QMainWindow):
 
     def on_batch_summary_completed(self, summary_text):
         """
-        Saves the generated batch summary to the project file and also parses
-        and saves individual summaries back to their respective clip JSON files.
+        Saves the generated batch summary directly to the correct field
+        in the .gnai project file.
         """
         if not self.projectDock.gnai_path or not self.active_summary_type:
             self.active_summary_type = None
             return
 
-        # 1. Save the full combined summary to the main project .gnai file
+        # Load the project data
         project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
         if error:
             self.show_status_message(f"Errore nel caricamento del progetto per salvare il riassunto: {error}", error=True)
             self.active_summary_type = None
             return
 
+        # Ensure the 'projectSummaries' dictionary exists
         if 'projectSummaries' not in project_data:
             project_data['projectSummaries'] = {}
+
+        # Save the summary to the correct field (e.g., 'combinedDetailed' or 'combinedMeeting')
         project_data['projectSummaries'][self.active_summary_type] = summary_text
+
+        # Save the updated project data back to the .gnai file
         self.project_manager.save_project(self.projectDock.gnai_path, project_data)
-        self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato nel progetto.", timeout=5000)
+        self.show_status_message(f"Riassunto '{self.active_summary_type}' salvato con successo nel file di progetto.", timeout=5000)
 
-        # 2. Parse and save individual summaries back to clip JSONs
-        summary_type_key = 'detailed' if 'Detailed' in self.active_summary_type else 'meeting'
-        # Regex to find summaries for each file. It looks for a "Source:" line and captures everything until the next "Source:".
-        # It uses a non-greedy match `(.+?)` and the DOTALL flag to span multiple lines.
-        # The lookahead `(?=Source:|\Z)` ensures it stops at the next source or the end of the string.
-        pattern = re.compile(r"Source: (.+?)\n(.+?)(?=\nSource:|\Z)", re.DOTALL)
-        matches = pattern.findall(summary_text)
-
-        for match in matches:
-            filename = match[0].strip()
-            individual_summary = match[1].strip()
-
-            # Find the full path for the clip
-            clip_path = self.project_manager.get_clip_path_by_filename(self.projectDock.gnai_path, filename)
-            if clip_path:
-                self.save_summary_to_clip_json(clip_path, summary_type_key, individual_summary)
-            else:
-                logging.warning(f"Could not find clip path for filename '{filename}' while saving individual summary.")
-
-        # 3. Optionally, display the full summary in the UI
-        if self.active_summary_type == "combinedDettagliato":
-            self.summaryCombinedDetailedTextArea.setMarkdown(summary_text)
-            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
-        elif self.active_summary_type == "combinedMeeting":
-            self.summaryCombinedMeetingTextArea.setMarkdown(summary_text)
-            self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
-
-        # 4. Reset the active summary type
+        # Reset the active summary type
         self.active_summary_type = None
 
     def save_summary_to_clip_json(self, clip_path, summary_type, summary_content):
