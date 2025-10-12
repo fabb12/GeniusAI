@@ -6686,6 +6686,13 @@ class VideoAudioManager(QMainWindow):
         if not self.projectDock.isVisible():
             self.projectDock.show()
 
+        # Carica i riassunti combinati dal file di progetto
+        project_summaries = project_data.get('projectSummaries', {})
+        if project_summaries:
+            self.summaryCombinedDetailedTextArea.setMarkdown(project_summaries.get('combinedDettagliato', ''))
+            self.summaryCombinedMeetingTextArea.setMarkdown(project_summaries.get('combinedMeeting', ''))
+            logging.info("Riassunti combinati caricati dal progetto.")
+
         # Asynchronously load the most recent clip to avoid blocking the UI
         QTimer.singleShot(100, self._load_most_recent_clip)
 
