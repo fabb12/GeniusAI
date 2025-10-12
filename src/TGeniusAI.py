@@ -5128,7 +5128,7 @@ class VideoAudioManager(QMainWindow):
         self.summaries = {}
         self.active_summary_type = None
 
-        self.original_text = self.transcriptionTextArea.toPlainText()
+        self.original_text = self.singleTranscriptionTextArea.toPlainText()
 
         # La logica del timecode e del rilevamento lingua rimane
         # Usa il testo semplice per il rilevamento della lingua per evitare problemi con l'HTML
@@ -5148,7 +5148,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         logging.info("Salvataggio automatico della trascrizione...")
-        current_text = self.transcriptionTextArea.toPlainText()
+        current_text = self.singleTranscriptionTextArea.toPlainText()
         update_data = {
             "transcription_raw": current_text,
             "transcription_date": datetime.datetime.now().isoformat()
