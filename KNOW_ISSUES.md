@@ -72,10 +72,12 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] aggiung funzoan import video da metter nel progetto '
 - [x] tasto desto su clip sceglie  dove aprire il video in  quale video player, input o ouput
 - [x] qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
-- [ ] Taglia le pause più lunghe di 2 secondi e aggiungi una transizione morbida tra le clip.”
+- [x] Taglia le pause più lunghe di 2 secondi e aggiungi una transizione morbida tra le clip.”
 - [ ] aggiungi transazioni automatiche
 - [ ] riconoscere oggetti, volti, luoghi, emozioni;
 - [ ] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
+- [ ] integrare trascrzione con documenti esterni
+- 
 mettere un titolo nel riassuto
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
