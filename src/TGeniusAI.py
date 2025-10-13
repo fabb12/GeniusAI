@@ -218,7 +218,7 @@ class MediaOverlayThread(QThread):
                 # Create image with a bit of padding
                 img = Image.new('RGBA', (text_width + 20, text_height + 20), (0, 0, 0, 0))
                 draw = ImageDraw.Draw(img)
-                draw.text((10, 10), text, font=font, fill=self.media_data['color'])
+                draw.text((10 - left, 10 - top), text, font=font, fill=self.media_data['color'])
 
                 # Convert Pillow image to moviepy clip
                 overlay_clip = ImageClip(np.array(img))
