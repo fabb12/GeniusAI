@@ -179,49 +179,13 @@ class MediaOverlayThread(QThread):
 
             if media_type == 'text':
                 self.progress.emit(30, "Creating text overlay...")
-
-                # Create text image with Pillow
-                font_path_str = self.media_data['font'].replace('-', ' ')
-                font_size = self.media_data.get('fontsize', 12) # Default to 12 if not provided
-
-                try:
-                    # Attempt to load the selected font
-                    font = ImageFont.truetype(f"{font_path_str}.ttf", font_size)
-                except IOError:
-                    logging.warning(f"Could not find font: {font_path_str}.ttf. Trying a default font.")
-                    try:
-                        # Fallback 1: Try a common font like Arial
-                        font = ImageFont.truetype("arial.ttf", font_size)
-                    except IOError:
-                        # Fallback 2: Use the default Pillow font and specify the size
-                        logging.warning("Default font 'arial.ttf' not found. Using Pillow's load_default().")
-                        # load_default() returns a font object, but we need to ensure the size is correct.
-                        # The default font has a fixed size, so we can't pass the size directly.
-                        # This is a limitation of the default font. Let's try to get a font with size.
-                        try:
-                            # This is a bit of a hack, but might work on some systems
-                            font = ImageFont.truetype("sans-serif", font_size)
-                        except IOError:
-                             # Final fallback: Use Pillow's default font. It does not support resizing.
-                             font = ImageFont.load_default()
-
-
-                text = self.media_data['text']
-
-                # Dummy draw to get text size
-                dummy_img = Image.new('RGB', (0, 0))
-                dummy_draw = ImageDraw.Draw(dummy_img)
-                left, top, right, bottom = dummy_draw.textbbox((0,0), text, font=font)
-                text_width = right - left
-                text_height = bottom - top
-
-                # Create image with a bit of padding
-                img = Image.new('RGBA', (text_width + 20, text_height + 20), (0, 0, 0, 0))
-                draw = ImageDraw.Draw(img)
-                draw.text((10, 10), text, font=font, fill=self.media_data['color'])
-
-                # Convert Pillow image to moviepy clip
-                overlay_clip = ImageClip(np.array(img))
+                # Use moviepy's TextClip for more robust text rendering
+                overlay_clip = TextClip(
+                    txt=self.media_data['text'],
+                    fontsize=self.media_data.get('fontsize', 24), # Default fontsize
+                    color=self.media_data.get('color', 'white'),
+                    font=self.media_data.get('font', 'Arial') # Provide a fallback font
+                )
             elif media_type == 'image':
                 self.progress.emit(30, "Creating image overlay...")
                 overlay_clip = (ImageClip(self.media_data['path'])
@@ -266,7 +230,29 @@ class MediaOverlayThread(QThread):
             self.progress.emit(60, "Compositing video...")
             if not self.running: return
 
-            final_clip = CompositeVideoClip([video_clip, overlay_clip])
+            # Optimize rendering by only processing the relevant segment
+            end_time = self.start_time + duration
+            if end_time > video_clip.duration:
+                end_time = video_clip.duration
+
+            # Create the part with the overlay
+            sub_clip_to_overlay = video_clip.subclip(self.start_time, end_time)
+            composited_part = CompositeVideoClip([sub_clip_to_overlay, overlay_clip.set_start(0)]) # Overlay starts at 0 in the subclip
+
+            # Get the parts of the video that are not affected
+            pre_clip = video_clip.subclip(0, self.start_time)
+            post_clip = video_clip.subclip(end_time)
+
+            # Concatenate all parts
+            clips_to_concatenate = []
+            if pre_clip.duration > 0:
+                clips_to_concatenate.append(pre_clip)
+            clips_to_concatenate.append(composited_part)
+            if post_clip.duration > 0:
+                clips_to_concatenate.append(post_clip)
+
+            final_clip = concatenate_videoclips(clips_to_concatenate, method="compose")
+
 
             self.progress.emit(80, "Writing final video...")
             if not self.running: return
