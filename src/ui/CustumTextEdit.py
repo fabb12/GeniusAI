@@ -54,7 +54,8 @@ class CustomTextEdit(QTextEdit):
                 if current_size > 1:
                     current_font.setPointSize(current_size - 1)
 
-            self.setFont(current_font)
+            # Non impostare il font qui per evitare cicli di segnali.
+            # Emetti solo il segnale, il gestore centrale applicherà la modifica.
             self.fontSizeChanged.emit(current_font.pointSize())
             event.accept()
         else:

@@ -1718,19 +1718,21 @@ class VideoAudioManager(QMainWindow):
             text_areas.append(self.audioAiTextArea)
 
         for area in text_areas:
-            if area:  # Assicura che l'area esista
-                # Itera su tutti i blocchi di testo e applica il nuovo font
-                cursor = QTextCursor(area.document())
-                cursor.beginEditBlock()
-                while not cursor.atEnd():
-                    cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor)
-                    char_format = cursor.charFormat()
+            if area:
+                area.blockSignals(True)
+                try:
+                    # Applica il font a tutto il documento
+                    cursor = QTextCursor(area.document())
+                    cursor.select(QTextCursor.SelectionType.Document)
+                    char_format = QTextCharFormat()
                     char_format.setFont(font)
-                    cursor.setCharFormat(char_format)
-                cursor.endEditBlock()
+                    cursor.mergeCharFormat(char_format)
+                    cursor.clearSelection() # Deseleziona il testo
 
-                # Imposta anche il font di base per il testo futuro
-                area.setFont(font)
+                    # Imposta il font di base per il testo futuro
+                    area.setCurrentCharFormat(char_format)
+                finally:
+                    area.blockSignals(False)
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
