@@ -55,7 +55,7 @@ from src.ui.CustVideoWidget import CropVideoWidget
 from src.ui.CustomSlider import CustomSlider
 from src.managers.Settings import SettingsDialog
 from src.ui.ScreenButton import ScreenButton
-from src.ui.CustumTextEdit import CustomTextEdit
+from src.ui.CustomTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
@@ -1689,21 +1689,29 @@ class VideoAudioManager(QMainWindow):
 
     def apply_and_save_font_settings(self, size=None):
         """
-        Applica le impostazioni del font (famiglia e dimensione) alle aree di testo
-        e salva la dimensione se viene modificata.
+        Applica le impostazioni del font (famiglia e dimensione) a tutte le aree di testo
+        e salva la nuova dimensione se è stata modificata (es. tramite rotellina).
+        Questo metodo è il gestore centrale per ogni modifica del font.
         """
         settings = QSettings("Genius", "GeniusAI")
 
+        # Determina la famiglia di caratteri dalle impostazioni
         font_family = settings.value("editor/fontFamily", "Arial")
 
-        if size is None:
-            font_size = settings.value("editor/fontSize", 14, type=int)
-        else:
+        # Determina la dimensione del carattere:
+        # - Usa la nuova dimensione 'size' se fornita (da wheelEvent).
+        # - Altrimenti, leggi la dimensione salvata.
+        if size is not None:
             font_size = size
+            # Salva la nuova dimensione nelle impostazioni per la persistenza
             settings.setValue("editor/fontSize", font_size)
+        else:
+            font_size = settings.value("editor/fontSize", 14, type=int)
 
+        # Crea l'oggetto QFont da applicare
         font = QFont(font_family, font_size)
 
+        # Elenco centralizzato di tutte le aree di testo da aggiornare
         text_areas = [
             self.singleTranscriptionTextArea,
             self.batchTranscriptionTextArea,
@@ -1713,25 +1721,30 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea,
             self.summaryCombinedDetailedTextArea,
             self.summaryCombinedMeetingTextArea,
+            self.audioAiTextArea,
         ]
-        if hasattr(self, 'audioAiTextArea'):
-            text_areas.append(self.audioAiTextArea)
 
+        # Itera su ogni area di testo per applicare il nuovo font
         for area in text_areas:
             if area:
+                # Blocca i segnali del widget per evitare cicli di eventi
+                # (es. textChanged che richiama un salvataggio che richiama un'altra modifica)
                 area.blockSignals(True)
                 try:
-                    # Applica il font a tutto il documento
-                    cursor = QTextCursor(area.document())
-                    cursor.select(QTextCursor.SelectionType.Document)
+                    # Crea un formato di carattere con il nuovo font
                     char_format = QTextCharFormat()
                     char_format.setFont(font)
-                    cursor.mergeCharFormat(char_format)
-                    cursor.clearSelection() # Deseleziona il testo
 
-                    # Imposta il font di base per il testo futuro
+                    # Applica il formato a tutto il documento per aggiornare il testo esistente
+                    cursor = QTextCursor(area.document())
+                    cursor.select(QTextCursor.SelectionType.Document)
+                    cursor.mergeCharFormat(char_format)
+                    cursor.clearSelection()
+
+                    # Imposta il formato del carattere corrente per il testo che verrà digitato
                     area.setCurrentCharFormat(char_format)
                 finally:
+                    # Riattiva i segnali in ogni caso
                     area.blockSignals(False)
 
     def videoContainerResizeEvent(self, event):
