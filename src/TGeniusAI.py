@@ -1747,6 +1747,11 @@ class VideoAudioManager(QMainWindow):
                     # Riattiva i segnali in ogni caso
                     area.blockSignals(False)
 
+        # Aggiorna anche i titoli dei dock
+        for dock in self.dockSettingsManager.docks.values():
+            if hasattr(dock, 'label') and hasattr(dock.label, 'updateStyle') and hasattr(dock.label, 'setFontSize'):
+                dock.label.setFontSize(f"{font_size}px")
+
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
         if self.zoom_level == 1.0:
@@ -2177,14 +2182,19 @@ class VideoAudioManager(QMainWindow):
         self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
 
     def _sync_transcription_state_from_ui(self):
-        """Sincronizza le variabili di stato della trascrizione con il contenuto della UI."""
+        """
+        Sincronizza lo stato della trascrizione dalla UI al modello dati,
+        convertendo sempre l'HTML in Markdown per la memorizzazione.
+        """
+        html_content = self.singleTranscriptionTextArea.toHtml()
+        markdown_content = markdownify(html_content, heading_style="ATX")
+
         if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
-            # Se la vista corretta è attiva, converti il suo HTML in Markdown prima di salvarlo
-            html_content = self.singleTranscriptionTextArea.toHtml()
-            self.transcription_corrected = markdownify(html_content, heading_style="ATX")
+            # Se la vista corretta è attiva, il suo contenuto aggiorna 'transcription_corrected'.
+            self.transcription_corrected = markdown_content
         else:
-            # Altrimenti, salva l'HTML della trascrizione originale
-            self.transcription_original = self.singleTranscriptionTextArea.toHtml()
+            # Se la vista originale è attiva, il suo contenuto aggiorna 'transcription_original'.
+            self.transcription_original = markdown_content
 
     def save_transcription_to_json(self):
         """
@@ -5527,9 +5537,10 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
-            # Carica l'HTML per preservare la formattazione
-            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
-            self._style_existing_timestamps(self.singleTranscriptionTextArea) # Applica stile
+            # Converte il Markdown originale in HTML per la visualizzazione
+            html_content = markdown.markdown(self.transcription_original, extensions=['fenced_code', 'tables'])
+            self.singleTranscriptionTextArea.setHtml(html_content)
+            self._style_existing_timestamps(self.singleTranscriptionTextArea) # Applica stile ai timestamp
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 

@@ -26,6 +26,11 @@ class CustomDockLabel(DockLabel):
         # Applica il nostro stile personalizzato
         self.updateStyle()
 
+    def setFontSize(self, size):
+        """Imposta la dimensione del font e aggiorna lo stile."""
+        self.fontSize = size
+        self.updateStyle()
+
     def updateStyle(self):
         r = '3px'
         fg = "#E8E9ED"  # Testo grigio chiaro
