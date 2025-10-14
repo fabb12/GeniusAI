@@ -28,20 +28,17 @@ class AddMediaDialog(QDialog):
         # Tab widget for different media types
         self.tabs = QTabWidget()
         self.tab_text = QWidget()
-        self.tab_image = QWidget()
-        self.tab_gif = QWidget()
+        self.tab_image_gif = QWidget()
         self.tab_pip = QWidget() # New Tab for PiP
 
         self.tabs.addTab(self.tab_text, "Text")
-        self.tabs.addTab(self.tab_image, "Image")
-        self.tabs.addTab(self.tab_gif, "GIF")
+        self.tabs.addTab(self.tab_image_gif, "Image/GIF")
         self.tabs.addTab(self.tab_pip, "Video PiP") # Add PiP tab
         self.settings_layout.addWidget(self.tabs)
         self.tabs.currentChanged.connect(self.update_preview)
 
         self._create_text_tab()
-        self._create_image_tab()
-        self._create_gif_tab()
+        self._create_image_gif_tab()
         self._create_pip_tab() # Create the new PiP tab
 
         # Dialog buttons (OK, Cancel)
@@ -82,21 +79,13 @@ class AddMediaDialog(QDialog):
         settings.setValue("text/pos_y", self.pos_y_spinbox.value())
         settings.setValue("text/duration", self.duration_spinbox_text.value())
 
-        # Image Tab
-        settings.setValue("image/path", self.image_path_label.text())
-        settings.setValue("image/pos_x", self.image_pos_x_spinbox.value())
-        settings.setValue("image/pos_y", self.image_pos_y_spinbox.value())
-        settings.setValue("image/width", self.image_width_spinbox.value())
-        settings.setValue("image/height", self.image_height_spinbox.value())
-        settings.setValue("image/duration", self.duration_spinbox_image.value())
-
-        # GIF Tab
-        settings.setValue("gif/path", self.gif_path_label.text())
-        settings.setValue("gif/pos_x", self.gif_pos_x_spinbox.value())
-        settings.setValue("gif/pos_y", self.gif_pos_y_spinbox.value())
-        settings.setValue("gif/width", self.gif_width_spinbox.value())
-        settings.setValue("gif/height", self.gif_height_spinbox.value())
-        settings.setValue("gif/duration", self.duration_spinbox_gif.value())
+        # Image/GIF Tab
+        settings.setValue("image_gif/path", self.image_gif_path_label.text())
+        settings.setValue("image_gif/pos_x", self.image_gif_pos_x_spinbox.value())
+        settings.setValue("image_gif/pos_y", self.image_gif_pos_y_spinbox.value())
+        settings.setValue("image_gif/width", self.image_gif_width_spinbox.value())
+        settings.setValue("image_gif/height", self.image_gif_height_spinbox.value())
+        settings.setValue("image_gif/duration", self.duration_spinbox_image_gif.value())
 
         # PiP Tab
         settings.setValue("pip/path", self.pip_path_label.text())
@@ -119,21 +108,13 @@ class AddMediaDialog(QDialog):
         self.pos_y_spinbox.setValue(settings.value("text/pos_y", 0, type=int))
         self.duration_spinbox_text.setValue(settings.value("text/duration", 5.0, type=float))
 
-        # Image Tab
-        self.image_path_label.setText(settings.value("image/path", "", type=str))
-        self.image_pos_x_spinbox.setValue(settings.value("image/pos_x", 0, type=int))
-        self.image_pos_y_spinbox.setValue(settings.value("image/pos_y", 0, type=int))
-        self.image_width_spinbox.setValue(settings.value("image/width", 100, type=int))
-        self.image_height_spinbox.setValue(settings.value("image/height", 100, type=int))
-        self.duration_spinbox_image.setValue(settings.value("image/duration", 5.0, type=float))
-
-        # GIF Tab
-        self.gif_path_label.setText(settings.value("gif/path", "", type=str))
-        self.gif_pos_x_spinbox.setValue(settings.value("gif/pos_x", 0, type=int))
-        self.gif_pos_y_spinbox.setValue(settings.value("gif/pos_y", 0, type=int))
-        self.gif_width_spinbox.setValue(settings.value("gif/width", 100, type=int))
-        self.gif_height_spinbox.setValue(settings.value("gif/height", 100, type=int))
-        self.duration_spinbox_gif.setValue(settings.value("gif/duration", 5.0, type=float))
+        # Image/GIF Tab
+        self.image_gif_path_label.setText(settings.value("image_gif/path", "", type=str))
+        self.image_gif_pos_x_spinbox.setValue(settings.value("image_gif/pos_x", 0, type=int))
+        self.image_gif_pos_y_spinbox.setValue(settings.value("image_gif/pos_y", 0, type=int))
+        self.image_gif_width_spinbox.setValue(settings.value("image_gif/width", 100, type=int))
+        self.image_gif_height_spinbox.setValue(settings.value("image_gif/height", 100, type=int))
+        self.duration_spinbox_image_gif.setValue(settings.value("image_gif/duration", 5.0, type=float))
 
         # PiP Tab
         self.pip_path_label.setText(settings.value("pip/path", "", type=str))
@@ -188,13 +169,10 @@ class AddMediaDialog(QDialog):
         if current_tab_index == 0: # Text
             self.pos_x_spinbox.setValue(original_x)
             self.pos_y_spinbox.setValue(original_y)
-        elif current_tab_index == 1: # Image
-            self.image_pos_x_spinbox.setValue(original_x)
-            self.image_pos_y_spinbox.setValue(original_y)
-        elif current_tab_index == 2: # GIF
-            self.gif_pos_x_spinbox.setValue(original_x)
-            self.gif_pos_y_spinbox.setValue(original_y)
-        elif current_tab_index == 3: # PiP - Position is handled by combobox, but we could adapt this
+        elif current_tab_index == 1: # Image/GIF
+            self.image_gif_pos_x_spinbox.setValue(original_x)
+            self.image_gif_pos_y_spinbox.setValue(original_y)
+        elif current_tab_index == 2: # PiP - Position is handled by combobox, but we could adapt this
             pass # No direct X/Y spinboxes for PiP
 
         # The spinbox valueChanged signal will automatically call update_preview
@@ -234,20 +212,10 @@ class AddMediaDialog(QDialog):
             # Adjust y-position to account for text height so it's placed correctly
             painter.drawText(position[0], position[1] + text_height, text)
 
-        elif media_type == 'image' and media_data.get('path'):
-            image_path = media_data['path']
-            if os.path.exists(image_path):
-                overlay_pixmap = QPixmap(image_path)
-                if not overlay_pixmap.isNull():
-                    position = media_data['position']
-                    size = media_data['size']
-                    painter.drawPixmap(position[0], position[1], size[0], size[1], overlay_pixmap)
-
-        elif media_type == 'gif' and media_data.get('path'):
-            # For GIF, we just show the first frame as a static image in the preview
-            gif_path = media_data['path']
-            if os.path.exists(gif_path):
-                overlay_pixmap = QPixmap(gif_path) # QPixmap loads the first frame of a GIF
+        elif media_type in ['image', 'gif'] and media_data.get('path'):
+            path = media_data['path']
+            if os.path.exists(path):
+                overlay_pixmap = QPixmap(path)
                 if not overlay_pixmap.isNull():
                     position = media_data['position']
                     size = media_data['size']
@@ -343,112 +311,61 @@ class AddMediaDialog(QDialog):
         self.duration_spinbox_text.setSuffix(" s")
         layout.addRow("Duration:", self.duration_spinbox_text)
 
-    def _create_image_tab(self):
-        layout = QFormLayout(self.tab_image)
+    def _create_image_gif_tab(self):
+        layout = QFormLayout(self.tab_image_gif)
 
         # File Path
         file_layout = QHBoxLayout()
-        self.image_path_label = QLineEdit()
-        self.image_path_label.setReadOnly(True)
-        browse_button = QPushButton("Browse...")
-        browse_button.clicked.connect(lambda: self._browse_file(self.image_path_label, "Images (*.png *.jpg *.jpeg)"))
-        file_layout.addWidget(self.image_path_label)
-        file_layout.addWidget(browse_button)
-        layout.addRow("Image File:", file_layout)
-
-        # Position
-        pos_layout = QHBoxLayout()
-        self.image_pos_x_spinbox = QSpinBox()
-        self.image_pos_x_spinbox.setRange(0, 9999)
-        self.image_pos_x_spinbox.valueChanged.connect(self.update_preview)
-        self.image_pos_y_spinbox = QSpinBox()
-        self.image_pos_y_spinbox.setRange(0, 9999)
-        self.image_pos_y_spinbox.valueChanged.connect(self.update_preview)
-        pos_layout.addWidget(QLabel("X:"))
-        pos_layout.addWidget(self.image_pos_x_spinbox)
-        pos_layout.addWidget(QLabel("Y:"))
-        pos_layout.addWidget(self.image_pos_y_spinbox)
-        layout.addRow("Position (px):", pos_layout)
-
-        # Size
-        size_layout = QHBoxLayout()
-        self.image_width_spinbox = QSpinBox()
-        self.image_width_spinbox.setRange(1, 9999)
-        self.image_width_spinbox.setValue(100)
-        self.image_width_spinbox.valueChanged.connect(self.update_preview)
-        self.image_height_spinbox = QSpinBox()
-        self.image_height_spinbox.setRange(1, 9999)
-        self.image_height_spinbox.setValue(100)
-        self.image_height_spinbox.valueChanged.connect(self.update_preview)
-        size_layout.addWidget(QLabel("Width:"))
-        size_layout.addWidget(self.image_width_spinbox)
-        size_layout.addWidget(QLabel("Height:"))
-        size_layout.addWidget(self.image_height_spinbox)
-        layout.addRow("Size (px):", size_layout)
-
-        # Duration
-        self.duration_spinbox_image = QDoubleSpinBox()
-        self.duration_spinbox_image.setRange(0.1, 600.0)
-        self.duration_spinbox_image.setValue(5.0)
-        self.duration_spinbox_image.setSuffix(" s")
-        layout.addRow("Duration:", self.duration_spinbox_image)
-
-    def _create_gif_tab(self):
-        layout = QFormLayout(self.tab_gif)
-
-        # File Path
-        file_layout = QHBoxLayout()
-        self.gif_path_label = QLineEdit()
-        self.gif_path_label.setReadOnly(True)
-        file_layout.addWidget(self.gif_path_label)
+        self.image_gif_path_label = QLineEdit()
+        self.image_gif_path_label.setReadOnly(True)
+        file_layout.addWidget(self.image_gif_path_label)
 
         browse_library_button = QPushButton("Browse Library...")
         browse_library_button.clicked.connect(self._open_gif_library)
         file_layout.addWidget(browse_library_button)
 
         browse_file_button = QPushButton("Browse File...")
-        browse_file_button.clicked.connect(lambda: self._browse_file(self.gif_path_label, "GIFs (*.gif)"))
+        browse_file_button.clicked.connect(lambda: self._browse_file(self.image_gif_path_label, "Images & GIFs (*.png *.jpg *.jpeg *.gif)"))
         file_layout.addWidget(browse_file_button)
 
-        layout.addRow("GIF File:", file_layout)
-
+        layout.addRow("File:", file_layout)
 
         # Position
         pos_layout = QHBoxLayout()
-        self.gif_pos_x_spinbox = QSpinBox()
-        self.gif_pos_x_spinbox.setRange(0, 9999)
-        self.gif_pos_x_spinbox.valueChanged.connect(self.update_preview)
-        self.gif_pos_y_spinbox = QSpinBox()
-        self.gif_pos_y_spinbox.setRange(0, 9999)
-        self.gif_pos_y_spinbox.valueChanged.connect(self.update_preview)
+        self.image_gif_pos_x_spinbox = QSpinBox()
+        self.image_gif_pos_x_spinbox.setRange(0, 9999)
+        self.image_gif_pos_x_spinbox.valueChanged.connect(self.update_preview)
+        self.image_gif_pos_y_spinbox = QSpinBox()
+        self.image_gif_pos_y_spinbox.setRange(0, 9999)
+        self.image_gif_pos_y_spinbox.valueChanged.connect(self.update_preview)
         pos_layout.addWidget(QLabel("X:"))
-        pos_layout.addWidget(self.gif_pos_x_spinbox)
+        pos_layout.addWidget(self.image_gif_pos_x_spinbox)
         pos_layout.addWidget(QLabel("Y:"))
-        pos_layout.addWidget(self.gif_pos_y_spinbox)
+        pos_layout.addWidget(self.image_gif_pos_y_spinbox)
         layout.addRow("Position (px):", pos_layout)
 
         # Size
         size_layout = QHBoxLayout()
-        self.gif_width_spinbox = QSpinBox()
-        self.gif_width_spinbox.setRange(1, 9999)
-        self.gif_width_spinbox.setValue(100)
-        self.gif_width_spinbox.valueChanged.connect(self.update_preview)
-        self.gif_height_spinbox = QSpinBox()
-        self.gif_height_spinbox.setRange(1, 9999)
-        self.gif_height_spinbox.setValue(100)
-        self.gif_height_spinbox.valueChanged.connect(self.update_preview)
+        self.image_gif_width_spinbox = QSpinBox()
+        self.image_gif_width_spinbox.setRange(1, 9999)
+        self.image_gif_width_spinbox.setValue(100)
+        self.image_gif_width_spinbox.valueChanged.connect(self.update_preview)
+        self.image_gif_height_spinbox = QSpinBox()
+        self.image_gif_height_spinbox.setRange(1, 9999)
+        self.image_gif_height_spinbox.setValue(100)
+        self.image_gif_height_spinbox.valueChanged.connect(self.update_preview)
         size_layout.addWidget(QLabel("Width:"))
-        size_layout.addWidget(self.gif_width_spinbox)
+        size_layout.addWidget(self.image_gif_width_spinbox)
         size_layout.addWidget(QLabel("Height:"))
-        size_layout.addWidget(self.gif_height_spinbox)
+        size_layout.addWidget(self.image_gif_height_spinbox)
         layout.addRow("Size (px):", size_layout)
 
         # Duration
-        self.duration_spinbox_gif = QDoubleSpinBox()
-        self.duration_spinbox_gif.setRange(0.1, 600.0)
-        self.duration_spinbox_gif.setValue(5.0)
-        self.duration_spinbox_gif.setSuffix(" s")
-        layout.addRow("Duration:", self.duration_spinbox_gif)
+        self.duration_spinbox_image_gif = QDoubleSpinBox()
+        self.duration_spinbox_image_gif.setRange(0.1, 600.0)
+        self.duration_spinbox_image_gif.setValue(5.0)
+        self.duration_spinbox_image_gif.setSuffix(" s")
+        layout.addRow("Duration:", self.duration_spinbox_image_gif)
 
     def _create_pip_tab(self):
         layout = QFormLayout(self.tab_pip)
@@ -507,7 +424,7 @@ class AddMediaDialog(QDialog):
         if dialog.exec():
             selected_path = dialog.get_selected_gif_path()
             if selected_path:
-                self.gif_path_label.setText(selected_path)
+                self.image_gif_path_label.setText(selected_path)
                 self.update_preview()
 
     def _browse_file(self, label_widget, file_filter):
@@ -530,23 +447,17 @@ class AddMediaDialog(QDialog):
                 "position": (self.pos_x_spinbox.value(), self.pos_y_spinbox.value()),
                 "duration": self.duration_spinbox_text.value(),
             }
-        elif current_tab_index == 1: # Image
+        elif current_tab_index == 1: # Image/GIF
+            path = self.image_gif_path_label.text()
+            media_type = "gif" if path.lower().endswith(".gif") else "image"
             data = {
-                "type": "image",
-                "path": self.image_path_label.text(),
-                "position": (self.image_pos_x_spinbox.value(), self.image_pos_y_spinbox.value()),
-                "size": (self.image_width_spinbox.value(), self.image_height_spinbox.value()),
-                "duration": self.duration_spinbox_image.value(),
+                "type": media_type,
+                "path": path,
+                "position": (self.image_gif_pos_x_spinbox.value(), self.image_gif_pos_y_spinbox.value()),
+                "size": (self.image_gif_width_spinbox.value(), self.image_gif_height_spinbox.value()),
+                "duration": self.duration_spinbox_image_gif.value(),
             }
-        elif current_tab_index == 2: # GIF
-            data = {
-                "type": "gif",
-                "path": self.gif_path_label.text(),
-                "position": (self.gif_pos_x_spinbox.value(), self.gif_pos_y_spinbox.value()),
-                "size": (self.gif_width_spinbox.value(), self.gif_height_spinbox.value()),
-                "duration": self.duration_spinbox_gif.value(),
-            }
-        elif current_tab_index == 3: # Video PiP
+        elif current_tab_index == 2: # Video PiP
             data = {
                 "type": "video_pip",
                 "path": self.pip_path_label.text(),
