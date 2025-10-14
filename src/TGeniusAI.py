@@ -1721,7 +1721,18 @@ class VideoAudioManager(QMainWindow):
             text_areas.append(self.audioAiTextArea)
 
         for area in text_areas:
-            if area: # Assicura che l'area esista prima di applicare il font
+            if area:  # Assicura che l'area esista
+                # Itera su tutti i blocchi di testo e applica il nuovo font
+                cursor = QTextCursor(area.document())
+                cursor.beginEditBlock()
+                while not cursor.atEnd():
+                    cursor.movePosition(QTextCursor.MoveOperation.NextBlock, QTextCursor.MoveMode.KeepAnchor)
+                    char_format = cursor.charFormat()
+                    char_format.setFont(font)
+                    cursor.setCharFormat(char_format)
+                cursor.endEditBlock()
+
+                # Imposta anche il font di base per il testo futuro
                 area.setFont(font)
 
     def videoContainerResizeEvent(self, event):
