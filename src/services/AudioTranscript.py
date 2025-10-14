@@ -79,7 +79,7 @@ class TranscriptionThread(QThread):
 
                 # Formatta il timestamp come [MM:SS] - [MM:SS]
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}] - [{end_mins:02d}:{end_secs:02d}]"
-                transcription += f"{timestamp}\n{text}\n\n"
+                transcription += f'{timestamp}\n"{text}"'
 
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
