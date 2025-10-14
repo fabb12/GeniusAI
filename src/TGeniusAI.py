@@ -1008,13 +1008,8 @@ class VideoAudioManager(QMainWindow):
         self.frameForwardButton.clicked.connect(self.frameForward)
         self.deleteButton.clicked.connect(self.bookmark_manager.delete_all_bookmarks)
 
-        self.currentTimeLabel = QLabel('00:00')
-        self.currentTimeLabel.setToolTip("Mostra il tempo corrente del video input")
-        self.totalTimeLabel = QLabel('/ 00:00')
+        self.totalTimeLabel = QLabel('/ 00:00:00:000')
         self.totalTimeLabel.setToolTip("Mostra la durata totale del video input")
-        timecodeLayout = QHBoxLayout()
-        timecodeLayout.addWidget(self.currentTimeLabel)
-        timecodeLayout.addWidget(self.totalTimeLabel)
 
         # ---------------------
         # PLAYER OUTPUT
@@ -1134,20 +1129,19 @@ class VideoAudioManager(QMainWindow):
         videoPlayerLayout = QVBoxLayout()
         videoPlayerLayout.addWidget(self.fileNameLabel)
         videoPlayerLayout.addWidget(self.videoContainer)
-        videoPlayerLayout.addLayout(timecodeLayout)
-
-        # Timecode input
-        timecode_input_layout = QHBoxLayout()
+        # Timecode input / display
+        timecode_layout = QHBoxLayout()
         self.timecodeInput = QLineEdit()
-        self.timecodeInput.setPlaceholderText("HH:MM:SS:ms")
-        self.timecodeInput.setToolTip("Vai al timecode")
-        timecode_input_layout.addWidget(self.timecodeInput)
+        self.timecodeInput.setToolTip("Tempo corrente / Vai al timecode (Premi Invio o clicca Go)")
+        self.timecodeInput.returnPressed.connect(self.goToTimecode) # Connect Enter key
+        timecode_layout.addWidget(self.timecodeInput)
+        timecode_layout.addWidget(self.totalTimeLabel)
 
         go_button = QPushButton("Go")
         go_button.setToolTip("Vai al timecode specificato")
         go_button.clicked.connect(self.goToTimecode)
-        timecode_input_layout.addWidget(go_button)
-        videoPlayerLayout.addLayout(timecode_input_layout)
+        timecode_layout.addWidget(go_button)
+        videoPlayerLayout.addLayout(timecode_layout)
 
         videoPlayerLayout.addWidget(self.videoSlider)
 
@@ -2661,8 +2655,8 @@ class VideoAudioManager(QMainWindow):
     def releaseSourceVideo(self):
         self.player.stop()
         time.sleep(.01)
-        self.currentTimeLabel.setText('00:00')
-        self.totalTimeLabel.setText('00:00')
+        self.timecodeInput.clear()
+        self.totalTimeLabel.setText('/ 00:00:00:000')
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
@@ -4869,8 +4863,7 @@ class VideoAudioManager(QMainWindow):
         seconds = total_seconds % 60
         milliseconds = position % 1000
         timecode_str = f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}'
-        # Aggiorna l'etichetta con il nuovo time code
-        self.currentTimeLabel.setText(timecode_str)
+        # Aggiorna il campo di testo del timecode solo se non ha il focus
         if not self.timecodeInput.hasFocus():
             self.timecodeInput.setText(timecode_str)
 
