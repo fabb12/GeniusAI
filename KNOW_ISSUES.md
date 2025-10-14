@@ -77,7 +77,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] riconoscere oggetti, volti, luoghi, emozioni;
 - [ ] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
 - [ ] integrare trascrzione con documenti esterni
-- [ ] inserire timeline
+- [ ] inserire timelinej
 - 
 mettere un titolo nel riassuto
 ## [1.2.2] - 2024-06-30
