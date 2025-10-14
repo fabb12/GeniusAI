@@ -261,7 +261,8 @@ class MediaOverlayThread(QThread):
 
             if not self.running: return
 
-            overlay_clip = overlay_clip.set_position(self.media_data['position']).set_duration(duration).set_start(self.start_time)
+            position = (self.media_data['position']['x'], self.media_data['position']['y'])
+            overlay_clip = overlay_clip.set_position(position).set_duration(duration).set_start(self.start_time)
 
             self.progress.emit(60, "Compositing video...")
             if not self.running: return
@@ -7185,6 +7186,13 @@ class VideoAudioManager(QMainWindow):
             )
             self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
         else:
+            # Unify position data for all other media types
+            if 'position' in media_data and isinstance(media_data['position'], tuple):
+                media_data['position'] = {
+                    'x': media_data['position'][0],
+                    'y': media_data['position'][1]
+                }
+
             thread = MediaOverlayThread(
                 base_video_path=self.videoPathLineEdit,
                 media_data=media_data,
