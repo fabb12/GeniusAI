@@ -1662,9 +1662,21 @@ class VideoAudioManager(QMainWindow):
         self.apply_and_save_font_settings()
 
         # Connetti i segnali per il cambio di font
-        self.singleTranscriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        text_areas_to_connect = [
+            self.singleTranscriptionTextArea,
+            self.batchTranscriptionTextArea,
+            self.summaryDetailedTextArea,
+            self.summaryMeetingTextArea,
+            self.summaryDetailedIntegratedTextArea,
+            self.summaryMeetingIntegratedTextArea,
+            self.summaryCombinedDetailedTextArea,
+            self.summaryCombinedMeetingTextArea,
+            self.audioAiTextArea,
+        ]
+
+        for area in text_areas_to_connect:
+            if area:
+                area.fontSizeChanged.connect(self.apply_and_save_font_settings)
 
     def get_current_summary_text_area(self):
         """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
