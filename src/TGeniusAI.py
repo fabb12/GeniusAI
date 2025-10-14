@@ -936,10 +936,11 @@ class VideoAudioManager(QMainWindow):
         self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
         self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
 
-        self.fileNameLabel = QLabel("Nessun video caricato")
+        self.fileNameLabel = QLineEdit("Nessun video caricato")
         self.fileNameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
-        self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
+        self.fileNameLabel.setStyleSheet("QLineEdit { font-weight: bold; }")
+        self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input. Modifica e premi Invio per rinominare.")
+        self.fileNameLabel.returnPressed.connect(self.rename_from_player_input)
 
         self.playButton = QPushButton('')
         self.playButton.setIcon(QIcon(get_resource("play.png")))
@@ -1068,10 +1069,12 @@ class VideoAudioManager(QMainWindow):
 
         self.timecodeEnabled = False
 
-        self.fileNameLabelOutput = QLabel("Nessun video caricato")
+        self.fileNameLabelOutput = QLineEdit("Nessun video caricato")
         self.fileNameLabelOutput.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.fileNameLabelOutput.setStyleSheet("QLabel { font-weight: bold; }")
-        self.fileNameLabelOutput.setToolTip("Nome del file video attualmente caricato nel Player Output")
+        self.fileNameLabelOutput.setStyleSheet("QLineEdit { font-weight: bold; }")
+        self.fileNameLabelOutput.setToolTip("Nome del file video attualmente caricato nel Player Output. Modifica e premi Invio per rinominare.")
+        self.fileNameLabelOutput.returnPressed.connect(self.rename_from_player_output)
+
 
         videoOutputLayout = QVBoxLayout()
         videoOutputLayout.addWidget(self.fileNameLabelOutput)
@@ -4848,6 +4851,9 @@ class VideoAudioManager(QMainWindow):
             self.videoCropWidget.setVisible(True)
             self.audioOnlyLabel.setVisible(False)
 
+        # Rimuovi il focus per evitare modifiche accidentali
+        self.fileNameLabel.clearFocus()
+
         self.updateRecentFiles(video_path)
 
         # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
@@ -4864,6 +4870,7 @@ class VideoAudioManager(QMainWindow):
 
         self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
         self.videoPathLineOutputEdit = video_path
+        self.fileNameLabelOutput.clearFocus()
         logging.debug(f"Loaded video output: {video_path}")
 
 
@@ -7070,6 +7077,30 @@ class VideoAudioManager(QMainWindow):
                  os.rename(new_clip_path, old_clip_path)
             if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
                  os.rename(new_json_path, old_json_path)
+
+    def rename_from_player_input(self):
+        """Gestisce la richiesta di rinomina dal QLineEdit del player di input."""
+        if not self.videoPathLineEdit:
+            return
+        old_filename = os.path.basename(self.videoPathLineEdit)
+        new_filename = self.fileNameLabel.text().strip()
+        if old_filename != new_filename and new_filename:
+            self.rename_project_clip(old_filename, new_filename)
+        else:
+            # Ripristina il testo originale se non ci sono modifiche o il nome è vuoto
+            self.fileNameLabel.setText(old_filename)
+
+    def rename_from_player_output(self):
+        """Gestisce la richiesta di rinomina dal QLineEdit del player di output."""
+        if not self.videoPathLineOutputEdit:
+            return
+        old_filename = os.path.basename(self.videoPathLineOutputEdit)
+        new_filename = self.fileNameLabelOutput.text().strip()
+        if old_filename != new_filename and new_filename:
+            self.rename_project_clip(old_filename, new_filename)
+        else:
+            # Ripristina il testo originale se non ci sono modifiche o il nome è vuoto
+            self.fileNameLabelOutput.setText(old_filename)
 
     def relink_project_clip(self, old_filename, new_filepath):
         """Gestisce il ricollegamento di una clip offline."""

@@ -75,36 +75,51 @@ class DownloadDialog(QDialog):
         self.parent_window.video_download_language = video_language
         logging.debug(video_language)
 
-        # Se un progetto è attivo, salva nella cartella 'downloads' del progetto,
-        # altrimenti nella cartella 'downloads' principale.
-        if self.parent_window.current_project_path:
-            downloads_dir = os.path.join(self.parent_window.current_project_path, "downloads")
-        else:
-            downloads_dir = os.path.join(os.getcwd(), "downloads")
+        if not self.parent_window.current_project_path:
+            self.parent_window.show_status_message("Nessun progetto attivo. Il file scaricato non sarà aggiunto al progetto.", error=True)
+            # Carica il video nel player per un uso temporaneo
+            self.parent_window.loadVideo(temp_file_path, video_title)
+            return
 
-        os.makedirs(downloads_dir, exist_ok=True)
+        clips_dir = os.path.join(self.parent_window.current_project_path, "clips")
+        os.makedirs(clips_dir, exist_ok=True)
 
         try:
             file_name = os.path.basename(temp_file_path)
-            permanent_file_path = os.path.join(downloads_dir, file_name)
+            permanent_file_path = os.path.join(clips_dir, file_name)
             shutil.move(temp_file_path, permanent_file_path)
 
             temp_dir = os.path.dirname(temp_file_path)
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
-            self.parent_window.loadVideo(permanent_file_path, video_title)
+            # Aggiungi la clip al progetto usando il ProjectManager
+            success, message = self.parent_window.project_manager.add_clip_to_project_from_path(
+                self.parent_window.projectDock.gnai_path,
+                permanent_file_path,
+                status="online" # Imposta lo stato come online
+            )
+            if success:
+                self.parent_window.show_status_message(f"Clip '{file_name}' aggiunta al progetto.")
+                # Ricarica il progetto per aggiornare la UI
+                self.parent_window.load_project(self.parent_window.projectDock.gnai_path)
+                # Carica il nuovo video nel player
+                self.parent_window.loadVideo(permanent_file_path, video_title)
 
-            if upload_date:
-                try:
-                    video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
-                    self.parent_window._update_json_file(permanent_file_path, {"video_date": video_date})
-                except (ValueError, TypeError) as e:
-                    logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
+                # Aggiorna la data di creazione se disponibile
+                if upload_date:
+                    try:
+                        video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
+                        self.parent_window._update_json_file(permanent_file_path, {"video_date": video_date})
+                    except (ValueError, TypeError) as e:
+                        logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
+            else:
+                 self.parent_window.show_status_message(f"Errore nell'aggiungere la clip al progetto: {message}", error=True)
+
 
         except Exception as e:
-            self.parent_window.show_status_message(f"Errore durante lo spostamento del file scaricato: {e}", error=True)
-            logging.error(f"Failed to move downloaded file: {e}")
+            self.parent_window.show_status_message(f"Errore durante lo spostamento e l'integrazione del file scaricato: {e}", error=True)
+            logging.error(f"Failed to move and integrate downloaded file: {e}")
 
     def onDownloadError(self, error_message):
         self.parent_window.show_status_message(f"Errore di download: {error_message}", error=True)

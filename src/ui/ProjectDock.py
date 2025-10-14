@@ -46,6 +46,32 @@ class ProjectDock(CustomDock):
         self.btn_merge_clips.clicked.connect(self.merge_clips_requested.emit)
         self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
+        self.tree_clips.keyPressEvent = self.keyPressEvent
+
+    def keyPressEvent(self, event):
+        """Gestisce la pressione dei tasti sulla lista delle clip."""
+        if event.key() == Qt.Key.Key_F2:
+            self.rename_selected_clip()
+        else:
+            # Assicura che l'evento venga gestito dal widget genitore se non è F2
+            QTreeWidget.keyPressEvent(self.tree_clips, event)
+
+    def rename_selected_clip(self):
+        """Avvia la procedura di rinomina per la clip selezionata."""
+        selected_items = self.tree_clips.selectedItems()
+        if not selected_items:
+            return
+
+        item = selected_items[0]
+        if not self.project_dir or not item or item.isDisabled() or not item.parent():
+            return
+
+        clip_filename = item.text(0)
+        base_name, extension = os.path.splitext(clip_filename)
+        new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
+        if ok and new_base_name:
+            new_filename = new_base_name + extension
+            self.rename_clip_requested.emit(clip_filename, new_filename)
 
     def on_directory_changed(self, path):
         """
@@ -108,11 +134,7 @@ class ProjectDock(CustomDock):
             elif 'separate_audio_action' in locals() and action == separate_audio_action:
                 self.separate_audio_requested.emit(file_path)
             elif action == rename_action:
-                base_name, extension = os.path.splitext(clip_filename)
-                new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
-                if ok and new_base_name:
-                    new_filename = new_base_name + extension
-                    self.rename_clip_requested.emit(clip_filename, new_filename)
+                self.rename_selected_clip()
             elif action == delete_action:
                 self.delete_clip_requested.emit(clip_filename) # Usa la variabile locale
 
