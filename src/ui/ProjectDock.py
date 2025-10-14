@@ -272,9 +272,18 @@ class ProjectDock(CustomDock):
                     try:
                         with open(json_path, 'r', encoding='utf-8') as f:
                             json_data = json.load(f)
-                        if json_data.get("transcription_original") or json_data.get("transcription_corrected"):
+                        # Verifica che il contenuto esista e non sia una stringa vuota/whitespace
+                        transcription_original = json_data.get("transcription_original", "")
+                        transcription_corrected = json_data.get("transcription_corrected", "")
+                        if (transcription_original and transcription_original.strip()) or \
+                           (transcription_corrected and transcription_corrected.strip()):
                             has_transcription = "✔️"
-                        if json_data.get("summaries", {}).get("detailed") or json_data.get("summaries", {}).get("meeting"):
+
+                        summaries = json_data.get("summaries", {})
+                        summary_detailed = summaries.get("detailed", "")
+                        summary_meeting = summaries.get("meeting", "")
+                        if (summary_detailed and summary_detailed.strip()) or \
+                           (summary_meeting and summary_meeting.strip()):
                             has_summary = "✔️"
                     except (json.JSONDecodeError, IOError):
                         pass # Il file JSON potrebbe essere corrotto o vuoto
