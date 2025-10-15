@@ -111,7 +111,7 @@ class ProjectDock(CustomDock):
                     pass # Errore nel JSON, lo consideriamo come senza riassunto
 
             rename_action = menu.addAction("Rinomina")
-            rename_from_summary_action = menu.addAction("Rinomina da titolo riassunto")
+            rename_from_summary_action = menu.addAction("Auto-Rinomina")
             rename_from_summary_action.setEnabled(has_summary)
             if not has_summary:
                 rename_from_summary_action.setToolTip("Azione disabilitata: nessun riassunto dettagliato trovato per questa clip.")
