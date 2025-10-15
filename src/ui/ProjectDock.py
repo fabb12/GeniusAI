@@ -21,6 +21,7 @@ class ProjectDock(CustomDock):
     open_folder_requested = pyqtSignal()
     delete_clip_requested = pyqtSignal(str)
     relink_clip_requested = pyqtSignal(str, str)
+    rename_clip_from_summary_requested = pyqtSignal(str)
     project_clips_folder_changed = pyqtSignal() # Segnale generico di modifica
     batch_transcribe_requested = pyqtSignal()
     batch_summarize_requested = pyqtSignal()
@@ -97,6 +98,26 @@ class ProjectDock(CustomDock):
                 menu.addSeparator()
 
             rename_action = menu.addAction("Rinomina")
+
+            # Azione per rinominare da riassunto
+            has_summary = False
+            json_path = os.path.splitext(file_path)[0] + ".json"
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        json_data = json.load(f)
+                    summaries = json_data.get("summaries", {})
+                    summary_detailed = summaries.get("detailed", "")
+                    summary_meeting = summaries.get("meeting", "")
+                    if (summary_detailed and summary_detailed.strip()) or \
+                       (summary_meeting and summary_meeting.strip()):
+                        has_summary = True
+                except (json.JSONDecodeError, IOError):
+                    pass
+
+            if has_summary:
+                rename_from_summary_action = menu.addAction("Autodefine filename from summary")
+
             delete_action = menu.addAction("Rimuovi dal progetto")
 
             action = menu.exec(self.tree_clips.mapToGlobal(position))
@@ -113,6 +134,8 @@ class ProjectDock(CustomDock):
                 if ok and new_base_name:
                     new_filename = new_base_name + extension
                     self.rename_clip_requested.emit(clip_filename, new_filename)
+            elif 'rename_from_summary_action' in locals() and action == rename_from_summary_action:
+                self.rename_clip_from_summary_requested.emit(clip_filename)
             elif action == delete_action:
                 self.delete_clip_requested.emit(clip_filename) # Usa la variabile locale
 

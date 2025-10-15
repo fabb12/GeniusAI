@@ -1,0 +1,5 @@
+You are an expert in creating safe and descriptive filenames. Your task is to generate a short, descriptive, and safe filename from the following summary title. The filename should be in lowercase, with spaces replaced by underscores, and all special characters removed.
+
+Summary Title: {text}
+
+Generated Filename:

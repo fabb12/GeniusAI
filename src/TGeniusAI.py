@@ -879,11 +879,75 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
+        self.projectDock.rename_clip_from_summary_requested.connect(self.rename_clip_from_summary)
         self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
         self.projectDock.batch_summarize_requested.connect(self.start_batch_summarization)
         self.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
 
-        self.videoNotesDock = CustomDock("Note Video", closable=True)
+    def rename_clip_from_summary(self, old_filename):
+        """Avvia il processo di rinomina di una clip basandosi sul titolo del suo riassunto."""
+        if not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        clip_path = self.project_manager.get_clip_path_by_filename(self.projectDock.gnai_path, old_filename)
+        if not clip_path or not os.path.exists(clip_path):
+            self.show_status_message(f"File clip non trovato: {old_filename}", error=True)
+            return
+
+        json_path = os.path.splitext(clip_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            self.show_status_message("Nessun file di metadati (.json) trovato per questa clip.", error=True)
+            return
+
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+
+            summaries = json_data.get("summaries", {})
+            summary_text = summaries.get("detailed", "") or summaries.get("meeting", "")
+
+            if not summary_text.strip():
+                self.show_status_message("Nessun riassunto trovato per questa clip.", error=True)
+                return
+
+            # Estrai il titolo (prima riga del riassunto)
+            title = summary_text.strip().split('\n')[0].strip()
+            # Rimuovi eventuali caratteri di markdown come '#'
+            title = re.sub(r'^[#\s]+', '', title)
+
+            if not title:
+                self.show_status_message("Impossibile estrarre un titolo valido dal riassunto.", error=True)
+                return
+
+            self.show_status_message("Generazione del nome del file dal titolo del riassunto...")
+
+            # Avvia il thread AI per generare il nome del file
+            thread = ProcessTextAI(
+                mode="filename_generation",
+                language="italiano",  # La lingua non è critica qui
+                prompt_vars={'text': title}
+            )
+
+            # Usa una lambda per passare il vecchio nome del file al completamento
+            callback = lambda result: self.on_filename_generated(result, old_filename)
+            self.start_task(thread, callback, self.onProcessError, self.update_status_progress)
+
+        except (json.JSONDecodeError, IOError) as e:
+            self.show_status_message(f"Errore nella lettura del file JSON: {e}", error=True)
+
+    def on_filename_generated(self, generated_name, old_filename):
+        """Gestisce il nome del file generato dall'AI e avvia la rinomina."""
+        new_base_name = generated_name.strip()
+        if not new_base_name:
+            self.show_status_message("L'AI non ha generato un nome di file valido.", error=True)
+            return
+
+        _, extension = os.path.splitext(old_filename)
+        new_filename = f"{new_base_name}{extension}"
+
+        self.show_status_message(f"Nome file generato: {new_filename}. Rinomina in corso...")
+        self.rename_project_clip(old_filename, new_filename)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoNotesDock.setStyleSheet(self.styleSheet())
         self.videoNotesDock.setToolTip("Dock per le note video")

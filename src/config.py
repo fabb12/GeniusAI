@@ -276,6 +276,7 @@ PROMPT_VIDEO_INTEGRATION = get_prompt_path("video_integration_prompt.txt")
 PROMPT_MEETING_SUMMARY = get_prompt_path("meeting_summary_prompt.txt")
 PROMPT_OPERATIONAL_GUIDE = get_prompt_path("prompt_operational_guide.txt")
 PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
+PROMPT_FILENAME_GENERATION = get_prompt_path("filename_generation_prompt.txt")
 
 # --- Percorsi Risorse ---
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
