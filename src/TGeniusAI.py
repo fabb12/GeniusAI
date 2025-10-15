@@ -948,6 +948,7 @@ class VideoAudioManager(QMainWindow):
 
         self.show_status_message(f"Nome file generato: {new_filename}. Rinomina in corso...")
         self.rename_project_clip(old_filename, new_filename)
+
         self.videoNotesDock = CustomDock("Note Video", closable=True)
         self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.videoNotesDock.setStyleSheet(self.styleSheet())
