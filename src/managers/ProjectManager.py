@@ -201,11 +201,23 @@ class ProjectManager:
 
             new_metadata_filename = os.path.splitext(new_filename)[0] + ".json"
 
+            clip_found = False
+            # Cerca e aggiorna nelle clip video
             for clip in project_data.get("clips", []):
                 if clip.get("clip_filename") == old_filename:
                     clip["clip_filename"] = new_filename
                     clip["metadata_filename"] = new_metadata_filename
+                    clip_found = True
                     break
+
+            # Se non trovato, cerca e aggiorna nelle clip audio
+            if not clip_found:
+                for clip in project_data.get("audio_clips", []):
+                    if clip.get("clip_filename") == old_filename:
+                        clip["clip_filename"] = new_filename
+                        clip["metadata_filename"] = new_metadata_filename
+                        clip_found = True
+                        break
 
             f.seek(0)
             json.dump(project_data, f, indent=4)

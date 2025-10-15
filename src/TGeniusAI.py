@@ -7006,59 +7006,80 @@ class VideoAudioManager(QMainWindow):
                 self.load_project(self.projectDock.gnai_path)
 
     def rename_project_clip(self, old_filename, new_filename):
-        """Rinomina una clip nel progetto, aggiornando il filesystem e il file .gnai."""
+        """Rinomina una clip, gestendo lo scaricamento e ricaricamento dai player."""
         if not self.current_project_path or not self.projectDock.gnai_path:
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
-        is_audio = any(clip['clip_filename'] == old_filename for clip in self.projectDock.project_data.get('audio_clips', []))
+        is_audio = any(c['clip_filename'] == old_filename for c in self.projectDock.project_data.get('audio_clips', []))
         subfolder = "audio" if is_audio else "clips"
         clips_dir = os.path.join(self.current_project_path, subfolder)
 
         old_clip_path = os.path.join(clips_dir, old_filename)
         new_clip_path = os.path.join(clips_dir, new_filename)
-
         old_json_path = os.path.splitext(old_clip_path)[0] + ".json"
         new_json_path = os.path.splitext(new_clip_path)[0] + ".json"
 
-        # Controlla se il nuovo nome file esiste già
         if os.path.exists(new_clip_path):
             self.show_status_message(f"Un file con nome '{new_filename}' esiste già.", error=True)
             return
 
+        # --- Logica di scaricamento/ricaricamento ---
+        player_to_reload = None
+        reload_timestamp = 0
+
+        # Controlla se il file è caricato nel player di input
+        if self.videoPathLineEdit and os.path.normpath(self.videoPathLineEdit) == os.path.normpath(old_clip_path):
+            player_to_reload = 'input'
+            reload_timestamp = self.player.position()
+            self.releaseSourceVideo()
+
+        # Controlla se il file è caricato nel player di output
+        if self.videoPathLineOutputEdit and os.path.normpath(self.videoPathLineOutputEdit) == os.path.normpath(old_clip_path):
+            player_to_reload = 'output'
+            reload_timestamp = self.playerOutput.position()
+            self.releaseOutputVideo()
+        # --- Fine logica ---
+
         try:
-            # 1. Rinomina il file video/audio
             if os.path.exists(old_clip_path):
                 os.rename(old_clip_path, new_clip_path)
-
-            # 2. Rinomina il file JSON associato
             if os.path.exists(old_json_path):
                 os.rename(old_json_path, new_json_path)
 
-            # 3. Aggiorna il file di progetto .gnai
             success, message = self.project_manager.rename_clip_in_project(
                 self.projectDock.gnai_path, old_filename, new_filename
             )
             if not success:
-                # Se l'aggiornamento del .gnai fallisce, tenta di ripristinare i nomi dei file
-                self.show_status_message(f"Errore nell'aggiornamento del progetto: {message}", error=True)
-                if os.path.exists(new_clip_path):
-                    os.rename(new_clip_path, old_clip_path)
-                if os.path.exists(new_json_path):
-                    os.rename(new_json_path, old_json_path)
-                return
+                raise Exception(message)
 
-            # 4. Ricarica il progetto per aggiornare la UI
             self.load_project(self.projectDock.gnai_path)
             self.show_status_message(f"Clip '{old_filename}' rinominata in '{new_filename}'.")
 
+            # --- Ricarica nel player ---
+            if player_to_reload:
+                QTimer.singleShot(100, lambda: self._reload_renamed_clip(player_to_reload, new_clip_path, reload_timestamp))
+
         except Exception as e:
-            self.show_status_message(f"Errore durante la rinomina del file: {e}", error=True)
-            # Tenta di ripristinare se qualcosa va storto
+            self.show_status_message(f"Errore durante la rinomina: {e}", error=True)
+            # Tenta il ripristino
             if os.path.exists(new_clip_path) and not os.path.exists(old_clip_path):
-                 os.rename(new_clip_path, old_clip_path)
+                os.rename(new_clip_path, old_clip_path)
             if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
-                 os.rename(new_json_path, old_json_path)
+                os.rename(new_json_path, old_json_path)
+            # Se un video era stato scaricato, tenta di ricaricarlo
+            if player_to_reload:
+                 QTimer.singleShot(100, lambda: self._reload_renamed_clip(player_to_reload, old_clip_path, reload_timestamp))
+
+
+    def _reload_renamed_clip(self, player_type, clip_path, timestamp):
+        """Ricarica una clip in un player e imposta il timestamp."""
+        if player_type == 'input':
+            self.loadVideo(clip_path)
+            self.player.setPosition(timestamp)
+        elif player_type == 'output':
+            self.loadVideoOutput(clip_path)
+            self.playerOutput.setPosition(timestamp)
 
     def rename_clip_from_summary(self, clip_filename):
         """
