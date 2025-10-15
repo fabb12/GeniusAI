@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QGroupBox, QTreeWidget, QTreeWidgetItem, QPushButton, QFormLayout, QHeaderView, QMenu, QHBoxLayout, QInputDialog, QFileDialog
-from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QTimer
+from PyQt6.QtCore import Qt, pyqtSignal, QFileSystemWatcher, QTimer, QEvent
 from PyQt6.QtGui import QIcon
 from src.ui.CustomDock import CustomDock
 from src.config import get_resource
@@ -43,10 +43,36 @@ class ProjectDock(CustomDock):
         self.sync_timer.timeout.connect(self.project_clips_folder_changed.emit)
 
         self._setup_ui()
-        self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
         self.btn_merge_clips.clicked.connect(self.merge_clips_requested.emit)
         self.tree_clips.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.tree_clips.customContextMenuRequested.connect(self.show_context_menu)
+        self.tree_clips.installEventFilter(self)
+
+    def eventFilter(self, source, event):
+        if event.type() == QEvent.Type.KeyPress and source is self.tree_clips:
+            if event.key() == Qt.Key.Key_F2:
+                item = self.tree_clips.currentItem()
+                if item and item.parent(): # Assicura che sia una clip e non una cartella radice
+                    self._trigger_rename(item)
+                    return True
+        return super().eventFilter(source, event)
+
+    def _trigger_rename(self, item):
+        """Avvia la logica di rinomina per un dato item."""
+        if not self.project_dir or item.isDisabled() or not item.parent():
+            return
+
+        status = item.data(0, Qt.ItemDataRole.UserRole + 1)
+        if status == "offline":
+            # Potresti voler gestire la rinomina di clip offline in modo diverso o non permetterla
+            return
+
+        clip_filename = item.text(0)
+        base_name, extension = os.path.splitext(clip_filename)
+        new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
+        if ok and new_base_name:
+            new_filename = new_base_name + extension
+            self.rename_clip_requested.emit(clip_filename, new_filename)
 
     def on_directory_changed(self, path):
         """
@@ -127,11 +153,7 @@ class ProjectDock(CustomDock):
             elif 'separate_audio_action' in locals() and action == separate_audio_action:
                 self.separate_audio_requested.emit(file_path)
             elif action == rename_action:
-                base_name, extension = os.path.splitext(clip_filename)
-                new_base_name, ok = QInputDialog.getText(self, "Rinomina Clip", "Nuovo nome:", text=base_name)
-                if ok and new_base_name:
-                    new_filename = new_base_name + extension
-                    self.rename_clip_requested.emit(clip_filename, new_filename)
+                self._trigger_rename(item)
             elif action == rename_from_summary_action:
                 self.rename_from_summary_requested.emit(clip_filename)
             elif action == delete_action:
@@ -164,6 +186,7 @@ class ProjectDock(CustomDock):
         self.tree_clips.setColumnCount(6)
         self.tree_clips.setHeaderLabels(["Nome File", "Data", "Durata", "Dimensione", "Trascrizione", "Riassunto"])
         self.tree_clips.setToolTip("Fai doppio click su una clip per caricarla.")
+        self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
 
         header = self.tree_clips.header()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
