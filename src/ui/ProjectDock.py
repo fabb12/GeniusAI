@@ -97,8 +97,25 @@ class ProjectDock(CustomDock):
                 separate_audio_action = menu.addAction("Separa Audio")
                 menu.addSeparator()
 
+            # Verifica se esiste un riassunto per abilitare l'azione
+            has_summary = False
+            json_path = os.path.splitext(file_path)[0] + ".json"
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        json_data = json.load(f)
+                    summary_text = json_data.get("summaries", {}).get("detailed", "")
+                    if summary_text and summary_text.strip():
+                        has_summary = True
+                except (json.JSONDecodeError, IOError):
+                    pass # Errore nel JSON, lo consideriamo come senza riassunto
+
             rename_action = menu.addAction("Rinomina")
             rename_from_summary_action = menu.addAction("Rinomina da titolo riassunto")
+            rename_from_summary_action.setEnabled(has_summary)
+            if not has_summary:
+                rename_from_summary_action.setToolTip("Azione disabilitata: nessun riassunto dettagliato trovato per questa clip.")
+
             delete_action = menu.addAction("Rimuovi dal progetto")
 
             action = menu.exec(self.tree_clips.mapToGlobal(position))
