@@ -1,0 +1,2 @@
+Traduci il seguente testo in un nome di file valido. Il nome del file deve essere tutto in minuscolo, senza spazi (usa i trattini al posto degli spazi), senza caratteri speciali e senza estensione. Ad esempio, se il testo è 'La Mia Prima Clip Video', il risultato deve essere 'la-mia-prima-clip-video'.
+Il testo da convertire è:

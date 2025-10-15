@@ -878,6 +878,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.open_in_input_player_requested.connect(self.loadVideo)
         self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
         self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
+        self.projectDock.rename_from_summary_requested.connect(self.rename_clip_from_summary)
         self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
         self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
         self.projectDock.batch_summarize_requested.connect(self.start_batch_summarization)
@@ -7058,6 +7059,80 @@ class VideoAudioManager(QMainWindow):
                  os.rename(new_clip_path, old_clip_path)
             if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
                  os.rename(new_json_path, old_json_path)
+
+    def rename_clip_from_summary(self, clip_filename):
+        """
+        Genera un nuovo nome file dal titolo del riassunto di una clip e la rinomina.
+        """
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        # 1. Trova il percorso del file JSON associato
+        clip_path = self.project_manager.get_clip_path_by_filename(self.projectDock.gnai_path, clip_filename)
+        if not clip_path:
+            self.show_status_message(f"Impossibile trovare il percorso per la clip '{clip_filename}'.", error=True)
+            return
+
+        json_path = os.path.splitext(clip_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            self.show_status_message(f"File JSON non trovato per '{clip_filename}'. Generare prima un riassunto.", error=True)
+            return
+
+        # 2. Leggi il JSON e estrai il titolo del riassunto
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            summary_text = data.get("summaries", {}).get("detailed", "")
+            if not summary_text:
+                self.show_status_message("Nessun riassunto dettagliato trovato nel file JSON.", error=True)
+                return
+
+            # Estrai la prima riga come titolo
+            summary_title = summary_text.strip().split('\n')[0]
+            # Rimuovi eventuali asterischi o caratteri di markdown iniziali
+            summary_title = re.sub(r'^[#* \t]+', '', summary_title)
+
+            if not summary_title:
+                self.show_status_message("Il titolo del riassunto è vuoto.", error=True)
+                return
+
+        except (json.JSONDecodeError, IndexError) as e:
+            self.show_status_message(f"Errore nella lettura del titolo dal JSON: {e}", error=True)
+            return
+
+        # 3. Usa ProcessTextAI per generare il nome del file
+        self.show_status_message(f"Genero il nome del file dal titolo: '{summary_title}'...")
+
+        thread = ProcessTextAI(
+            mode="generate_filename",
+            language="italiano", # La lingua non è critica per questa modalità
+            prompt_vars={'text': summary_title}
+        )
+
+        # Il callback gestirà la rinomina effettiva
+        on_complete = lambda new_base_name: self.on_filename_generated(clip_filename, new_base_name)
+        self.start_task(thread, on_complete, self.onProcessError, self.update_status_progress)
+
+    def on_filename_generated(self, old_filename, new_base_name):
+        """
+        Callback chiamato quando il nuovo nome base del file è stato generato dall'AI.
+        """
+        new_base_name = new_base_name.strip().replace("'", "") # Pulisce ulteriormente l'output
+
+        if not new_base_name:
+            self.show_status_message("L'AI non ha generato un nome file valido.", error=True)
+            return
+
+        # Aggiungi l'estensione originale
+        _, extension = os.path.splitext(old_filename)
+        new_filename = f"{new_base_name}{extension}"
+
+        self.show_status_message(f"Nuovo nome generato: '{new_filename}'. Procedo con la rinomina...")
+
+        # Chiama il metodo di rinomina esistente
+        self.rename_project_clip(old_filename, new_filename)
 
     def relink_project_clip(self, old_filename, new_filepath):
         """Gestisce il ricollegamento di una clip offline."""

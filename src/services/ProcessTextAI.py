@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION,
-    PROMPT_COMBINED_ANALYSIS, PROMPT_COMBINED_SUMMARY_TEXT_ONLY
+    PROMPT_COMBINED_ANALYSIS, PROMPT_COMBINED_SUMMARY_TEXT_ONLY, PROMPT_GENERATE_FILENAME
 )
 
 load_dotenv()
@@ -44,7 +44,7 @@ class ProcessTextAI(QThread):
         self.result = None
 
         # Valida la modalità
-        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary", "combined_summary_text_only"]
+        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary", "combined_summary_text_only", "generate_filename"]
         if mode not in valid_modes:
             raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
@@ -100,6 +100,8 @@ class ProcessTextAI(QThread):
             prompt_file_path = PROMPT_COMBINED_ANALYSIS
         elif self.mode == "combined_summary_text_only":
             prompt_file_path = PROMPT_COMBINED_SUMMARY_TEXT_ONLY
+        elif self.mode == "generate_filename":
+            prompt_file_path = PROMPT_GENERATE_FILENAME
         else:
             error_msg = f"Modalità non valida: {self.mode}"
             logging.error(error_msg)
