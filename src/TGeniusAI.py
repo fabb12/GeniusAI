@@ -3179,6 +3179,10 @@ class VideoAudioManager(QMainWindow):
         self.player_button_group.addButton(self.player_output_button)
         self.player_button_group.setExclusive(True)
 
+        # Connetti i segnali dei pulsanti a un gestore
+        self.player_input_button.toggled.connect(lambda checked: self._on_player_selection_changed('Input', checked))
+        self.player_output_button.toggled.connect(lambda checked: self._on_player_selection_changed('Output', checked))
+
         main_layout.addWidget(player_selection_group)
 
 
@@ -7209,6 +7213,11 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Progetto salvato con successo.")
         else:
             self.show_status_message(f"Errore nel salvataggio del progetto: {message}", error=True)
+
+    def _on_player_selection_changed(self, player_name, is_checked):
+        """Mostra un messaggio nella status bar quando la selezione del player cambia."""
+        if is_checked:
+            self.show_status_message(f"Player {player_name} selezionato per le operazioni.", timeout=3000)
 
     def _select_audio_from_project(self):
         """Apre il dialogo per selezionare un file audio dal progetto e aggiorna il line edit."""
