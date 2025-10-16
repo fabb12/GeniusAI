@@ -892,11 +892,11 @@ class VideoAudioManager(QMainWindow):
         self.createVideoNotesDock()
 
 
-        # self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
-        # self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        # self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
-        # area.addDock(self.infoExtractionDock, 'right')
-        # self.createInfoExtractionDock()
+        self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
+        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
+        area.addDock(self.infoExtractionDock, 'right')
+        self.createInfoExtractionDock()
 
         # ---------------------
         # PLAYER INPUT
@@ -1538,7 +1538,8 @@ class VideoAudioManager(QMainWindow):
             'audioDock': self.audioDock,
             'videoPlayerOutput': self.videoPlayerOutput,
             'projectDock': self.projectDock,
-            'videoNotesDock': self.videoNotesDock
+            'videoNotesDock': self.videoNotesDock,
+            'infoExtractionDock': self.infoExtractionDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -5126,6 +5127,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
+        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -5136,6 +5138,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleAudioDock)
         viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
+        viewMenu.addAction(self.actionToggleInfoExtractionDock)
 
 
 
@@ -5211,6 +5214,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleEditingDock.setChecked(True)
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
+        self.actionToggleInfoExtractionDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -5223,6 +5227,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
+        self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -7532,6 +7537,76 @@ class VideoAudioManager(QMainWindow):
         Handles errors that occur during the operational guide generation.
         """
         self.show_status_message(f"Errore durante la generazione della guida: {error_message}", error=True)
+
+    def createInfoExtractionDock(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.infoExtractionResultArea = QTextEdit()
+        self.infoExtractionResultArea.setPlaceholderText("I risultati dell'analisi appariranno qui...")
+        layout.addWidget(self.infoExtractionResultArea)
+
+        controls_layout = QHBoxLayout()
+        self.infoFrameCountSpin = QSpinBox()
+        self.infoFrameCountSpin.setRange(1, 100)
+        self.infoFrameCountSpin.setValue(10)
+        controls_layout.addWidget(QLabel("Numero di frame:"))
+        controls_layout.addWidget(self.infoFrameCountSpin)
+
+        self.languageInput = QComboBox()
+        self.languageInput.addItems(["italiano", "inglese", "francese", "spagnolo", "tedesco"])
+        controls_layout.addWidget(QLabel("Lingua:"))
+        controls_layout.addWidget(self.languageInput)
+
+        layout.addLayout(controls_layout)
+
+        self.extractInfoButton = QPushButton("Riconosci Oggetti")
+        self.extractInfoButton.clicked.connect(self.run_object_recognition)
+        layout.addWidget(self.extractInfoButton)
+
+        self.infoExtractionDock.addWidget(widget)
+
+    def run_object_recognition(self):
+        if not self.videoPathLineEdit:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            return
+
+        self.infoExtractionResultArea.setPlainText("Analisi in corso...")
+
+        thread = FrameExtractor(
+            video_path=self.videoPathLineEdit,
+            num_frames=self.infoFrameCountSpin.value(),
+            analysis_mode='object_recognition'
+        )
+
+        # Since process_video is not a QThread, we need to run it in a generic QThread
+        class Worker(QThread):
+            completed = pyqtSignal(dict)
+            error = pyqtSignal(str)
+
+            def __init__(self, extractor, language):
+                super().__init__()
+                self.extractor = extractor
+                self.language = language
+
+            def run(self):
+                try:
+                    results = self.extractor.process_video(language=self.language)
+                    if results:
+                        self.completed.emit(results)
+                    else:
+                        self.error.emit("Nessun risultato ottenuto dall'analisi.")
+                except Exception as e:
+                    self.error.emit(str(e))
+
+        self.worker = Worker(thread, self.languageInput.currentText())
+        self.worker.completed.connect(self.on_object_recognition_complete)
+        self.worker.error.connect(self.onAnalysisError) # Re-use existing error handler
+        self.worker.start()
+
+    def on_object_recognition_complete(self, results):
+        self.infoExtractionResultArea.setPlainText(json.dumps(results, indent=4, ensure_ascii=False))
+        self.show_status_message("Riconoscimento oggetti completato.")
 
 
 def get_application_path():
