@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QGroupBox, QComboBox, QSpinBox, QFileDialog,
     QMessageBox, QSizePolicy, QProgressDialog, QToolBar, QSlider,
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
-    QStatusBar, QListWidget, QListWidgetItem, QMenu
+    QStatusBar, QListWidget, QListWidgetItem, QMenu, QButtonGroup, QDialogButtonBox
 )
 
 # PyQtGraph (docking)
@@ -3102,14 +3102,16 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Entrambi i campi 'Nome Voce' e 'ID Voce' sono necessari.", error=True)
 
 
+    def _get_selected_player_info(self):
+        """Restituisce il percorso del video e l'istanza del player selezionato."""
+        if self.player_input_button.isChecked():
+            return self.videoPathLineEdit, self.player
+        elif self.player_output_button.isChecked():
+            return self.videoPathLineOutputEdit, self.playerOutput
+        return None, None
+
     def applyFreezeFramePause(self):
-        selected_player = self.playerSelectionCombo.currentText()
-        if selected_player == "Player Input":
-            video_path = self.videoPathLineEdit
-            player = self.player
-        else:
-            video_path = self.videoPathLineOutputEdit
-            player = self.playerOutput
+        video_path, player = self._get_selected_player_info()
 
         if not video_path or not os.path.exists(video_path):
             self.show_status_message("Carica un video prima di applicare una pausa.", error=True)
@@ -3157,11 +3159,28 @@ class VideoAudioManager(QMainWindow):
         # Player Selection GroupBox
         player_selection_group = QGroupBox("Applica a")
         player_selection_layout = QHBoxLayout(player_selection_group)
-        self.playerSelectionCombo = QComboBox()
-        self.playerSelectionCombo.addItems(["Player Input", "Player Output"])
-        self.playerSelectionCombo.setToolTip("Scegli a quale player applicare le seguenti operazioni.")
-        player_selection_layout.addWidget(self.playerSelectionCombo)
+
+        # Pulsante per il Player Input
+        self.player_input_button = QPushButton(QIcon(get_resource("rec.png")), "Input")
+        self.player_input_button.setCheckable(True)
+        self.player_input_button.setChecked(True)
+        self.player_input_button.setToolTip("Applica le operazioni al Video Player Input")
+        player_selection_layout.addWidget(self.player_input_button)
+
+        # Pulsante per il Player Output
+        self.player_output_button = QPushButton(QIcon(get_resource("play.png")), "Output")
+        self.player_output_button.setCheckable(True)
+        self.player_output_button.setToolTip("Applica le operazioni al Video Player Output")
+        player_selection_layout.addWidget(self.player_output_button)
+
+        # Raggruppa i pulsanti per renderli mutuamente esclusivi
+        self.player_button_group = QButtonGroup(self)
+        self.player_button_group.addButton(self.player_input_button)
+        self.player_button_group.addButton(self.player_output_button)
+        self.player_button_group.setExclusive(True)
+
         main_layout.addWidget(player_selection_group)
+
 
         # Creazione del QTabWidget
         tab_widget = QTabWidget()
@@ -3204,10 +3223,13 @@ class VideoAudioManager(QMainWindow):
         self.mergeVideoPathLineEdit.setPlaceholderText("Seleziona il video da aggiungere...")
         browseMergeVideoButton = QPushButton('Sfoglia...')
         browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
+        projectMergeVideoButton = QPushButton('Dal Progetto')
+        projectMergeVideoButton.clicked.connect(self._select_video_from_project)
 
         grid_layout.addWidget(QLabel("Video da unire:"), 0, 0)
-        grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1, 1, 2)
-        grid_layout.addWidget(browseMergeVideoButton, 0, 3)
+        grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1)
+        grid_layout.addWidget(browseMergeVideoButton, 0, 2)
+        grid_layout.addWidget(projectMergeVideoButton, 0, 3)
 
         resolution_group = QGroupBox("Gestione Risoluzione")
         resolution_layout = QVBoxLayout(resolution_group)
@@ -3326,10 +3348,13 @@ class VideoAudioManager(QMainWindow):
         file_layout = QHBoxLayout()
         self.audioPathLineEdit = QLineEdit()
         self.audioPathLineEdit.setReadOnly(True)
-        browseAudioButton = QPushButton('Scegli Audio Principale')
+        browseAudioButton = QPushButton('Sfoglia...')
         browseAudioButton.clicked.connect(self.browseAudio)
+        projectAudioButton = QPushButton('Dal Progetto')
+        projectAudioButton.clicked.connect(self._select_audio_from_project) # Connetti al nuovo metodo
         file_layout.addWidget(self.audioPathLineEdit)
         file_layout.addWidget(browseAudioButton)
+        file_layout.addWidget(projectAudioButton) # Aggiungi il nuovo pulsante
         layout.addLayout(file_layout)
 
         applyAudioButton = QPushButton('Applica Audio Principale')
@@ -3457,14 +3482,7 @@ class VideoAudioManager(QMainWindow):
         return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
 
     def mergeVideo(self):
-        selected_player = self.playerSelectionCombo.currentText()
-        if selected_player == "Player Input":
-            base_video_path = self.videoPathLineEdit
-            player = self.player
-        else:
-            base_video_path = self.videoPathLineOutputEdit
-            player = self.playerOutput
-
+        base_video_path, player = self._get_selected_player_info()
         merge_video_path = self.mergeVideoPathLineEdit.text()
 
         if not base_video_path or not os.path.exists(base_video_path):
@@ -3588,14 +3606,7 @@ class VideoAudioManager(QMainWindow):
             self.audio_buttons[0].setChecked(True)
 
     def applyBackgroundAudioToVideo(self):
-        selected_player = self.playerSelectionCombo.currentText()
-        if selected_player == "Player Input":
-            video_path = self.videoPathLineEdit
-        else:
-            # Note: self.videoPathLineOutputEdit is a string variable holding the path,
-            # not a QLineEdit widget.
-            video_path = self.videoPathLineOutputEdit
-
+        video_path, _ = self._get_selected_player_info()
         background_audio_path = self.backgroundAudioPathLineEdit.text()
         slider_value = self.volumeSliderBack.value()
         background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
@@ -3624,14 +3635,7 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore durante l'applicazione dell'audio di sottofondo: {error_message}", error=True)
 
     def applyAudioWithPauses(self):
-        selected_player = self.playerSelectionCombo.currentText()
-        if selected_player == "Player Input":
-            video_path = self.videoPathLineEdit
-            player = self.player
-        else:
-            video_path = self.videoPathLineOutputEdit
-            player = self.playerOutput
-
+        video_path, player = self._get_selected_player_info()
         pause_duration_str = self.pauseAudioDurationLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
@@ -5702,14 +5706,7 @@ class VideoAudioManager(QMainWindow):
 
     def handle_apply_main_audio(self):
         """Handles the 'Applica Audio Principale' button click."""
-        selected_player = self.playerSelectionCombo.currentText()
-        if selected_player == "Player Input":
-            video_path = self.videoPathLineEdit
-            player = self.player
-        else:
-            video_path = self.videoPathLineOutputEdit
-            player = self.playerOutput
-
+        video_path, player = self._get_selected_player_info()
         new_audio_path = self.audioPathLineEdit.text()
 
         if not video_path or not os.path.exists(video_path):
@@ -7212,6 +7209,65 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Progetto salvato con successo.")
         else:
             self.show_status_message(f"Errore nel salvataggio del progetto: {message}", error=True)
+
+    def _select_audio_from_project(self):
+        """Apre il dialogo per selezionare un file audio dal progetto e aggiorna il line edit."""
+        selected_path = self._select_clip_from_project_dialog(clip_type='audio')
+        if selected_path:
+            self.audioPathLineEdit.setText(selected_path)
+
+    def _select_video_from_project(self):
+        """Apre il dialogo per selezionare un file video dal progetto e aggiorna il line edit."""
+        selected_path = self._select_clip_from_project_dialog(clip_type='video')
+        if selected_path:
+            self.mergeVideoPathLineEdit.setText(selected_path)
+
+    def _select_clip_from_project_dialog(self, clip_type='video'):
+        """
+        Apre un dialogo per selezionare una clip (video o audio) dal progetto corrente.
+        Restituisce il percorso completo della clip selezionata o None.
+        """
+        if not self.current_project_path or not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return None
+
+        if clip_type == 'video':
+            clips = self.projectDock.project_data.get("clips", [])
+            title = "Seleziona Video dal Progetto"
+            clips_dir = os.path.join(self.current_project_path, "clips")
+        elif clip_type == 'audio':
+            clips = self.projectDock.project_data.get("audio_clips", [])
+            title = "Seleziona Audio dal Progetto"
+            clips_dir = os.path.join(self.current_project_path, "audio")
+        else:
+            return None
+
+        if not clips:
+            self.show_status_message(f"Nessuna clip di tipo '{clip_type}' trovata nel progetto.", error=True)
+            return None
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+
+        list_widget = QListWidget()
+        for clip in clips:
+            # Mostra solo le clip 'online' o 'new'
+            if clip.get('status') in ['online', 'new']:
+                list_widget.addItem(clip["clip_filename"])
+
+        layout.addWidget(list_widget)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted and list_widget.currentItem():
+            selected_filename = list_widget.currentItem().text()
+            return os.path.join(clips_dir, selected_filename)
+
+        return None
 
     def get_temp_filepath(self, suffix="", prefix="tmp_"):
         """
