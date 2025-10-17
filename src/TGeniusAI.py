@@ -7543,70 +7543,79 @@ class VideoAudioManager(QMainWindow):
         layout = QVBoxLayout(widget)
 
         self.infoExtractionResultArea = QTextEdit()
-        self.infoExtractionResultArea.setPlaceholderText("I risultati dell'analisi appariranno qui...")
+        self.infoExtractionResultArea.setPlaceholderText("I risultati della ricerca appariranno qui...")
         layout.addWidget(self.infoExtractionResultArea)
 
-        controls_layout = QHBoxLayout()
-        self.infoFrameCountSpin = QSpinBox()
-        self.infoFrameCountSpin.setRange(1, 100)
-        self.infoFrameCountSpin.setValue(10)
-        controls_layout.addWidget(QLabel("Numero di frame:"))
-        controls_layout.addWidget(self.infoFrameCountSpin)
+        search_layout = QHBoxLayout()
+        self.searchQueryInput = QLineEdit()
+        self.searchQueryInput.setPlaceholderText("Es: una persona che saluta, una macchina rossa...")
+        search_layout.addWidget(QLabel("Cosa vuoi cercare?"))
+        search_layout.addWidget(self.searchQueryInput)
 
-        self.languageInput = QComboBox()
-        self.languageInput.addItems(["italiano", "inglese", "francese", "spagnolo", "tedesco"])
-        controls_layout.addWidget(QLabel("Lingua:"))
-        controls_layout.addWidget(self.languageInput)
+        layout.addLayout(search_layout)
 
-        layout.addLayout(controls_layout)
-
-        self.extractInfoButton = QPushButton("Riconosci Oggetti")
-        self.extractInfoButton.clicked.connect(self.run_object_recognition)
-        layout.addWidget(self.extractInfoButton)
+        self.searchButton = QPushButton("Cerca")
+        self.searchButton.clicked.connect(self.run_specific_object_search)
+        layout.addWidget(self.searchButton)
 
         self.infoExtractionDock.addWidget(widget)
 
-    def run_object_recognition(self):
+    def run_specific_object_search(self):
         if not self.videoPathLineEdit:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
             return
 
-        self.infoExtractionResultArea.setPlainText("Analisi in corso...")
+        search_query = self.searchQueryInput.text().strip()
+        if not search_query:
+            QMessageBox.warning(self, "Attenzione", "Inserisci un oggetto da cercare.")
+            return
+
+        self.infoExtractionResultArea.setPlainText(f"Ricerca di '{search_query}' in corso...")
 
         thread = FrameExtractor(
             video_path=self.videoPathLineEdit,
-            num_frames=self.infoFrameCountSpin.value(),
-            analysis_mode='object_recognition'
+            num_frames=10, # Hardcoded for now, can be changed
+            analysis_mode='specific_object_search',
+            search_query=search_query
         )
 
-        # Since process_video is not a QThread, we need to run it in a generic QThread
         class Worker(QThread):
             completed = pyqtSignal(dict)
             error = pyqtSignal(str)
 
-            def __init__(self, extractor, language):
+            def __init__(self, extractor):
                 super().__init__()
                 self.extractor = extractor
-                self.language = language
 
             def run(self):
                 try:
-                    results = self.extractor.process_video(language=self.language)
+                    results = self.extractor.process_video(language="italiano") # Hardcoded for now
                     if results:
                         self.completed.emit(results)
                     else:
-                        self.error.emit("Nessun risultato ottenuto dall'analisi.")
+                        self.error.emit("Nessun risultato ottenuto dalla ricerca.")
                 except Exception as e:
                     self.error.emit(str(e))
 
-        self.worker = Worker(thread, self.languageInput.currentText())
-        self.worker.completed.connect(self.on_object_recognition_complete)
+        self.worker = Worker(thread)
+        self.worker.completed.connect(self.on_specific_object_search_complete)
         self.worker.error.connect(self.onAnalysisError) # Re-use existing error handler
         self.worker.start()
 
-    def on_object_recognition_complete(self, results):
-        self.infoExtractionResultArea.setPlainText(json.dumps(results, indent=4, ensure_ascii=False))
-        self.show_status_message("Riconoscimento oggetti completato.")
+    def on_specific_object_search_complete(self, results):
+        frames = results.get("frames", [])
+        if not frames:
+            self.infoExtractionResultArea.setPlainText("Nessuna occorrenza trovata.")
+            return
+
+        # Format the results into a readable list
+        result_text = ""
+        for frame in frames:
+            result_text += f"Timecode: {frame['timestamp']}\n"
+            result_text += f"Descrizione: {frame['description']}\n\n"
+
+        self.infoExtractionResultArea.setPlainText(result_text)
+        self.show_status_message("Ricerca completata.")
 
 
 def get_application_path():
