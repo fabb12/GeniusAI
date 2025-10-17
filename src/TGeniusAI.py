@@ -7603,7 +7603,7 @@ class VideoAudioManager(QMainWindow):
             num_frames=self.analysisFrameCountSpin.value(),
             analysis_mode='specific_object_search',
             search_query=search_query,
-            language=self.languageInput.currentText()
+            language=self.languageComboBox.currentText()
         )
 
         class Worker(QThread):
