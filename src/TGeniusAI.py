@@ -4918,6 +4918,9 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineOutputEdit = video_path
         logging.debug(f"Loaded video output: {video_path}")
 
+        # Aggiungi questa riga per caricare la cache di estrazione anche per il player di output
+        self._load_and_display_extraction_cache(video_path)
+
 
     def updateTimeCode(self, position):
         # Calcola ore, minuti e secondi dalla posizione, che è in millisecondi
