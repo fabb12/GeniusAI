@@ -12,6 +12,8 @@ import sys
 import time # Per eventuali pause tra richieste API
 from moviepy.editor import VideoFileClip
 from tqdm import tqdm # Barra di progresso
+import io
+from PIL import Image
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
@@ -94,51 +96,52 @@ class FrameExtractor:
         """
         frame_list = []
         cap = None
-        video = None
         try:
-            # Usa moviepy per ottenere durata precisa
-            video = VideoFileClip(self.video_path)
-            duration = video.duration
-            if duration <= 0:
-                 logging.error(f"Durata del video non valida o zero: {self.video_path}")
-                 return []
-            video.close() # Chiudi subito moviepy dopo aver ottenuto la durata
-
-            timestamps = np.linspace(0, duration, self.num_frames, endpoint=False)
-            logging.info(f"Estrazione di {self.num_frames} frame a timestamps: {[f'{ts:.2f}s' for ts in timestamps]}")
-
             cap = cv2.VideoCapture(self.video_path)
             if not cap.isOpened():
                 logging.error(f"Impossibile aprire il video con OpenCV: {self.video_path}")
                 return []
 
-            for i, timestamp in enumerate(timestamps):
-                cap.set(cv2.CAP_PROP_POS_MSEC, timestamp * 1000)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+
+            if total_frames <= 0 or fps <= 0:
+                logging.error(f"Metadati video non validi (frame o fps): {self.video_path}")
+                return []
+
+            step = total_frames // self.num_frames
+            if step == 0:
+                step = 1
+
+            logging.info(f"Estrazione di {self.num_frames} frame da un totale di {total_frames} con un passo di {step} frame.")
+
+            for i in range(self.num_frames):
+                frame_index = i * step
+                if frame_index >= total_frames:
+                    break
+
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
                 success, frame = cap.read()
+
                 if success:
-                    # Codifica in JPEG (più efficiente per API vision)
-                    success_encode, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85]) # Qualità 85
+                    timestamp = frame_index / fps
+                    success_encode, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
                     if success_encode:
                         frame_base64 = base64.b64encode(buffer).decode("utf-8")
                         frame_list.append({"data": frame_base64, "timestamp": timestamp})
                     else:
-                         logging.warning(f"Errore durante la codifica del frame al timestamp {timestamp:.2f}s")
+                        logging.warning(f"Errore durante la codifica del frame all'indice {frame_index}")
                 else:
-                    # A volte l'ultimo frame può dare problemi, logga ma continua se possibile
-                    logging.warning(f"Impossibile leggere il frame al timestamp {timestamp:.2f}s (indice {i})")
-                    # Prova a riaprire il capture se fallisce ripetutamente? (Potrebbe essere overkill)
+                    logging.warning(f"Impossibile leggere il frame all'indice {frame_index}")
 
             logging.info(f"Estratti con successo {len(frame_list)} frame.")
 
         except Exception as e:
             logging.exception(f"Errore durante l'estrazione dei frame da {self.video_path}")
-            return [] # Ritorna lista vuota in caso di errore
+            return []
         finally:
             if cap:
                 cap.release()
-            if video: # Assicurati che moviepy sia chiuso
-                try: video.close()
-                except: pass
 
         return frame_list
 
