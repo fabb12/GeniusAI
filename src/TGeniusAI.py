@@ -4728,7 +4728,8 @@ class VideoAudioManager(QMainWindow):
 
     def _load_and_display_extraction_cache(self, video_path):
         """
-        Carica e visualizza il contenuto della cache di estrazione informazioni, se esiste.
+        Carica e visualizza il contenuto della cache di estrazione informazioni, se esiste,
+        formattandolo come Markdown.
         """
         if not video_path:
             self.infoExtractionResultArea.clear()
@@ -4738,7 +4739,7 @@ class VideoAudioManager(QMainWindow):
         self.infoExtractionResultArea.clear()
 
         if not os.path.exists(cache_path):
-            return # No cache file, so nothing to display
+            return  # No cache file, so nothing to display
 
         try:
             with open(cache_path, 'r', encoding='utf-8') as f:
@@ -4749,31 +4750,33 @@ class VideoAudioManager(QMainWindow):
             return
 
         if not cache_data:
-            return # Cache is empty
+            return  # Cache is empty
 
-        html_content = "<h2>Risultati precedentemente estratti:</h2>"
-        timecode_color = self.highlight_colors.get("Blu Timecode", {}).get("hex", "#ADD8E6")
+        markdown_content = "## Risultati Precedentemente Estratti\n\n"
 
         for query, results in cache_data.items():
-            html_content += f"<h4>Ricerca per: '{query}'</h4>"
+            markdown_content += f"#### Ricerca per: '{query}'\n"
             frames = results.get("frames", [])
             if frames:
                 for frame in frames:
                     try:
-                        time_parts = frame['timestamp'].split(':')
+                        # Rimuovi le parentesi e splitta per creare il timecode in secondi
+                        time_str = frame['timestamp'].replace('[', '').replace(']', '')
+                        time_parts = time_str.split(':')
                         if len(time_parts) == 2:
                             minutes = int(time_parts[0])
                             seconds = int(time_parts[1])
                             total_seconds = minutes * 60 + seconds
-                            html_content += f"<li><a href='{total_seconds}' style='color: {timecode_color};'>[{frame['timestamp']}]</a> "
-                            html_content += f"- {frame['description']}</li>"
+                            # Formatta come link Markdown cliccabile
+                            markdown_content += f"* [{frame['timestamp']}]({total_seconds}) - {frame['description']}\n"
                     except (ValueError, KeyError):
-                        continue # Skip malformed entries
-                html_content += "<br>" # Add space between queries
+                        # Fallback per voci malformate
+                        markdown_content += f"* {frame.get('timestamp', '[N/A]')} - {frame.get('description', 'N/A')}\n"
+                markdown_content += "\n"  # Aggiunge uno spazio tra le diverse query
             else:
-                html_content += "<p>Nessun risultato trovato per questa ricerca.</p><br>"
+                markdown_content += "_Nessun risultato trovato per questa ricerca._\n\n"
 
-        self.infoExtractionResultArea.setHtml(html_content)
+        self.infoExtractionResultArea.setMarkdown(markdown_content)
         self.show_status_message("Cache di estrazione informazioni caricata.")
 
 
@@ -7822,26 +7825,24 @@ class VideoAudioManager(QMainWindow):
             self.infoExtractionResultArea.setPlainText("Nessuna occorrenza trovata.")
             return
 
-        # Format the results into a readable list with clickable timecodes
-        html_result = ""
+        # Format the results into a readable Markdown list with clickable timecodes
+        markdown_result = f"## Risultati per: '{search_query}'\n\n"
         for frame in frames:
-            # Assumes timestamp is in "mm:ss" format
-            time_parts = frame['timestamp'].split(':')
-            if len(time_parts) == 2:
-                try:
+            try:
+                # Rimuovi le parentesi e splitta per creare il timecode in secondi
+                time_str = frame['timestamp'].replace('[', '').replace(']', '')
+                time_parts = time_str.split(':')
+                if len(time_parts) == 2:
                     minutes = int(time_parts[0])
                     seconds = int(time_parts[1])
                     total_seconds = minutes * 60 + seconds
-                    # Create a clickable link for the timecode with a specific color
-                    timecode_color = self.highlight_colors.get("Blu Timecode", {}).get("hex", "#ADD8E6")
-                    html_result += f"<a href='{total_seconds}' style='color: {timecode_color};'>[{frame['timestamp']}]</a> "
-                    html_result += f"Descrizione: {frame['description']}<br><br>"
-                except ValueError:
-                    # Fallback for invalid timestamp format
-                    html_result += f"Timecode: {frame['timestamp']}<br>"
-                    html_result += f"Descrizione: {frame['description']}<br><br>"
+                    # Formatta come link Markdown cliccabile
+                    markdown_result += f"* [{frame['timestamp']}]({total_seconds}) - {frame['description']}\n"
+            except (ValueError, KeyError):
+                 # Fallback per voci malformate
+                markdown_result += f"* {frame.get('timestamp', '[N/A]')} - {frame.get('description', 'N/A')}\n"
 
-        self.infoExtractionResultArea.setHtml(html_result)
+        self.infoExtractionResultArea.setMarkdown(markdown_result)
         self.show_status_message("Ricerca completata.")
 
     def seek_to_search_result_timecode(self, seconds):
