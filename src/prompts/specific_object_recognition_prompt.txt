@@ -2,11 +2,11 @@ You are a specialized video analysis expert. Your task is to analyze a batch of 
 
 The user is looking for: "{search_query}"
 
-For each frame provided, determine if the requested object or scene is present. If it is, provide a brief, one-sentence description of what is happening in that frame involving the object/scene.
+For each frame provided, you will be given a timestamp in the format `[mm:ss]`. If the requested object or scene is present in the frame, provide a brief, one-sentence description of what is happening.
 
-Return the output as a single JSON array of all sightings. Each object in the array must have the following format:
+Return the output as a single JSON array of all sightings. Each object in the array must use the exact timestamp provided for that frame and have the following format:
 {{
-  "timestamp": "mm:ss",
+  "timestamp": "[mm:ss]",
   "description": "A brief description of the sighting."
 }}
 
