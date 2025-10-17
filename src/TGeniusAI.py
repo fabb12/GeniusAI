@@ -1667,6 +1667,7 @@ class VideoAudioManager(QMainWindow):
         self.singleTranscriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+        self.infoExtractionResultArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
 
     def get_current_summary_text_area(self):
         """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
@@ -1700,6 +1701,7 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea,
             self.summaryCombinedDetailedTextArea,
             self.summaryCombinedMeetingTextArea,
+            self.infoExtractionResultArea,
         ]
         if hasattr(self, 'audioAiTextArea'):
             text_areas.append(self.audioAiTextArea)
@@ -7607,8 +7609,9 @@ class VideoAudioManager(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        self.infoExtractionResultArea = QTextEdit()
+        self.infoExtractionResultArea = CustomTextEdit(self)
         self.infoExtractionResultArea.setPlaceholderText("I risultati della ricerca appariranno qui...")
+        self.infoExtractionResultArea.timestampDoubleClicked.connect(self.seek_to_search_result_timecode)
         layout.addWidget(self.infoExtractionResultArea)
 
         # Player Selection
@@ -7696,14 +7699,36 @@ class VideoAudioManager(QMainWindow):
             self.infoExtractionResultArea.setPlainText("Nessuna occorrenza trovata.")
             return
 
-        # Format the results into a readable list
-        result_text = ""
+        # Format the results into a readable list with clickable timecodes
+        html_result = ""
         for frame in frames:
-            result_text += f"Timecode: {frame['timestamp']}\n"
-            result_text += f"Descrizione: {frame['description']}\n\n"
+            # Assumes timestamp is in "mm:ss" format
+            time_parts = frame['timestamp'].split(':')
+            if len(time_parts) == 2:
+                try:
+                    minutes = int(time_parts[0])
+                    seconds = int(time_parts[1])
+                    total_seconds = minutes * 60 + seconds
+                    # Create a clickable link for the timecode
+                    html_result += f"<a href='{total_seconds}'>[{frame['timestamp']}]</a> "
+                    html_result += f"Descrizione: {frame['description']}<br><br>"
+                except ValueError:
+                    # Fallback for invalid timestamp format
+                    html_result += f"Timecode: {frame['timestamp']}<br>"
+                    html_result += f"Descrizione: {frame['description']}<br><br>"
 
-        self.infoExtractionResultArea.setPlainText(result_text)
+        self.infoExtractionResultArea.setHtml(html_result)
         self.show_status_message("Ricerca completata.")
+
+    def seek_to_search_result_timecode(self, seconds):
+        """
+        Seeks the selected video player to the specified time in seconds.
+        """
+        selected_player_name = self.analysisPlayerSelectionCombo.currentText()
+        player = self.player if selected_player_name == "Player Input" else self.playerOutput
+
+        if player:
+            player.setPosition(int(seconds * 1000))
 
 
 def get_application_path():
