@@ -18,7 +18,7 @@ from PIL import Image
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
-    PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY, PROMPT_OBJECT_RECOGNITION, PROMPT_SPECIFIC_OBJECT_RECOGNITION
+    PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY, PROMPT_SPECIFIC_OBJECT_RECOGNITION
 )
 
 class FrameExtractor:
@@ -26,7 +26,7 @@ class FrameExtractor:
     Estrae frame da un video e li analizza usando un modello AI (vision) selezionato
     (Claude, Gemini). Genera anche un riassunto testuale del video.
     """
-    def __init__(self, video_path, num_frames, analysis_mode='description', batch_size=5, api_keys=None, search_query=None):
+    def __init__(self, video_path, num_frames, analysis_mode='description', batch_size=5, api_keys=None, search_query=None, language='italiano'):
         """
         Inizializza l'estrattore di frame.
 
@@ -38,11 +38,13 @@ class FrameExtractor:
             api_keys (dict, optional): Dizionario contenente le API keys {'anthropic': '...', 'google': '...'}.
                                      Se None, le chiavi verranno lette dalla config globale.
             search_query (str, optional): La query di ricerca per la modalità 'specific_object_search'.
+            language (str, optional): La lingua per l'analisi.
         """
         self.video_path = video_path
         self.num_frames = num_frames
         self.analysis_mode = analysis_mode
         self.search_query = search_query
+        self.language = language
         # Limita batch_size per Gemini che potrebbe avere limiti inferiori per chiamata
         self.batch_size = min(batch_size, 16) # Gemini ha un limite di 16 immagini per chiamata
 
@@ -358,76 +360,6 @@ class FrameExtractor:
         logging.info(f"Analisi frame completata. Dati estratti per {len(frame_data)} frame.")
         return frame_data
 
-    def analyze_frames_for_objects(self, frame_list, language):
-        """
-        Analizza una lista di frame per il riconoscimento di oggetti, persone e scene.
-
-        Args:
-            frame_list (list): La lista di dizionari frame da analizzare.
-            language (str): La lingua per le analisi richieste.
-
-        Returns:
-            list: Lista di dizionari con i dati dei frame analizzati:
-                  {'frame_number': int, 'analysis': dict, 'timestamp': str 'mm:ss'}
-        """
-        if not frame_list:
-            logging.warning("Lista frame vuota passata ad analyze_frames_for_objects.")
-            return []
-
-        frame_data = [] # Risultato finale
-        total_batches = (len(frame_list) + self.batch_size - 1) // self.batch_size
-        model_name_lower = self.selected_model.lower()
-
-        try:
-            with open(PROMPT_OBJECT_RECOGNITION, 'r', encoding='utf-8') as f:
-                prompt_template = f.read()
-        except Exception as e:
-            logging.exception("Errore fatale: impossibile leggere il prompt di object recognition.")
-            raise RuntimeError(f"Errore lettura prompt object recognition: {e}")
-
-        logging.info(f"Inizio analisi oggetti di {len(frame_list)} frame in {total_batches} batch usando {self.selected_model}...")
-
-        for batch_idx in tqdm(range(total_batches), desc="Analisi Oggetti Batches", unit="batch"):
-            batch_start_index = batch_idx * self.batch_size
-            batch_end_index = min((batch_idx + 1) * self.batch_size, len(frame_list))
-            current_batch = frame_list[batch_start_index:batch_end_index]
-
-            if not current_batch: continue
-
-            batch_results = []
-            if "claude" in model_name_lower:
-                batch_results = self._analyze_batch_claude(current_batch, batch_idx, language, prompt_template)
-            elif "gemini" in model_name_lower:
-                batch_results = self._analyze_batch_gemini(current_batch, batch_idx, language, prompt_template)
-            else:
-                logging.error(f"Modello '{self.selected_model}' non supportato per l'analisi oggetti.")
-                continue
-
-            if batch_results:
-                try:
-                    for item in batch_results:
-                        local_index = int(item.get("frame", -1))
-                        analysis = item.get("analysis", {})
-
-                        if 0 <= local_index < len(current_batch):
-                            global_frame_number = batch_start_index + local_index
-                            timestamp_seconds = current_batch[local_index]['timestamp']
-                            minutes = int(timestamp_seconds // 60)
-                            seconds = int(timestamp_seconds % 60)
-
-                            frame_data.append({
-                                "frame_number": global_frame_number,
-                                "analysis": analysis,
-                                "timestamp": f"{minutes:02d}:{seconds:02d}",
-                            })
-                        else:
-                            logging.warning(f"Batch {batch_idx} - Indice frame non valido ricevuto nel JSON: {local_index}. Item: {item}")
-                except (TypeError, ValueError) as parse_err:
-                    logging.error(f"Batch {batch_idx} - Errore durante l'elaborazione dei risultati JSON: {parse_err}. Risultati: {batch_results}")
-
-        logging.info(f"Analisi oggetti completata. Dati estratti per {len(frame_data)} frame.")
-        return frame_data
-
     def analyze_frames_for_specific_object(self, frame_list, language, search_query):
         """
         Analizza una lista di frame per cercare un oggetto specifico.
@@ -575,13 +507,12 @@ class FrameExtractor:
             return None # Ritorna None in caso di errore API
 
     # --- Metodo Principale di Processamento ---
-    def process_video(self, output_json="video_analysis.json", language="italiano"):
+    def process_video(self, output_json="video_analysis.json"):
         """
         Esegue l'intero processo: estrazione frame, analisi, riassunto e salva in JSON.
 
         Args:
             output_json (str): Percorso del file JSON di output.
-            language (str): Lingua per l'analisi e il riassunto.
 
         Returns:
             dict: Il dizionario contenente i risultati, o None in caso di errore grave.
@@ -589,7 +520,7 @@ class FrameExtractor:
         results = {"frames": [], "video_summary": None}
         try:
             logging.info(f"--- Inizio Processamento Video: {self.video_path} ---")
-            logging.info(f"Parametri: num_frames={self.num_frames}, language='{language}', model='{self.selected_model}'")
+            logging.info(f"Parametri: num_frames={self.num_frames}, language='{self.language}', model='{self.selected_model}'")
 
             # 1. Estrai Frames
             print(f"Estrazione di {self.num_frames} frame...") # Output per utente console
@@ -604,7 +535,7 @@ class FrameExtractor:
             # 2. Analizza Frames
             if self.analysis_mode == 'object_recognition':
                 print(f"Analisi oggetti con {self.selected_model}...")
-                frame_data = self.analyze_frames_for_objects(frames, language)
+                frame_data = self.analyze_frames_for_objects(frames, self.language)
                 results["frames"] = frame_data
                 if not frame_data:
                     print("Attenzione: Analisi oggetti non ha prodotto risultati.")
@@ -616,7 +547,7 @@ class FrameExtractor:
                 results["video_summary"] = "Object recognition analysis complete."
             elif self.analysis_mode == 'specific_object_search':
                 print(f"Ricerca di '{self.search_query}' con {self.selected_model}...")
-                frame_data = self.analyze_frames_for_specific_object(frames, language, self.search_query)
+                frame_data = self.analyze_frames_for_specific_object(frames, self.language, self.search_query)
                 results["frames"] = frame_data
                 if not frame_data:
                     print("Attenzione: Ricerca non ha prodotto risultati.")
@@ -627,7 +558,7 @@ class FrameExtractor:
                 results["video_summary"] = f"Search for '{self.search_query}' complete."
             else: # Modalità 'description'
                 print(f"Analisi dei frame con {self.selected_model}...")
-                frame_data = self.analyze_frames_batch(frames, language)
+                frame_data = self.analyze_frames_batch(frames, self.language)
                 results["frames"] = frame_data
                 if not frame_data:
                      print("Attenzione: Analisi frame non ha prodotto risultati.")
@@ -639,7 +570,7 @@ class FrameExtractor:
                 # 3. Genera Riassunto Testuale
                 if frame_data: # Genera riassunto solo se ci sono dati dai frame
                     print("Generazione del riassunto testuale del video...")
-                    summary = self.generate_video_summary(frame_data, language)
+                    summary = self.generate_video_summary(frame_data, self.language)
                     results["video_summary"] = summary
                     if summary:
                         print("Riassunto generato.")
