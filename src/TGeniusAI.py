@@ -4723,7 +4723,59 @@ class VideoAudioManager(QMainWindow):
             json.dump(data, f, ensure_ascii=False, indent=4)
 
         self._update_ui_from_json_data(data)
+        self._load_and_display_extraction_cache(video_path)
         return data
+
+    def _load_and_display_extraction_cache(self, video_path):
+        """
+        Carica e visualizza il contenuto della cache di estrazione informazioni, se esiste.
+        """
+        if not video_path:
+            self.infoExtractionResultArea.clear()
+            return
+
+        cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+        self.infoExtractionResultArea.clear()
+
+        if not os.path.exists(cache_path):
+            return # No cache file, so nothing to display
+
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                cache_data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.error(f"Impossibile leggere il file cache di estrazione {cache_path}: {e}")
+            self.infoExtractionResultArea.setPlainText(f"Errore nel caricamento della cache:\n{e}")
+            return
+
+        if not cache_data:
+            return # Cache is empty
+
+        html_content = "<h2>Risultati precedentemente estratti:</h2>"
+        timecode_color = self.highlight_colors.get("Blu Timecode", {}).get("hex", "#ADD8E6")
+
+        for query, results in cache_data.items():
+            html_content += f"<h4>Ricerca per: '{query}'</h4>"
+            frames = results.get("frames", [])
+            if frames:
+                for frame in frames:
+                    try:
+                        time_parts = frame['timestamp'].split(':')
+                        if len(time_parts) == 2:
+                            minutes = int(time_parts[0])
+                            seconds = int(time_parts[1])
+                            total_seconds = minutes * 60 + seconds
+                            html_content += f"<li><a href='{total_seconds}' style='color: {timecode_color};'>[{frame['timestamp']}]</a> "
+                            html_content += f"- {frame['description']}</li>"
+                    except (ValueError, KeyError):
+                        continue # Skip malformed entries
+                html_content += "<br>" # Add space between queries
+            else:
+                html_content += "<p>Nessun risultato trovato per questa ricerca.</p><br>"
+
+        self.infoExtractionResultArea.setHtml(html_content)
+        self.show_status_message("Cache di estrazione informazioni caricata.")
+
 
     def _create_new_json_data(self, video_path):
         """
