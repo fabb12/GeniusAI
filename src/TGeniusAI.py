@@ -7645,12 +7645,18 @@ class VideoAudioManager(QMainWindow):
 
         self.infoExtractionDock.addWidget(widget)
 
-    def run_specific_object_search(self):
+    def _get_selected_analysis_video_path(self):
+        """
+        Restituisce il percorso del file video dal player selezionato nel dock di analisi.
+        """
         selected_player = self.analysisPlayerSelectionCombo.currentText()
         if selected_player == "Player Input":
-            video_path = self.videoPathLineEdit
-        else:
-            video_path = self.videoPathLineOutputEdit
+            return self.videoPathLineEdit
+        else: # Player Output
+            return self.videoPathLineOutputEdit
+
+    def run_specific_object_search(self):
+        video_path = self._get_selected_analysis_video_path()
 
         if not video_path:
             QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel player selezionato.")
@@ -7730,8 +7736,7 @@ class VideoAudioManager(QMainWindow):
 
         # --- Cache-Saving Logic ---
         if not from_cache and search_query and results:
-            selected_player = self.analysisPlayerSelectionCombo.currentText()
-            video_path = self.videoPathLineEdit if selected_player == "Player Input" else self.videoPathLineOutputEdit
+            video_path = self._get_selected_analysis_video_path()
 
             if video_path:
                 cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
