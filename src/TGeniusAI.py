@@ -7611,12 +7611,29 @@ class VideoAudioManager(QMainWindow):
         self.infoExtractionResultArea.setPlaceholderText("I risultati della ricerca appariranno qui...")
         layout.addWidget(self.infoExtractionResultArea)
 
+        # Player Selection
+        player_selection_layout = QHBoxLayout()
+        player_selection_layout.addWidget(QLabel("Player Target:"))
+        self.analysisPlayerSelectionCombo = QComboBox()
+        self.analysisPlayerSelectionCombo.addItems(["Player Input", "Player Output"])
+        player_selection_layout.addWidget(self.analysisPlayerSelectionCombo)
+        layout.addLayout(player_selection_layout)
+
+        # Frame Count
+        frame_count_layout = QHBoxLayout()
+        frame_count_layout.addWidget(QLabel("Numero di frame da analizzare:"))
+        self.analysisFrameCountSpin = QSpinBox()
+        self.analysisFrameCountSpin.setRange(1, 500)
+        self.analysisFrameCountSpin.setValue(20)
+        frame_count_layout.addWidget(self.analysisFrameCountSpin)
+        layout.addLayout(frame_count_layout)
+
+        # Search Query
         search_layout = QHBoxLayout()
         self.searchQueryInput = QLineEdit()
         self.searchQueryInput.setPlaceholderText("Es: una persona che saluta, una macchina rossa...")
         search_layout.addWidget(QLabel("Cosa vuoi cercare?"))
         search_layout.addWidget(self.searchQueryInput)
-
         layout.addLayout(search_layout)
 
         self.searchButton = QPushButton("Cerca")
@@ -7626,8 +7643,14 @@ class VideoAudioManager(QMainWindow):
         self.infoExtractionDock.addWidget(widget)
 
     def run_specific_object_search(self):
-        if not self.videoPathLineEdit:
-            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+        selected_player = self.analysisPlayerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            video_path = self.videoPathLineEdit
+        else:
+            video_path = self.videoPathLineOutputEdit
+
+        if not video_path:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel player selezionato.")
             return
 
         search_query = self.searchQueryInput.text().strip()
@@ -7638,8 +7661,8 @@ class VideoAudioManager(QMainWindow):
         self.infoExtractionResultArea.setPlainText(f"Ricerca di '{search_query}' in corso...")
 
         thread = FrameExtractor(
-            video_path=self.videoPathLineEdit,
-            num_frames=10, # Hardcoded for now, can be changed
+            video_path=video_path,
+            num_frames=self.analysisFrameCountSpin.value(),
             analysis_mode='specific_object_search',
             search_query=search_query
         )
