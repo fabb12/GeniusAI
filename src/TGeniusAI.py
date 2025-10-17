@@ -7667,7 +7667,8 @@ class VideoAudioManager(QMainWindow):
             video_path=video_path,
             num_frames=self.analysisFrameCountSpin.value(),
             analysis_mode='specific_object_search',
-            search_query=search_query
+            search_query=search_query,
+            language=self.languageInput.currentText()
         )
 
         class Worker(QThread):
@@ -7680,7 +7681,7 @@ class VideoAudioManager(QMainWindow):
 
             def run(self):
                 try:
-                    results = self.extractor.process_video(language="italiano") # Hardcoded for now
+                    results = self.extractor.process_video()
                     if results:
                         self.completed.emit(results)
                     else:
@@ -7709,8 +7710,9 @@ class VideoAudioManager(QMainWindow):
                     minutes = int(time_parts[0])
                     seconds = int(time_parts[1])
                     total_seconds = minutes * 60 + seconds
-                    # Create a clickable link for the timecode
-                    html_result += f"<a href='{total_seconds}'>[{frame['timestamp']}]</a> "
+                    # Create a clickable link for the timecode with a specific color
+                    timecode_color = self.highlight_colors.get("Blu Timecode", {}).get("hex", "#ADD8E6")
+                    html_result += f"<a href='{total_seconds}' style='color: {timecode_color};'>[{frame['timestamp']}]</a> "
                     html_result += f"Descrizione: {frame['description']}<br><br>"
                 except ValueError:
                     # Fallback for invalid timestamp format

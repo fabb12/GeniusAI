@@ -277,7 +277,6 @@ PROMPT_MEETING_SUMMARY = get_prompt_path("meeting_summary_prompt.txt")
 PROMPT_OPERATIONAL_GUIDE = get_prompt_path("prompt_operational_guide.txt")
 PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
 PROMPT_GENERATE_FILENAME = get_prompt_path("generate_filename_prompt.txt")
-PROMPT_OBJECT_RECOGNITION = get_prompt_path("object_recognition_prompt.txt")
 PROMPT_SPECIFIC_OBJECT_RECOGNITION = get_prompt_path("specific_object_recognition_prompt.txt")
 
 # --- Percorsi Risorse ---
@@ -317,6 +316,7 @@ HIGHLIGHT_COLORS = {
     "Azzurro Cielo": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
     "Viola": {"qcolor": QColor("#9370DB"), "docx": WD_COLOR_INDEX.VIOLET, "hex": "#9370db"},
     "Rosso Chiaro": {"qcolor": QColor("#F08080"), "docx": WD_COLOR_INDEX.RED, "hex": "#f08080"},
+    "Blu Timecode": {"qcolor": QColor("#ADD8E6"), "docx": None, "hex": "#add8e6"},
 }
 
 # --- Impostazioni Default Generali ---
