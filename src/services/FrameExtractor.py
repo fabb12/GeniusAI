@@ -154,7 +154,11 @@ class FrameExtractor:
         content_list = messages[0]["content"]
 
         for idx, frame in enumerate(batch):
-            content_list.append({"type": "text", "text": f"Frame {idx}:"}) # Usa indice locale al batch nel prompt
+            timestamp_seconds = frame['timestamp']
+            minutes = int(timestamp_seconds // 60)
+            seconds = int(timestamp_seconds % 60)
+            timestamp_str = f"[{minutes:02d}:{seconds:02d}]"
+            content_list.append({"type": "text", "text": f"Frame {idx} at timestamp {timestamp_str}:"})
             content_list.append({
                 "type": "image",
                 "source": { "type": "base64", "media_type": "image/jpeg", "data": frame["data"] }
@@ -199,7 +203,11 @@ class FrameExtractor:
         # Prepara il contenuto per Gemini (lista di testo e oggetti immagine)
         gemini_content = []
         for idx, frame in enumerate(batch):
-             gemini_content.append(f"Frame {idx}:") # Usa indice locale al batch
+             timestamp_seconds = frame['timestamp']
+             minutes = int(timestamp_seconds // 60)
+             seconds = int(timestamp_seconds % 60)
+             timestamp_str = f"[{minutes:02d}:{seconds:02d}]"
+             gemini_content.append(f"Frame {idx} at timestamp {timestamp_str}:")
              # Gemini richiede oggetti Immagine dall'SDK
              try:
                  # Decodifica base64 in bytes
