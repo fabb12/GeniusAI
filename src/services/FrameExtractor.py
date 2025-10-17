@@ -142,7 +142,7 @@ class FrameExtractor:
 
         return frame_list
 
-    def _analyze_batch_claude(self, batch, batch_idx, language, prompt_template):
+    def _analyze_batch_claude(self, batch, batch_idx, language, prompt_template, search_query=None):
         """Analizza un batch di frame usando Claude."""
         self._init_anthropic_client()
         if not self.anthropic_client: return [] # Errore già loggato
@@ -157,7 +157,10 @@ class FrameExtractor:
                 "source": { "type": "base64", "media_type": "image/jpeg", "data": frame["data"] }
             })
 
-        formatted_prompt = prompt_template.format(language=language, batch_size=len(batch))
+        format_vars = {'language': language, 'batch_size': len(batch)}
+        if search_query:
+            format_vars['search_query'] = search_query
+        formatted_prompt = prompt_template.format(**format_vars)
         content_list.append({"type": "text", "text": formatted_prompt})
 
         try:
@@ -186,7 +189,7 @@ class FrameExtractor:
             logging.exception(f"Errore API Claude durante analisi batch {batch_idx}")
             return [] # Ritorna vuoto per questo batch in caso di errore API
 
-    def _analyze_batch_gemini(self, batch, batch_idx, language, prompt_template):
+    def _analyze_batch_gemini(self, batch, batch_idx, language, prompt_template, search_query=None):
         """Analizza un batch di frame usando Gemini."""
         self._configure_gemini() # Assicura che l'SDK sia configurato
 
@@ -206,7 +209,10 @@ class FrameExtractor:
                   return [] # Errore nel batch
 
         # Aggiungi il prompt testuale alla fine
-        formatted_prompt = prompt_template.format(language=language, batch_size=len(batch))
+        format_vars = {'language': language, 'batch_size': len(batch)}
+        if search_query:
+            format_vars['search_query'] = search_query
+        formatted_prompt = prompt_template.format(**format_vars)
         gemini_content.append(formatted_prompt)
 
         try:
@@ -448,14 +454,11 @@ class FrameExtractor:
 
             if not current_batch: continue
 
-            # Format the prompt with the search query
-            formatted_prompt_template = prompt_template.format(language=language, search_query=search_query, batch_size=len(current_batch))
-
             batch_results = []
             if "claude" in model_name_lower:
-                batch_results = self._analyze_batch_claude(current_batch, batch_idx, language, formatted_prompt_template)
+                batch_results = self._analyze_batch_claude(current_batch, batch_idx, language, prompt_template, search_query)
             elif "gemini" in model_name_lower:
-                batch_results = self._analyze_batch_gemini(current_batch, batch_idx, language, formatted_prompt_template)
+                batch_results = self._analyze_batch_gemini(current_batch, batch_idx, language, prompt_template, search_query)
             else:
                 logging.error(f"Modello '{self.selected_model}' non supportato per la ricerca di oggetti specifici.")
                 continue
@@ -463,14 +466,12 @@ class FrameExtractor:
             if batch_results:
                 try:
                     for item in batch_results:
-                        timestamp_seconds = item.get("timestamp")
+                        timestamp_str = item.get("timestamp")
                         description = item.get("description", "N/D").strip()
 
-                        if timestamp_seconds is not None:
-                            minutes = int(timestamp_seconds // 60)
-                            seconds = int(timestamp_seconds % 60)
+                        if timestamp_str is not None:
                             frame_data.append({
-                                "timestamp": f"{minutes:02d}:{seconds:02d}",
+                                "timestamp": timestamp_str,
                                 "description": description,
                             })
                 except (TypeError, ValueError) as parse_err:
