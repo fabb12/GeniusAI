@@ -7661,6 +7661,28 @@ class VideoAudioManager(QMainWindow):
             QMessageBox.warning(self, "Attenzione", "Inserisci un oggetto da cercare.")
             return
 
+        # --- Cache-Loading Logic ---
+        cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                if search_query in cache_data:
+                    self.show_status_message(f"Risultati per '{search_query}' trovati nella cache.")
+                    # Pass the results directly to the completion handler, marking them as from cache
+                    payload = {
+                        'query': search_query,
+                        'results': cache_data[search_query],
+                        'from_cache': True
+                    }
+                    self.on_specific_object_search_complete(payload)
+                    return # Skip the analysis
+        except (json.JSONDecodeError, IOError) as e:
+            self.show_status_message(f"Cache corrotta o illeggibile: {e}. Eseguo una nuova analisi.", error=True)
+            logging.error(f"Error reading cache file {cache_path}: {e}")
+        # --- End of Cache-Loading Logic ---
+
+
         self.infoExtractionResultArea.setPlainText(f"Ricerca di '{search_query}' in corso...")
 
         thread = FrameExtractor(
@@ -7683,7 +7705,13 @@ class VideoAudioManager(QMainWindow):
                 try:
                     results = self.extractor.process_video()
                     if results:
-                        self.completed.emit(results)
+                        # Pass the search query along with the results
+                        payload = {
+                            'query': self.extractor.search_query,
+                            'results': results,
+                            'from_cache': False
+                        }
+                        self.completed.emit(payload)
                     else:
                         self.error.emit("Nessun risultato ottenuto dalla ricerca.")
                 except Exception as e:
@@ -7694,7 +7722,41 @@ class VideoAudioManager(QMainWindow):
         self.worker.error.connect(self.onAnalysisError) # Re-use existing error handler
         self.worker.start()
 
-    def on_specific_object_search_complete(self, results):
+    def on_specific_object_search_complete(self, payload):
+        # Unpack payload
+        search_query = payload.get('query')
+        results = payload.get('results', {})
+        from_cache = payload.get('from_cache', False)
+
+        # --- Cache-Saving Logic ---
+        if not from_cache and search_query and results:
+            selected_player = self.analysisPlayerSelectionCombo.currentText()
+            video_path = self.videoPathLineEdit if selected_player == "Player Input" else self.videoPathLineOutputEdit
+
+            if video_path:
+                cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+                try:
+                    # Read existing cache data or initialize a new dictionary
+                    if os.path.exists(cache_path):
+                        with open(cache_path, 'r', encoding='utf-8') as f:
+                            cache_data = json.load(f)
+                    else:
+                        cache_data = {}
+
+                    # Add/update the entry for the current search query
+                    cache_data[search_query] = results
+
+                    # Write the updated data back to the cache file
+                    with open(cache_path, 'w', encoding='utf-8') as f:
+                        json.dump(cache_data, f, ensure_ascii=False, indent=4)
+
+                    logging.info(f"Risultati per '{search_query}' salvati nella cache: {cache_path}")
+
+                except (IOError, json.JSONDecodeError) as e:
+                    self.show_status_message(f"Errore durante il salvataggio nella cache: {e}", error=True)
+                    logging.error(f"Error writing to cache file {cache_path}: {e}")
+        # --- End of Cache-Saving Logic ---
+
         frames = results.get("frames", [])
         if not frames:
             self.infoExtractionResultArea.setPlainText("Nessuna occorrenza trovata.")
