@@ -7706,7 +7706,17 @@ class VideoAudioManager(QMainWindow):
         self.searchButton.clicked.connect(self.run_specific_object_search)
         layout.addWidget(self.searchButton)
 
+        # Connect the checkbox to the slot
+        self.smartExtractionCheckbox.toggled.connect(self._toggle_frame_count_spinbox)
+        # Set initial state
+        self._toggle_frame_count_spinbox(self.smartExtractionCheckbox.isChecked())
+
         self.infoExtractionDock.addWidget(widget)
+
+    def _toggle_frame_count_spinbox(self, checked):
+        """Enable/disable the frame count spinbox based on smart extraction checkbox."""
+        self.analysisFrameCountSpin.setEnabled(not checked)
+        self.analysisFrameCountSpin.setToolTip("Non utilizzato con l'estrazione intelligente" if checked else "Numero di frame da analizzare")
 
     def _get_selected_analysis_video_path(self):
         """
