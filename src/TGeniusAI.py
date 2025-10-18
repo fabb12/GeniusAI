@@ -7689,6 +7689,11 @@ class VideoAudioManager(QMainWindow):
         frame_count_layout.addWidget(self.analysisFrameCountSpin)
         layout.addLayout(frame_count_layout)
 
+        # Smart Extraction Checkbox
+        self.smartExtractionCheckbox = QCheckBox("Usa estrazione intelligente dei frame")
+        self.smartExtractionCheckbox.setToolTip("Analizza solo i frame con cambiamenti significativi dell'interfaccia.")
+        layout.addWidget(self.smartExtractionCheckbox)
+
         # Search Query
         search_layout = QHBoxLayout()
         self.searchQueryInput = QLineEdit()
@@ -7767,23 +7772,45 @@ class VideoAudioManager(QMainWindow):
 
             def run(self):
                 try:
-                    results = self.extractor.process_video()
-                    if results:
-                        # Pass the search query along with the results
+                    # Decide which frame extraction method to use
+                    if self.extractor.parent.smartExtractionCheckbox.isChecked():
+                        self.extractor.parent.show_status_message("Estrazione intelligente dei frame in corso...", timeout=0)
+                        frames = self.extractor.extract_significant_frames()
+                    else:
+                        self.extractor.parent.show_status_message("Estrazione frame standard in corso...", timeout=0)
+                        frames = self.extractor.extract_frames()
+
+                    if not frames:
+                        self.error.emit("Estrazione dei frame non riuscita.")
+                        return
+
+                    # Analyze the extracted frames
+                    self.extractor.parent.show_status_message(f"Analisi di {len(frames)} frame in corso...", timeout=0)
+                    results = self.extractor.analyze_frames_for_specific_object(
+                        frames,
+                        self.extractor.language,
+                        self.extractor.search_query
+                    )
+
+                    if results is not None:
                         payload = {
                             'query': self.extractor.search_query,
-                            'results': results,
+                            'results': {"frames": results}, # Ensure the structure matches what on_specific_object_search_complete expects
                             'from_cache': False
                         }
                         self.completed.emit(payload)
                     else:
-                        self.error.emit("Nessun risultato ottenuto dalla ricerca.")
+                        self.error.emit("Nessun risultato ottenuto dall'analisi.")
                 except Exception as e:
+                    import traceback
+                    logging.error(f"Errore nel worker di ricerca: {e}\n{traceback.format_exc()}")
                     self.error.emit(str(e))
 
+        # Pass the main window instance to the extractor and worker
+        thread.parent = self
         self.worker = Worker(thread)
         self.worker.completed.connect(self.on_specific_object_search_complete)
-        self.worker.error.connect(self.onAnalysisError) # Re-use existing error handler
+        self.worker.error.connect(self.onAnalysisError)
         self.worker.start()
 
     def on_specific_object_search_complete(self, payload):
