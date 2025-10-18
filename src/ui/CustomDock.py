@@ -94,26 +94,16 @@ class CustomDock(Dock):
         super().setStyleSheet(style)
         self.label.setStyleSheet("background-color: #00FFFF; color: #0000FF;")
 
-    def hideDock(self):
-        """Nasconde il dock e la sua label senza rimuoverli dalla gerarchia."""
-        self.hide()
-        self.label.hide()
-        self.updateGeometry()
-        if self.parentWidget():
-            self.parentWidget().update()
-
-    def showDock(self):
-        """Mostra il dock e la sua label."""
-        self.show()
-        self.label.show()
-        self.updateGeometry()
-        if self.parentWidget():
-            self.parentWidget().update()
+    def setVisible(self, visible):
+        """Override di setVisible per gestire la visibilità del dock e della sua label."""
+        super().setVisible(visible)
+        self.label.setVisible(visible)
+        # Non è necessario chiamare updateGeometry() qui, Qt lo gestirà.
 
     def close(self):
         """
-        Nasconde il dock e la sua label (senza rimuoverlo dalla gerarchia)
+        Nasconde il dock e la sua label chiamando setVisible(False)
         per poterlo ripristinare in seguito.
         """
-        self.hideDock()
+        self.setVisible(False)
         self.sigClosed.emit(self)

@@ -5189,100 +5189,68 @@ class VideoAudioManager(QMainWindow):
     def onSaveError(self, error_message):
         self.show_status_message(f"Errore durante il salvataggio del video: {error_message}", error=True)
 
-    def setupViewMenuActions(self, viewMenu):
-        # Azione per il Video Player Dock
-        self.actionToggleVideoPlayerDock = QAction('Mostra/Nascondi Video Player Input', self, checkable=True)
-        self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
-        self.actionToggleVideoPlayerDock.triggered.connect(
-            lambda: self.toggleDockVisibilityAndUpdateMenu(self.videoPlayerDock,
-                                                           self.actionToggleVideoPlayerDock.isChecked()))
+    def setAllDocksVisibility(self, visible):
+        """Imposta la visibilità per tutti i dock e aggiorna il menu."""
+        for dock in self.dockSettingsManager.docks.values():
+            dock.setVisible(visible)
+        self.updateViewMenu()
 
-        # Azioni simili per gli altri docks...
-        self.actionToggleVideoPlayerDockOutput = self.createToggleAction(self.videoPlayerOutput,
-                                                                         'Mostra/Nascondi Video Player Output')
-        self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
-                                                                     'Mostra/Nascondi Trascrizione')
-        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
-        self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
-        self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
-        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
-        self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
-        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
+    def setupViewMenuActions(self, viewMenu):
+        """Configura le azioni del menu 'View' con icone e collegamenti."""
+        # Azioni per mostrare/nascondere i singoli dock
+        self.actionToggleVideoPlayerDock = self.createToggleAction(self.videoPlayerDock, 'Player Input', 'play.png')
+        self.actionToggleVideoPlayerDockOutput = self.createToggleAction(self.videoPlayerOutput, 'Player Output', 'play.png')
+        self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock, 'Trascrizione', 'script.png')
+        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Generazione Audio AI', 'sound.png')
+        self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Registrazione', 'rec.png')
+        self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Gestione Audio/Video', 'audio_wave.png')
+        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Progetto', 'folder.png')
+        self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Note Video', 'text_sum.png')
+        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Estrazione Info', 'frame_get.png')
 
         # Aggiungi tutte le azioni al menu 'View'
-        viewMenu.addAction(self.actionToggleVideoPlayerDock)
-        viewMenu.addAction(self.actionToggleVideoPlayerDockOutput)
-        viewMenu.addAction(self.actionToggleTranscriptionDock)
-        viewMenu.addAction(self.actionToggleEditingDock)
-        viewMenu.addAction(self.actionToggleRecordingDock)
-        viewMenu.addAction(self.actionToggleAudioDock)
-        viewMenu.addAction(self.actionToggleProjectDock)
-        viewMenu.addAction(self.actionToggleVideoNotesDock)
-        viewMenu.addAction(self.actionToggleInfoExtractionDock)
+        viewMenu.addActions([
+            self.actionToggleVideoPlayerDock, self.actionToggleVideoPlayerDockOutput,
+            self.actionToggleTranscriptionDock, self.actionToggleEditingDock,
+            self.actionToggleRecordingDock, self.actionToggleAudioDock,
+            self.actionToggleProjectDock, self.actionToggleVideoNotesDock,
+            self.actionToggleInfoExtractionDock
+        ])
 
+        viewMenu.addSeparator()
 
-
-        # Aggiungi azioni per mostrare/nascondere tutti i docks
-        showAllDocksAction = QAction('Mostra tutti i Docks', self)
-        hideAllDocksAction = QAction('Nascondi tutti i Docks', self)
-
-        showAllDocksAction.triggered.connect(self.showAllDocks)
-        hideAllDocksAction.triggered.connect(self.hideAllDocks)
-
-        viewMenu.addSeparator()  # Aggiunge un separatore per chiarezza
+        # Azioni per mostrare/nascondere tutti i dock
+        showAllDocksAction = QAction(QIcon(get_resource("eye.png")), 'Mostra tutti i Docks', self)
+        showAllDocksAction.triggered.connect(lambda: self.setAllDocksVisibility(True))
         viewMenu.addAction(showAllDocksAction)
+
+        hideAllDocksAction = QAction(QIcon(get_resource("hide.png")), 'Nascondi tutti i Docks', self)
+        hideAllDocksAction.triggered.connect(lambda: self.setAllDocksVisibility(False))
         viewMenu.addAction(hideAllDocksAction)
 
+        viewMenu.addSeparator()
 
-        # Azione per salvare il layout dei docks
-        saveLayoutAction = QAction('Salva Layout dei Docks', self)
-        saveLayoutAction.triggered.connect(self.saveDockLayout)
-        viewMenu.addSeparator()  # Aggiunge un separatore per chiarezza
+        # Azioni per salvare e caricare il layout
+        saveLayoutAction = QAction(QIcon(get_resource("save.png")), 'Salva Layout...', self)
+        saveLayoutAction.triggered.connect(self.dockSettingsManager.save_layout_as)
         viewMenu.addAction(saveLayoutAction)
+
+        loadLayoutAction = QAction(QIcon(get_resource("load.png")), 'Carica Layout...', self)
+        loadLayoutAction.triggered.connect(self.dockSettingsManager.load_layout_from)
+        viewMenu.addAction(loadLayoutAction)
 
         # Aggiorna lo stato iniziale del menu
         self.updateViewMenu()
 
-    def saveDockLayout(self):
-        if hasattr(self, 'dockSettingsManager'):
-            self.dockSettingsManager.save_settings()
-            self.show_status_message("Layout dei docks salvato correttamente.")
-        else:
-            self.show_status_message("Gestore delle impostazioni dei dock non trovato.", error=True)
-
-    def showAllDocks(self):
-        # Imposta tutti i docks visibili
-        self.videoPlayerDock.setVisible(True)
-        self.videoPlayerOutput.setVisible(True)
-        self.audioDock.setVisible(True)
-        self.transcriptionDock.setVisible(True)
-        self.editingDock.setVisible(True)
-        self.recordingDock.setVisible(True)
-        self.videoEffectsDock.setVisible(True)
-        self.updateViewMenu()  # Aggiorna lo stato dei menu
-
-    def hideAllDocks(self):
-        # Nasconde tutti i docks
-        self.videoPlayerDock.setVisible(False)
-        self.videoPlayerOutput.setVisible(False)
-        self.audioDock.setVisible(False)
-        self.transcriptionDock.setVisible(False)
-        self.editingDock.setVisible(False)
-        self.recordingDock.setVisible(False)
-        self.videoEffectsDock.setVisible(False)
-        self.updateViewMenu()  # Aggiorna lo stato dei menu
-    def createToggleAction(self, dock, menuText):
-        action = QAction(menuText, self, checkable=True)
+    def createToggleAction(self, dock, menuText, icon_name):
+        """Crea una QAction checkable per un dock con un'icona."""
+        action = QAction(QIcon(get_resource(icon_name)), menuText, self, checkable=True)
         action.setChecked(dock.isVisible())
         action.triggered.connect(lambda checked: self.toggleDockVisibilityAndUpdateMenu(dock, checked))
         return action
 
     def toggleDockVisibilityAndUpdateMenu(self, dock, visible):
-        if visible:
-            dock.showDock()
-        else:
-            dock.hideDock()
-
+        dock.setVisible(visible)
         self.updateViewMenu()
 
     def resetViewMenu(self):
