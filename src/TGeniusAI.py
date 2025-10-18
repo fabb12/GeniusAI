@@ -658,6 +658,7 @@ class VideoAudioManager(QMainWindow):
         self.current_highlight_color_name = default_color_name
 
         self.initUI()
+        self._first_show = True
 
         # Move these initializations to after initUI
         self.videoContainer.resizeEvent = self.videoContainerResizeEvent
@@ -3535,12 +3536,23 @@ class VideoAudioManager(QMainWindow):
             self.backgroundAudioPathLineEdit.setText(fileName)
             self.show_status_message(f"Selezionato audio di sottofondo: {os.path.basename(fileName)}")
 
+    def showEvent(self, event):
+        """
+        Override the showEvent to load dock settings only after the window is shown.
+        This ensures that restoreState() works correctly.
+        """
+        super().showEvent(event)
+        if self._first_show:
+            settings_file = './dock_settings.json'
+            if os.path.exists(settings_file):
+                self.dockSettingsManager.load_settings(settings_file)
+            else:
+                self.dockSettingsManager.loadDefaultLayout()
+            self._first_show = False
+
     def setupDockSettingsManager(self):
-        settings_file = './dock_settings.json'
-        if os.path.exists(settings_file):
-            self.dockSettingsManager.load_settings(settings_file)
-        else:
-            self.set_default_dock_layout()
+        # La logica di caricamento è stata spostata in showEvent.
+        # Qui ci assicuriamo solo che il menu sia inizializzato correttamente.
         self.resetViewMenu()
 
     def closeEvent(self, event):
