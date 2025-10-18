@@ -1,5 +1,6 @@
 import json
-from PyQt6.QtCore import QPoint, QSize
+import base64
+from PyQt6.QtCore import QPoint, QSize, QByteArray
 import logging
 from src.config import DOCK_SETTINGS_FILE
 from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
@@ -8,35 +9,39 @@ class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
         self.parent = parent
         self.main_window = main_window
-        self.docks = docks  # Dizionario dei docks: {nome_dock: istanza_dock}
+        self.docks = docks
         self.settings_file = DOCK_SETTINGS_FILE
 
     def save_settings(self):
-        settings = {'main_window': {
-            'width': self.main_window.size().width(),
-            'height': self.main_window.size().height(),
-            'x': self.main_window.pos().x(),
-            'y': self.main_window.pos().y()
-        }}
-        for name, dock in self.docks.items():
-            settings[name] = {
-                'visible': dock.isVisible(),
-                'x': dock.pos().x(),
-                'y': dock.pos().y(),
-                'width': dock.size().width(),
-                'height': dock.size().height()
-            }
+        """
+        Salva la geometria della finestra principale e lo stato completo dei dock.
+        Lo stato viene codificato in Base64 per essere serializzabile in JSON.
+        """
+        state = self.main_window.saveState()
+        state_base64 = base64.b64encode(state.data()).decode('ascii')
+
+        settings = {
+            'main_window': {
+                'width': self.main_window.size().width(),
+                'height': self.main_window.size().height(),
+                'x': self.main_window.pos().x(),
+                'y': self.main_window.pos().y()
+            },
+            'dock_state_base64': state_base64
+        }
         with open(self.settings_file, 'w') as file:
             json.dump(settings, file, indent=4)
+        logging.info("Impostazioni del layout dei dock salvate.")
 
     def load_settings(self, settings_file=None):
+        """
+        Carica e applica la geometria della finestra principale e lo stato dei dock.
+        Lo stato viene decodificato da Base64 prima di essere ripristinato.
+        """
         if not settings_file:
             settings_file = self.settings_file
 
         try:
-            for dock in self.docks.values():
-                dock.setVisible(False)
-
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
@@ -46,16 +51,19 @@ class DockSettingsManager:
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            for name, dock in self.docks.items():
-                dock_settings = settings.get(name, {})
-                dock.setVisible(dock_settings.get('visible', True))
-                dock.resize(QSize(dock_settings.get('width', 600), dock_settings.get('height', 200)))
-                dock.move(QPoint(dock_settings.get('x', 100), dock_settings.get('y', 100)))
+            state_base64 = settings.get('dock_state_base64')
+            if state_base64:
+                state_data = base64.b64decode(state_base64)
+                self.main_window.restoreState(QByteArray(state_data))
+                logging.info("Layout dei dock ripristinato dal file di impostazioni.")
+            else:
+                logging.warning("Nessuno stato dei dock trovato nel file. Caricamento del layout di default.")
+                self.loadDefaultLayout()
 
             self.main_window.updateViewMenu()
 
-        except FileNotFoundError:
-            logging.debug("Settings file not found. Using default settings.")
+        except (FileNotFoundError, json.JSONDecodeError, KeyError, binascii.Error) as e:
+            logging.warning(f"File di impostazioni non trovato o corrotto ({e}). Caricamento del layout di default.")
             self.loadDefaultLayout()
 
     def set_workspace(self, workspace_name):
