@@ -147,6 +147,116 @@ class FrameExtractor:
 
         return frame_list
 
+    def extract_significant_frames(self, change_threshold=1.5, min_interval=3.0, max_interval=30.0):
+        """
+        Estrae frame da un video solo quando si verifica un cambiamento significativo dell'interfaccia.
+
+        Args:
+            change_threshold (float): Percentuale di pixel che devono cambiare per considerare il frame significativo.
+            min_interval (float): Intervallo minimo in secondi tra due estrazioni per evitare over-sampling.
+            max_interval (float): Intervallo massimo in secondi prima di forzare l'estrazione di un frame.
+
+        Returns:
+            list: Lista di dizionari, ognuno contenente:
+                  {'data': str (immagine base64), 'timestamp': float (in secondi), 'change_percentage': float}
+        """
+        frame_list = []
+        cap = None
+
+        try:
+            cap = cv2.VideoCapture(self.video_path)
+            if not cap.isOpened():
+                logging.error(f"Impossibile aprire il video con OpenCV: {self.video_path}")
+                return []
+
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            if fps == 0:
+                logging.error("FPS del video è 0, impossibile calcolare i timestamp.")
+                return []
+
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            logging.info(f"Inizio estrazione frame significativi da '{self.video_path}' (FPS: {fps:.2f})")
+
+            last_extracted_frame_gray = None
+            last_extraction_time = -min_interval # Permette l'estrazione del primo frame
+
+            kernel = np.ones((8, 8), np.uint8) # Kernel per la morphological operation per ignorare il cursore
+
+            frame_count = 0
+            while True:
+                success, frame = cap.read()
+                if not success:
+                    break
+
+                current_time = frame_count / fps
+
+                # Estrai sempre il primo frame
+                if last_extracted_frame_gray is None:
+                    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                    # Salva il frame
+                    success_encode, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                    if success_encode:
+                        frame_base64 = base64.b64encode(buffer).decode("utf-8")
+                        frame_list.append({
+                            "data": frame_base64,
+                            "timestamp": current_time,
+                            "change_percentage": 100.0 # Primo frame è sempre significativo
+                        })
+                        last_extracted_frame_gray = gray_frame
+                        last_extraction_time = current_time
+                        logging.info(f"Estratto frame iniziale a {current_time:.2f}s")
+
+                    frame_count += 1
+                    continue
+
+                # Condizioni per forzare l'estrazione
+                time_since_last_extraction = current_time - last_extraction_time
+                force_extraction = time_since_last_extraction >= max_interval
+
+                # Analisi del cambiamento solo se è passato l'intervallo minimo o se si forza l'estrazione
+                if time_since_last_extraction >= min_interval or force_extraction:
+                    gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+                    # Ignora piccoli cambiamenti (es. cursore) con morphology
+                    gray_frame_morphed = cv2.morphologyEx(gray_frame, cv2.MORPH_OPEN, kernel)
+                    last_frame_morphed = cv2.morphologyEx(last_extracted_frame_gray, cv2.MORPH_OPEN, kernel)
+
+                    # Calcola la differenza
+                    diff = cv2.absdiff(last_frame_morphed, gray_frame_morphed)
+                    _, thresh = cv2.threshold(diff, 25, 255, cv2.THRESH_BINARY)
+
+                    changed_pixels = np.count_nonzero(thresh)
+                    total_pixels = thresh.shape[0] * thresh.shape[1]
+                    change_percentage = (changed_pixels / total_pixels) * 100
+
+                    if force_extraction or change_percentage > change_threshold:
+                        success_encode, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
+                        if success_encode:
+                            frame_base64 = base64.b64encode(buffer).decode("utf-8")
+                            frame_list.append({
+                                "data": frame_base64,
+                                "timestamp": current_time,
+                                "change_percentage": change_percentage
+                            })
+                            last_extracted_frame_gray = gray_frame
+                            last_extraction_time = current_time
+                            reason = "soglia superata" if not force_extraction else "intervallo massimo raggiunto"
+                            logging.info(f"Estratto frame a {current_time:.2f}s ({reason}, {change_percentage:.2f}%)")
+
+                frame_count += 1
+
+            logging.info(f"Estrazione completata. Estratti {len(frame_list)} frame significativi.")
+
+        except Exception as e:
+            logging.exception(f"Errore durante l'estrazione dei frame significativi da {self.video_path}")
+            return []
+        finally:
+            if cap:
+                cap.release()
+
+        return frame_list
+
     def _analyze_batch_claude(self, batch, batch_idx, language, prompt_template, search_query=None):
         """Analizza un batch di frame usando Claude."""
         self._init_anthropic_client()
