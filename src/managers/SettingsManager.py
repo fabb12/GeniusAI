@@ -69,30 +69,32 @@ class DockSettingsManager:
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            # Ripristina lo stato generale dell'area dei dock
-            dock_state = settings.get('dock_state')
-            if dock_state:
-                area = self.main_window.centralWidget()
-                area.restoreState(dock_state)
-                logging.info("Stato generale dei dock ripristinato.")
-
-            # Applica la configurazione granulare (visibilità e geometria) a ogni dock
+            # Prima, imposta la visibilità di tutti i dock in base alla configurazione salvata.
+            # Questo è fondamentale per garantire che i workspace e i layout salvati non entrino in conflitto.
             docks_config = settings.get('docks_config')
             if docks_config:
                 for name, config in docks_config.items():
                     if name in self.docks:
-                        dock = self.docks[name]
-                        # Applica la visibilità prima di tutto
-                        dock.setVisible(config.get('visible', True))
+                        # Imposta lo stato di visibilità salvato. Non mostrare ancora la label.
+                        self.docks[name].setVisible(config.get('visible', True))
+                logging.info("Stato di visibilità iniziale dei dock impostato.")
 
-                        # Se il dock deve essere visibile, applica la geometria
-                        if config.get('visible', True):
-                            geom_data = config.get('geometry')
-                            if geom_data and len(geom_data) == 4:
-                                dock.setGeometry(QRect(*geom_data))
-                logging.info("Configurazione granulare dei dock applicata.")
-            else:
-                logging.warning("Nessuna configurazione granulare trovata. Alcuni stati potrebbero non essere ripristinati.")
+            # Ora, ripristina lo stato generale dell'area dei dock.
+            # Questo posizionerà e organizzerà correttamente solo i dock che sono stati resi visibili.
+            dock_state = settings.get('dock_state')
+            if dock_state:
+                area = self.main_window.centralWidget()
+                area.restoreState(dock_state)
+                logging.info("Stato generale dell'area dei dock ripristinato.")
+
+            # Infine, riapplica la geometria esatta per ogni dock visibile per garantire la coerenza.
+            if docks_config:
+                for name, config in docks_config.items():
+                    if name in self.docks and self.docks[name].isVisible():
+                        geom_data = config.get('geometry')
+                        if geom_data and len(geom_data) == 4:
+                            self.docks[name].setGeometry(QRect(*geom_data))
+                logging.info("Geometria finale dei dock visibili ripristinata.")
 
             self.main_window.updateViewMenu()
 
