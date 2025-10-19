@@ -5252,6 +5252,7 @@ class VideoAudioManager(QMainWindow):
     def toggleDockVisibilityAndUpdateMenu(self, dock, visible):
         dock.setVisible(visible)
         self.updateViewMenu()
+        self.centralWidget().updateGeometry()
 
     def resetViewMenu(self):
 

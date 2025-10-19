@@ -15,7 +15,7 @@ class DockSettingsManager:
     def save_settings(self, settings_file=None):
         """
         Salva la geometria della finestra principale, lo stato dell'area dei dock
-        e la configurazione granulare di ogni singolo dock (visibilità, geometria).
+        e lo stato di visibilità di ogni singolo dock.
         """
         if not settings_file:
             settings_file = self.settings_file
@@ -23,13 +23,7 @@ class DockSettingsManager:
         area = self.main_window.centralWidget()
         state = area.saveState()
 
-        docks_config = {}
-        for name, dock in self.docks.items():
-            geom = dock.geometry()
-            docks_config[name] = {
-                'visible': dock.isVisible(),
-                'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]
-            }
+        docks_visibility = {name: dock.isVisible() for name, dock in self.docks.items()}
 
         settings = {
             'main_window': {
@@ -39,7 +33,7 @@ class DockSettingsManager:
                 'y': self.main_window.pos().y()
             },
             'dock_state': state,
-            'docks_config': docks_config
+            'docks_visibility': docks_visibility
         }
         try:
             with open(settings_file, 'w') as file:
@@ -53,7 +47,7 @@ class DockSettingsManager:
     def load_settings(self, settings_file=None):
         """
         Carica e applica la geometria della finestra, lo stato dell'area dei dock
-        e la configurazione individuale di ogni dock.
+        e la visibilità di ogni dock.
         """
         if not settings_file:
             settings_file = self.settings_file
@@ -62,41 +56,27 @@ class DockSettingsManager:
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
-            # Ripristina dimensioni e posizione della finestra principale
             main_window_settings = settings.get('main_window', {})
             self.main_window.resize(
                 QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
                       main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
             self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
 
-            # Prima, imposta la visibilità di tutti i dock in base alla configurazione salvata.
-            # Questo è fondamentale per garantire che i workspace e i layout salvati non entrino in conflitto.
-            docks_config = settings.get('docks_config')
-            if docks_config:
-                for name, config in docks_config.items():
+            docks_visibility = settings.get('docks_visibility')
+            if docks_visibility:
+                for name, visible in docks_visibility.items():
                     if name in self.docks:
-                        # Imposta lo stato di visibilità salvato. Non mostrare ancora la label.
-                        self.docks[name].setVisible(config.get('visible', True))
-                logging.info("Stato di visibilità iniziale dei dock impostato.")
+                        self.docks[name].setVisible(visible)
+                logging.info("Stato di visibilità dei dock impostato.")
 
-            # Ora, ripristina lo stato generale dell'area dei dock.
-            # Questo posizionerà e organizzerà correttamente solo i dock che sono stati resi visibili.
             dock_state = settings.get('dock_state')
             if dock_state:
                 area = self.main_window.centralWidget()
                 area.restoreState(dock_state)
                 logging.info("Stato generale dell'area dei dock ripristinato.")
 
-            # Infine, riapplica la geometria esatta per ogni dock visibile per garantire la coerenza.
-            if docks_config:
-                for name, config in docks_config.items():
-                    if name in self.docks and self.docks[name].isVisible():
-                        geom_data = config.get('geometry')
-                        if geom_data and len(geom_data) == 4:
-                            self.docks[name].setGeometry(QRect(*geom_data))
-                logging.info("Geometria finale dei dock visibili ripristinata.")
-
             self.main_window.updateViewMenu()
+            self.main_window.centralWidget().updateGeometry()
 
         except FileNotFoundError:
             logging.warning(f"File di impostazioni '{settings_file}' non trovato. Caricamento del layout di default.")
@@ -151,6 +131,7 @@ class DockSettingsManager:
             self.docks['audioDock'].setVisible(True)
 
         self.main_window.updateViewMenu()
+        self.main_window.centralWidget().updateGeometry()
 
     def loadRecordingLayout(self):
         """Carica il layout per la registrazione video."""
