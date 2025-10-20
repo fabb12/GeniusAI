@@ -5504,11 +5504,23 @@ class VideoAudioManager(QMainWindow):
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            # Carica il testo e poi applica lo stile
-            self.singleTranscriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+
+            transcription_text = data.get('transcription_raw', '')
+
+            # Controlla se il testo è già in formato HTML
+            is_html = bool(BeautifulSoup(transcription_text, "html.parser").find())
+
+            if is_html:
+                self.singleTranscriptionTextArea.setHtml(transcription_text)
+            else:
+                # Converte il testo semplice in paragrafi HTML per la visualizzazione
+                html_text = transcription_text.replace('\n', '<br>')
+                self.singleTranscriptionTextArea.setHtml(f"<p>{html_text}</p>")
+
             self._style_existing_timestamps(self.singleTranscriptionTextArea)
             self.onProcessComplete(data)
             self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
+
         except (FileNotFoundError, json.JSONDecodeError) as e:
             self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
             logging.error(f"Failed to load transcription JSON {json_path}: {e}")
@@ -5536,9 +5548,15 @@ class VideoAudioManager(QMainWindow):
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
-            # Carica l'HTML per preservare la formattazione
-            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
-            self._style_existing_timestamps(self.singleTranscriptionTextArea) # Applica stile
+            # Gestisce sia le nuove trascrizioni in HTML che quelle vecchie in testo semplice
+            is_html = bool(BeautifulSoup(self.transcription_original, "html.parser").find())
+            if is_html:
+                self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+            else:
+                html_text = self.transcription_original.replace('\n', '<br>')
+                self.singleTranscriptionTextArea.setHtml(f"<p>{html_text}</p>")
+
+            self._style_existing_timestamps(self.singleTranscriptionTextArea)
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
