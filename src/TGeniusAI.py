@@ -834,42 +834,42 @@ class VideoAudioManager(QMainWindow):
         # ---------------------
         self.videoPlayerDock = CustomDock("Video Player Input", closable=True)
         self.videoPlayerDock.setStyleSheet(self.styleSheet())
-        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.videoPlayerDock.setToolTip("Dock per la riproduzione video di input")
         area.addDock(self.videoPlayerDock, 'left')
 
         self.videoPlayerOutput = CustomDock("Video Player Output", closable=True)
         self.videoPlayerOutput.setStyleSheet(self.styleSheet())
-        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.videoPlayerOutput.setToolTip("Dock per la riproduzione video di output")
         area.addDock(self.videoPlayerOutput, 'left')
 
         self.transcriptionDock = CustomDock("Trascrizione e Sintesi Audio", closable=True)
-        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.transcriptionDock.setStyleSheet(self.styleSheet())
         self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
 
         self.editingDock = CustomDock("Generazione Audio AI", closable=True)
-        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.editingDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.editingDock.setStyleSheet(self.styleSheet())
         self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
         area.addDock(self.editingDock, 'right')
 
         self.recordingDock = self.createRecordingDock()
-        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.recordingDock.setStyleSheet(self.styleSheet())
         self.recordingDock.setToolTip("Dock per la registrazione")
         area.addDock(self.recordingDock, 'right')
 
         self.audioDock = self.createAudioDock()
-        self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.audioDock.setStyleSheet(self.styleSheet())
         self.audioDock.setToolTip("Dock per la gestione Audio/Video")
         area.addDock(self.audioDock, 'left')
 
         self.projectDock = ProjectDock()
-        self.projectDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.projectDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.projectDock.setStyleSheet(self.styleSheet())
         area.addDock(self.projectDock, 'right', self.transcriptionDock)
         self.projectDock.clip_selected.connect(self.load_project_clip)
@@ -886,7 +886,7 @@ class VideoAudioManager(QMainWindow):
         self.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
 
         self.videoNotesDock = CustomDock("Note Video", closable=True)
-        self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.videoNotesDock.setStyleSheet(self.styleSheet())
         self.videoNotesDock.setToolTip("Dock per le note video")
         area.addDock(self.videoNotesDock, 'bottom', self.transcriptionDock)
@@ -894,7 +894,7 @@ class VideoAudioManager(QMainWindow):
 
 
         self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
-        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
         area.addDock(self.infoExtractionDock, 'right')
         self.createInfoExtractionDock()
@@ -5231,13 +5231,9 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addSeparator()
 
         # Azioni per salvare e caricare il layout
-        saveLayoutAction = QAction(QIcon(get_resource("save.png")), 'Salva Layout...', self)
-        saveLayoutAction.triggered.connect(self.dockSettingsManager.save_layout_as)
+        saveLayoutAction = QAction(QIcon(get_resource("save.png")), 'Salva Layout', self)
+        saveLayoutAction.triggered.connect(self.dockSettingsManager.save_settings)
         viewMenu.addAction(saveLayoutAction)
-
-        loadLayoutAction = QAction(QIcon(get_resource("load.png")), 'Carica Layout...', self)
-        loadLayoutAction.triggered.connect(self.dockSettingsManager.load_layout_from)
-        viewMenu.addAction(loadLayoutAction)
 
         # Aggiorna lo stato iniziale del menu
         self.updateViewMenu()
