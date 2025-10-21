@@ -14,7 +14,7 @@ class DockSettingsManager:
 
     def save_settings(self, settings_file=None):
         """
-        Salva la geometria e lo stato della finestra principale, lo stato dell'area dei dock
+        Salva la geometria della finestra principale, lo stato dell'area dei dock
         e la visibilità di ogni singolo dock.
         """
         if not settings_file:
@@ -27,7 +27,6 @@ class DockSettingsManager:
 
         settings = {
             'main_window_geometry': self.main_window.saveGeometry().data().hex(),
-            'main_window_state': self.main_window.saveState().data().hex(),
             'dock_state': dock_state,
             'docks_visibility': docks_visibility
         }
@@ -42,7 +41,7 @@ class DockSettingsManager:
 
     def load_settings(self, settings_file=None):
         """
-        Carica e applica la geometria e lo stato della finestra principale, la visibilità dei dock
+        Carica e applica la geometria della finestra principale, la visibilità dei dock
         e lo stato dell'area dei dock.
         """
         if not settings_file:
@@ -52,11 +51,9 @@ class DockSettingsManager:
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
-            # 1. Ripristina la geometria e lo stato della finestra principale.
+            # 1. Ripristina la geometria della finestra principale.
             if 'main_window_geometry' in settings:
                 self.main_window.restoreGeometry(QByteArray.fromHex(settings['main_window_geometry'].encode()))
-            if 'main_window_state' in settings:
-                self.main_window.restoreState(QByteArray.fromHex(settings['main_window_state'].encode()))
 
             # 2. Imposta la visibilità dei dock PRIMA di ripristinare lo stato dell'area.
             docks_visibility = settings.get('docks_visibility')
@@ -74,7 +71,6 @@ class DockSettingsManager:
 
             self.main_window.updateViewMenu()
             self.main_window.updateGeometry()
-
 
         except FileNotFoundError:
             logging.warning(f"File di impostazioni '{settings_file}' non trovato. Caricamento del layout di default.")
