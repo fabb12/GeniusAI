@@ -1,9 +1,9 @@
 import json
-from PyQt6.QtCore import QPoint, QSize, QRect
+from PyQt6.QtCore import QByteArray
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 import logging
 from src.config import DOCK_SETTINGS_FILE
-from src.config import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT
+
 
 class DockSettingsManager:
     def __init__(self, main_window, docks, parent):
@@ -14,32 +14,22 @@ class DockSettingsManager:
 
     def save_settings(self, settings_file=None):
         """
-        Salva la geometria della finestra principale, lo stato dell'area dei dock
-        e la configurazione granulare di ogni singolo dock (visibilità, geometria).
+        Salva la geometria e lo stato della finestra principale, lo stato dell'area dei dock
+        e la visibilità di ogni singolo dock.
         """
         if not settings_file:
             settings_file = self.settings_file
 
         area = self.main_window.centralWidget()
-        state = area.saveState()
+        dock_state = area.saveState()
 
-        docks_config = {}
-        for name, dock in self.docks.items():
-            geom = dock.geometry()
-            docks_config[name] = {
-                'visible': dock.isVisible(),
-                'geometry': [geom.x(), geom.y(), geom.width(), geom.height()]
-            }
+        docks_visibility = {name: dock.isVisible() for name, dock in self.docks.items()}
 
         settings = {
-            'main_window': {
-                'width': self.main_window.size().width(),
-                'height': self.main_window.size().height(),
-                'x': self.main_window.pos().x(),
-                'y': self.main_window.pos().y()
-            },
-            'dock_state': state,
-            'docks_config': docks_config
+            'main_window_geometry': self.main_window.saveGeometry().data().hex(),
+            'main_window_state': self.main_window.saveState().data().hex(),
+            'dock_state': dock_state,
+            'docks_visibility': docks_visibility
         }
         try:
             with open(settings_file, 'w') as file:
@@ -52,8 +42,8 @@ class DockSettingsManager:
 
     def load_settings(self, settings_file=None):
         """
-        Carica e applica la geometria della finestra, lo stato dell'area dei dock
-        e la configurazione individuale di ogni dock.
+        Carica e applica la geometria e lo stato della finestra principale, la visibilità dei dock
+        e lo stato dell'area dei dock.
         """
         if not settings_file:
             settings_file = self.settings_file
@@ -62,46 +52,34 @@ class DockSettingsManager:
             with open(settings_file, 'r') as file:
                 settings = json.load(file)
 
-            # Ripristina dimensioni e posizione della finestra principale
-            main_window_settings = settings.get('main_window', {})
-            self.main_window.resize(
-                QSize(main_window_settings.get('width', DEFAULT_WINDOW_WIDTH),
-                      main_window_settings.get('height', DEFAULT_WINDOW_HEIGHT)))
-            self.main_window.move(QPoint(main_window_settings.get('x', 100), main_window_settings.get('y', 100)))
+            # 1. Ripristina la geometria e lo stato della finestra principale.
+            if 'main_window_geometry' in settings:
+                self.main_window.restoreGeometry(QByteArray.fromHex(settings['main_window_geometry'].encode()))
+            if 'main_window_state' in settings:
+                self.main_window.restoreState(QByteArray.fromHex(settings['main_window_state'].encode()))
 
-            # Prima, imposta la visibilità di tutti i dock in base alla configurazione salvata.
-            # Questo è fondamentale per garantire che i workspace e i layout salvati non entrino in conflitto.
-            docks_config = settings.get('docks_config')
-            if docks_config:
-                for name, config in docks_config.items():
+            # 2. Imposta la visibilità dei dock PRIMA di ripristinare lo stato dell'area.
+            docks_visibility = settings.get('docks_visibility')
+            if docks_visibility:
+                for name, is_visible in docks_visibility.items():
                     if name in self.docks:
-                        # Imposta lo stato di visibilità salvato. Non mostrare ancora la label.
-                        self.docks[name].setVisible(config.get('visible', True))
-                logging.info("Stato di visibilità iniziale dei dock impostato.")
+                        self.docks[name].setVisible(is_visible)
 
-            # Ora, ripristina lo stato generale dell'area dei dock.
-            # Questo posizionerà e organizzerà correttamente solo i dock che sono stati resi visibili.
+            # 3. Ripristina lo stato dell'area dei dock.
             dock_state = settings.get('dock_state')
             if dock_state:
                 area = self.main_window.centralWidget()
                 area.restoreState(dock_state)
-                logging.info("Stato generale dell'area dei dock ripristinato.")
-
-            # Infine, riapplica la geometria esatta per ogni dock visibile per garantire la coerenza.
-            if docks_config:
-                for name, config in docks_config.items():
-                    if name in self.docks and self.docks[name].isVisible():
-                        geom_data = config.get('geometry')
-                        if geom_data and len(geom_data) == 4:
-                            self.docks[name].setGeometry(QRect(*geom_data))
-                logging.info("Geometria finale dei dock visibili ripristinata.")
+                logging.info("Stato dell'area dei dock ripristinato.")
 
             self.main_window.updateViewMenu()
+            self.main_window.updateGeometry()
+
 
         except FileNotFoundError:
             logging.warning(f"File di impostazioni '{settings_file}' non trovato. Caricamento del layout di default.")
             self.loadDefaultLayout()
-        except (json.JSONDecodeError, KeyError) as e:
+        except (json.JSONDecodeError, KeyError, TypeError) as e:
             logging.error(f"File di impostazioni '{settings_file}' corrotto o malformato ({e}). Caricamento del layout di default.")
             QMessageBox.critical(self.main_window, "Errore di Caricamento",
                                  f"Il file di layout '{settings_file}' è corrotto o non valido.\n"
@@ -151,6 +129,7 @@ class DockSettingsManager:
             self.docks['audioDock'].setVisible(True)
 
         self.main_window.updateViewMenu()
+        self.main_window.centralWidget().updateGeometry()
 
     def loadRecordingLayout(self):
         """Carica il layout per la registrazione video."""
