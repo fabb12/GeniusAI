@@ -152,6 +152,11 @@ class CustomTextEdit(QTextEdit):
         """
         if source.hasText():
             text_to_paste = source.text()
+
+            # Check if this is the audioAiTextArea and if the parent has the conversion method
+            if self.objectName() == "audioAiTextArea" and hasattr(self.parent(), 'convert_pauses_to_breaks'):
+                text_to_paste = self.parent().convert_pauses_to_breaks(text_to_paste)
+
             cursor = self.textCursor()
 
             is_replacing_all = (self.document().isEmpty() or
@@ -159,15 +164,17 @@ class CustomTextEdit(QTextEdit):
 
             if is_replacing_all:
                 try:
+                    # Try to set as markdown, which is useful for transcriptions with formatting
                     self.setMarkdownContent(text_to_paste)
                 except Exception as e:
-                    print(f"Errore durante il rendering Markdown su incolla, incollando come testo semplice: {e}")
+                    # Fallback to plain text if markdown fails
                     self.clear()
                     self.insertPlainText(text_to_paste)
-                    self.cursorPositionChanged.emit() # Emetti solo se non fatto da setMarkdownContent
             else:
+                # If not replacing all, just insert as plain text
                 self.insertPlainText(text_to_paste)
-                self.cursorPositionChanged.emit()
+
+            self.cursorPositionChanged.emit()
         else:
             super().insertFromMimeData(source)
             self.cursorPositionChanged.emit() # Emetti anche per altri tipi di dati incollati

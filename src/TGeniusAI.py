@@ -1351,6 +1351,7 @@ class VideoAudioManager(QMainWindow):
         audio_ai_layout.addWidget(tools_group)
 
         self.audioAiTextArea = CustomTextEdit(self)
+        self.audioAiTextArea.setObjectName("audioAiTextArea")
         self.audioAiTextArea.setPlaceholderText("Incolla qui il testo da usare per la generazione audio o altre funzioni AI...")
         audio_ai_layout.addWidget(self.audioAiTextArea)
 
@@ -7903,6 +7904,23 @@ class VideoAudioManager(QMainWindow):
 
         if player:
             player.setPosition(int(seconds * 1000))
+
+    def convert_pauses_to_breaks(self, text):
+        """
+        Converts [PAUSA] [HH:MM:SS] - [HH:MM:SS] to <break time="Xs" />.
+        """
+        def parse_time(time_str):
+            parts = time_str.split(':')
+            return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+
+        def replacer(match):
+            start_time = parse_time(match.group(1))
+            end_time = parse_time(match.group(2))
+            duration = end_time - start_time
+            return f'<break time="{duration}s" />'
+
+        pattern = re.compile(r'\[PAUSA\] \[(\d{2}:\d{2}:\d{2})\] - \[(\d{2}:\d{2}:\d{2})\]')
+        return pattern.sub(replacer, text)
 
 
 def get_application_path():
