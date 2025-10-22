@@ -7,6 +7,8 @@ import speech_recognition as sr
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
 
 
 class TranscriptionThread(QThread):
@@ -26,77 +28,83 @@ class TranscriptionThread(QThread):
     def run(self):
         standard_wav_path = None
         input_clip = None
-        audio_clip_for_chunking = None
         try:
             self.progress.emit(5, "Estrazione e standardizzazione audio...")
 
             input_clip = AudioFileClip(self.media_path)
 
-            # Se sono specificati start_time e end_time, taglia la clip
             if self.start_time is not None and self.end_time is not None:
                 self.progress.emit(6, f"Estrazione audio da {self.start_time:.2f}s a {self.end_time:.2f}s...")
                 input_clip = input_clip.subclip(self.start_time, self.end_time)
 
-            # Standardizza in un file WAV temporaneo
             standard_wav_path = self.main_window.get_temp_filepath(suffix=".wav")
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', logger=None)
-            input_clip.close()
-            self.progress.emit(10, "Audio pronto per la trascrizione.")
+            self.progress.emit(10, "Audio pronto per l'analisi del silenzio.")
 
-            # Step 2: Process the standardized WAV file.
-            audio_clip_for_chunking = AudioFileClip(standard_wav_path)
-            duration = audio_clip_for_chunking.duration
-            if duration <= 0:
-                raise ValueError("La durata dell'audio è non valida o negativa.")
+            sound = AudioSegment.from_wav(standard_wav_path)
+            self.progress.emit(15, "Rilevamento delle parti non silenziose...")
 
+            nonsilent_chunks = detect_nonsilent(sound, min_silence_len=1000, silence_thresh=-40)
+            if not nonsilent_chunks:
+                self.error.emit("Nessuna parte non silenziosa trovata. L'audio potrebbe essere completamente silenzioso.")
+                return
+
+            self.progress.emit(20, f"Trovati {len(nonsilent_chunks)} segmenti audio da trascrivere.")
             language_video = self.main_window.languageComboBox.currentData()
             transcription = ""
-
-            # Unified chunking logic for all audio lengths
-            length = 30000  # 30 seconds
-            # Calcola l'offset iniziale basato sul tempo di inizio della trascrizione parziale
+            last_end_ms = 0
             offset_ms = int(self.start_time * 1000) if self.start_time is not None else 0
 
-            chunks = [
-                (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start + offset_ms)
-                for start in range(0, int(duration * 1000), length)
-            ]
-
-            total_chunks = len(chunks)
-
-            for index, (chunk, start_time_ms) in enumerate(chunks):
+            total_chunks = len(nonsilent_chunks)
+            for i, (start_ms, end_ms) in enumerate(nonsilent_chunks):
                 if not self._is_running:
                     self.save_transcription_to_json(transcription, language_video)
                     return
 
-                text, _, _ = self.transcribeAudioChunk(chunk, start_time_ms)
+                if start_ms > last_end_ms:
+                    pause_start_s = (last_end_ms + offset_ms) / 1000
+                    pause_end_s = (start_ms + offset_ms) / 1000
+                    transcription += f"[PAUSA] [{self.format_time(pause_start_s)}] - [{self.format_time(pause_end_s)}]\n\n"
 
-                # Calcola i timestamp di inizio e fine
-                start_seconds = start_time_ms // 1000
-                end_seconds = start_seconds + int(chunk.duration)
-                start_mins, start_secs = divmod(start_seconds, 60)
-                end_mins, end_secs = divmod(end_seconds, 60)
+                chunk_audio_clip = AudioFileClip(standard_wav_path).subclip(start_ms / 1000, end_ms / 1000)
+                text, _, _ = self.transcribeAudioChunk(chunk_audio_clip, start_ms + offset_ms)
 
-                # Formatta il timestamp come [MM:SS] - [MM:SS]
-                timestamp = f"[{start_mins:02d}:{start_secs:02d}] - [{end_mins:02d}:{end_secs:02d}]"
+                start_s = (start_ms + offset_ms) / 1000
+                end_s = (end_ms + offset_ms) / 1000
+                timestamp = f"[{self.format_time(start_s)}] - [{self.format_time(end_s)}]"
                 transcription += f"{timestamp}\n{text}\n\n"
 
+                last_end_ms = end_ms
                 self.partial_text = transcription
-                progress_percentage = int(((index + 1) / total_chunks) * 100)
-                self.progress.emit(progress_percentage, f"Trascrizione {index + 1}/{total_chunks}")
+                progress_percentage = int(((i + 1) / total_chunks) * 80) + 20
+                self.progress.emit(progress_percentage, f"Trascrizione {i + 1}/{total_chunks}")
+                chunk_audio_clip.close()
+
+            duration_ms = len(sound)
+            if last_end_ms < duration_ms:
+                pause_start_s = (last_end_ms + offset_ms) / 1000
+                pause_end_s = (duration_ms + offset_ms) / 1000
+                transcription += f"[PAUSA] [{self.format_time(pause_start_s)}] - [{self.format_time(pause_end_s)}]\n\n"
 
             json_path = self.save_transcription_to_json(transcription, language_video)
             self.completed.emit((json_path, []))
 
         except Exception as e:
             self.error.emit(str(e))
+            logging.error(f"Errore nella trascrizione: {e}", exc_info=True)
         finally:
             if input_clip:
                 input_clip.close()
-            if audio_clip_for_chunking:
-                audio_clip_for_chunking.close()
             if standard_wav_path and os.path.exists(standard_wav_path):
                 os.remove(standard_wav_path)
+
+    def format_time(self, seconds):
+        """Formatta i secondi in HH:MM:SS."""
+        td = datetime.timedelta(seconds=seconds)
+        total_seconds = int(td.total_seconds())
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
     def save_transcription_to_json(self, transcription, language_code):
         json_path = os.path.splitext(self.media_path)[0] + ".json"
