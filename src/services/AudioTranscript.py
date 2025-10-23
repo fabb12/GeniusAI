@@ -79,7 +79,7 @@ class TranscriptionThread(QThread):
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
                 if text is None:
                     pause_duration = chunk.duration
-                    transcription += f"{timestamp}\n<break time=\"{pause_duration:.0f}s\" />\n\n"
+                    transcription += f"{timestamp}\n[PAUSA]\n\n"
                 else:
                     transcription += f"{timestamp}\n{text}\n\n"
 
