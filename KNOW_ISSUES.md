@@ -74,13 +74,13 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [x] qundo fa il crop deve slvare nella cartella clip con prefisso cropped mantenendo stesso nome
 - [x] Taglia le pause più lunghe di 2 secondi e aggiungi una transizione morbida tra le clip.”
 - [ ] aggiungi transazioni automatiche
-- [ ] riconoscere oggetti, volti, luoghi, emozioni;
-- [ ] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
+- [x] riconoscere oggetti, volti, luoghi, emozioni;
+- [x] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
 - [ ] integrare trascrzione con documenti esterni
 - [ ] inserire timeline
-- [ ]sistemare timecode trascrzione 
-- [ ] aggiugni il nome del file quadno uso uno trascrzione
-- [ ] sistemare spunta per trascrzione 
+- [x] sistemare timecode trascrzione 
+- [x] aggiugni il nome del file quadno uso uno trascrzione
+- [x] sistemare spunta per trascrzione 
 - 
 mettere un titolo nel riassuto
 ## [1.2.2] - 2024-06-30
