@@ -53,7 +53,7 @@ class TranscriptionThread(QThread):
             transcription = ""
 
             # Unified chunking logic for all audio lengths
-            length = 30000  # 30 seconds
+            length = 15000  # 15 seconds
             # Calcola l'offset iniziale basato sul tempo di inizio della trascrizione parziale
             offset_ms = int(self.start_time * 1000) if self.start_time is not None else 0
 
@@ -73,13 +73,15 @@ class TranscriptionThread(QThread):
 
                 # Calcola i timestamp di inizio e fine
                 start_seconds = start_time_ms // 1000
-                end_seconds = start_seconds + int(chunk.duration)
                 start_mins, start_secs = divmod(start_seconds, 60)
-                end_mins, end_secs = divmod(end_seconds, 60)
 
-                # Formatta il timestamp come [MM:SS] - [MM:SS]
-                timestamp = f"[{start_mins:02d}:{start_secs:02d}] - [{end_mins:02d}:{end_secs:02d}]"
-                transcription += f"{timestamp}\n{text}\n\n"
+                # Formatta il timestamp come [MM:SS]
+                timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
+                if text is None:
+                    pause_duration = chunk.duration
+                    transcription += f"{timestamp} <break time=\"{pause_duration:.0f}s\" />\n"
+                else:
+                    transcription += f"{timestamp} {text}\n"
 
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
@@ -141,7 +143,7 @@ class TranscriptionThread(QThread):
             text = recognizer.recognize_google(audio_data, language=locale)
             return text, start_time, language_video
         except sr.UnknownValueError:
-            return "[Incomprensibile]", start_time, None
+            return None, start_time, None
         except sr.RequestError as e:
             return f"[Errore: {e}]", start_time, None
         except Exception as e:

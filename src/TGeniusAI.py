@@ -2665,6 +2665,7 @@ class VideoAudioManager(QMainWindow):
         self.videoPathLineEdit = ''
         self.fileNameLabel.setText("Nessun video caricato")
         self.videoNotesListWidget.clear()
+        self.transcriptionDock.setTitle("Trascrizione e Sintesi Audio")
     def releaseOutputVideo(self):
         self.playerOutput.stop()
         time.sleep(.01)
@@ -4890,6 +4891,7 @@ class VideoAudioManager(QMainWindow):
             QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
 
         self.videoPathLineEdit = video_path
+        self.transcriptionDock.setTitle(f"Trascrizione e Sintesi Audio - {os.path.basename(video_path)}")
 
         is_audio_only = self.isAudioOnly(video_path)
         self.cropButton.setEnabled(not is_audio_only)
@@ -4908,6 +4910,9 @@ class VideoAudioManager(QMainWindow):
         # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
         self._manage_video_json(video_path)
         self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
+        if not self.transcription_original:
+            self.transcriptionViewToggle.setEnabled(False)
+            self.transcriptionViewToggle.setChecked(False)
 
     def loadVideoOutput(self, video_path):
 
