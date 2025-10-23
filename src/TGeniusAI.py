@@ -5530,7 +5530,7 @@ class VideoAudioManager(QMainWindow):
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             # Carica il testo e poi applica lo stile
-            self.singleTranscriptionTextArea.setPlainText(data.get('transcription_raw', ''))
+            self.singleTranscriptionTextArea.setMarkdown(data.get('transcription_raw', ''))
             self._style_existing_timestamps(self.singleTranscriptionTextArea)
             self.onProcessComplete(data)
             self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)

@@ -79,9 +79,9 @@ class TranscriptionThread(QThread):
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
                 if text is None:
                     pause_duration = chunk.duration
-                    transcription += f"{timestamp}\n[PAUSA]\n\n"
+                    transcription += f"{timestamp}\n\n[PAUSA]\n\n"
                 else:
-                    transcription += f"{timestamp}\n{text}\n\n"
+                    transcription += f"{timestamp}\n\n{text}\n\n"
 
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
