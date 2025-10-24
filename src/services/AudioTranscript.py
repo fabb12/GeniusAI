@@ -7,6 +7,8 @@ import speech_recognition as sr
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip
+from pydub import AudioSegment
+from pydub.silence import detect_nonsilent
 
 
 class TranscriptionThread(QThread):
@@ -26,62 +28,68 @@ class TranscriptionThread(QThread):
     def run(self):
         standard_wav_path = None
         input_clip = None
-        audio_clip_for_chunking = None
         try:
             self.progress.emit(5, "Estrazione e standardizzazione audio...")
 
             input_clip = AudioFileClip(self.media_path)
 
-            # Se sono specificati start_time e end_time, taglia la clip
             if self.start_time is not None and self.end_time is not None:
                 self.progress.emit(6, f"Estrazione audio da {self.start_time:.2f}s a {self.end_time:.2f}s...")
                 input_clip = input_clip.subclip(self.start_time, self.end_time)
 
-            # Standardizza in un file WAV temporaneo
             standard_wav_path = self.main_window.get_temp_filepath(suffix=".wav")
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', logger=None)
-            input_clip.close()
             self.progress.emit(10, "Audio pronto per la trascrizione.")
 
-            # Step 2: Process the standardized WAV file.
-            audio_clip_for_chunking = AudioFileClip(standard_wav_path)
-            duration = audio_clip_for_chunking.duration
-            if duration <= 0:
-                raise ValueError("La durata dell'audio è non valida o negativa.")
+            audio_segment = AudioSegment.from_wav(standard_wav_path)
 
             language_video = self.main_window.languageComboBox.currentData()
             transcription = ""
 
-            # Unified chunking logic for all audio lengths
-            length = 15000  # 15 seconds
-            # Calcola l'offset iniziale basato sul tempo di inizio della trascrizione parziale
             offset_ms = int(self.start_time * 1000) if self.start_time is not None else 0
 
-            chunks = [
-                (audio_clip_for_chunking.subclip(start / 1000, min((start + length) / 1000, duration)), start + offset_ms)
-                for start in range(0, int(duration * 1000), length)
-            ]
+            # Rileva i segmenti di non-silenzio
+            nonsilent_chunks = detect_nonsilent(
+                audio_segment,
+                min_silence_len=700,
+                silence_thresh=audio_segment.dBFS - 16,
+                seek_step=1
+            )
 
-            total_chunks = len(chunks)
+            if not nonsilent_chunks:
+                self.error.emit("Nessun parlato rilevato nel file audio.")
+                return
 
-            for index, (chunk, start_time_ms) in enumerate(chunks):
+            total_chunks = len(nonsilent_chunks)
+            last_end_time = 0
+
+            for index, chunk_range in enumerate(nonsilent_chunks):
                 if not self._is_running:
                     self.save_transcription_to_json(transcription, language_video)
                     return
 
-                text, _, _ = self.transcribeAudioChunk(chunk, start_time_ms)
+                start_chunk, end_chunk = chunk_range
 
-                # Calcola i timestamp di inizio e fine
-                start_seconds = start_time_ms // 1000
+                # Calcola la pausa dall'ultimo segmento
+                if last_end_time > 0:
+                    pause_duration = (start_chunk - last_end_time) / 1000.0
+                    if pause_duration > 1.0: # Pausa significativa
+                        pause_start_seconds = (last_end_time + offset_ms) // 1000
+                        pause_start_mins, pause_start_secs = divmod(pause_start_seconds, 60)
+                        timestamp = f"[{pause_start_mins:02d}:{pause_start_secs:02d}]"
+                        transcription += f'{timestamp}\n\n<break time="{pause_duration:.1f}s" />\n\n'
+
+                chunk = audio_segment[start_chunk:end_chunk]
+                text, _, _ = self.transcribeAudioChunk(chunk, start_chunk + offset_ms)
+
+                start_seconds = (start_chunk + offset_ms) // 1000
                 start_mins, start_secs = divmod(start_seconds, 60)
-
-                # Formatta il timestamp come [MM:SS]
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
-                if text is None:
-                    pause_duration = chunk.duration
-                    transcription += f"{timestamp} <break time=\"{pause_duration:.0f}s\" />\n\n"
-                else:
-                    transcription += f"{timestamp} {text}\n\n"
+
+                if text:
+                    transcription += f"{timestamp}\n\n{text}\n\n"
+
+                last_end_time = end_chunk
 
                 self.partial_text = transcription
                 progress_percentage = int(((index + 1) / total_chunks) * 100)
@@ -95,8 +103,6 @@ class TranscriptionThread(QThread):
         finally:
             if input_clip:
                 input_clip.close()
-            if audio_clip_for_chunking:
-                audio_clip_for_chunking.close()
             if standard_wav_path and os.path.exists(standard_wav_path):
                 os.remove(standard_wav_path)
 
@@ -133,7 +139,7 @@ class TranscriptionThread(QThread):
         temp_audio_file_path = None
         try:
             temp_audio_file_path = self.main_window.get_temp_filepath(suffix=".wav")
-            audio_chunk.write_audiofile(temp_audio_file_path, codec='pcm_s16le', logger=None)
+            audio_chunk.export(temp_audio_file_path, format="wav")
 
             with sr.AudioFile(temp_audio_file_path) as source:
                 audio_data = recognizer.record(source)
