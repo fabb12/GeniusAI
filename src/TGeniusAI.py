@@ -5464,24 +5464,6 @@ class VideoAudioManager(QMainWindow):
 
         return styled_html
 
-    def _style_existing_timestamps(self, text_edit):
-        """
-        Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
-        Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
-        """
-        current_html = text_edit.toHtml()
-        new_html = self._style_timestamps_in_html(current_html)
-
-        if new_html != current_html:
-            # Salva la posizione del cursore
-            cursor = text_edit.textCursor()
-            cursor_pos = cursor.position()
-            # Applica il nuovo HTML
-            text_edit.setHtml(new_html)
-            # Ripristina la posizione del cursore
-            cursor.setPosition(cursor_pos)
-
-
     def detectAndUpdateLanguage(self, text):
         try:
             detected_language_code = detect(text)
@@ -5529,9 +5511,14 @@ class VideoAudioManager(QMainWindow):
         try:
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            # Carica il testo e poi applica lo stile
-            self.singleTranscriptionTextArea.setMarkdown(data.get('transcription_raw', ''))
-            self._style_existing_timestamps(self.singleTranscriptionTextArea)
+            # Estrai il Markdown grezzo
+            raw_markdown = data.get('transcription_raw', '')
+            # Converti il Markdown in HTML
+            html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
+            # Applica lo stile personalizzato ai timestamp nell'HTML
+            styled_html = self._style_timestamps_in_html(html_content)
+            # Imposta l'HTML finale nell'area di testo
+            self.singleTranscriptionTextArea.setHtml(styled_html)
             self.onProcessComplete(data)
             self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
         except (FileNotFoundError, json.JSONDecodeError) as e:
@@ -5557,12 +5544,15 @@ class VideoAudioManager(QMainWindow):
         # Decide quale testo mostrare e imposta lo stato del toggle
         if self.transcription_corrected:
             html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
-            self.singleTranscriptionTextArea.setHtml(html_content)
+            styled_html = self._style_timestamps_in_html(html_content)
+            self.singleTranscriptionTextArea.setHtml(styled_html)
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
-            # Carica il Markdown direttamente, che verrà renderizzato correttamente
-            self.singleTranscriptionTextArea.setMarkdown(self.transcription_original)
+            # Converti il Markdown in HTML, applica lo stile e visualizza
+            html_content = markdown.markdown(self.transcription_original, extensions=['fenced_code', 'tables'])
+            styled_html = self._style_timestamps_in_html(html_content)
+            self.singleTranscriptionTextArea.setHtml(styled_html)
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
