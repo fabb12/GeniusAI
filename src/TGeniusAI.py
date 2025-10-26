@@ -6485,6 +6485,40 @@ class VideoAudioManager(QMainWindow):
             QMessageBox {
                 background-color: #444444;
             }
+               /* Stile base per la casella (non spuntata) */
+            QCheckBox::indicator {
+                background-color: #333333; /* Sfondo scuro per la casella vuota */
+                border: 1px solid #777777;
+                width: 13px;
+                height: 13px;
+                border-radius: 2px;
+            }
+            
+            /* Stile per la casella QUANDO è spuntata */
+            QCheckBox::indicator:checked {
+                background-color: #55aaff; /* Un colore acceso per indicare la selezione */
+                border: 1px solid #77c7ff;
+            }
+            /* Stile per la casella quando il mouse è sopra */
+            QCheckBox::indicator:hover {
+                border: 1px solid #55aaff;
+            }
+
+            /* Stili simili per i Radio Button per coerenza */
+            QRadioButton::indicator {
+                background-color: #333333;
+                border: 1px solid #777777;
+                border-radius: 7px; /* Cerchio perfetto */
+                width: 13px;
+                height: 13px;
+            }
+            QRadioButton::indicator:checked {
+                background-color: #55aaff; /* Colore di riempimento quando selezionato */
+                border: 2px solid #333333; /* Bordo interno per creare l'effetto "pallino" */
+            }
+            QRadioButton::indicator:hover {
+                border: 1px solid #55aaff;
+            }
         """)
 
     def dragEnterEvent(self, event):
