@@ -35,3 +35,5 @@ langchain_anthropic
 Pillow
 docx2pdf
 fpdf2
+pypdf
+python-docx

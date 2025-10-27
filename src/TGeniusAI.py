@@ -5049,6 +5049,11 @@ class VideoAudioManager(QMainWindow):
         importAudioAction.triggered.connect(self.import_audio_to_project)
         importMenu.addAction(importAudioAction)
 
+        importDocAction = QAction('Importa documento...', self)
+        importDocAction.setStatusTip('Importa un documento PDF o DOCX per integrare il riassunto')
+        importDocAction.triggered.connect(self.import_document)
+        importMenu.addAction(importDocAction)
+
         # Creazione del menu View per la gestione della visibilità dei docks
         viewMenu = menuBar.addMenu('&View')
 
@@ -7929,6 +7934,89 @@ class VideoAudioManager(QMainWindow):
 
         if player:
             player.setPosition(int(seconds * 1000))
+
+    def import_document(self):
+        """
+        Handles the document import workflow: selecting a file, extracting text,
+        choosing a summary to update, and calling the AI to integrate the information.
+        """
+        # 1. Check if there is a summary to integrate into
+        available_summaries = []
+        if self.summaries.get("detailed", "").strip():
+            available_summaries.append("Dettagliato")
+        if self.summaries.get("meeting", "").strip():
+            available_summaries.append("Note Riunione")
+
+        if not available_summaries:
+            self.show_status_message("Nessun riassunto esistente da integrare. Generane uno prima.", error=True)
+            return
+
+        # 2. Open file dialog to select PDF or DOCX
+        filePath, _ = QFileDialog.getOpenFileName(
+            self, "Importa Documento", "", "Documents (*.pdf *.docx)"
+        )
+        if not filePath:
+            return
+
+        # 3. Extract text from the document
+        try:
+            if filePath.lower().endswith('.pdf'):
+                document_text = self._extract_text_from_pdf(filePath)
+            elif filePath.lower().endswith('.docx'):
+                document_text = self._extract_text_from_docx(filePath)
+            else:
+                self.show_status_message("Formato file non supportato.", error=True)
+                return
+
+            if not document_text.strip():
+                self.show_status_message("Nessun testo estratto dal documento.", error=True)
+                return
+        except Exception as e:
+            self.show_status_message(f"Errore estrazione testo: {e}", error=True)
+            logging.error(f"Failed to extract text from {filePath}: {e}")
+            return
+
+        # 4. Ask user which summary to update
+        summary_choice, ok = QInputDialog.getItem(
+            self, "Scegli Riassunto", "In quale riassunto vuoi integrare il documento?", available_summaries, 0, False
+        )
+        if not ok:
+            return
+
+        # 5. Get the existing summary and prepare for AI integration
+        summary_key = "detailed" if summary_choice == "Dettagliato" else "meeting"
+        existing_summary = self.summaries.get(summary_key, "")
+        self.active_summary_type = summary_key # Set this for onProcessComplete
+
+        self.show_status_message(f"Integrazione del documento nel riassunto '{summary_choice}' in corso...")
+
+        # 6. Call the AI service
+        thread = ProcessTextAI(
+            mode="document_integration",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={
+                'existing_summary': existing_summary,
+                'document_text': document_text
+            }
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def _extract_text_from_pdf(self, file_path):
+        """Extracts text from a PDF file."""
+        import pypdf
+        text = ""
+        with open(file_path, 'rb') as f:
+            reader = pypdf.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() or ""
+        return text
+
+    def _extract_text_from_docx(self, file_path):
+        """Extracts text from a DOCX file."""
+        import docx
+        doc = docx.Document(file_path)
+        text = "\n".join([para.text for para in doc.paragraphs])
+        return text
 
 
 def get_application_path():
