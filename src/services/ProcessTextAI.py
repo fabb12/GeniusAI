@@ -121,7 +121,7 @@ class ProcessTextAI(QThread):
                 prompt_template = f.read()
 
             # Logica di formattazione condizionale
-            if self.mode in ["video_integration", "combined_summary"]:
+            if self.mode in ["video_integration", "combined_summary", "document_integration"]:
                 # Queste modalità usano un template completo con più variabili
                 format_data = self.prompt_vars.copy()
                 format_data['language'] = self.language
