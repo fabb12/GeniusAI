@@ -278,6 +278,7 @@ PROMPT_OPERATIONAL_GUIDE = get_prompt_path("prompt_operational_guide.txt")
 PROMPT_TTS = get_prompt_path("tts_prompt.txt") # Se esiste
 PROMPT_GENERATE_FILENAME = get_prompt_path("generate_filename_prompt.txt")
 PROMPT_SPECIFIC_OBJECT_RECOGNITION = get_prompt_path("specific_object_recognition_prompt.txt")
+PROMPT_DOCUMENT_INTEGRATION = get_prompt_path("document_integration_prompt.txt")
 
 # --- Percorsi Risorse ---
 RESOURCES_DIR = os.path.join(BASE_DIR, "res")
