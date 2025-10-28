@@ -16,6 +16,7 @@ from src.config import (
     PROMPT_COMBINED_ANALYSIS, PROMPT_COMBINED_SUMMARY_TEXT_ONLY, PROMPT_GENERATE_FILENAME,
     PROMPT_DOCUMENT_INTEGRATION
 )
+from src.services.utils import _call_ollama_api
 
 load_dotenv()
 
@@ -149,36 +150,19 @@ class ProcessTextAI(QThread):
 
         try:
             if "ollama:" in model_name_lower:
-                # --- Logica per Ollama ---
                 logging.info(f"Usando Ollama ({self.selected_model}) per {self.mode}.")
                 self.progress.emit(30, f"Invio a Ollama ({self.mode})...")
                 ollama_model_name = self.selected_model.split(":", 1)[1]
-                # Modifica: Usa l'endpoint /api/chat invece di /api/generate
-                api_url = f"{self.ollama_endpoint}/api/chat"
 
-                # Modifica: Struttura il payload per /api/chat
-                messages = [
-                    {"role": "system", "content": system_prompt_content},
-                    {"role": "user", "content": user_prompt}
-                ]
-                payload = {"model": ollama_model_name, "messages": messages, "stream": False}
-
-                response = requests.post(api_url, json=payload, timeout=300) # Timeout 5 min
-                response.raise_for_status()
-                response_data = response.json()
+                result_text = _call_ollama_api(
+                    self.ollama_endpoint,
+                    ollama_model_name,
+                    system_prompt_content,
+                    user_prompt
+                )
                 self.progress.emit(80, f"Ricevuta risposta da Ollama ({self.mode})...")
-
-                # Modifica: Estrai il contenuto del messaggio dalla risposta di /api/chat
-                if "message" in response_data and "content" in response_data["message"]:
-                    result_text = response_data["message"]["content"].strip()
-                else:
-                    result_text = ""
-
-                if not result_text:
-                    error_details = response_data.get("error", "Risposta vuota o formato non valido.")
-                    raise Exception(f"Ollama ha restituito un errore o una risposta vuota: {error_details}")
                 logging.info(f"Ollama ({self.mode}) completato.")
-                return result_text, 0, 0 # Token non disponibili
+                return result_text, 0, 0
 
             elif "gemini" in model_name_lower:
                 # --- Logica per Google Gemini ---
