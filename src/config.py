@@ -122,6 +122,7 @@ OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434") # Defau
 OLLAMA_GEMMA_2B = "ollama:gemma:2b"
 OLLAMA_GEMMA_7B = "ollama:gemma:7b"
 OLLAMA_GEMMA2_9B = "ollama:gemma2:9B"
+OLLAMA_GEMMA_LATEST = "ollama:gemma:latest"
 OLLAMA_LLAMA3_8B = "ollama:llama3:8b"
 OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
 
@@ -163,7 +164,7 @@ CATEGORIZED_FAST_TEXT_MODELS = {
         GEMINI_20_FLASH, GEMINI_20_FLASH_LITE
     ],
     "Ollama": [
-        OLLAMA_GEMMA_2B, OLLAMA_GEMMA_7B, OLLAMA_GEMMA2_9B,
+        OLLAMA_GEMMA_LATEST, OLLAMA_GEMMA2_9B, OLLAMA_GEMMA_7B, OLLAMA_GEMMA_2B,
         OLLAMA_LLAMA3_8B, OLLAMA_MISTRAL_7B
     ]
 }
