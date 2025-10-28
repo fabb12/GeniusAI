@@ -50,3 +50,67 @@ def remove_timestamps_from_html(html_content):
     content = re.sub(r'\s+</p>', '</p>', content)
 
     return content.strip()
+
+import requests
+import logging
+
+def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, timeout=300):
+    """
+    Funzione helper centralizzata per chiamare l'API di Ollama con logica di fallback.
+    Tenta prima l'endpoint /api/chat, e se fallisce con un 404, riprova con /api/generate.
+    """
+    # Tentativo 1: /api/chat (moderno)
+    try:
+        logging.info(f"Tentativo Ollama con /api/chat per il modello '{model_name}'...")
+        api_url = f"{endpoint}/api/chat"
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        payload = {"model": model_name, "messages": messages, "stream": False}
+
+        response = requests.post(api_url, json=payload, timeout=timeout)
+        response.raise_for_status()
+        response_data = response.json()
+
+        if "message" in response_data and "content" in response_data["message"]:
+            result_text = response_data["message"]["content"].strip()
+            if result_text:
+                logging.info("Successo con /api/chat.")
+                return result_text
+
+        # Se la risposta è vuota ma valida, solleva un'eccezione per evitare il fallback non necessario
+        raise Exception("Risposta vuota o formato non valido da /api/chat.")
+
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            logging.warning("Endpoint /api/chat non trovato (404). Tento il fallback a /api/generate...")
+        else:
+            # Per altri errori HTTP, solleva l'eccezione e interrompi
+            raise e
+    except Exception as e:
+        # Per altri tipi di eccezioni (timeout, errori di connessione), solleva e interrompi
+        logging.error(f"Errore durante la chiamata a /api/chat: {e}")
+        raise e
+
+    # Tentativo 2: /api/generate (fallback per versioni più vecchie)
+    try:
+        logging.info(f"Tentativo Ollama con /api/generate per il modello '{model_name}'...")
+        api_url = f"{endpoint}/api/generate"
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        payload = {"model": model_name, "prompt": full_prompt, "stream": False, "system": system_prompt}
+
+        response = requests.post(api_url, json=payload, timeout=timeout)
+        response.raise_for_status()
+        response_data = response.json()
+
+        result_text = response_data.get("response", "").strip()
+        if result_text:
+            logging.info("Successo con /api/generate.")
+            return result_text
+
+        raise Exception("Risposta vuota o formato non valido da /api/generate.")
+
+    except Exception as e:
+        logging.error(f"Anche il fallback a /api/generate è fallito: {e}")
+        raise e

@@ -23,6 +23,7 @@ from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_PPTX_GENERATION # Assicurati che questo percorso sia corretto e il file esista
 )
+from src.services.utils import _call_ollama_api
 
 load_dotenv() # Carica .env se necessario
 
@@ -140,31 +141,17 @@ class PptxGeneration:
 
         try:
             if "ollama:" in model_name_lower:
-                # --- Logica per Ollama ---
                 logging.info(f"Chiamata API Ollama: {selected_model}")
                 ollama_model_name = selected_model.split(":", 1)[1]
-                api_url = f"{OLLAMA_ENDPOINT}/api/chat"
 
-                messages = [
-                    {"role": "system", "content": system_prompt_content},
-                    {"role": "user", "content": user_prompt}
-                ]
-                payload = {"model": ollama_model_name, "messages": messages, "stream": False}
-
-                response = requests.post(api_url, json=payload, timeout=300)
-                response.raise_for_status()
-                response_data = response.json()
-
-                if "message" in response_data and "content" in response_data["message"]:
-                    result_text = response_data["message"]["content"].strip()
-                else:
-                    result_text = ""
-
-                if not result_text:
-                    error_details = response_data.get("error", "Risposta vuota o formato non valido.")
-                    raise Exception(f"Ollama ha restituito un errore o una risposta vuota: {error_details}")
+                result_text = _call_ollama_api(
+                    OLLAMA_ENDPOINT,
+                    ollama_model_name,
+                    system_prompt_content,
+                    user_prompt
+                )
                 logging.info("Risposta ricevuta da Ollama.")
-                return result_text, 0, 0 # Token non disponibili
+                return result_text, 0, 0
 
             elif "gemini" in model_name_lower:
                 # --- Logica per Google Gemini ---
