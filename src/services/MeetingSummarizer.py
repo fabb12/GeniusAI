@@ -111,18 +111,26 @@ class MeetingSummarizer(QThread):
                 logging.info(f"Usando Ollama ({self.selected_model}) per riassunto meeting.")
                 self.progress.emit(40, f"Invio a Ollama...")
                 ollama_model_name = self.selected_model.split(":", 1)[1]
-                api_url = f"{self.ollama_endpoint}/api/generate"
-                # Combina system e user prompt per Ollama
-                full_prompt = f"{system_prompt_content}\n\n{user_prompt}"
-                payload = {"model": ollama_model_name, "prompt": full_prompt, "stream": False, "system": system_prompt_content}
+                api_url = f"{self.ollama_endpoint}/api/chat"
+
+                messages = [
+                    {"role": "system", "content": system_prompt_content},
+                    {"role": "user", "content": user_prompt}
+                ]
+                payload = {"model": ollama_model_name, "messages": messages, "stream": False}
 
                 response = requests.post(api_url, json=payload, timeout=300) # Timeout 5 min
                 response.raise_for_status()
                 response_data = response.json()
                 self.progress.emit(85, f"Ricevuta risposta da Ollama...")
-                result_text = response_data.get("response", "").strip()
+
+                if "message" in response_data and "content" in response_data["message"]:
+                    result_text = response_data["message"]["content"].strip()
+                else:
+                    result_text = ""
+
                 if not result_text:
-                    error_details = response_data.get("error", "Risposta vuota.")
+                    error_details = response_data.get("error", "Risposta vuota o formato non valido.")
                     raise Exception(f"Ollama ha restituito un errore o una risposta vuota: {error_details}")
                 logging.info(f"Ollama riassunto meeting completato.")
                 return result_text, 0, 0 # Token non disponibili
