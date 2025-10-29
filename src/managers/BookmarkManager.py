@@ -6,6 +6,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips, concatenate_audioclips
 from src.services.utils import generate_unique_filename
 from src.services.AudioTranscript import TranscriptionThread
+from src.services.WhisperTranscript import WhisperTranscriptionThread # Import Whisper thread
 import json
 
 class BookmarkCutThread(QThread):
@@ -188,7 +189,7 @@ class BookmarkManager:
 
     def _transcribe_next_segment(self):
         """
-        Transcribes the next segment in the queue.
+        Transcribes the next segment in the queue, choosing the correct thread.
         """
         if self.current_bookmark_index >= len(self.bookmarks_to_transcribe):
             self.main_window.show_status_message("Trascrizione di tutti i segmenti completata.")
@@ -205,14 +206,23 @@ class BookmarkManager:
 
         self.main_window.show_status_message(f"Trascrizione del segmento {self.current_bookmark_index + 1}/{len(self.bookmarks_to_transcribe)}...")
 
-        thread = TranscriptionThread(
-            media_path=self.main_window.videoPathLineEdit.text(),
-            main_window=self.main_window,
-            start_time=start_time_sec,
-            end_time=end_time_sec
-        )
+        if self.main_window.onlineModeCheckbox.isChecked():
+            thread = TranscriptionThread(
+                media_path=self.main_window.videoPathLineEdit,
+                main_window=self.main_window,
+                start_time=start_time_sec,
+                end_time=end_time_sec
+            )
+        else:
+            thread = WhisperTranscriptionThread(
+                media_path=self.main_window.videoPathLineEdit,
+                main_window=self.main_window,
+                start_time=start_time_sec,
+                end_time=end_time_sec,
+                model_name=self.main_window.whisperModelComboBox.currentText(),
+                use_gpu=self.main_window.gpuCheckbox.isChecked()
+            )
 
-        # Use the main window's task manager to run the thread
         self.main_window.start_task(
             thread,
             on_complete=self._on_segment_transcribed,

@@ -8,6 +8,7 @@ import time
 import logging
 import json
 import markdown
+import torch
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
@@ -47,7 +48,9 @@ from difflib import SequenceMatcher
 
 from src.ui.DownloadDialog import DownloadDialog
 from src.services.AudioTranscript import TranscriptionThread
+from src.services.WhisperTranscript import WhisperTranscriptionThread
 from src.services.AudioGenerationREST import AudioGenerationThread
+from src.ui.ModelManagerDialog import ModelManagerDialog
 from src.services.VideoCutting import VideoCuttingThread
 from src.recorder.ScreenRecorder import ScreenRecorder
 from src.managers.SettingsManager import DockSettingsManager
@@ -1198,19 +1201,51 @@ class VideoAudioManager(QMainWindow):
         language_layout = QHBoxLayout()
         language_layout.addWidget(QLabel("Seleziona lingua video:"))
         self.languageComboBox = QComboBox()
-        self.languageComboBox.addItems(["Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
-        self.languageComboBox.setItemData(0, "it")
-        self.languageComboBox.setItemData(1, "en")
-        self.languageComboBox.setItemData(2, "fr")
-        self.languageComboBox.setItemData(3, "es")
-        self.languageComboBox.setItemData(4, "de")
+        self.languageComboBox.addItems(["Rilevamento Automatico", "Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        self.languageComboBox.setItemData(0, "auto")
+        self.languageComboBox.setItemData(1, "it")
+        self.languageComboBox.setItemData(2, "en")
+        self.languageComboBox.setItemData(3, "fr")
+        self.languageComboBox.setItemData(4, "es")
+        self.languageComboBox.setItemData(5, "de")
         language_layout.addWidget(self.languageComboBox)
         language_layout.addStretch()
         self.transcriptionLanguageLabel = QLabel("Lingua rilevata: N/A")
         language_layout.addWidget(self.transcriptionLanguageLabel)
         main_controls_layout.addLayout(language_layout)
 
-        # --- Riga 2: Gruppi di Controlli Affiancati ---
+        # --- Riga 2: Modalità di Trascrizione (Online/Offline) ---
+        mode_layout = QHBoxLayout()
+        self.onlineModeCheckbox = QCheckBox("Modalità: Online (Google)")
+        self.onlineModeCheckbox.setChecked(False) # Default to offline
+        self.onlineModeCheckbox.toggled.connect(self.toggle_transcription_mode)
+        mode_layout.addWidget(self.onlineModeCheckbox)
+        mode_layout.addStretch()
+        main_controls_layout.addLayout(mode_layout)
+
+        # --- Riga 3: Controlli Whisper (visibili solo in modalità offline) ---
+        self.whisperControlsGroup = QGroupBox("Impostazioni Whisper (Offline)")
+        whisper_layout = QHBoxLayout(self.whisperControlsGroup)
+
+        whisper_layout.addWidget(QLabel("Modello:"))
+        self.whisperModelComboBox = QComboBox()
+        self.whisperModelComboBox.addItems(["tiny", "base", "small", "medium", "large"])
+        self.whisperModelComboBox.setCurrentText("base")
+        whisper_layout.addWidget(self.whisperModelComboBox)
+
+        self.gpuCheckbox = QCheckBox("Usa GPU (CUDA)")
+        self.gpuCheckbox.setChecked(torch.cuda.is_available())
+        self.gpuCheckbox.setEnabled(torch.cuda.is_available())
+        whisper_layout.addWidget(self.gpuCheckbox)
+
+        self.manageModelsButton = QPushButton("Gestisci Modelli")
+        self.manageModelsButton.clicked.connect(self.open_model_manager)
+        whisper_layout.addWidget(self.manageModelsButton)
+
+        main_controls_layout.addWidget(self.whisperControlsGroup)
+
+
+        # --- Riga 4: Gruppi di Controlli Affiancati ---
         groups_layout = QHBoxLayout()
 
         # --- Gruppo 1: Azioni sui File ---
@@ -5503,24 +5538,48 @@ class VideoAudioManager(QMainWindow):
     def updateTranscriptionLanguageDisplay(self, language):
         self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
 
+    def toggle_transcription_mode(self, checked):
+        """Show/hide Whisper controls based on the online/offline mode."""
+        self.whisperControlsGroup.setVisible(not checked)
+        if checked:
+            self.onlineModeCheckbox.setText("Modalità: Online (Google)")
+        else:
+            self.onlineModeCheckbox.setText("Modalità: Offline (Whisper)")
+
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
             self.show_status_message("Nessun video selezionato.", error=True)
             return
 
-        # Se sono presenti dei bookmark, usa il BookmarkManager per la trascrizione sequenziale.
-        if self.videoSlider.bookmarks:
-            self.bookmark_manager.transcribe_all_bookmarks()
+        if self.onlineModeCheckbox.isChecked():
+            # Use the original TranscriptionThread for online mode
+            if self.videoSlider.bookmarks:
+                self.bookmark_manager.transcribe_all_bookmarks()
+            else:
+                self.show_status_message("Avvio trascrizione online (Google)...")
+                thread = TranscriptionThread(
+                    media_path=self.videoPathLineEdit,
+                    main_window=self,
+                    start_time=None,
+                    end_time=None
+                )
+                self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
         else:
-            # Altrimenti, esegui la trascrizione dell'intero video come prima.
-            self.show_status_message("Nessun bookmark trovato, avvio trascrizione dell'intero video.")
-            thread = TranscriptionThread(
-                self.videoPathLineEdit,
-                self,
-                start_time=None,
-                end_time=None
-            )
-            self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
+            # Use the new WhisperTranscriptionThread for offline mode
+            if self.videoSlider.bookmarks:
+                # TODO: Update bookmark_manager to support Whisper options
+                self.bookmark_manager.transcribe_all_bookmarks()
+            else:
+                self.show_status_message("Avvio trascrizione offline (Whisper)...")
+                thread = WhisperTranscriptionThread(
+                    media_path=self.videoPathLineEdit,
+                    main_window=self,
+                    start_time=None,
+                    end_time=None,
+                    model_name=self.whisperModelComboBox.currentText(),
+                    use_gpu=self.gpuCheckbox.isChecked()
+                )
+                self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
     def onTranscriptionComplete(self, result):
         json_path, temp_files = result
@@ -7468,6 +7527,11 @@ class VideoAudioManager(QMainWindow):
 
     def on_overlay_error(self, error_message):
         self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
+
+    def open_model_manager(self):
+        """Opens the Whisper model management dialog."""
+        dialog = ModelManagerDialog(self)
+        dialog.exec()
 
     def start_batch_transcription(self):
         """
