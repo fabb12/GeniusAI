@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 
 from src.services.FrameExtractor import FrameExtractor
 from src.services.ProcessTextAI import ProcessTextAI
+from src.config import DEFAULT_FRAME_COUNT
 
 class VideoIntegrationThread(QThread):
     completed = pyqtSignal(str)
@@ -22,7 +23,8 @@ class VideoIntegrationThread(QThread):
         try:
             self.progress.emit(10, "Estrazione intelligente dei frame dal video...")
             extractor = FrameExtractor(
-                video_path=self.video_path
+                video_path=self.video_path,
+                num_frames=DEFAULT_FRAME_COUNT
             )
             frames = extractor.extract_significant_frames()
             if not frames:
