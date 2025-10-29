@@ -11,6 +11,8 @@ from moviepy.editor import AudioFileClip
 # Import for Whisper
 import whisper
 import torch
+from src.config import FFMPEG_PATH
+from os import pathsep
 
 class WhisperTranscriptionThread(QThread):
     progress = pyqtSignal(int, str)
@@ -79,6 +81,11 @@ class WhisperTranscriptionThread(QThread):
             audio_extraction_end_time = time.time()
             logging.info(f"Audio extracted in {audio_extraction_end_time - audio_extraction_start_time:.2f} seconds.")
             self.progress.emit(10, "Audio pronto per la trascrizione.")
+
+            # --- Environment Setup for FFmpeg ---
+            original_path = os.environ["PATH"]
+            ffmpeg_dir = os.path.dirname(FFMPEG_PATH)
+            os.environ["PATH"] = ffmpeg_dir + pathsep + original_path
 
             # --- Model Loading ---
             model = self.load_model(self.model_name, self.use_gpu, self.progress)
@@ -157,6 +164,8 @@ class WhisperTranscriptionThread(QThread):
             logging.error(f"Errore nella trascrizione Whisper: {e}\n{traceback.format_exc()}")
             self.error.emit(f"Si è verificato un errore imprevisto: {e}")
         finally:
+            if 'original_path' in locals():
+                os.environ["PATH"] = original_path
             if input_clip:
                 input_clip.close()
             if standard_wav_path and os.path.exists(standard_wav_path):
