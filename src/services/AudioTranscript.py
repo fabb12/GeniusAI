@@ -151,7 +151,9 @@ class TranscriptionThread(QThread):
         except sr.UnknownValueError:
             return None, start_time, None
         except sr.RequestError as e:
-            return f"[Errore: {e}]", start_time, None
+            error_msg = f"Network error with Google Speech Recognition. Check your internet connection. Details: {e}"
+            logging.error(error_msg)
+            raise Exception(error_msg) from e
         except Exception as e:
             return f"[Errore: {e}]", start_time, None
         finally:

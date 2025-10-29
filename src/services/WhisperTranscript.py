@@ -11,6 +11,7 @@ from moviepy.editor import AudioFileClip
 # Import for Whisper
 import whisper
 import torch
+from urllib.error import URLError
 from src.config import FFMPEG_PATH
 from os import pathsep
 
@@ -55,6 +56,12 @@ class WhisperTranscriptionThread(QThread):
                     if device == 'cuda':
                         logging.info(f"VRAM Usage:\n{torch.cuda.memory_summary(device=device, abbreviated=False)}")
 
+                except URLError as e:
+                    error_msg = f"Network error downloading Whisper model '{model_name}'. Check your internet connection, firewall, or proxy settings. Details: {e}"
+                    logging.error(error_msg)
+                    cls._whisper_model = None
+                    cls._model_name = None
+                    raise Exception(error_msg) from e
                 except Exception as e:
                     logging.error(f"Failed to load Whisper model: {e}")
                     cls._whisper_model = None
