@@ -8,13 +8,14 @@ class ModelDownloaderThread(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, model_name):
+    def __init__(self, model_name, cache_dir):
         super().__init__()
         self.model_name = model_name
+        self.cache_dir = cache_dir
 
     def run(self):
         try:
-            whisper._download(whisper._MODELS[self.model_name], whisper._get_CACHE_DIR(), self.progress.emit)
+            whisper._download(whisper._MODELS[self.model_name], self.cache_dir, self.progress.emit)
             self.finished.emit(self.model_name)
         except Exception as e:
             self.error.emit(str(e))
@@ -46,11 +47,16 @@ class ModelManagerDialog(QDialog):
 
         self.populate_models()
 
+    def get_cache_dir(self):
+        """Returns the application's cache directory for Whisper models."""
+        return os.path.join(os.path.expanduser("~"), ".cache", "whisper")
+
     def populate_models(self):
         self.listWidget.clear()
+        cache_dir = self.get_cache_dir()
         for model_name in whisper.available_models():
             item = QListWidgetItem(model_name)
-            is_downloaded = os.path.exists(os.path.join(whisper._get_CACHE_DIR(), f"{model_name}.pt"))
+            is_downloaded = os.path.exists(os.path.join(cache_dir, f"{model_name}.pt"))
             item.setText(f"{model_name} {'(scaricato)' if is_downloaded else ''}")
             item.setData(Qt.ItemDataRole.UserRole, is_downloaded)
             self.listWidget.addItem(item)
@@ -71,7 +77,7 @@ class ModelManagerDialog(QDialog):
         self.deleteButton.setEnabled(False)
         self.progressBar.setVisible(True)
 
-        self.downloader = ModelDownloaderThread(model_name)
+        self.downloader = ModelDownloaderThread(model_name, self.get_cache_dir())
         self.downloader.progress.connect(self.progressBar.setValue)
         self.downloader.finished.connect(self.on_download_finished)
         self.downloader.error.connect(self.on_download_error)
@@ -106,7 +112,7 @@ class ModelManagerDialog(QDialog):
 
         if reply == QMessageBox.StandardButton.Yes:
             try:
-                model_path = os.path.join(whisper._get_CACHE_DIR(), f"{model_name}.pt")
+                model_path = os.path.join(self.get_cache_dir(), f"{model_name}.pt")
                 os.remove(model_path)
                 QMessageBox.information(self, "Eliminazione completata", f"Il modello '{model_name}' è stato eliminato.")
                 self.populate_models()
