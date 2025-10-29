@@ -4956,71 +4956,71 @@ class VideoAudioManager(QMainWindow):
         menuBar = self.menuBar()
         fileMenu = menuBar.addMenu('&File')
 
-        openProjectAction = QAction('&Open Project...', self)
-        openProjectAction.setStatusTip('Open a .gnai project file')
+        openProjectAction = QAction('&Apri Progetto...', self)
+        openProjectAction.setStatusTip('Apri un file di progetto .gnai')
         openProjectAction.triggered.connect(self.open_project)
         fileMenu.addAction(openProjectAction)
 
-        newProjectAction = QAction('&New Project...', self)
-        newProjectAction.setStatusTip('Create a new project')
+        newProjectAction = QAction('&Nuovo Progetto...', self)
+        newProjectAction.setStatusTip('Crea un nuovo progetto')
         newProjectAction.triggered.connect(self.create_new_project)
         fileMenu.addAction(newProjectAction)
 
-        saveProjectAction = QAction('&Save Project', self)
+        saveProjectAction = QAction('&Salva Progetto', self)
         saveProjectAction.setShortcut('Ctrl+S')
-        saveProjectAction.setStatusTip('Save the current project')
+        saveProjectAction.setStatusTip('Salva il progetto corrente')
         saveProjectAction.triggered.connect(self.save_project)
         fileMenu.addAction(saveProjectAction)
 
-        closeProjectAction = QAction('&Close Project', self)
-        closeProjectAction.setStatusTip('Close the current project and clear the workspace')
+        closeProjectAction = QAction('&Chiudi Progetto', self)
+        closeProjectAction.setStatusTip('Chiudi il progetto corrente e pulisci l\'area di lavoro')
         closeProjectAction.triggered.connect(self._clear_workspace)
         fileMenu.addAction(closeProjectAction)
 
         fileMenu.addSeparator()
 
-        openAction = QAction('&Open Video/Audio', self)
+        openAction = QAction('&Apri Video/Audio', self)
         openAction.setShortcut('Ctrl+O')
-        openAction.setStatusTip('Open video')
+        openAction.setStatusTip('Apri video')
         openAction.triggered.connect(self.browseVideo)
 
-        openActionOutput = QAction('&Open as Output Video', self)
+        openActionOutput = QAction('&Apri come Video di Output', self)
         openAction.setShortcut('Ctrl+I')
-        openActionOutput.setStatusTip('Open Video Output')
+        openActionOutput.setStatusTip('Apri Video di Output')
         openActionOutput.triggered.connect(self.browseVideoOutput)
 
         fileMenu.addAction(openAction)
         fileMenu.addAction(openActionOutput)
 
         # New Save As action
-        saveAsAction = QAction('&Save Video Output As...', self)
+        saveAsAction = QAction('&Salva Video di Output Come...', self)
         saveAsAction.setShortcut('Ctrl+S')
-        saveAsAction.setStatusTip('Save the current video from Video Player Output')
+        saveAsAction.setStatusTip('Salva il video corrente dal Player Video di Output')
         saveAsAction.triggered.connect(self.saveVideoAs)
         fileMenu.addAction(saveAsAction)
 
         # Action to open root folder
-        openRootFolderAction = QAction('&Open Root Folder', self)
+        openRootFolderAction = QAction('&Apri Cartella Principale', self)
         openRootFolderAction.setShortcut('Ctrl+R')
-        openRootFolderAction.setStatusTip('Open the root folder of the software')
+        openRootFolderAction.setStatusTip('Apri la cartella principale del software')
         openRootFolderAction.triggered.connect(self.openRootFolder)
         fileMenu.addAction(openRootFolderAction)
 
         fileMenu.addSeparator()
 
-        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Source", self)
+        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Scarica Sorgente Video", self)
         releaseSourceAction.triggered.connect(self.releaseSourceVideo)
         fileMenu.addAction(releaseSourceAction)
 
-        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Unload Video Output", self)
+        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Scarica Video di Output", self)
         releaseOutputAction.triggered.connect(self.releaseOutputVideo)
         fileMenu.addAction(releaseOutputAction)
 
         fileMenu.addSeparator()
 
-        exitAction = QAction('&Exit', self)
+        exitAction = QAction('&Esci', self)
         exitAction.setShortcut('Ctrl+Q')
-        exitAction.setStatusTip('Exit application')
+        exitAction.setStatusTip('Esci dall\'applicazione')
         exitAction.triggered.connect(self.close)
         fileMenu.addAction(exitAction)
 
@@ -5033,7 +5033,7 @@ class VideoAudioManager(QMainWindow):
 
 
         # Creazione del menu Import
-        importMenu = menuBar.addMenu('&Import')
+        importMenu = menuBar.addMenu('&Importa')
         importUrlAction = QAction('Importa da URL...', self)
         importUrlAction.setStatusTip('Importa video o audio da un URL (es. YouTube)')
         importUrlAction.triggered.connect(self.openDownloadDialog)
@@ -5055,7 +5055,7 @@ class VideoAudioManager(QMainWindow):
         importMenu.addAction(importDocAction)
 
         # Creazione del menu View per la gestione della visibilità dei docks
-        viewMenu = menuBar.addMenu('&View')
+        viewMenu = menuBar.addMenu('&Visualizza')
 
         # Creazione del menu Workspace per i layout preimpostati
         workspaceMenu = menuBar.addMenu('&Workspace')
@@ -5066,7 +5066,7 @@ class VideoAudioManager(QMainWindow):
 
 
         # Aggiunta del menu Workflows
-        workflowsMenu = menuBar.addMenu('&Workflows')
+        workflowsMenu = menuBar.addMenu('&Azioni AI')
         workflowsMenu.addAction(self.summarizeMeetingAction)
         workflowsMenu.addAction(self.summarizeAction)
         workflowsMenu.addAction(self.fixTextAction)
@@ -5074,14 +5074,14 @@ class VideoAudioManager(QMainWindow):
         # workflowsMenu.addAction(self.extractInfoAction)
 
         # Creazione del menu Export
-        exportMenu = menuBar.addMenu('&Export')
+        exportMenu = menuBar.addMenu('&Esporta')
         exportAction = QAction('Esporta Riepilogo...', self)
         exportAction.triggered.connect(self.export_summary)
         exportMenu.addAction(exportAction)
 
         # Creazione del menu Insert
-        insertMenu = menuBar.addMenu('&Insert')
-        addMediaAction = QAction('Add Media/Text...', self)
+        insertMenu = menuBar.addMenu('&Inserisci')
+        addMediaAction = QAction('Aggiungi Media/Testo...', self)
         addMediaAction.setStatusTip('Aggiungi testo o immagini al video')
         addMediaAction.triggered.connect(self.openAddMediaDialog)
         insertMenu.addAction(addMediaAction)
