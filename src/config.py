@@ -126,7 +126,7 @@ OLLAMA_GEMMA3_4B = "ollama:gemma3:4b"
 OLLAMA_GEMMA_LATEST = "ollama:gemma:latest"
 OLLAMA_LLAMA3_8B = "ollama:llama3:8b"
 OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
-
+OLLAMA_LLAVA = "ollama:llava:latest"  # Modello Vision
 # --- Struttura Dati Categoria Modelli ---
 # Dizionari che raggruppano i modelli per provider per una migliore visualizzazione nella UI
 
@@ -146,7 +146,7 @@ def _merge_categorized_dicts(*dicts):
                     merged[category].append(model)
     return merged
 
-CATEGORIZED_MODELS_WITH_VISION = {
+_CATEGORIZED_MODELS_WITH_VISION_BASE = {
     "Anthropic": [
         MODEL_4_5_SONNET, MODEL_4_1_OPUS, MODEL_4_OPUS, MODEL_4_SONNET,
         MODEL_3_7_SONNET, MODEL_3_5_SONNET, MODEL_3_5_HAIKU, MODEL_3_OPUS,
@@ -155,8 +155,22 @@ CATEGORIZED_MODELS_WITH_VISION = {
     "Google": [
         GEMINI_25_PRO, GEMINI_25_FLASH, GEMINI_25_FLASH_LITE,
         GEMINI_20_FLASH, GEMINI_20_FLASH_LITE
+    ],
+}
+
+_CATEGORIZED_OLLAMA_VISION = {
+    "Ollama (Vision)": [
+        OLLAMA_LLAVA,
+        OLLAMA_GEMMA_LATEST,
+        OLLAMA_GEMMA3_4B,
+        OLLAMA_GEMMA2_9B,
+        OLLAMA_GEMMA_7B,
+        OLLAMA_GEMMA_2B
     ]
 }
+
+# Unisci i modelli vision cloud e locali
+CATEGORIZED_MODELS_WITH_VISION = _merge_categorized_dicts(_CATEGORIZED_MODELS_WITH_VISION_BASE, _CATEGORIZED_OLLAMA_VISION)
 
 CATEGORIZED_FAST_TEXT_MODELS = {
     "Anthropic": [MODEL_3_5_HAIKU, MODEL_3_HAIKU],
