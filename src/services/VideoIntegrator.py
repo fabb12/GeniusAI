@@ -12,21 +12,19 @@ class VideoIntegrationThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, video_path, num_frames, language, current_summary_html, parent=None):
+    def __init__(self, video_path, language, current_summary_html, parent=None):
         super().__init__(parent)
         self.video_path = video_path
-        self.num_frames = num_frames
         self.language = language
         self.current_summary_html = current_summary_html
 
     def run(self):
         try:
-            self.progress.emit(10, "Estrazione frame dal video...")
+            self.progress.emit(10, "Estrazione intelligente dei frame dal video...")
             extractor = FrameExtractor(
-                video_path=self.video_path,
-                num_frames=self.num_frames
+                video_path=self.video_path
             )
-            frames = extractor.extract_frames()
+            frames = extractor.extract_significant_frames()
             if not frames:
                 self.error.emit("Impossibile estrarre i frame dal video.")
                 return

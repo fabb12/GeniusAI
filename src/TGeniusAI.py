@@ -1424,15 +1424,9 @@ class VideoAudioManager(QMainWindow):
         self.integraInfoButton = QPushButton("")
         self.integraInfoButton.setIcon(QIcon(get_resource("frame_get.png")))
         self.integraInfoButton.setFixedSize(32, 32)
-        self.integraInfoButton.setToolTip("Integra info dal video nel riassunto")
+        self.integraInfoButton.setToolTip("Integra info dal video nel riassunto (con estrazione smart)")
         self.integraInfoButton.clicked.connect(self.integraInfoVideo)
         top_controls_layout.addWidget(self.integraInfoButton)
-
-        top_controls_layout.addWidget(QLabel("Frame:"))
-        self.estrazioneFrameCountSpin = QSpinBox()
-        self.estrazioneFrameCountSpin.setRange(1, 30)
-        self.estrazioneFrameCountSpin.setValue(DEFAULT_FRAME_COUNT)
-        top_controls_layout.addWidget(self.estrazioneFrameCountSpin)
 
         top_controls_layout.addStretch()
         summary_controls_layout.addLayout(top_controls_layout)
@@ -1856,7 +1850,6 @@ class VideoAudioManager(QMainWindow):
         # Passa l'HTML del riassunto direttamente al thread
         thread = VideoIntegrationThread(
             video_path=self.videoPathLineEdit,
-            num_frames=self.estrazioneFrameCountSpin.value(),
             language=self.languageComboBox.currentText(),
             current_summary_html=summary_to_integrate, # Passa l'HTML
             parent=self
