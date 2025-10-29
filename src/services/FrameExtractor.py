@@ -20,6 +20,7 @@ from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY, PROMPT_SPECIFIC_OBJECT_RECOGNITION
 )
+from src.services.utils import _call_ollama_api
 
 class FrameExtractor:
     """
@@ -52,7 +53,7 @@ class FrameExtractor:
         api_keys = api_keys or {}
         self.anthropic_api_key = api_keys.get('anthropic', get_api_key('anthropic'))
         self.google_api_key = api_keys.get('google', get_api_key('google'))
-        # self.ollama_endpoint = OLLAMA_ENDPOINT # Aggiungi se usi Ollama Vision
+        self.ollama_endpoint = OLLAMA_ENDPOINT
 
         # Recupera il modello selezionato per l'azione 'frame_extractor'
         self.selected_model = get_model_for_action('frame_extractor')
@@ -387,6 +388,54 @@ class FrameExtractor:
             logging.exception(f"Errore API Gemini durante analisi batch {batch_idx}")
             return [] # Ritorna vuoto per questo batch
 
+    def _analyze_batch_ollama(self, batch, batch_idx, language, prompt_template, search_query=None):
+        """Analizza un batch di frame usando un modello Vision di Ollama."""
+        # Prepara il prompt
+        format_vars = {'language': language, 'batch_size': len(batch)}
+        if search_query:
+            format_vars['search_query'] = search_query
+
+        # Unisce i timestamp al prompt per dare contesto
+        timestamps_info = "\n".join(
+            f"Frame {idx} at timestamp [{int(f['timestamp'] // 60):02d}:{int(f['timestamp'] % 60):02d}]"
+            for idx, f in enumerate(batch)
+        )
+        user_prompt = f"{timestamps_info}\n\n{prompt_template.format(**format_vars)}"
+
+        system_prompt = "Sei un analista video AI. Analizza i frame forniti e rispondi in formato JSON."
+
+        # Estrai i dati base64 delle immagini
+        images_base64 = [frame["data"] for frame in batch]
+
+        try:
+            # Estrai il nome del modello dall'identificatore completo (es. "ollama:llava")
+            model_name = self.selected_model.split(":", 1)[1]
+
+            raw_text = _call_ollama_api(
+                self.ollama_endpoint,
+                model_name,
+                system_prompt,
+                user_prompt,
+                images=images_base64
+            )
+
+            # Parsing robusto del JSON dalla risposta
+            json_match = re.search(r'```json\s*([\s\S]*?)\s*```|(\[[\s\S]*\]|\{[\s\S]*\})', raw_text)
+            if json_match:
+                json_str = json_match.group(1) or json_match.group(2)
+                frames_json = json.loads(json_str)
+                logging.debug(f"Ollama Batch {batch_idx} - JSON Parsed: {frames_json}")
+                return frames_json
+            else:
+                logging.error(f"Ollama Batch {batch_idx} - Nessun blocco JSON trovato nella risposta: {raw_text}")
+                return []
+        except json.JSONDecodeError as jde:
+            logging.error(f"Ollama Batch {batch_idx} - Errore parsing JSON: {jde}\nRisposta grezza:\n{raw_text}")
+            return []
+        except Exception as e:
+            logging.exception(f"Errore API Ollama durante analisi batch {batch_idx}")
+            return []
+
     # --- Metodo Principale di Analisi ---
     def analyze_frames_batch(self, frame_list, language):
         """
@@ -432,8 +481,8 @@ class FrameExtractor:
                 batch_results = self._analyze_batch_claude(current_batch, batch_idx, language, prompt_template)
             elif "gemini" in model_name_lower:
                 batch_results = self._analyze_batch_gemini(current_batch, batch_idx, language, prompt_template)
-            # elif "ollama" in model_name_lower:
-                # batch_results = self._analyze_batch_ollama_vision(...) # Implementare se necessario
+            elif "ollama:" in model_name_lower:
+                batch_results = self._analyze_batch_ollama(current_batch, batch_idx, language, prompt_template)
             else:
                 logging.error(f"Modello '{self.selected_model}' non supportato per l'analisi frame.")
                 # Puoi decidere se fermarti o continuare con gli altri batch
@@ -512,6 +561,8 @@ class FrameExtractor:
                 batch_results = self._analyze_batch_claude(current_batch, batch_idx, language, prompt_template, search_query)
             elif "gemini" in model_name_lower:
                 batch_results = self._analyze_batch_gemini(current_batch, batch_idx, language, prompt_template, search_query)
+            elif "ollama:" in model_name_lower:
+                batch_results = self._analyze_batch_ollama(current_batch, batch_idx, language, prompt_template, search_query)
             else:
                 logging.error(f"Modello '{self.selected_model}' non supportato per la ricerca di oggetti specifici.")
                 continue
@@ -603,10 +654,16 @@ class FrameExtractor:
                      logging.warning(f"Risposta riassunto Gemini bloccata. Feedback: {response.prompt_feedback}")
                      return None
 
-            # elif "ollama" in model_name_lower:
-                # Implementare chiamata a Ollama per riassunto testuale
-                # ...
-                # return summary_text_from_ollama
+            elif "ollama:" in model_name_lower:
+                model_name = self.selected_model.split(":", 1)[1]
+                summary = _call_ollama_api(
+                    self.ollama_endpoint,
+                    model_name,
+                    "Sei un assistente AI specializzato nel riassumere video.",
+                    prompt_text
+                )
+                logging.info("Riassunto video generato con Ollama.")
+                return summary
 
             else:
                 logging.error(f"Modello '{self.selected_model}' non supportato per il riassunto video.")
