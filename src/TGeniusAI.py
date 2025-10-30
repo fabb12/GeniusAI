@@ -86,6 +86,7 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
+from src.services.VideoSummaryIntegration import VideoSummaryIntegrationThread
 from src.services.SilenceRemover import SilenceRemoverThread
 from src.managers.ProjectManager import ProjectManager
 from src.managers.BookmarkManager import BookmarkManager
@@ -1446,6 +1447,13 @@ class VideoAudioManager(QMainWindow):
         self.integraInfoButton.clicked.connect(self.integraInfoVideo)
         top_controls_layout.addWidget(self.integraInfoButton)
 
+        self.integrateSummaryWithFramesButton = QPushButton()
+        self.integrateSummaryWithFramesButton.setIcon(QIcon(get_resource("integrate.png")))
+        self.integrateSummaryWithFramesButton.setFixedSize(32, 32)
+        self.integrateSummaryWithFramesButton.setToolTip("Genera un nuovo riassunto integrato con i fotogrammi chiave del video.")
+        self.integrateSummaryWithFramesButton.clicked.connect(self.start_video_summary_integration)
+        top_controls_layout.addWidget(self.integrateSummaryWithFramesButton)
+
         top_controls_layout.addStretch()
         summary_controls_layout.addLayout(top_controls_layout)
 
@@ -1507,6 +1515,13 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
 
+        # Tab per il Riassunto con Frame
+        self.summaryWithFramesTextArea = CustomTextEdit(self)
+        self.summaryWithFramesTextArea.setPlaceholderText("Il riassunto con i frame del video apparirà qui...")
+        self.summaryWithFramesTextArea.setReadOnly(True) # This view is generated, not edited directly
+        self.summaryWithFramesTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryTabWidget.addTab(self.summaryWithFramesTextArea, "Riassunto con Frame")
+
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
 
@@ -1518,6 +1533,7 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea: "meeting_integrated",
             self.summaryCombinedDetailedTextArea: "detailed_combined",
             self.summaryCombinedMeetingTextArea: "meeting_combined",
+            self.summaryWithFramesTextArea: "summary_with_frames",
         }
 
         summary_layout.addWidget(self.summaryTabWidget)
@@ -1770,6 +1786,7 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea,
             self.summaryCombinedDetailedTextArea,
             self.summaryCombinedMeetingTextArea,
+            self.summaryWithFramesTextArea,
             self.infoExtractionResultArea,
         ]
         if hasattr(self, 'audioAiTextArea'):
@@ -1959,6 +1976,55 @@ class VideoAudioManager(QMainWindow):
 
     def onIntegrazioneError(self, error_message):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
+
+    def start_video_summary_integration(self):
+        """
+        Starts the thread to generate a summary integrated with key video frames.
+        """
+        if not self.videoPathLineEdit:
+            self.show_status_message("Nessun video caricato.", error=True)
+            return
+
+        transcription_text = self.singleTranscriptionTextArea.toHtml()
+        if not transcription_text.strip():
+            self.show_status_message("La trascrizione è vuota. Eseguire prima la trascrizione.", error=True)
+            return
+
+        thread = VideoSummaryIntegrationThread(
+            main_window=self,
+            video_path=self.videoPathLineEdit,
+            transcription_text=transcription_text,
+            language=self.languageComboBox.currentText()
+        )
+        self.start_task(
+            thread,
+            self.on_video_summary_integration_complete,
+            self.on_video_summary_integration_error,
+            self.update_status_progress
+        )
+
+    def on_video_summary_integration_complete(self, final_html):
+        """
+        Handles the completion of the video summary integration, displaying the rich HTML.
+        """
+        self.summaries['summary_with_frames'] = final_html
+        self.summaryWithFramesTextArea.setHtml(final_html)
+        self.summaryTabWidget.setCurrentWidget(self.summaryWithFramesTextArea)
+        self.show_status_message("Riassunto con frame generato con successo.")
+
+        # Save the result to the JSON file
+        update_data = {
+            "summaries": self.summaries,
+            "summary_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
+
+    def on_video_summary_integration_error(self, error_message):
+        """
+        Handles errors during the video summary integration.
+        """
+        self.show_status_message(f"Errore durante la generazione del riassunto con frame: {error_message}", error=True)
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -4375,38 +4441,48 @@ class VideoAudioManager(QMainWindow):
             self._export_to_pdf(export_html, path)
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF utilizzando fpdf2 e il font DejaVu incluso."""
+        """Esporta il contenuto HTML in un file PDF, gestendo immagini incorporate in Base64."""
+        from io import BytesIO
+        import base64
+
         try:
             pdf = FPDF()
             pdf.add_page()
 
-            # Usa il font DejaVuSans.ttf incluso nelle risorse per garantire la compatibilità Unicode.
             font_path = get_resource("fonts/DejaVuSans.ttf")
-
             if not os.path.exists(font_path):
-                self.show_status_message("Font DejaVuSans.ttf non trovato nelle risorse dell'applicazione.", error=True)
-                logging.error(f"Font non trovato al percorso: {font_path}")
-                return
+                raise FileNotFoundError("Font DejaVuSans.ttf non trovato.")
 
             pdf.add_font("DejaVu", "", font_path, uni=True)
             pdf.set_font("DejaVu", size=12)
 
-            # Pulisci l'HTML prima di scriverlo nel PDF
             soup = BeautifulSoup(html_content, 'html.parser')
 
-            # Rimuovi i tag di stile che contengono il CSS indesiderato
-            for style in soup.find_all('style'):
-                style.decompose()
-
-            # Estrai solo il contenuto del body per evitare di scrivere tag html/head
+            # Processa ogni elemento nel body
             if soup.body:
-                # Usiamo decode_contents() per ottenere solo ciò che è DENTRO il body
-                body_content = soup.body.decode_contents()
-            else:
-                # Fallback nel caso in cui l'HTML non abbia un body esplicito
-                body_content = str(soup)
+                for element in soup.body.find_all(recursive=False):
+                    if element.name == 'img' and element.get('src', '').startswith('data:image/jpeg;base64,'):
+                        # Estrai i dati Base64
+                        b64_data = element['src'].split(',')[1]
+                        image_data = base64.b64decode(b64_data)
 
-            pdf.write_html(body_content)
+                        # Carica l'immagine da un buffer di byte
+                        img = Image.open(BytesIO(image_data))
+
+                        # Aggiungi l'immagine al PDF
+                        # Usiamo un nome temporaneo per l'immagine in memoria
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmpfile:
+                            img.save(tmpfile, format="JPEG")
+                            tmp_path = tmpfile.name
+
+                        # Calcola la larghezza mantenendo l'aspect ratio
+                        page_width = pdf.w - 2 * pdf.l_margin
+                        pdf.image(tmp_path, w=page_width)
+                        os.remove(tmp_path)
+
+                    else:
+                        # Per il testo e altri elementi HTML, usa write_html
+                        pdf.write_html(str(element))
 
             pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
@@ -4451,12 +4527,27 @@ class VideoAudioManager(QMainWindow):
 
     def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Analizza ricorsivamente un elemento HTML e aggiunge 'run' formattati a un paragrafo DOCX.
+        Analizza ricorsivamente un elemento HTML, aggiunge 'run' formattati a un paragrafo DOCX,
+        e gestisce le immagini inline.
         """
+        from io import BytesIO
+        import base64
+        from docx.shared import Inches
+
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
                 self._apply_styles_to_run(element, run)
+            elif child.name == 'img' and child.get('src', '').startswith('data:image/jpeg;base64,'):
+                b64_data = child['src'].split(',')[1]
+                image_data = base64.b64decode(b64_data)
+                image_stream = BytesIO(image_data)
+
+                # Aggiungi l'immagine al paragrafo, con una larghezza massima di 6 pollici
+                paragraph.add_run().add_picture(image_stream, width=Inches(6.0))
+            elif child.name:
+                # Process nested tags recursively
+                self._add_runs_to_paragraph(child, paragraph)
             elif child.name:
                 # Per i tag nidificati, creiamo un nuovo 'run' e applichiamo gli stili
                 # da tutti i suoi parent.
@@ -5629,6 +5720,8 @@ class VideoAudioManager(QMainWindow):
         #     "source_files": [], "detailed_combined": "", "meeting_combined": "",
         #     "detailed_combined_integrated": "", "meeting_combined_integrated": ""
         # })
+
+        self.summaryWithFramesTextArea.setHtml(self.summaries.get('summary_with_frames', ''))
 
         # Aggiorna la vista per tutti i tab. _update_summary_view è la fonte di verità.
         self._update_summary_view()
