@@ -2391,25 +2391,23 @@ class VideoAudioManager(QMainWindow):
             logging.debug("Sync to model skipped: widget is read-only or not available.")
             return
 
-        # Determina la chiave corretta in base al tab attivo
-        is_combined = "Combinato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex())
-        if is_combined:
+        summary_key = self._get_current_summary_key()
+        if not summary_key:
+            logging.warning("Could not determine summary key for active widget.")
+            return
+
+        # Determina quale dizionario usare (singolo, combinato)
+        if "combined" in summary_key:
             data_source = self.combined_summary
-            summary_type = 'detailed_combined' if "Dettagliato" in self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex()) else 'meeting_combined'
         else:
             data_source = self.summaries
-            summary_type = 'detailed' if self.summaryTabWidget.currentIndex() == 0 else 'meeting'
-
-        # Determina se la vista è integrata
-        summary_key = summary_type
 
         # Salva il contenuto del widget, convertito in Markdown, nel modello dati.
-        if summary_key:
-            html_content = active_widget.toHtml()
-            # Converte l'HTML in Markdown, preservando la formattazione di base.
-            markdown_content = markdownify(html_content, heading_style="ATX")
-            data_source[summary_key] = markdown_content
-            logging.debug(f"Synced UI to model for key: {summary_key} after converting to Markdown.")
+        html_content = active_widget.toHtml()
+        # Converte l'HTML in Markdown, preservando la formattazione di base.
+        markdown_content = markdownify(html_content, heading_style="ATX")
+        data_source[summary_key] = markdown_content
+        logging.debug(f"Synced UI to model for key: {summary_key} after converting to Markdown.")
 
     def onProcessComplete(self, result):
         if isinstance(result, dict):
