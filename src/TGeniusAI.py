@@ -1222,24 +1222,6 @@ class VideoAudioManager(QMainWindow):
         mode_layout.addStretch()
         main_controls_layout.addLayout(mode_layout)
 
-        # --- Riga 3: Controlli Whisper (visibili solo in modalità offline) ---
-        self.whisperControlsGroup = QGroupBox("Impostazioni Whisper (Offline)")
-        whisper_layout = QHBoxLayout(self.whisperControlsGroup)
-
-        whisper_layout.addWidget(QLabel("Modello:"))
-        self.whisperModelComboBox = QComboBox()
-        self.whisperModelComboBox.addItems(["tiny", "base", "small", "medium", "large"])
-        self.whisperModelComboBox.setCurrentText("base")
-        whisper_layout.addWidget(self.whisperModelComboBox)
-
-        self.gpuCheckbox = QCheckBox("Usa GPU (CUDA)")
-        self.gpuCheckbox.setChecked(torch.cuda.is_available())
-        self.gpuCheckbox.setEnabled(torch.cuda.is_available())
-        whisper_layout.addWidget(self.gpuCheckbox)
-
-        main_controls_layout.addWidget(self.whisperControlsGroup)
-
-
         # --- Riga 4: Gruppi di Controlli Affiancati ---
         groups_layout = QHBoxLayout()
 
@@ -5534,8 +5516,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
 
     def toggle_transcription_mode(self, checked):
-        """Show/hide Whisper controls based on the online/offline mode."""
-        self.whisperControlsGroup.setVisible(not checked)
+        """Aggiorna il testo del checkbox in base alla modalità."""
         if checked:
             self.onlineModeCheckbox.setText("Modalità: Online (Google)")
         else:
@@ -5566,13 +5547,17 @@ class VideoAudioManager(QMainWindow):
                 self.bookmark_manager.transcribe_all_bookmarks()
             else:
                 self.show_status_message("Avvio trascrizione offline (Whisper)...")
+                settings = QSettings("Genius", "GeniusAI")
+                model_name = settings.value("whisper/model", "base")
+                use_gpu = settings.value("whisper/use_gpu", torch.cuda.is_available(), type=bool)
+
                 thread = WhisperTranscriptionThread(
                     media_path=self.videoPathLineEdit,
                     main_window=self,
                     start_time=None,
                     end_time=None,
-                    model_name=self.whisperModelComboBox.currentText(),
-                    use_gpu=self.gpuCheckbox.isChecked()
+                    model_name=model_name,
+                    use_gpu=use_gpu
                 )
                 self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
 
