@@ -6,6 +6,7 @@ from PyQt6.QtGui import QImage, QPixmap
 import time
 import mss
 import mss.tools
+from PIL import Image
 
 # Add the src directory to the python path
 sys.path.append(os.path.abspath('.'))

@@ -4548,13 +4548,6 @@ class VideoAudioManager(QMainWindow):
             elif child.name:
                 # Process nested tags recursively
                 self._add_runs_to_paragraph(child, paragraph)
-            elif child.name:
-                # Per i tag nidificati, creiamo un nuovo 'run' e applichiamo gli stili
-                # da tutti i suoi parent.
-                nested_text = child.get_text()
-                if nested_text:
-                    run = paragraph.add_run(nested_text)
-                    self._apply_styles_to_run(child, run)
 
     def _apply_styles_to_run(self, element, run):
         """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
