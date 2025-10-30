@@ -1215,10 +1215,16 @@ class VideoAudioManager(QMainWindow):
 
         # --- Riga 2: Modalità di Trascrizione (Online/Offline) ---
         mode_layout = QHBoxLayout()
-        self.onlineModeCheckbox = QCheckBox("Modalità: Online (Google)")
-        self.onlineModeCheckbox.setChecked(False) # Default to offline
-        self.onlineModeCheckbox.toggled.connect(self.toggle_transcription_mode)
+        self.onlineModeCheckbox = QCheckBox("Online (Google)")
+        self.offlineModeCheckbox = QCheckBox("Offline (Whisper)")
+        self.transcriptionModeGroup = QButtonGroup(self)
+        self.transcriptionModeGroup.addButton(self.onlineModeCheckbox)
+        self.transcriptionModeGroup.addButton(self.offlineModeCheckbox)
+        self.transcriptionModeGroup.setExclusive(True)
+        self.offlineModeCheckbox.setChecked(True) # Default to offline
+        mode_layout.addWidget(QLabel("Modalità:"))
         mode_layout.addWidget(self.onlineModeCheckbox)
+        mode_layout.addWidget(self.offlineModeCheckbox)
         mode_layout.addStretch()
         main_controls_layout.addLayout(mode_layout)
 
@@ -5514,13 +5520,6 @@ class VideoAudioManager(QMainWindow):
 
     def updateTranscriptionLanguageDisplay(self, language):
         self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
-
-    def toggle_transcription_mode(self, checked):
-        """Aggiorna il testo del checkbox in base alla modalità."""
-        if checked:
-            self.onlineModeCheckbox.setText("Modalità: Online (Google)")
-        else:
-            self.onlineModeCheckbox.setText("Modalità: Offline (Whisper)")
 
     def transcribeVideo(self):
         if not self.videoPathLineEdit:
