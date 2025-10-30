@@ -51,6 +51,37 @@ def remove_timestamps_from_html(html_content):
 
     return content.strip()
 
+import markdown
+from markdownify import markdownify
+
+def parse_timestamp_to_seconds(timestamp_str):
+    """Converte un timestamp stringa [HH:MM:SS] o [MM:SS] in secondi totali."""
+    if not isinstance(timestamp_str, str):
+        return 0
+
+    clean_ts = timestamp_str.replace('[', '').replace(']', '').strip()
+    parts = clean_ts.split(':')
+
+    try:
+        if len(parts) == 3:
+            h, m, s = map(float, parts)
+            return h * 3600 + m * 60 + s
+        elif len(parts) == 2:
+            m, s = map(float, parts)
+            return m * 60 + s
+        else:
+            return 0
+    except (ValueError, TypeError):
+        return 0
+
+def convert_html_to_markdown(html_text):
+    """Converte un testo da HTML a Markdown."""
+    return markdownify(html_text, heading_style="ATX")
+
+def convert_markdown_to_html(markdown_text):
+    """Converte un testo da Markdown a HTML."""
+    return markdown.markdown(markdown_text, extensions=['fenced_code', 'tables'])
+
 import requests
 import logging
 
