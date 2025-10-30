@@ -48,7 +48,11 @@ class WhisperTranscriptionThread(QThread):
                     device = "cuda" if use_gpu and torch.cuda.is_available() else "cpu"
                     logging.info(f"Using device: {device} for Whisper model.")
 
-                    cls._whisper_model = whisper.load_model(model_name, device=device)
+                    models_dir = "models"
+                    if not os.path.exists(models_dir):
+                        os.makedirs(models_dir)
+
+                    cls._whisper_model = whisper.load_model(model_name, device=device, download_root=models_dir)
                     cls._model_name = model_name
                     load_end_time = time.time()
                     logging.info(f"Whisper model '{model_name}' loaded successfully on {device} in {load_end_time - load_start_time:.2f} seconds.")
