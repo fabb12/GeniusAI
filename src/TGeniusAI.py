@@ -9,10 +9,11 @@ import logging
 import json
 import markdown
 import torch
+import base64
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QBuffer, QIODevice)
 from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
@@ -1986,10 +1987,10 @@ class VideoAudioManager(QMainWindow):
                 return
 
             # Convert pixmap to base64
-            from io import BytesIO
-            buffer = BytesIO()
-            frame_pixmap.toImage().save(buffer, "JPG")
-            b64_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            buffer = QBuffer()
+            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+            frame_pixmap.save(buffer, "JPG")
+            b64_data = base64.b64encode(buffer.data()).decode('utf-8')
 
             # Create the img tag
             style = f'max-width: {size_percentage}%; height: auto; display: block; margin-left: auto; margin-right: auto; margin-top: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 5px;'
