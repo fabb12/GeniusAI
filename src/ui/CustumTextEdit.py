@@ -20,7 +20,7 @@ class CustomTextEdit(QTextEdit):
     """
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
-    insert_frame_requested = pyqtSignal(float)
+    insert_frame_requested = pyqtSignal(float, int)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
@@ -33,6 +33,8 @@ class CustomTextEdit(QTextEdit):
         self.current_search_index = -1
         self.search_results_cursors = []
         self.last_search_options = {}
+        self.resizing_image = None
+        self.resizing_start_pos = None
 
     def contextMenuEvent(self, event):
         """
@@ -57,11 +59,51 @@ class CustomTextEdit(QTextEdit):
                     action = menu.exec(event.globalPos())
 
                     if action == insert_frame_action:
-                        self.insert_frame_requested.emit(total_seconds)
+                        self.insert_frame_requested.emit(total_seconds, cursor.position())
                     return
 
         # Se non siamo su un timestamp, mostra il menu standard
+        cursor = self.cursorForPosition(event.pos())
+        image_format = self.get_image_format_at_cursor(cursor)
+
+        if image_format:
+            menu = self.createStandardContextMenu()
+            resize_action = menu.addAction("Ridimensiona Immagine")
+            action = menu.exec(event.globalPos())
+
+            if action == resize_action:
+                self.resize_image(image_format)
+            return
+
         super().contextMenuEvent(event)
+
+    def get_image_format_at_cursor(self, cursor):
+        char_format = cursor.charFormat()
+        if char_format.isImageFormat():
+            return char_format.toImageFormat()
+        return None
+
+    def resize_image(self, image_format):
+        from src.ui.ImageSizeDialog import ResizedImageDialog
+        dialog = ResizedImageDialog(image_format.width(), image_format.height(), self)
+        if dialog.exec():
+            new_width, new_height = dialog.get_new_size()
+            self.update_image_size(image_format, new_width, new_height)
+
+    def update_image_size(self, image_format, width, height):
+        new_format = image_format
+        new_format.setWidth(width)
+        new_format.setHeight(height)
+
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+
+        # Move the cursor to the start of the image and select it
+        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1)
+        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
+
+        cursor.setCharFormat(new_format)
+        cursor.endEditBlock()
 
     def wheelEvent(self, event):
         """
@@ -128,8 +170,29 @@ class CustomTextEdit(QTextEdit):
 
     def mousePressEvent(self, event):
         """Gestisce gli eventi di pressione del mouse."""
-        super().mousePressEvent(event)
+        cursor = self.cursorForPosition(event.pos())
+        self.resizing_image = self.get_image_format_at_cursor(cursor)
+        if self.resizing_image:
+            self.resizing_start_pos = event.pos()
+            self.setTextCursor(cursor)
+        else:
+            super().mousePressEvent(event)
         self.cursorPositionChanged.emit()
+
+    def mouseMoveEvent(self, event):
+        if self.resizing_image and self.resizing_start_pos:
+            delta = event.pos() - self.resizing_start_pos
+            new_width = self.resizing_image.width() + delta.x()
+            new_height = self.resizing_image.height() + delta.y()
+            if new_width > 10 and new_height > 10:
+                self.update_image_size(self.resizing_image, new_width, new_height)
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.resizing_image = None
+        self.resizing_start_pos = None
+        super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         """
