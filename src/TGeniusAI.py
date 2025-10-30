@@ -1526,7 +1526,24 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
         self.transcriptionTabWidget.addTab(self.audio_ai_tab, "Audio AI")
 
-        self.transcriptionDock.addWidget(self.transcriptionTabWidget)
+        # --- Barra Pulsanti Inferiore ---
+        bottom_button_bar = QHBoxLayout()
+        search_button = QPushButton(QIcon(get_resource("search.png")), " Cerca")
+        search_button.setToolTip("Apre il dialogo di ricerca per il testo attivo (Ctrl+F)")
+        search_button.clicked.connect(self.open_search_dialog)
+        bottom_button_bar.addWidget(search_button)
+        bottom_button_bar.addStretch()
+
+        # Aggiungi il tab widget e la barra dei pulsanti al layout del dock
+        dock_layout = QVBoxLayout()
+        dock_layout.addWidget(self.transcriptionTabWidget)
+        dock_layout.addLayout(bottom_button_bar)
+
+        # Il widget contenitore per il layout del dock
+        container_widget = QWidget()
+        container_widget.setLayout(dock_layout)
+        self.transcriptionDock.addWidget(container_widget)
+
 
         # Impostazioni voce per l'editing audio AI
         voiceSettingsWidget = self.setupVoiceSettingsUI()
@@ -1662,6 +1679,13 @@ class VideoAudioManager(QMainWindow):
         serviceToolbar.addAction(settingsAction)
 
         serviceToolbar.addSeparator()
+
+        # Azione di ricerca centralizzata
+        findAction = QAction("Cerca", self)
+        findAction.setShortcut("Ctrl+F")
+        findAction.triggered.connect(self.open_search_dialog)
+        self.addAction(findAction)
+
         # Configurazione della menu bar (questa parte rimane invariata)
         self.setupMenuBar()
 
@@ -1680,6 +1704,39 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
         self.infoExtractionResultArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
+
+    def open_search_dialog(self):
+        """
+        Apre il dialogo di ricerca per l'area di testo attualmente attiva e visibile.
+        Questo metodo determina quale CustomTextEdit ha il focus o è correntemente visualizzato
+        e invoca il suo metodo `openSearchDialog`.
+        """
+        active_text_edit = None
+
+        # Controlla quale tab principale è attivo
+        current_main_tab = self.transcriptionTabWidget.currentWidget()
+
+        if self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Trascrizione":
+            # Se siamo nella tab "Trascrizione", controlla il tab interno
+            current_transcription_tab = self.transcriptionTabs.currentWidget()
+            if isinstance(current_transcription_tab, CustomTextEdit):
+                active_text_edit = current_transcription_tab
+
+        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Riassunto":
+            # Se siamo nella tab "Riassunto", prendi il widget corrente del tab dei riassunti
+            current_summary_tab = self.summaryTabWidget.currentWidget()
+            if isinstance(current_summary_tab, CustomTextEdit):
+                active_text_edit = current_summary_tab
+
+        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Audio AI":
+             if isinstance(self.audioAiTextArea, CustomTextEdit):
+                active_text_edit = self.audioAiTextArea
+
+        # Se abbiamo trovato un editor di testo attivo e visibile, apri il dialogo
+        if active_text_edit and active_text_edit.isVisible():
+            active_text_edit.openSearchDialog()
+        else:
+            self.show_status_message("Nessun campo di testo attivo per la ricerca.", error=True)
 
     def get_current_summary_text_area(self):
         """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""

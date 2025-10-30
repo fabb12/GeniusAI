@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QShortcut, QPalette, QFont) # Aggiunto QFont
+                         QTextDocument, QPalette, QFont) # Aggiunto QFont
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings
 import re
 
@@ -23,10 +23,6 @@ class CustomTextEdit(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Crea un'istanza di QShortcut per la ricerca (Ctrl + F)
-        self.searchShortcut = QShortcut(QKeySequence("Ctrl+F"), self)
-        self.searchShortcut.activated.connect(self.openSearchDialog)
-
         # Memorizza l'istanza del dialogo di ricerca per evitare duplicati
         self.search_dialog_instance = None
 
