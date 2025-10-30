@@ -62,7 +62,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
-from src.ui.ImageSizeDialog import ImageSizeDialog
+from src.ui.ImageSizeDialog import ImageSizeDialog, ResizedImageDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -1471,7 +1471,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea = CustomTextEdit(self)
         self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
         self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedTextArea, timestamp, pos)
+        )
         self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
@@ -1479,7 +1481,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea = CustomTextEdit(self)
         self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingTextArea, timestamp, pos)
+        )
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
@@ -1487,7 +1491,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
         self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
         self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedIntegratedTextArea, timestamp, pos)
+        )
         self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
@@ -1968,9 +1974,9 @@ class VideoAudioManager(QMainWindow):
     def onIntegrazioneError(self, error_message):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
 
-    def handle_insert_frame_request(self, timestamp_seconds):
+    def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
         """
-        Handles the request to insert a video frame at a specific timestamp.
+        Gestisce la richiesta di inserire un fotogramma video a un timestamp specifico.
         """
         if not self.videoPathLineEdit:
             self.show_status_message("Nessun video caricato.", error=True)
@@ -1980,26 +1986,32 @@ class VideoAudioManager(QMainWindow):
         if dialog.exec():
             size_percentage = dialog.get_selected_size_percentage()
 
-            # Extract the frame
             frame_pixmap = self.get_frame_at(int(timestamp_seconds * 1000))
             if not frame_pixmap:
                 self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
                 return
 
-            # Convert pixmap to base64
             buffer = QBuffer()
             buffer.open(QIODevice.OpenModeFlag.WriteOnly)
             frame_pixmap.save(buffer, "JPG")
             b64_data = base64.b64encode(buffer.data()).decode('utf-8')
 
-            # Create the img tag
-            style = f'max-width: {size_percentage}%; height: auto; display: block; margin-left: auto; margin-right: auto; margin-top: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 5px;'
-            img_tag = f'<br><img src="data:image/jpeg;base64,{b64_data}" alt="Frame at {timestamp_seconds:.1f}s" style="{style}"><br>'
+            # Create the img tag with specific width and height to be updated later
+            width = frame_pixmap.width() * (size_percentage / 100)
+            height = frame_pixmap.height() * (size_percentage / 100)
+            style = f'width: {width}px; height: {height}px; display: block; margin: 5px auto; border: 1px solid #ccc; border-radius: 5px;'
+            img_tag = f'<br><img src="data:image/jpeg;base64,{b64_data}" alt="Frame at {timestamp_seconds:.1f}s" style="{style}" timestamp="{timestamp_seconds}"><br>'
 
-            # Insert the image into the active text edit
-            active_text_edit = self.get_current_summary_text_area()
-            if active_text_edit:
-                cursor = active_text_edit.textCursor()
+            if target_text_edit:
+                cursor = target_text_edit.textCursor()
+                cursor.setPosition(position)
+                # Find the end of the timecode to insert the image after it
+                cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
+                if ']' in cursor.selectedText():
+                    # Place cursor right after the ']'
+                    pos_in_block = cursor.selectionEnd()
+                    cursor.setPosition(pos_in_block)
+
                 cursor.insertHtml(img_tag)
                 self.show_status_message("Frame inserito con successo.")
 
@@ -4453,10 +4465,17 @@ class VideoAudioManager(QMainWindow):
                             tmp_path = tmpfile.name
 
                         # Calcola la larghezza mantenendo l'aspect ratio
-                        page_width = pdf.w - 2 * pdf.l_margin
-                        pdf.image(tmp_path, w=page_width)
-                        os.remove(tmp_path)
+                        style = element.get('style', '')
+                        width_match = re.search(r'width:\s*(\d+)', style)
+                        height_match = re.search(r'height:\s*(\d+)', style)
 
+                        if width_match:
+                            width = int(width_match.group(1)) * 0.75  # Convert pixels to points
+                        else:
+                            width = pdf.w - 2 * pdf.l_margin
+
+                        pdf.image(tmp_path, w=width)
+                        os.remove(tmp_path)
                     else:
                         # Per il testo e altri elementi HTML, usa write_html
                         pdf.write_html(str(element))
@@ -4509,7 +4528,7 @@ class VideoAudioManager(QMainWindow):
         """
         from io import BytesIO
         import base64
-        from docx.shared import Inches
+        from docx.shared import Inches, Pt
 
         for child in element.children:
             if isinstance(child, str):
@@ -4520,10 +4539,15 @@ class VideoAudioManager(QMainWindow):
                 image_data = base64.b64decode(b64_data)
                 image_stream = BytesIO(image_data)
 
-                # Aggiungi l'immagine al paragrafo, con una larghezza massima di 6 pollici
-                paragraph.add_run().add_picture(image_stream, width=Inches(6.0))
+                style = child.get('style', '')
+                width_match = re.search(r'width:\s*(\d+)', style)
+                height_match = re.search(r'height:\s*(\d+)', style)
+
+                width = Pt(int(width_match.group(1))) if width_match else Inches(6)
+                height = Pt(int(height_match.group(1))) if height_match else None
+
+                paragraph.add_run().add_picture(image_stream, width=width, height=height)
             elif child.name:
-                # Process nested tags recursively
                 self._add_runs_to_paragraph(child, paragraph)
 
     def _apply_styles_to_run(self, element, run):
