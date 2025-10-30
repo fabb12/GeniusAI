@@ -49,7 +49,10 @@ class ModelManagerDialog(QDialog):
 
     def get_cache_dir(self):
         """Returns the application's cache directory for Whisper models."""
-        return os.path.join(os.path.expanduser("~"), ".cache", "whisper")
+        models_dir = "models"
+        if not os.path.exists(models_dir):
+            os.makedirs(models_dir)
+        return models_dir
 
     def populate_models(self):
         self.listWidget.clear()
