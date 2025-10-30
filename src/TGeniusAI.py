@@ -50,7 +50,6 @@ from src.ui.DownloadDialog import DownloadDialog
 from src.services.AudioTranscript import TranscriptionThread
 from src.services.WhisperTranscript import WhisperTranscriptionThread
 from src.services.AudioGenerationREST import AudioGenerationThread
-from src.ui.ModelManagerDialog import ModelManagerDialog
 from src.services.VideoCutting import VideoCuttingThread
 from src.recorder.ScreenRecorder import ScreenRecorder
 from src.managers.SettingsManager import DockSettingsManager
@@ -1237,10 +1236,6 @@ class VideoAudioManager(QMainWindow):
         self.gpuCheckbox.setChecked(torch.cuda.is_available())
         self.gpuCheckbox.setEnabled(torch.cuda.is_available())
         whisper_layout.addWidget(self.gpuCheckbox)
-
-        self.manageModelsButton = QPushButton("Gestisci Modelli")
-        self.manageModelsButton.clicked.connect(self.open_model_manager)
-        whisper_layout.addWidget(self.manageModelsButton)
 
         main_controls_layout.addWidget(self.whisperControlsGroup)
 
@@ -7527,11 +7522,6 @@ class VideoAudioManager(QMainWindow):
 
     def on_overlay_error(self, error_message):
         self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
-
-    def open_model_manager(self):
-        """Opens the Whisper model management dialog."""
-        dialog = ModelManagerDialog(self)
-        dialog.exec()
 
     def start_batch_transcription(self):
         """
