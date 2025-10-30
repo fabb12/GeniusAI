@@ -8,10 +8,11 @@ from PyQt6.QtWidgets import (
 )
 import os
 import whisper
+import torch
 from PyQt6.QtCore import QSettings, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE, HIGHLIGHT_COLORS
-from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QProgressBar, QMessageBox
+from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QProgressBar, QMessageBox, QGroupBox
 
 class ModelDownloaderThread(QThread):
     progress = pyqtSignal(int)
@@ -182,6 +183,10 @@ class SettingsDialog(QDialog):
         self.fontFamilyComboBox.setCurrentFont(QFont(self.settings.value("editor/fontFamily", "Arial")))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
         self.highlightColorComboBox.setCurrentText(self.settings.value("editor/highlightColor", "Giallo"))
+        # Carica impostazioni Whisper
+        self.whisperModelComboBox.setCurrentText(self.settings.value("whisper/model", "base"))
+        self.gpuCheckbox.setChecked(self.settings.value("whisper/use_gpu", torch.cuda.is_available(), type=bool))
+
 
     def _setComboBoxValue(self, combo, value):
         index = combo.findText(value)
@@ -204,14 +209,34 @@ class SettingsDialog(QDialog):
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
         self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
         self.settings.setValue("editor/highlightColor", self.highlightColorComboBox.currentText())
+        # Salva impostazioni Whisper
+        self.settings.setValue("whisper/model", self.whisperModelComboBox.currentText())
+        self.settings.setValue("whisper/use_gpu", self.gpuCheckbox.isChecked())
         self.accept()
 
     def createWhisperSettingsTab(self):
         widget = QWidget()
         self.whisperLayout = QVBoxLayout(widget)
 
+        # Gruppo per le impostazioni del modello
+        settings_group = QGroupBox("Impostazioni di Trascrizione")
+        settings_layout = QFormLayout(settings_group)
+
+        self.whisperModelComboBox = QComboBox()
+        self.whisperModelComboBox.addItems(["tiny", "base", "small", "medium", "large"])
+        settings_layout.addRow("Modello di default:", self.whisperModelComboBox)
+
+        self.gpuCheckbox = QCheckBox("Usa GPU (CUDA) se disponibile")
+        self.gpuCheckbox.setEnabled(torch.cuda.is_available())
+        settings_layout.addRow(self.gpuCheckbox)
+        self.whisperLayout.addWidget(settings_group)
+
+        # Gruppo per la gestione dei modelli
+        management_group = QGroupBox("Gestione Modelli Scaricati")
+        management_layout = QVBoxLayout(management_group)
+
         self.listWidget = QListWidget()
-        self.whisperLayout.addWidget(self.listWidget)
+        management_layout.addWidget(self.listWidget)
 
         self.progressBar = QProgressBar()
         self.progressBar.setVisible(False)
@@ -222,7 +247,9 @@ class SettingsDialog(QDialog):
         self.deleteButton = QPushButton("Elimina Selezionato")
         self.buttonLayout.addWidget(self.downloadButton)
         self.buttonLayout.addWidget(self.deleteButton)
-        self.whisperLayout.addLayout(self.buttonLayout)
+        management_layout.addLayout(self.buttonLayout) # Aggiungi a questo layout
+        self.whisperLayout.addWidget(management_group) # Aggiungi il gruppo principale
+
 
         self.downloadButton.clicked.connect(self.download_model)
         self.deleteButton.clicked.connect(self.delete_model)
