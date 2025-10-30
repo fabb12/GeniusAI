@@ -16,8 +16,8 @@ class ImageSizeDialog(QDialog):
         layout = QVBoxLayout(self)
 
         self.size_combo = QComboBox()
-        self.size_combo.addItems(["Piccola (25%)", "Media (50%)", "Grande (75%)", "Originale (100%)"])
-        self.size_combo.setCurrentIndex(1) # Default to Medium
+        self.size_combo.addItems(["Micro (10%)", "Molto Piccola (15%)", "Piccola (25%)", "Media (50%)", "Grande (75%)", "Originale (100%)"])
+        self.size_combo.setCurrentIndex(3) # Default to Medium
 
         layout.addWidget(self.size_combo)
 
@@ -32,6 +32,10 @@ class ImageSizeDialog(QDialog):
         Returns the selected size as an integer percentage.
         """
         text = self.size_combo.currentText()
+        if "10" in text:
+            return 10
+        if "15" in text:
+            return 15
         if "25" in text:
             return 25
         if "50" in text:
