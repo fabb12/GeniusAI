@@ -133,21 +133,12 @@ class WhisperTranscriptionThread(QThread):
                 avg_logprob = segment.get('avg_logprob', -1.0)
                 no_speech_prob = segment.get('no_speech_prob', 0.0)
 
-                confidence_threshold = -0.5  # Adjust this threshold as needed
-
-                # Annotate text with confidence if below threshold or if no_speech_prob is high
-                if avg_logprob < confidence_threshold or no_speech_prob > 0.6:
-                    confidence_percent = round((1 + avg_logprob) * 100, 1) if avg_logprob != -1.0 else 0
-                    text += f" (Confidence: {confidence_percent}%)"
-
                 # Calculate and insert break tags for silences > 1s
                 if last_end_time > 0:
                     pause_duration = start_segment - last_end_time
                     if pause_duration > 1.0:
-                        pause_start_seconds = int(last_end_time + offset_seconds)
-                        pause_mins, pause_secs = divmod(pause_start_seconds, 60)
-                        timestamp = f"[{pause_mins:02d}:{pause_secs:02d}]"
-                        transcription += f'{timestamp}\n\n<break time="{pause_duration:.1f}s" />\n\n'
+                        # Breaks are formatted as paragraphs for consistency
+                        transcription += f'<p><break time="{pause_duration:.1f}s" /></p>'
 
                 # Format the timestamp for the current segment
                 start_seconds_with_offset = int(start_segment + offset_seconds)
@@ -155,7 +146,8 @@ class WhisperTranscriptionThread(QThread):
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
 
                 if text:
-                    transcription += f"{timestamp}\n\n{text}\n\n"
+                    # Format with separate <p> tags for timestamp and text
+                    transcription += f"<p>{timestamp}</p><p>{text}</p>"
 
                 last_end_time = end_segment
 
