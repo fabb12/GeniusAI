@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QPalette, QFont) # Aggiunto QFont
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings
+from PyQt6.QtWidgets import QMenu
 import re
 
 class CustomTextEdit(QTextEdit):
@@ -19,6 +20,7 @@ class CustomTextEdit(QTextEdit):
     """
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
+    insert_frame_requested = pyqtSignal(float)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
@@ -31,6 +33,35 @@ class CustomTextEdit(QTextEdit):
         self.current_search_index = -1
         self.search_results_cursors = []
         self.last_search_options = {}
+
+    def contextMenuEvent(self, event):
+        """
+        Mostra un menu contestuale personalizzato se il click destro è su un timestamp.
+        """
+        cursor = self.cursorForPosition(event.pos())
+        block_text = cursor.block().text()
+        click_pos_in_block = cursor.positionInBlock()
+
+        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
+        for match in timecode_pattern.finditer(block_text):
+            start_pos, end_pos = match.span(0)
+            if start_pos <= click_pos_in_block < end_pos:
+                time_str = match.group(1)
+                from src.services.utils import parse_timestamp_to_seconds
+                total_seconds = parse_timestamp_to_seconds(time_str)
+
+                if total_seconds is not None:
+                    menu = self.createStandardContextMenu()
+                    menu.addSeparator()
+                    insert_frame_action = menu.addAction("Inserisci Frame")
+                    action = menu.exec(event.globalPos())
+
+                    if action == insert_frame_action:
+                        self.insert_frame_requested.emit(total_seconds)
+                    return
+
+        # Se non siamo su un timestamp, mostra il menu standard
+        super().contextMenuEvent(event)
 
     def wheelEvent(self, event):
         """

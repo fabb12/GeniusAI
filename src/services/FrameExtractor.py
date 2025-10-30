@@ -258,47 +258,6 @@ class FrameExtractor:
 
         return frame_list
 
-    def extract_frames_at_timestamps(self, timestamps_in_seconds):
-        """
-        Estrae i frame a specifici timestamp (in secondi).
-        """
-        frame_list = []
-        cap = None
-        try:
-            cap = cv2.VideoCapture(self.video_path)
-            if not cap.isOpened():
-                logging.error(f"Impossibile aprire il video con OpenCV: {self.video_path}")
-                return []
-
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            if fps <= 0:
-                logging.error(f"Metadati video non validi (fps): {self.video_path}")
-                return []
-
-            for ts in sorted(list(set(timestamps_in_seconds))):
-                frame_index = int(ts * fps)
-                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
-                success, frame = cap.read()
-
-                if success:
-                    success_encode, buffer = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 85])
-                    if success_encode:
-                        frame_base64 = base64.b64encode(buffer).decode("utf-8")
-                        frame_list.append({"data": frame_base64, "timestamp": ts})
-                else:
-                    logging.warning(f"Impossibile leggere il frame al timestamp {ts}s (frame index {frame_index})")
-
-            logging.info(f"Estratti con successo {len(frame_list)} frame a timestamp specifici.")
-
-        except Exception as e:
-            logging.exception(f"Errore durante l'estrazione dei frame a timestamp specifici da {self.video_path}")
-            return []
-        finally:
-            if cap:
-                cap.release()
-
-        return frame_list
-
     def _analyze_batch_claude(self, batch, batch_idx, language, prompt_template, search_query=None):
         """Analizza un batch di frame usando Claude."""
         self._init_anthropic_client()

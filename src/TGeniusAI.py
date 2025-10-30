@@ -61,6 +61,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
+from src.ui.ImageSizeDialog import ImageSizeDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -86,7 +87,6 @@ from src.ui.VideoOverlay import VideoOverlay
 from src.services.MeetingSummarizer import MeetingSummarizer
 from src.services.CombinedAnalyzer import CombinedAnalyzer
 from src.services.VideoIntegrator import VideoIntegrationThread
-from src.services.VideoSummaryIntegration import VideoSummaryIntegrationThread
 from src.services.SilenceRemover import SilenceRemoverThread
 from src.managers.ProjectManager import ProjectManager
 from src.managers.BookmarkManager import BookmarkManager
@@ -1447,13 +1447,6 @@ class VideoAudioManager(QMainWindow):
         self.integraInfoButton.clicked.connect(self.integraInfoVideo)
         top_controls_layout.addWidget(self.integraInfoButton)
 
-        self.integrateSummaryWithFramesButton = QPushButton()
-        self.integrateSummaryWithFramesButton.setIcon(QIcon(get_resource("integrate.png")))
-        self.integrateSummaryWithFramesButton.setFixedSize(32, 32)
-        self.integrateSummaryWithFramesButton.setToolTip("Genera un nuovo riassunto integrato con i fotogrammi chiave del video.")
-        self.integrateSummaryWithFramesButton.clicked.connect(self.start_video_summary_integration)
-        top_controls_layout.addWidget(self.integrateSummaryWithFramesButton)
-
         top_controls_layout.addStretch()
         summary_controls_layout.addLayout(top_controls_layout)
 
@@ -1477,6 +1470,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea = CustomTextEdit(self)
         self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
         self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
@@ -1484,6 +1478,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea = CustomTextEdit(self)
         self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
@@ -1491,6 +1486,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
         self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
         self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
@@ -1498,6 +1494,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
 
@@ -1505,6 +1502,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
 
@@ -1512,15 +1510,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
-
-        # Tab per il Riassunto con Frame
-        self.summaryWithFramesTextArea = CustomTextEdit(self)
-        self.summaryWithFramesTextArea.setPlaceholderText("Il riassunto con i frame del video apparirà qui...")
-        self.summaryWithFramesTextArea.setReadOnly(True) # This view is generated, not edited directly
-        self.summaryWithFramesTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryTabWidget.addTab(self.summaryWithFramesTextArea, "Riassunto con Frame")
 
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
@@ -1533,7 +1525,6 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea: "meeting_integrated",
             self.summaryCombinedDetailedTextArea: "detailed_combined",
             self.summaryCombinedMeetingTextArea: "meeting_combined",
-            self.summaryWithFramesTextArea: "summary_with_frames",
         }
 
         summary_layout.addWidget(self.summaryTabWidget)
@@ -1786,7 +1777,6 @@ class VideoAudioManager(QMainWindow):
             self.summaryMeetingIntegratedTextArea,
             self.summaryCombinedDetailedTextArea,
             self.summaryCombinedMeetingTextArea,
-            self.summaryWithFramesTextArea,
             self.infoExtractionResultArea,
         ]
         if hasattr(self, 'audioAiTextArea'):
@@ -1977,54 +1967,40 @@ class VideoAudioManager(QMainWindow):
     def onIntegrazioneError(self, error_message):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
 
-    def start_video_summary_integration(self):
+    def handle_insert_frame_request(self, timestamp_seconds):
         """
-        Starts the thread to generate a summary integrated with key video frames.
+        Handles the request to insert a video frame at a specific timestamp.
         """
         if not self.videoPathLineEdit:
             self.show_status_message("Nessun video caricato.", error=True)
             return
 
-        transcription_text = self.singleTranscriptionTextArea.toHtml()
-        if not transcription_text.strip():
-            self.show_status_message("La trascrizione è vuota. Eseguire prima la trascrizione.", error=True)
-            return
+        dialog = ImageSizeDialog(self)
+        if dialog.exec():
+            size_percentage = dialog.get_selected_size_percentage()
 
-        thread = VideoSummaryIntegrationThread(
-            main_window=self,
-            video_path=self.videoPathLineEdit,
-            transcription_text=transcription_text,
-            language=self.languageComboBox.currentText()
-        )
-        self.start_task(
-            thread,
-            self.on_video_summary_integration_complete,
-            self.on_video_summary_integration_error,
-            self.update_status_progress
-        )
+            # Extract the frame
+            frame_pixmap = self.get_frame_at(int(timestamp_seconds * 1000))
+            if not frame_pixmap:
+                self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
+                return
 
-    def on_video_summary_integration_complete(self, final_html):
-        """
-        Handles the completion of the video summary integration, displaying the rich HTML.
-        """
-        self.summaries['summary_with_frames'] = final_html
-        self.summaryWithFramesTextArea.setHtml(final_html)
-        self.summaryTabWidget.setCurrentWidget(self.summaryWithFramesTextArea)
-        self.show_status_message("Riassunto con frame generato con successo.")
+            # Convert pixmap to base64
+            from io import BytesIO
+            buffer = BytesIO()
+            frame_pixmap.toImage().save(buffer, "JPG")
+            b64_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-        # Save the result to the JSON file
-        update_data = {
-            "summaries": self.summaries,
-            "summary_date": datetime.datetime.now().isoformat()
-        }
-        self._update_json_file(self.videoPathLineEdit, update_data)
+            # Create the img tag
+            style = f'max-width: {size_percentage}%; height: auto; display: block; margin-left: auto; margin-right: auto; margin-top: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 5px;'
+            img_tag = f'<br><img src="data:image/jpeg;base64,{b64_data}" alt="Frame at {timestamp_seconds:.1f}s" style="{style}"><br>'
 
-
-    def on_video_summary_integration_error(self, error_message):
-        """
-        Handles errors during the video summary integration.
-        """
-        self.show_status_message(f"Errore durante la generazione del riassunto con frame: {error_message}", error=True)
+            # Insert the image into the active text edit
+            active_text_edit = self.get_current_summary_text_area()
+            if active_text_edit:
+                cursor = active_text_edit.textCursor()
+                cursor.insertHtml(img_tag)
+                self.show_status_message("Frame inserito con successo.")
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -5713,8 +5689,6 @@ class VideoAudioManager(QMainWindow):
         #     "source_files": [], "detailed_combined": "", "meeting_combined": "",
         #     "detailed_combined_integrated": "", "meeting_combined_integrated": ""
         # })
-
-        self.summaryWithFramesTextArea.setHtml(self.summaries.get('summary_with_frames', ''))
 
         # Aggiorna la vista per tutti i tab. _update_summary_view è la fonte di verità.
         self._update_summary_view()
