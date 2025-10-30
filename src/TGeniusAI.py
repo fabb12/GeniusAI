@@ -2219,56 +2219,21 @@ class VideoAudioManager(QMainWindow):
 
     def save_transcription_to_json(self):
         """
-        Salva solo il contenuto della scheda Trascrizione nel file JSON.
+        Salva tutti i contenuti modificati nel file JSON associato.
         """
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
-            return
-
-        self._sync_transcription_state_from_ui()
-
-        update_data = {
-            "transcription_original": self.transcription_original,
-            "transcription_corrected": self.transcription_corrected,
-            "last_save_date": datetime.datetime.now().isoformat()
-        }
-        self._update_json_file(self.videoPathLineEdit, update_data)
-        self.show_status_message("Trascrizione salvata nel file JSON.", timeout=3000)
+        self.save_all_tabs_to_json()
 
     def save_summary_to_json(self):
         """
-        Salva lo stato corrente dei riassunti (dal dizionario 'self.summaries')
-        nel file JSON associato.
+        Salva tutti i contenuti modificati nel file JSON associato.
         """
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
-            return
-
-        # Ora, self.summaries è sempre aggiornato grazie al meccanismo di autosave.
-        # Possiamo salvarlo direttamente senza leggere dalla UI.
-        # Questo previene la sovrascrittura accidentale dei dati.
-        self._sync_active_summary_to_model() # Assicura che l'ultimo cambiamento sia salvato
-        update_data = {
-            "summaries": self.summaries,
-            "last_save_date": datetime.datetime.now().isoformat()
-        }
-        self._update_json_file(self.videoPathLineEdit, update_data)
-        self.show_status_message("Riassunti salvati nel file JSON.", timeout=3000)
+        self.save_all_tabs_to_json()
 
     def save_audio_ai_to_json(self):
         """
-        Salva solo il testo della scheda Audio AI nel file JSON.
+        Salva tutti i contenuti modificati nel file JSON associato.
         """
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
-            self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
-            return
-
-        update_data = {
-            "audio_ai_text": self.audioAiTextArea.toPlainText(),
-            "last_save_date": datetime.datetime.now().isoformat()
-        }
-        self._update_json_file(self.videoPathLineEdit, update_data)
-        self.show_status_message("Testo Audio AI salvato nel file JSON.", timeout=3000)
+        self.save_all_tabs_to_json()
 
     def save_all_tabs_to_json(self, show_message=True):
         """
@@ -2327,11 +2292,6 @@ class VideoAudioManager(QMainWindow):
 
         # Aggiorna i campi
         data.update(update_dict)
-        # Assicura che anche le trascrizioni siano sempre aggiornate
-        if self.transcription_original:
-            data["transcription_original"] = self.transcription_original
-        if self.transcription_corrected:
-            data["transcription_corrected"] = self.transcription_corrected
 
         # Rimuovi le chiavi obsolete per la pulizia del formato
         if 'combined_summary' in data:
