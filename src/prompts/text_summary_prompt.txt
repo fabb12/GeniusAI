@@ -30,13 +30,18 @@ Sei un esperto di analisi testuale e sintesi dei contenuti. Il tuo compito è el
     *   Il timecode deve seguire immediatamente il riferimento al file. Esempio: `[video_lezione_1.mp4] [00:15:23]`.
     *   Ogni informazione specifica deve avere il proprio timecode.
 
-5.  **COMPLETEZZA E PROFONDITÀ**:
+5.  **DIVIETO ASSOLUTO DI RAGGRUPPARE I TIMECODE**:
+    *   **NON** raggruppare mai i timecode. Ogni timecode deve riferirsi a un singolo punto.
+    *   **ERRATO**: `[00:11, 00:21]`
+    *   **CORRETTO**: `[00:11]` per un punto, e `[00:21]` per un altro punto.
+
+6.  **COMPLETEZZA E PROFONDITÀ**:
     *   Includi TUTTI i concetti, dati, esempi e spiegazioni significative presenti nella trascrizione.
     *   Non limitarti a informazioni superficiali: approfondisci ogni argomento trattato.
     *   Cattura le sfumature, le specificazioni e i dettagli rilevanti.
     *   Mantieni il contesto necessario per comprendere pienamente ogni punto.
 
-6.  **ESCLUSIONE DI CONTENUTI NON RILEVANTI**:
+7.  **ESCLUSIONE DI CONTENUTI NON RILEVANTI**:
     *   Ometti saluti generici, richieste di like/iscrizione, promozioni.
     *   Escludi digressioni personali non pertinenti all'argomento principale.
     *   Rimuovi filler verbali, ripetizioni inutili e contenuti puramente decorativi.
