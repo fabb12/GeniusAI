@@ -10,10 +10,23 @@ from PyQt6.QtWidgets import QMenu
 import re
 import time
 from .ImageCropDialog import ImageCropDialog
-from src.services.utils import get_frame_at_timestamp
+from services.utils import get_frame_at_timestamp
+
+class CustomTextDocument(QTextDocument):
+    def loadResource(self, type, name):
+        """
+        Loads the resource for the given type and name.
+        This is overridden to handle the custom 'frame://' scheme.
+        """
+        if type == QTextDocument.ResourceType.ImageResource and name.scheme() == 'frame':
+            # The resource is already in the document's cache, added via addResource.
+            # The base implementation will retrieve it for us.
+            return super().loadResource(type, name)
+        return super().loadResource(type, name)
 
 class CustomTextEdit(QTextEdit):
     """
+
     Un QTextEdit personalizzato con funzionalità aggiuntive:
     - Segnale per il cambio posizione cursore.
     - Ricerca (Ctrl+F) con dialogo separato, navigazione (F3/Shift+F3) ed evidenziazione.
@@ -28,6 +41,7 @@ class CustomTextEdit(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setDocument(CustomTextDocument(self))
         # Memorizza l'istanza del dialogo di ricerca per evitare duplicati
         self.search_dialog_instance = None
 
