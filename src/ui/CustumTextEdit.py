@@ -4,10 +4,13 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QPalette, QFont) # Aggiunto QFont
-from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings
+                         QTextDocument, QPalette, QFont, QPixmap) # Aggiunto QFont
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
+import time
+from .ImageCropDialog import ImageCropDialog
+from src.services.utils import get_frame_at_timestamp
 
 class CustomTextEdit(QTextEdit):
     """
@@ -35,10 +38,35 @@ class CustomTextEdit(QTextEdit):
         self.last_search_options = {}
         self.resizing_image = None
         self.resizing_start_pos = None
+        self.image_metadata = {}
+
+    def insert_image_with_metadata(self, image, width, height, video_path, timestamp):
+        """
+        Inserts an image as a document resource and stores its metadata.
+        """
+        image_name = f"frame_{video_path}_{timestamp}_{time.time()}"
+        uri = QUrl(f"frame://{image_name}")
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, image)
+
+        cursor = self.textCursor()
+        image_format = cursor.charFormat().toImageFormat()
+        image_format.setName(uri.toString())
+        image_format.setWidth(width)
+        image_format.setHeight(height)
+
+        cursor.insertImage(image_format)
+
+        # Store metadata
+        self.image_metadata[image_name] = {
+            'video_path': video_path,
+            'timestamp': timestamp,
+            'original_image': image  # Store the original QImage for later use
+        }
+        return image_name
 
     def contextMenuEvent(self, event):
         """
-        Mostra un menu contestuale personalizzato se il click destro è su un timestamp.
+        Shows a custom context menu for timestamps or images.
         """
         cursor = self.cursorForPosition(event.pos())
         block_text = cursor.block().text()
@@ -67,15 +95,103 @@ class CustomTextEdit(QTextEdit):
         image_format = self.get_image_format_at_cursor(cursor)
 
         if image_format:
+            image_name = image_format.name().replace("frame://", "")
+            has_metadata = image_name in self.image_metadata
+
             menu = self.createStandardContextMenu()
             resize_action = menu.addAction("Ridimensiona Immagine")
+
+            if has_metadata:
+                menu.addSeparator()
+                crop_action = menu.addAction("Ritaglia Immagine")
+                prev_frame_action = menu.addAction("Frame Precedente")
+                next_frame_action = menu.addAction("Frame Successivo")
+
             action = menu.exec(event.globalPos())
 
             if action == resize_action:
                 self.resize_image(image_format)
+            elif has_metadata and action == crop_action:
+                self.handle_crop_image(image_name)
+            elif has_metadata and action == prev_frame_action:
+                self.handle_previous_frame(image_name)
+            elif has_metadata and action == next_frame_action:
+                self.handle_next_frame(image_name)
             return
 
         super().contextMenuEvent(event)
+
+    def handle_crop_image(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        original_image = metadata['original_image']
+        pixmap = QPixmap.fromImage(original_image)
+
+        dialog = ImageCropDialog(pixmap, self.window())
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+            cropped_pixmap = pixmap.copy(crop_rect)
+            cropped_image = cropped_pixmap.toImage()
+
+            # Update the image resource and replace it in the document
+            self.update_image_resource(image_name, cropped_image, crop_rect.width(), crop_rect.height())
+
+    def update_image_resource(self, image_name, new_image, new_width, new_height):
+        uri = QUrl(f"frame://{image_name}")
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, new_image)
+
+        # Find the image in the document and update its size
+        cursor = QTextCursor(self.document())
+        while not cursor.isNull() and not cursor.atEnd():
+            cursor = self.document().find(uri.toString(), cursor, QTextDocument.FindFlag.FindCaseSensitively)
+            if not cursor.isNull():
+                char_format = cursor.charFormat()
+                if char_format.isImageFormat():
+                    image_format = char_format.toImageFormat()
+                    if image_format.name() == uri.toString():
+                        image_format.setWidth(new_width)
+                        image_format.setHeight(new_height)
+
+                        temp_cursor = QTextCursor(cursor)
+                        temp_cursor.setPosition(cursor.selectionStart())
+                        temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
+                        temp_cursor.setCharFormat(image_format)
+                        break
+
+    def _get_fps(self, video_path):
+        import cv2
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        return fps if fps > 0 else 30
+
+    def handle_previous_frame(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        fps = self._get_fps(metadata['video_path'])
+        new_timestamp = max(0, metadata['timestamp'] - (1 / fps))
+
+        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
+        if new_image:
+            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
+            metadata['timestamp'] = new_timestamp
+
+    def handle_next_frame(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        fps = self._get_fps(metadata['video_path'])
+        new_timestamp = metadata['timestamp'] + (1 / fps)
+
+        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
+        if new_image:
+            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
+            metadata['timestamp'] = new_timestamp
 
     def get_image_format_at_cursor(self, cursor):
         char_format = cursor.charFormat()

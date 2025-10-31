@@ -14,7 +14,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QBuffer, QIODevice)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QImage)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -1976,43 +1976,33 @@ class VideoAudioManager(QMainWindow):
 
     def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
         """
-        Gestisce la richiesta di inserire un fotogramma video a un timestamp specifico.
+        Handles the request to insert a video frame at a specific timestamp.
         """
-        if not self.videoPathLineEdit:
-            self.show_status_message("Nessun video caricato.", error=True)
+        video_path = self._get_selected_analysis_video_path()
+        if not video_path:
+            self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
             return
 
         dialog = ImageSizeDialog(self)
         if dialog.exec():
             size_percentage = dialog.get_selected_size_percentage()
 
-            frame_pixmap = self.get_frame_at(int(timestamp_seconds * 1000))
-            if not frame_pixmap:
+            frame_qimage = self.get_frame_at(int(timestamp_seconds * 1000), return_qimage=True)
+            if not frame_qimage:
                 self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
                 return
 
-            buffer = QBuffer()
-            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-            frame_pixmap.save(buffer, "JPG")
-            b64_data = base64.b64encode(buffer.data()).decode('utf-8')
-
-            # Create the img tag with specific width and height to be updated later
-            width = frame_pixmap.width() * (size_percentage / 100)
-            height = frame_pixmap.height() * (size_percentage / 100)
-            style = f'width: {width}px; height: {height}px; display: block; margin: 5px auto; border: 1px solid #ccc; border-radius: 5px;'
-            img_tag = f'<br><img src="data:image/jpeg;base64,{b64_data}" alt="Frame at {timestamp_seconds:.1f}s" style="{style}" timestamp="{timestamp_seconds}"><br>'
+            width = int(frame_qimage.width() * (size_percentage / 100))
+            height = int(frame_qimage.height() * (size_percentage / 100))
 
             if target_text_edit:
                 cursor = target_text_edit.textCursor()
                 cursor.setPosition(position)
-                # Find the end of the timecode to insert the image after it
-                cursor.movePosition(QTextCursor.MoveOperation.EndOfLine, QTextCursor.MoveMode.KeepAnchor)
-                if ']' in cursor.selectedText():
-                    # Place cursor right after the ']'
-                    pos_in_block = cursor.selectionEnd()
-                    cursor.setPosition(pos_in_block)
+                target_text_edit.setTextCursor(cursor)
 
-                cursor.insertHtml(img_tag)
+                target_text_edit.insert_image_with_metadata(
+                    frame_qimage, width, height, video_path, timestamp_seconds
+                )
                 self.show_status_message("Frame inserito con successo.")
 
     def toggle_recording_indicator(self):
@@ -2873,30 +2863,33 @@ class VideoAudioManager(QMainWindow):
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
 
-    def get_frame_at(self, position_ms):
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+    def get_frame_at(self, position_ms, return_qimage=False):
+        video_path = self._get_selected_analysis_video_path()
+        if not video_path or not os.path.exists(video_path):
             logging.warning("get_frame_at called with no valid video path.")
             return None
 
-        cap = cv2.VideoCapture(self.videoPathLineEdit)
+        cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            logging.error(f"Failed to open video file with OpenCV: {self.videoPathLineEdit}")
+            logging.error(f"Failed to open video file with OpenCV: {video_path}")
             return None
 
         try:
-            # Imposta la posizione del frame in millisecondi
             cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
             success, frame = cap.read()
 
             if success:
-                # Converte il frame da BGR (formato di OpenCV) a RGB
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 height, width, channel = rgb_frame.shape
                 bytes_per_line = 3 * width
                 q_image = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
-                return QPixmap.fromImage(q_image)
+
+                if return_qimage:
+                    return q_image
+                else:
+                    return QPixmap.fromImage(q_image)
             else:
-                logging.warning(f"Failed to read frame at {position_ms}ms from {self.videoPathLineEdit}")
+                logging.warning(f"Failed to read frame at {position_ms}ms from {video_path}")
                 return None
         except Exception as e:
             logging.error(f"Error getting frame at {position_ms}ms with OpenCV: {e}")
@@ -4430,9 +4423,8 @@ class VideoAudioManager(QMainWindow):
             self._export_to_pdf(export_html, path)
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF, gestendo immagini incorporate in Base64."""
+        """Esporta il contenuto HTML in un file PDF, gestendo immagini dai QTextDocument resources."""
         from io import BytesIO
-        import base64
 
         try:
             pdf = FPDF()
@@ -4446,38 +4438,38 @@ class VideoAudioManager(QMainWindow):
             pdf.set_font("DejaVu", size=12)
 
             soup = BeautifulSoup(html_content, 'html.parser')
+            active_summary_area = self.get_current_summary_text_area()
+            doc = active_summary_area.document()
 
-            # Processa ogni elemento nel body
             if soup.body:
-                for element in soup.body.find_all(recursive=False):
-                    if element.name == 'img' and element.get('src', '').startswith('data:image/jpeg;base64,'):
-                        # Estrai i dati Base64
-                        b64_data = element['src'].split(',')[1]
-                        image_data = base64.b64decode(b64_data)
+                for element in soup.body.find_all(True, recursive=False):
+                    if element.name == 'p':
+                        # Gestione dei paragrafi che possono contenere testo e immagini
+                        for content in element.contents:
+                            if content.name == 'img' and content.get('src', '').startswith('frame://'):
+                                uri = QUrl(content['src'])
+                                image = doc.resource(QTextDocument.ResourceType.ImageResource, uri)
+                                if image:
+                                    buffer = QBuffer()
+                                    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                                    image.save(buffer, "JPG")
+                                    image_data = buffer.data()
 
-                        # Carica l'immagine da un buffer di byte
-                        img = Image.open(BytesIO(image_data))
+                                    img = Image.open(BytesIO(image_data))
+                                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmpfile:
+                                        img.save(tmpfile, format="JPEG")
+                                        tmp_path = tmpfile.name
 
-                        # Aggiungi l'immagine al PDF
-                        # Usiamo un nome temporaneo per l'immagine in memoria
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmpfile:
-                            img.save(tmpfile, format="JPEG")
-                            tmp_path = tmpfile.name
+                                    style = content.get('style', '')
+                                    width_match = re.search(r'width:\s*(\d+)', style)
+                                    width = int(width_match.group(1)) * 0.75 if width_match else pdf.w - 2 * pdf.l_margin
 
-                        # Calcola la larghezza mantenendo l'aspect ratio
-                        style = element.get('style', '')
-                        width_match = re.search(r'width:\s*(\d+)', style)
-                        height_match = re.search(r'height:\s*(\d+)', style)
-
-                        if width_match:
-                            width = int(width_match.group(1)) * 0.75  # Convert pixels to points
-                        else:
-                            width = pdf.w - 2 * pdf.l_margin
-
-                        pdf.image(tmp_path, w=width)
-                        os.remove(tmp_path)
-                    else:
-                        # Per il testo e altri elementi HTML, usa write_html
+                                    pdf.image(tmp_path, w=width)
+                                    os.remove(tmp_path)
+                            elif isinstance(content, str):
+                                pdf.write(10, content)
+                        pdf.ln() # Newline after paragraph
+                    elif element.name:
                         pdf.write_html(str(element))
 
             pdf.output(path)
@@ -4485,7 +4477,7 @@ class VideoAudioManager(QMainWindow):
         except Exception as e:
             self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
             import traceback
-            logging.error(f"Errore durante l'esportazione in PDF con fpdf2: {e}\n{traceback.format_exc()}")
+            logging.error(f"Errore durante l'esportazione in PDF: {e}\n{traceback.format_exc()}")
 
     def _export_to_docx(self, summary_html, path):
         """Esporta il contenuto HTML in un file DOCX, gestendo paragrafi, titoli e liste."""
@@ -4523,30 +4515,37 @@ class VideoAudioManager(QMainWindow):
 
     def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Analizza ricorsivamente un elemento HTML, aggiunge 'run' formattati a un paragrafo DOCX,
-        e gestisce le immagini inline.
+        Recursively parses an HTML element, adds formatted runs to a DOCX paragraph,
+        and handles inline images from document resources.
         """
         from io import BytesIO
-        import base64
         from docx.shared import Inches, Pt
+
+        active_summary_area = self.get_current_summary_text_area()
+        doc = active_summary_area.document()
 
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
                 self._apply_styles_to_run(element, run)
-            elif child.name == 'img' and child.get('src', '').startswith('data:image/jpeg;base64,'):
-                b64_data = child['src'].split(',')[1]
-                image_data = base64.b64decode(b64_data)
-                image_stream = BytesIO(image_data)
+            elif child.name == 'img' and child.get('src', '').startswith('frame://'):
+                uri = QUrl(child['src'])
+                image = doc.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image:
+                    buffer = QBuffer()
+                    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                    image.save(buffer, "JPG")
+                    image_data = buffer.data()
+                    image_stream = BytesIO(image_data)
 
-                style = child.get('style', '')
-                width_match = re.search(r'width:\s*(\d+)', style)
-                height_match = re.search(r'height:\s*(\d+)', style)
+                    style = child.get('style', '')
+                    width_match = re.search(r'width:\s*(\d+)', style)
+                    height_match = re.search(r'height:\s*(\d+)', style)
 
-                width = Pt(int(width_match.group(1))) if width_match else Inches(6)
-                height = Pt(int(height_match.group(1))) if height_match else None
+                    width = Pt(int(width_match.group(1))) if width_match else Inches(6)
+                    height = Pt(int(height_match.group(1))) if height_match else None
 
-                paragraph.add_run().add_picture(image_stream, width=width, height=height)
+                    paragraph.add_run().add_picture(image_stream, width=width, height=height)
             elif child.name:
                 self._add_runs_to_paragraph(child, paragraph)
 
