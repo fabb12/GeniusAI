@@ -153,3 +153,32 @@ def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, images=No
     except Exception as e:
         logging.error(f"Anche il fallback a /api/generate è fallito: {e}")
         raise e
+
+def get_frame_at_timestamp(video_path, seconds):
+    """
+    Extracts a single frame from a video at a specific timestamp.
+    """
+    try:
+        import cv2
+        from PyQt6.QtGui import QImage
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+
+        # Convert seconds to milliseconds for OpenCV
+        position_ms = seconds * 1000
+        cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
+
+        success, frame = cap.read()
+        cap.release()
+
+        if success:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channel = rgb_frame.shape
+            bytes_per_line = 3 * width
+            return QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+        return None
+    except Exception as e:
+        print(f"Error getting frame at timestamp: {e}")
+        return None
