@@ -1228,9 +1228,10 @@ class VideoAudioManager(QMainWindow):
         speedLayout.addWidget(self.speedSpinBox)
 
         self.reverseButton = QPushButton('')
-        self.reverseButton.setIcon(QIcon(get_resource("rewind.png")))
-        self.reverseButton.setToolTip("Reverse video and audio")
+        self.reverseButton.setIcon(QIcon(get_resource("rewind_play.png")))
+        self.reverseButton.setToolTip("Inverti riproduzione audio/video")
         self.reverseButton.clicked.connect(self.toggleReversePlayback)
+        self.reverseButton.setFixedSize(32, 32)
         speedLayout.addWidget(self.reverseButton)
 
         videoPlayerLayout.addLayout(speedLayout)
