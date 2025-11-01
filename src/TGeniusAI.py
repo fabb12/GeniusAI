@@ -2941,12 +2941,36 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        frame_pixmap = self.get_frame_at(self.player.position())
+        # Determine start and end times for the dialog
+        start_time_ms = 0
+        video_duration_ms = self.player.duration()
+        end_time_ms = video_duration_ms
+
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark if available
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time_ms = start_pos
+            end_time_ms = end_pos
+
+        initial_position_ms = self.player.position()
+        # If the current position is outside the bookmark range, clamp it to the start.
+        if self.videoSlider.bookmarks and not (start_time_ms <= initial_position_ms <= end_time_ms):
+            initial_position_ms = start_time_ms
+
+        frame_pixmap = self.get_frame_at(initial_position_ms)
         if not frame_pixmap:
             QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
             return
 
-        dialog = CropDialog(frame_pixmap, self)
+        dialog = CropDialog(
+            parent=self,
+            video_path=self.videoPathLineEdit,
+            initial_pixmap=frame_pixmap,
+            video_duration_ms=video_duration_ms,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            initial_position_ms=initial_position_ms
+        )
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
@@ -3011,11 +3035,28 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Un'altra operazione è già in corso.", error=True)
             return
 
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Cropping bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Cropping entire video...")
+
         self.statusLabel.setText("Ritaglio del video in corso...")
         self.progressBar.setVisible(True)
         self.cancelButton.setVisible(True)
 
-        thread = CropThread(self.videoPathLineEdit, crop_rect, self.current_project_path, self)
+        thread = CropThread(
+            self.videoPathLineEdit,
+            crop_rect,
+            self.current_project_path,
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         self.current_thread = thread
 
         thread.progress.connect(self.progressBar.setValue)
