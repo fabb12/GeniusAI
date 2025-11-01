@@ -14,7 +14,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QBuffer, QIODevice)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QImage)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QTextDocument, QImage)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -23,7 +23,6 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
     QStatusBar, QListWidget, QListWidgetItem, QMenu, QButtonGroup, QDialogButtonBox
 )
-
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
@@ -32,7 +31,6 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
-from moviepy.video import vfx
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
