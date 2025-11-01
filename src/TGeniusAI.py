@@ -32,6 +32,7 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
+from moviepy.video import vfx
 from moviepy.audio.AudioClip import CompositeAudioClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
@@ -582,6 +583,57 @@ class AudioProcessingThread(QThread):
             if 'new_audio_clip' in locals(): new_audio_clip.close()
 
 
+class ReverseVideoThread(QThread):
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)
+
+    def __init__(self, video_path, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.main_window = parent
+        self._is_running = True
+
+    def run(self):
+        clip = None
+        reversed_clip = None
+        try:
+            if not self.video_path or not os.path.exists(self.video_path):
+                self.error.emit("Video file not found.")
+                return
+
+            self.progress.emit(10, "Loading video clip...")
+            clip = VideoFileClip(self.video_path)
+
+            if not self._is_running: return
+
+            self.progress.emit(30, "Reversing video and audio...")
+            reversed_clip = clip.fx(vfx.time_mirrorx)
+
+            if not self._is_running: return
+
+            temp_path = self.main_window.get_temp_filepath(suffix=".mp4", prefix="reversed_")
+
+            self.progress.emit(60, "Saving reversed video...")
+
+            logger = MergeProgressLogger(self.progress)
+            reversed_clip.write_videofile(temp_path, codec='libx264', audio_codec='aac', logger=logger)
+
+            if self._is_running:
+                self.completed.emit(temp_path)
+
+        except Exception as e:
+            if self._is_running:
+                self.error.emit(str(e))
+        finally:
+            if clip: clip.close()
+            if reversed_clip: reversed_clip.close()
+
+    def stop(self):
+        self._is_running = False
+        self.progress.emit(0, "Cancelling...")
+
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -704,6 +756,7 @@ class VideoAudioManager(QMainWindow):
         }
         self.active_summary_type = None # e.g., 'detailed', 'meeting_combined'
         self.original_audio_ai_html = ""
+        self.reversed_video_path = None
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -1160,6 +1213,13 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBox.setSingleStep(0.1)
         self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
         speedLayout.addWidget(self.speedSpinBox)
+
+        self.reverseButton = QPushButton('')
+        self.reverseButton.setIcon(QIcon(get_resource("rewind.png")))
+        self.reverseButton.setToolTip("Reverse video and audio")
+        self.reverseButton.clicked.connect(self.toggleReversePlayback)
+        speedLayout.addWidget(self.reverseButton)
+
         videoPlayerLayout.addLayout(speedLayout)
 
         videoPlayerLayout.addLayout(playbackControlLayout)
@@ -3622,6 +3682,13 @@ class VideoAudioManager(QMainWindow):
         # Salva tutte le modifiche correnti prima di chiudere
         self.save_all_tabs_to_json(show_message=False)
 
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path):
+            try:
+                os.remove(self.reversed_video_path)
+                logging.info("Cleaned up temporary reversed video file on exit.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file on exit: {e}")
+
         self.dockSettingsManager.save_settings()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
             self.monitor_preview.close()
@@ -4992,6 +5059,14 @@ class VideoAudioManager(QMainWindow):
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path) and not video_path == self.reversed_video_path:
+            try:
+                os.remove(self.reversed_video_path)
+                self.reversed_video_path = None
+                logging.info("Cleaned up previous reversed video file.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file: {e}")
+
         self.player.stop()
         self.reset_view()
         self.speedSpinBox.setValue(1.0)
@@ -8147,6 +8222,28 @@ class VideoAudioManager(QMainWindow):
         doc = docx.Document(file_path)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
+
+    def toggleReversePlayback(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("No video loaded to reverse.", error=True)
+            return
+
+        thread = ReverseVideoThread(self.videoPathLineEdit, parent=self)
+        self.start_task(
+            thread,
+            on_complete=self.onReverseCompleted,
+            on_error=self.onReverseError,
+            on_progress=self.update_status_progress
+        )
+
+    def onReverseCompleted(self, reversed_path):
+        self.reversed_video_path = reversed_path
+        self.loadVideo(self.reversed_video_path, f"reversed_{os.path.basename(self.videoPathLineEdit)}")
+        self.player.play()
+        self.show_status_message("Reversed video is now playing.")
+
+    def onReverseError(self, error_message):
+        self.show_status_message(f"Error reversing video: {error_message}", error=True)
 
 
 def get_application_path():
