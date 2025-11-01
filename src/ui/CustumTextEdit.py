@@ -112,15 +112,38 @@ class CustomTextEdit(QTextEdit):
             menu = self.createStandardContextMenu()
             resize_action = menu.addAction("Ridimensiona Immagine")
             crop_action = menu.addAction("Ritaglia Immagine")
+
+            menu.addSeparator()
+
+            prev_frame_action = menu.addAction("Frame Precedente")
+            next_frame_action = menu.addAction("Frame Successivo")
+
             action = menu.exec(event.globalPos())
 
             if action == resize_action:
                 self.resize_image(image_format)
             elif action == crop_action:
                 self.crop_image(image_format)
+            elif action in [prev_frame_action, next_frame_action]:
+                uri_string = image_format.name()
+                if uri_string.startswith("frame://"):
+                    image_name = uri_string[len("frame://"):]
+                    if action == prev_frame_action:
+                        self.handle_previous_frame(image_name)
+                    elif action == next_frame_action:
+                        self.handle_next_frame(image_name)
             return
 
         super().contextMenuEvent(event)
+
+    def crop_image(self, image_format):
+        """
+        Extracts the image name from the format and calls the cropping handler.
+        """
+        uri_string = image_format.name()
+        if uri_string.startswith("frame://"):
+            image_name = uri_string[len("frame://"):]
+            self.handle_crop_image(image_name)
 
     def handle_crop_image(self, image_name):
         metadata = self.image_metadata.get(image_name)
