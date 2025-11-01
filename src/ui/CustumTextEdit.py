@@ -97,21 +97,33 @@ class CustomTextEdit(QTextEdit):
                 total_seconds = parse_timestamp_to_seconds(time_str)
 
                 if total_seconds is not None:
+                    from PyQt6.QtGui import QIcon
+                    from src.config import get_resource
+
                     menu = self.createStandardContextMenu()
                     menu.addSeparator()
-                    insert_frame_action = menu.addAction("Inserisci Frame")
+                    insert_frame_action = menu.addAction(QIcon(get_resource("frame_get.png")), "Inserisci Frame")
                     action = menu.exec(event.globalPos())
 
                     if action == insert_frame_action:
                         self.insert_frame_requested.emit(total_seconds, cursor.position())
                     return
 
-        # Se non siamo su un timestamp, apri l'editor di immagini
+        # Se non siamo su un timestamp, controlla se siamo su un'immagine
         cursor = self.cursorForPosition(event.pos())
         image_format = self.get_image_format_at_cursor(cursor)
 
         if image_format:
-            self.open_image_editor(image_format)
+            menu = self.createStandardContextMenu()
+            menu.addSeparator()
+            edit_action = menu.addAction("Modifica Frame")
+            delete_action = menu.addAction("Elimina Frame")
+            action = menu.exec(event.globalPos())
+
+            if action == edit_action:
+                self.open_image_editor(image_format)
+            elif action == delete_action:
+                cursor.removeSelectedText() # Rimuove l'immagine selezionata
             return
 
         super().contextMenuEvent(event)

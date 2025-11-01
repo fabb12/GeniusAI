@@ -675,6 +675,7 @@ class VideoAudioManager(QMainWindow):
         self.video_writer = None
         self.current_video_path = None
         self.current_audio_path = None
+        self.current_fps = 0
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
 
@@ -2756,6 +2757,7 @@ class VideoAudioManager(QMainWindow):
         self.totalTimeLabel.setText('/ 00:00:00:000')
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
+        self.current_fps = 0
         self.fileNameLabel.setText("Nessun video caricato")
         self.videoNotesListWidget.clear()
         self.transcriptionDock.setTitle("Trascrizione e Sintesi Audio")
@@ -2919,25 +2921,22 @@ class VideoAudioManager(QMainWindow):
             cap.release()
 
     def get_current_fps(self):
-        try:
-            return VideoFileClip(self.videoPathLineEdit).fps
-        except Exception as e:
-            print(f"Error getting FPS: {e}")
-            return 0
+        """Returns the cached FPS of the current video."""
+        return self.current_fps or 30 # Return cached FPS or a default value
 
     def get_next_frame(self):
         fps = self.get_current_fps()
-        if fps > 0:
-            current_pos = self.player.position()
-            new_pos = current_pos + (1000 / fps)
-            self.player.setPosition(int(new_pos))
+        current_pos = self.player.position()
+        new_pos = current_pos + (1000 / fps)
+        self.player.setPosition(int(new_pos))
 
     def get_previous_frame(self):
         fps = self.get_current_fps()
-        if fps > 0:
-            current_pos = self.player.position()
-            new_pos = current_pos - (1000 / fps)
-            self.player.setPosition(int(new_pos))
+        current_pos = self.player.position()
+        new_pos = current_pos - (1000 / fps)
+        if new_pos < 0:
+            new_pos = 0
+        self.player.setPosition(int(new_pos))
 
     def perform_crop(self, crop_rect):
         if self.current_thread and self.current_thread.isRunning():
@@ -5044,6 +5043,14 @@ class VideoAudioManager(QMainWindow):
         if not self.transcription_original:
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
+
+        # Cache the FPS
+        try:
+            with VideoFileClip(video_path) as clip:
+                self.current_fps = clip.fps
+        except Exception as e:
+            logging.error(f"Error caching FPS for {video_path}: {e}")
+            self.current_fps = 30 # Fallback to a default value
 
     def loadVideoOutput(self, video_path):
 
