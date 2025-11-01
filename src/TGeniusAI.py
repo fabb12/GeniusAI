@@ -14,7 +14,7 @@ from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
 from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QBuffer, QIODevice)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QTextDocument, QImage)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QImage)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QProgressBar, QTabWidget, QDialog,QTextEdit, QInputDialog, QDoubleSpinBox, QFrame,
     QStatusBar, QListWidget, QListWidgetItem, QMenu, QButtonGroup, QDialogButtonBox
 )
+
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
 from src.ui.CustomDock import CustomDock
@@ -31,7 +32,7 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
-from moviepy.audio.AudioClip import CompositeAudioClip
+from moviepy.audio.AudioClip import CompositeAudioClip, AudioArrayClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 import cv2
@@ -586,9 +587,11 @@ class ReverseVideoThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, video_path, parent=None):
+    def __init__(self, video_path, start_time=None, end_time=None, parent=None):
         super().__init__(parent)
         self.video_path = video_path
+        self.start_time = start_time
+        self.end_time = end_time
         self.main_window = parent
         self._is_running = True
 
@@ -600,8 +603,11 @@ class ReverseVideoThread(QThread):
                 self.error.emit("Video file not found.")
                 return
 
-            self.progress.emit(10, "Loading video clip...")
+            self.progress.emit(10, "Loading and clipping video...")
             clip = VideoFileClip(self.video_path)
+            if self.start_time is not None and self.end_time is not None:
+                clip = clip.subclip(self.start_time, self.end_time)
+
             if not self._is_running: return
 
             # Manually reverse the video frames
@@ -8235,7 +8241,18 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("No video loaded to reverse.", error=True)
             return
 
-        thread = ReverseVideoThread(self.videoPathLineEdit, parent=self)
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark for reversal
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Reversing bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Reversing entire video...")
+
+        thread = ReverseVideoThread(self.videoPathLineEdit, start_time=start_time, end_time=end_time, parent=self)
         self.start_task(
             thread,
             on_complete=self.onReverseCompleted,
@@ -8245,9 +8262,9 @@ class VideoAudioManager(QMainWindow):
 
     def onReverseCompleted(self, reversed_path):
         self.reversed_video_path = reversed_path
-        self.loadVideo(self.reversed_video_path, f"reversed_{os.path.basename(self.videoPathLineEdit)}")
-        self.player.play()
-        self.show_status_message("Reversed video is now playing.")
+        self.loadVideoOutput(self.reversed_video_path)
+        self.playerOutput.play()
+        self.show_status_message("Reversed video is now playing in the output player.")
 
     def onReverseError(self, error_message):
         self.show_status_message(f"Error reversing video: {error_message}", error=True)
