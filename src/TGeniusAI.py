@@ -62,7 +62,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
-from src.ui.ImageSizeDialog import ImageSizeDialog, ResizedImageDialog
+from src.ui.FrameEditorDialog import FrameEditorDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -1562,6 +1562,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedTextArea, timestamp, pos)
         )
+        self.summaryDetailedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryDetailedTextArea, name, meta)
+        )
         self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
@@ -1571,6 +1574,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingTextArea, timestamp, pos)
+        )
+        self.summaryMeetingTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryMeetingTextArea, name, meta)
         )
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
@@ -1582,6 +1588,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedIntegratedTextArea, timestamp, pos)
         )
+        self.summaryDetailedIntegratedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryDetailedIntegratedTextArea, name, meta)
+        )
         self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
@@ -1590,6 +1599,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryMeetingIntegratedTextArea, name, meta)
+        )
         self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
 
@@ -1598,6 +1610,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedDetailedTextArea, name, meta)
+        )
         self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
 
@@ -1606,6 +1621,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedMeetingTextArea, name, meta)
+        )
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
 
@@ -2063,35 +2081,56 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
 
     def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
-        """
-        Handles the request to insert a video frame at a specific timestamp.
-        """
         video_path = self._get_selected_analysis_video_path()
         if not video_path:
             self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
             return
 
-        dialog = ImageSizeDialog(self)
+        frame_qimage = self.get_frame_at(int(timestamp_seconds * 1000), return_qimage=True)
+        if not frame_qimage:
+            self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
+            return
+
+        dialog = FrameEditorDialog(QPixmap.fromImage(frame_qimage), self)
+        dialog.size_slider.setValue(50)  # Default to 50% size
         if dialog.exec():
-            size_percentage = dialog.get_selected_size_percentage()
+            crop_rect = dialog.get_crop_rect()
+            size_percentage = dialog.get_size_percentage()
 
-            frame_qimage = self.get_frame_at(int(timestamp_seconds * 1000), return_qimage=True)
-            if not frame_qimage:
-                self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
-                return
+            cropped_pixmap = QPixmap.fromImage(frame_qimage).copy(crop_rect)
+            final_image = cropped_pixmap.toImage()
 
-            width = int(frame_qimage.width() * (size_percentage / 100))
-            height = int(frame_qimage.height() * (size_percentage / 100))
+            width = int(final_image.width() * (size_percentage / 100))
+            height = int(final_image.height() * (size_percentage / 100))
 
             if target_text_edit:
                 cursor = target_text_edit.textCursor()
                 cursor.setPosition(position)
                 target_text_edit.setTextCursor(cursor)
-
                 target_text_edit.insert_image_with_metadata(
-                    frame_qimage, width, height, video_path, timestamp_seconds
+                    final_image, width, height, video_path, timestamp_seconds
                 )
                 self.show_status_message("Frame inserito con successo.")
+
+    def handle_frame_edit_request(self, target_text_edit, image_name, metadata):
+        original_image = metadata.get('original_image')
+        if not original_image:
+            self.show_status_message("Metadati immagine non trovati o immagine non valida.", error=True)
+            return
+
+        dialog = FrameEditorDialog(QPixmap.fromImage(original_image), self)
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+            size_percentage = dialog.get_size_percentage()
+
+            cropped_pixmap = QPixmap.fromImage(original_image).copy(crop_rect)
+            final_image = cropped_pixmap.toImage()
+
+            new_width = int(final_image.width() * (size_percentage / 100))
+            new_height = int(final_image.height() * (size_percentage / 100))
+
+            target_text_edit.update_edited_frame(image_name, final_image, new_width, new_height)
+            self.show_status_message("Frame aggiornato con successo.")
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
