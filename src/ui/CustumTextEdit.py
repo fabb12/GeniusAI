@@ -295,6 +295,19 @@ class CustomTextEdit(QTextEdit):
         else:
             super().mouseMoveEvent(event)
 
+    def update_image_size(self, image_format, new_width, new_height):
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        new_format = QTextImageFormat()
+        new_format.setName(image_format.name())
+        new_format.setWidth(new_width)
+        new_format.setHeight(new_height)
+
+        cursor.setCharFormat(new_format)
+
+
     def mouseReleaseEvent(self, event):
         self.resizing_image = None
         self.resizing_start_pos = None
