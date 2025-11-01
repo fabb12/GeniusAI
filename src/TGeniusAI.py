@@ -32,8 +32,7 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
-from moviepy.video import vfx
-from moviepy.audio.AudioClip import CompositeAudioClip
+from moviepy.audio.AudioClip import CompositeAudioClip, AudioArrayClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 import cv2
@@ -596,7 +595,7 @@ class ReverseVideoThread(QThread):
 
     def run(self):
         clip = None
-        reversed_clip = None
+        reversed_video = None
         try:
             if not self.video_path or not os.path.exists(self.video_path):
                 self.error.emit("Video file not found.")
@@ -604,20 +603,29 @@ class ReverseVideoThread(QThread):
 
             self.progress.emit(10, "Loading video clip...")
             clip = VideoFileClip(self.video_path)
-
             if not self._is_running: return
 
-            self.progress.emit(30, "Reversing video and audio...")
-            reversed_clip = clip.fx(vfx.time_mirrorx)
+            # Manually reverse the video frames
+            self.progress.emit(30, "Reversing video frames...")
+            frames = [frame for frame in clip.iter_frames()]
+            reversed_frames = frames[::-1]
+            reversed_video = ImageSequenceClip(reversed_frames, fps=clip.fps)
+
+            # Reverse the audio if it exists
+            if clip.audio:
+                self.progress.emit(50, "Reversing audio...")
+                audio_frames = [frame for frame in clip.audio.iter_frames()]
+                reversed_audio_frames = audio_frames[::-1]
+                reversed_audio = AudioArrayClip(np.array(reversed_audio_frames), fps=clip.audio.fps)
+                reversed_video = reversed_video.set_audio(reversed_audio)
 
             if not self._is_running: return
 
             temp_path = self.main_window.get_temp_filepath(suffix=".mp4", prefix="reversed_")
 
-            self.progress.emit(60, "Saving reversed video...")
-
+            self.progress.emit(70, "Saving reversed video...")
             logger = MergeProgressLogger(self.progress)
-            reversed_clip.write_videofile(temp_path, codec='libx264', audio_codec='aac', logger=logger)
+            reversed_video.write_videofile(temp_path, codec='libx264', audio_codec='aac', logger=logger)
 
             if self._is_running:
                 self.completed.emit(temp_path)
@@ -627,7 +635,7 @@ class ReverseVideoThread(QThread):
                 self.error.emit(str(e))
         finally:
             if clip: clip.close()
-            if reversed_clip: reversed_clip.close()
+            if reversed_video: reversed_video.close()
 
     def stop(self):
         self._is_running = False
