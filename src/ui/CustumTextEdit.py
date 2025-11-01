@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QPalette, QFont, QPixmap) # Aggiunto QFont
+                         QTextDocument, QPalette, QFont, QPixmap, QTextImageFormat) # Aggiunto QFont
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
@@ -63,7 +63,7 @@ class CustomTextEdit(QTextEdit):
         self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, image)
 
         cursor = self.textCursor()
-        image_format = cursor.charFormat().toImageFormat()
+        image_format = QTextImageFormat()
         image_format.setName(uri.toString())
         image_format.setWidth(width)
         image_format.setHeight(height)
@@ -109,28 +109,15 @@ class CustomTextEdit(QTextEdit):
         image_format = self.get_image_format_at_cursor(cursor)
 
         if image_format:
-            image_name = image_format.name().replace("frame://", "")
-            has_metadata = image_name in self.image_metadata
-
             menu = self.createStandardContextMenu()
             resize_action = menu.addAction("Ridimensiona Immagine")
-
-            if has_metadata:
-                menu.addSeparator()
-                crop_action = menu.addAction("Ritaglia Immagine")
-                prev_frame_action = menu.addAction("Frame Precedente")
-                next_frame_action = menu.addAction("Frame Successivo")
-
+            crop_action = menu.addAction("Ritaglia Immagine")
             action = menu.exec(event.globalPos())
 
             if action == resize_action:
                 self.resize_image(image_format)
-            elif has_metadata and action == crop_action:
-                self.handle_crop_image(image_name)
-            elif has_metadata and action == prev_frame_action:
-                self.handle_previous_frame(image_name)
-            elif has_metadata and action == next_frame_action:
-                self.handle_next_frame(image_name)
+            elif action == crop_action:
+                self.crop_image(image_format)
             return
 
         super().contextMenuEvent(event)
