@@ -78,49 +78,89 @@ class CustomTextEdit(QTextEdit):
         }
         return image_name
 
+    def _document_has_timecodes(self):
+        """Checks if the document contains any timecodes."""
+        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
+        return not self.document().find(timecode_pattern).isNull()
+
+    def _find_nearest_timecode(self, from_position):
+        """
+        Finds the timecode in the document nearest to the given cursor position
+        by searching backwards and then forwards.
+        """
+        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
+        from src.services.utils import parse_timestamp_to_seconds
+
+        # Search backwards
+        cursor_back = QTextCursor(self.document())
+        cursor_back.setPosition(from_position)
+        found_back = self.document().find(timecode_pattern, cursor_back, QTextDocument.FindFlag.FindBackward)
+
+        # Search forwards
+        cursor_fwd = QTextCursor(self.document())
+        cursor_fwd.setPosition(from_position)
+        found_fwd = self.document().find(timecode_pattern, cursor_fwd)
+
+        if found_back.isNull() and found_fwd.isNull():
+            return None, -1
+
+        dist_back = float('inf')
+        if not found_back.isNull():
+            dist_back = from_position - found_back.position()
+
+        dist_fwd = float('inf')
+        if not found_fwd.isNull():
+            dist_fwd = found_fwd.position() - from_position
+
+        if dist_back < dist_fwd:
+            final_cursor = found_back
+        else:
+            final_cursor = found_fwd
+
+        time_str = final_cursor.selectedText().strip('[]')
+        total_seconds = parse_timestamp_to_seconds(time_str)
+
+        return total_seconds, final_cursor.position()
+
     def contextMenuEvent(self, event):
         """
-        Shows a custom context menu for timestamps or images.
+        Shows a custom context menu.
+        "Insert Frame" is always shown but enabled only if timecodes exist.
+        It finds the nearest timecode to the cursor.
         """
+        menu = self.createStandardContextMenu()
         cursor = self.cursorForPosition(event.pos())
-        block_text = cursor.block().text()
-        click_pos_in_block = cursor.positionInBlock()
 
-        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
-        for match in timecode_pattern.finditer(block_text):
-            start_pos, end_pos = match.span(0)
-            if start_pos <= click_pos_in_block < end_pos:
-                time_str = match.group(1)
-                from src.services.utils import parse_timestamp_to_seconds
-                total_seconds = parse_timestamp_to_seconds(time_str)
-
-                if total_seconds is not None:
-                    menu = self.createStandardContextMenu()
-                    menu.addSeparator()
-                    insert_frame_action = menu.addAction("Inserisci Frame")
-                    action = menu.exec(event.globalPos())
-
-                    if action == insert_frame_action:
-                        self.insert_frame_requested.emit(total_seconds, cursor.position())
-                    return
-
-        # Se non siamo su un timestamp, mostra il menu standard
-        cursor = self.cursorForPosition(event.pos())
+        # Handle image-specific actions first
         image_format = self.get_image_format_at_cursor(cursor)
-
         if image_format:
-            menu = self.createStandardContextMenu()
             edit_action = menu.addAction("Edit Frame")
             delete_action = menu.addAction("Delete Frame")
-            action = menu.exec(event.globalPos())
+            menu.addSeparator()
 
-            if action == edit_action:
-                self.edit_frame(image_format)
-            elif action == delete_action:
-                self.delete_frame()
+        # Add "Insert Frame" action
+        insert_frame_action = menu.addAction("Inserisci Frame")
+
+        # Enable it only if the document contains timecodes
+        has_timecodes = self._document_has_timecodes()
+        insert_frame_action.setEnabled(has_timecodes)
+
+        action = menu.exec(event.globalPos())
+
+        if action == insert_frame_action:
+            nearest_time, _ = self._find_nearest_timecode(cursor.position())
+            if nearest_time is not None:
+                # Emit with the cursor's original click position
+                self.insert_frame_requested.emit(nearest_time, cursor.position())
             return
 
-        super().contextMenuEvent(event)
+        if image_format:
+            if 'edit_action' in locals() and action == edit_action:
+                self.edit_frame(image_format)
+                return
+            if 'delete_action' in locals() and action == delete_action:
+                self.delete_frame()
+                return
 
     def delete_frame(self):
         cursor = self.textCursor()
