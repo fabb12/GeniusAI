@@ -45,11 +45,13 @@ class CropThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
 
-    def __init__(self, video_path, crop_rect, project_path, parent=None):
+    def __init__(self, video_path, crop_rect, project_path, start_time=None, end_time=None, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.crop_rect = crop_rect
         self.project_path = project_path
+        self.start_time = start_time
+        self.end_time = end_time
         self.process = None
         self.running = True
         self.original_popen = None
@@ -89,6 +91,11 @@ class CropThread(QThread):
         self._monkey_patch_subprocess()
         try:
             video = VideoFileClip(self.video_path)
+
+            # Se sono specificati start_time e end_time (bookmark), taglia il video prima
+            if self.start_time is not None and self.end_time is not None:
+                video = video.subclip(self.start_time, self.end_time)
+
             video_width, video_height = video.size
 
             x1 = self.crop_rect.x()
