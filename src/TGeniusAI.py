@@ -2833,8 +2833,6 @@ class VideoAudioManager(QMainWindow):
 
         # 5. Aggiorna la UI
         target_widget.blockSignals(True)
-        # Svuota le risorse esistenti prima di caricare il nuovo contenuto
-        target_widget.document().clear()
         target_widget.setHtml(display_html)
         target_widget.blockSignals(False)
 
@@ -7375,6 +7373,15 @@ class VideoAudioManager(QMainWindow):
 
         # Asynchronously load the most recent clip to avoid blocking the UI
         QTimer.singleShot(100, self._load_most_recent_clip)
+
+        # Prepara i dati per l'aggiornamento dell'interfaccia utente, inclusi i riassunti
+        ui_data = {
+            "summaries": project_data.get('projectSummaries', {}),
+            "combined_summary": project_data.get('combined_summary', {})
+            # Aggiungi qui altri dati specifici della clip se necessario
+        }
+        self._update_ui_from_json_data(ui_data)
+
 
     def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
