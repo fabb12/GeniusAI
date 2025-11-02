@@ -37,6 +37,7 @@ class CustomTextEdit(QTextEdit):
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
     insert_frame_requested = pyqtSignal(float, int)
+    frame_edit_requested = pyqtSignal(str)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
@@ -54,13 +55,13 @@ class CustomTextEdit(QTextEdit):
         self.resizing_start_pos = None
         self.image_metadata = {}
 
-    def insert_image_with_metadata(self, image, width, height, video_path, timestamp):
+    def insert_image_with_metadata(self, displayed_image, width, height, video_path, timestamp, original_image=None):
         """
         Inserts an image as a document resource and stores its metadata.
         """
         image_name = f"frame_{video_path}_{timestamp}_{time.time()}"
         uri = QUrl(f"frame://{image_name}")
-        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, image)
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_image)
 
         cursor = self.textCursor()
         image_format = QTextImageFormat()
@@ -71,10 +72,11 @@ class CustomTextEdit(QTextEdit):
         cursor.insertImage(image_format)
 
         # Store metadata
+        image_to_store = original_image if original_image is not None else displayed_image
         self.image_metadata[image_name] = {
             'video_path': video_path,
             'timestamp': timestamp,
-            'original_image': image  # Store the original QImage for later use
+            'original_image': image_to_store
         }
         return image_name
 
@@ -114,27 +116,20 @@ class CustomTextEdit(QTextEdit):
 
         # Check for image context first
         image_format = self.get_image_format_at_cursor(cursor)
-        if image_format:
-            menu = self.createStandardContextMenu()
-            resize_action = menu.addAction("Ridimensiona Immagine")
-            crop_action = menu.addAction("Ritaglia Immagine")
-            menu.addSeparator()
-            prev_frame_action = menu.addAction("Frame Precedente")
-            next_frame_action = menu.addAction("Frame Successivo")
+        if image_format and image_format.name().startswith("frame://"):
+            menu = QMenu(self)
+            edit_action = menu.addAction("Modifica Frame")
+            delete_action = menu.addAction("Rimuovi Frame")
             action = menu.exec(event.globalPos())
 
-            if action == resize_action:
-                self.resize_image(image_format)
-            elif action == crop_action:
-                self.crop_image(image_format)
-            elif action in [prev_frame_action, next_frame_action]:
-                uri_string = image_format.name()
-                if uri_string.startswith("frame://"):
-                    image_name = uri_string[len("frame://"):]
-                    if action == prev_frame_action:
-                        self.handle_previous_frame(image_name)
-                    elif action == next_frame_action:
-                        self.handle_next_frame(image_name)
+            if action == edit_action:
+                image_name = image_format.name().replace("frame://", "")
+                self.frame_edit_requested.emit(image_name)
+            elif action == delete_action:
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.endEditBlock()
             return
 
         # If not on an image, create the general context menu

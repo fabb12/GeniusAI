@@ -146,6 +146,11 @@ class CropDialog(QDialog):
             int(geom.height() * scale_factor_h)
         )
 
+    def get_cropped_pixmap(self):
+        """Returns the selected area of the original pixmap as a new pixmap."""
+        crop_rect = self.get_crop_rect()
+        return self.original_pixmap.copy(crop_rect)
+
     def showEvent(self, event):
         super().showEvent(event)
         self.rubber_band.show()
