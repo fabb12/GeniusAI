@@ -7,6 +7,11 @@ class CustomSlider(QSlider):
         super().__init__(orientation, parent)
         self.bookmarks = []
         self.pending_bookmark_start = None
+        self.is_zoomed = False
+        self.original_min = self.minimum()
+        self.original_max = self.maximum()
+        self.current_zoom_level = 1
+        self.magnet_enabled = False
         self.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #5c5c5c;
@@ -107,7 +112,128 @@ class CustomSlider(QSlider):
             remove_single_action.setEnabled(False)
         context_menu.addAction(remove_single_action)
 
+        context_menu.addSeparator()
+
+        zoom_in_action = QAction("Zoom In", self)
+        zoom_in_action.triggered.connect(self.zoom_in)
+        context_menu.addAction(zoom_in_action)
+
+        zoom_out_action = QAction("Zoom Out", self)
+        zoom_out_action.triggered.connect(self.zoom_out)
+        context_menu.addAction(zoom_out_action)
+
+        reset_zoom_action = QAction("Reset Zoom", self)
+        reset_zoom_action.triggered.connect(self.reset_zoom)
+        context_menu.addAction(reset_zoom_action)
+
+        context_menu.addSeparator()
+
+        magnet_action = QAction("Magnet to Bookmarks", self)
+        magnet_action.setCheckable(True)
+        magnet_action.setChecked(self.magnet_enabled)
+        magnet_action.triggered.connect(self.toggle_magnet)
+        context_menu.addAction(magnet_action)
+
         context_menu.exec(event.globalPos())
+
+    def mouseMoveEvent(self, event):
+        if self.magnet_enabled and event.buttons() == Qt.MouseButton.LeftButton:
+
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+
+            value = self.style().sliderValueFromPosition(self.minimum(), self.maximum(), int(event.position().x()), self.width())
+
+            nearest_bookmark = self.find_nearest_bookmark(value)
+
+            if nearest_bookmark is not None:
+
+                start_pos, end_pos = self.bookmarks[nearest_bookmark]
+
+                if abs(value - start_pos) < abs(value - end_pos):
+                    snap_to = start_pos
+                else:
+                    snap_to = end_pos
+
+                if abs(value-snap_to) < (self.maximum()-self.minimum())*0.05:
+                    self.setValue(snap_to)
+                    return
+
+        super().mouseMoveEvent(event)
+
+    def find_nearest_bookmark(self, value):
+        if not self.bookmarks:
+            return None
+
+        nearest_b_index = -1
+        min_dist = float('inf')
+
+        for i, (start,end) in enumerate(self.bookmarks):
+
+            dist_to_start = abs(value-start)
+            dist_to_end = abs(value-end)
+
+            if dist_to_start < min_dist:
+                min_dist = dist_to_start
+                nearest_b_index = i
+
+            if dist_to_end < min_dist:
+                min_dist = dist_to_end
+                nearest_b_index = i
+
+        return nearest_b_index
+
+    def toggle_magnet(self, checked):
+        self.magnet_enabled = checked
+
+    def setRange(self, min_val, max_val):
+        super().setRange(min_val, max_val)
+        if not self.is_zoomed:
+            self.original_min = min_val
+            self.original_max = max_val
+
+    def zoom_in(self):
+        self.is_zoomed = True
+        current_min = self.minimum()
+        current_max = self.maximum()
+        current_val = self.value()
+
+        range_size = (current_max - current_min) / 2
+        new_min = int(current_val - range_size / 2)
+        new_max = int(current_val + range_size / 2)
+
+        if new_min < self.original_min:
+            new_min = self.original_min
+        if new_max > self.original_max:
+            new_max = self.original_max
+
+        self.setRange(new_min, new_max)
+
+    def zoom_out(self):
+        if not self.is_zoomed:
+            return
+
+        current_min = self.minimum()
+        current_max = self.maximum()
+        current_val = self.value()
+
+        range_size = (current_max - current_min) * 2
+        new_min = int(current_val - range_size / 2)
+        new_max = int(current_val + range_size / 2)
+
+        if new_min < self.original_min:
+            new_min = self.original_min
+        if new_max > self.original_max:
+            new_max = self.original_max
+
+        self.setRange(new_min, new_max)
+
+        if new_min == self.original_min and new_max == self.original_max:
+            self.is_zoomed = False
+
+    def reset_zoom(self):
+        self.is_zoomed = False
+        self.setRange(self.original_min, self.original_max)
 
     def paintEvent(self, event):
         super().paintEvent(event)
