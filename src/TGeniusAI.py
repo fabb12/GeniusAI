@@ -3032,13 +3032,7 @@ class VideoAudioManager(QMainWindow):
             end_time = end_pos / 1000.0
             self.show_status_message(f"Il ritaglio sarà limitato al bookmark: {start_time:.2f}s - {end_time:.2f}s")
 
-        dialog = CropDialog(
-            video_path=self.videoPathLineEdit,
-            current_time=self.player.position(),
-            start_time=start_time,
-            end_time=end_time,
-            parent=self
-        )
+        dialog = CropDialog(self.videoPathLineEdit, start_time, end_time, self)
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
 
@@ -4621,7 +4615,7 @@ class VideoAudioManager(QMainWindow):
     def _export_to_pdf(self, html_content, path):
         """Esporta il contenuto HTML in un file PDF, gestendo immagini dai QTextDocument resources."""
         from io import BytesIO
-
+        temp_files = []
         try:
             pdf = FPDF()
             pdf.add_page()
@@ -4637,43 +4631,39 @@ class VideoAudioManager(QMainWindow):
             active_summary_area = self.get_current_summary_text_area()
             doc = active_summary_area.document()
 
-            if soup.body:
-                for element in soup.body.find_all(True, recursive=False):
-                    if element.name == 'p':
-                        # Gestione dei paragrafi che possono contenere testo e immagini
-                        for content in element.contents:
-                            if content.name == 'img' and content.get('src', '').startswith('frame://'):
-                                uri = QUrl(content['src'])
-                                image = doc.resource(QTextDocument.ResourceType.ImageResource, uri)
-                                if image:
-                                    buffer = QBuffer()
-                                    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-                                    image.save(buffer, "JPG")
-                                    image_data = buffer.data()
+            # Pre-process images: convert frame:// to temp files
+            for img_tag in soup.find_all('img'):
+                src = img_tag.get('src')
+                if src and src.startswith('frame://'):
+                    uri = QUrl(src)
+                    image_resource = doc.resource(QTextDocument.ResourceType.ImageResource, uri)
+                    if image_resource and isinstance(image_resource, QImage):
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg", mode='wb') as tmpfile:
+                            buffer = QBuffer()
+                            buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+                            image_resource.save(buffer, "JPG")
+                            tmpfile.write(buffer.data())
+                            img_tag['src'] = tmpfile.name
+                            temp_files.append(tmpfile.name)
 
-                                    img = Image.open(BytesIO(image_data))
-                                    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmpfile:
-                                        img.save(tmpfile, format="JPEG")
-                                        tmp_path = tmpfile.name
-
-                                    style = content.get('style', '')
-                                    width_match = re.search(r'width:\s*(\d+)', style)
-                                    width = int(width_match.group(1)) * 0.75 if width_match else pdf.w - 2 * pdf.l_margin
-
-                                    pdf.image(tmp_path, w=width)
-                                    os.remove(tmp_path)
-                            elif isinstance(content, str):
-                                pdf.write(10, content)
-                        pdf.ln() # Newline after paragraph
-                    elif element.name:
-                        pdf.write_html(str(element))
+            # Use the modified HTML
+            processed_html = str(soup)
+            pdf.write_html(processed_html)
 
             pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+
         except Exception as e:
             self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
             import traceback
             logging.error(f"Errore durante l'esportazione in PDF: {e}\n{traceback.format_exc()}")
+        finally:
+            # Clean up temporary files
+            for temp_file in temp_files:
+                try:
+                    os.remove(temp_file)
+                except OSError as e:
+                    logging.error(f"Error removing temporary file {temp_file}: {e}")
 
     def _export_to_docx(self, summary_html, path):
         """Esporta il contenuto HTML in un file DOCX, gestendo paragrafi, titoli e liste."""
