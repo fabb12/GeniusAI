@@ -100,7 +100,7 @@ class CropDialog(QDialog):
         self.rubber_band.show()
 
     def update_frame(self):
-        new_pixmap = self.parent_window.get_frame_at(self.current_position_ms)
+        new_pixmap = self.parent_window.get_frame_at(self.video_path, self.current_position_ms)
         if new_pixmap and not new_pixmap.isNull():
             self.original_pixmap = new_pixmap
 

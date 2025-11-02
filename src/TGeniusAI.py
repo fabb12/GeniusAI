@@ -1598,7 +1598,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingIntegratedTextArea, timestamp, pos)
+        )
         self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(
             lambda name, meta: self.handle_frame_edit_request(self.summaryMeetingIntegratedTextArea, name, meta)
         )
@@ -1609,7 +1611,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedDetailedTextArea, timestamp, pos)
+        )
         self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(
             lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedDetailedTextArea, name, meta)
         )
@@ -1620,7 +1624,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedMeetingTextArea, timestamp, pos)
+        )
         self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(
             lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedMeetingTextArea, name, meta)
         )
@@ -2086,7 +2092,7 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
             return
 
-        frame_qimage = self.get_frame_at(int(timestamp_seconds * 1000), return_qimage=True)
+        frame_qimage = self.get_frame_at(video_path, int(timestamp_seconds * 1000), return_qimage=True)
         if not frame_qimage:
             self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
             return
@@ -2996,14 +3002,15 @@ class VideoAudioManager(QMainWindow):
         if self.videoSlider.bookmarks and not (start_time_ms <= initial_position_ms <= end_time_ms):
             initial_position_ms = start_time_ms
 
-        frame_pixmap = self.get_frame_at(initial_position_ms)
+        # The code review indicates self.videoPathLineEdit is a widget, so we use .text()
+        frame_pixmap = self.get_frame_at(self.videoPathLineEdit.text(), initial_position_ms)
         if not frame_pixmap:
             QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
             return
 
         dialog = CropDialog(
             parent=self,
-            video_path=self.videoPathLineEdit,
+            video_path=self.videoPathLineEdit.text(),
             initial_pixmap=frame_pixmap,
             video_duration_ms=video_duration_ms,
             start_time_ms=start_time_ms,
@@ -3014,8 +3021,7 @@ class VideoAudioManager(QMainWindow):
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
 
-    def get_frame_at(self, position_ms, return_qimage=False):
-        video_path = self._get_selected_analysis_video_path()
+    def get_frame_at(self, video_path, position_ms, return_qimage=False):
         if not video_path or not os.path.exists(video_path):
             logging.warning("get_frame_at called with no valid video path.")
             return None
