@@ -78,46 +78,49 @@ class CustomTextEdit(QTextEdit):
         }
         return image_name
 
-    def contextMenuEvent(self, event):
-        """
-        Shows a custom context menu for timestamps or images.
-        """
-        cursor = self.cursorForPosition(event.pos())
-        block_text = cursor.block().text()
-        click_pos_in_block = cursor.positionInBlock()
-
+    def find_nearest_timecode(self, cursor_pos):
+        """Finds the nearest timecode to the given cursor position."""
+        doc = self.document()
         timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
-        for match in timecode_pattern.finditer(block_text):
-            start_pos, end_pos = match.span(0)
-            if start_pos <= click_pos_in_block < end_pos:
+
+        nearest_timecode = None
+        min_distance = float('inf')
+
+        block = doc.begin()
+        while block.isValid():
+            block_text = block.text()
+            for match in timecode_pattern.finditer(block_text):
                 time_str = match.group(1)
                 from src.services.utils import parse_timestamp_to_seconds
                 total_seconds = parse_timestamp_to_seconds(time_str)
 
                 if total_seconds is not None:
-                    menu = self.createStandardContextMenu()
-                    menu.addSeparator()
-                    insert_frame_action = menu.addAction("Inserisci Frame")
-                    action = menu.exec(event.globalPos())
+                    match_pos = block.position() + match.start()
+                    distance = abs(cursor_pos - match_pos)
 
-                    if action == insert_frame_action:
-                        self.insert_frame_requested.emit(total_seconds, cursor.position())
-                    return
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_timecode = total_seconds
 
-        # Se non siamo su un timestamp, mostra il menu standard
+            block = block.next()
+
+        return nearest_timecode
+
+    def contextMenuEvent(self, event):
+        """
+        Shows a custom context menu. "Insert Frame" is always available if timecodes exist.
+        """
         cursor = self.cursorForPosition(event.pos())
-        image_format = self.get_image_format_at_cursor(cursor)
 
+        # Check for image context first
+        image_format = self.get_image_format_at_cursor(cursor)
         if image_format:
             menu = self.createStandardContextMenu()
             resize_action = menu.addAction("Ridimensiona Immagine")
             crop_action = menu.addAction("Ritaglia Immagine")
-
             menu.addSeparator()
-
             prev_frame_action = menu.addAction("Frame Precedente")
             next_frame_action = menu.addAction("Frame Successivo")
-
             action = menu.exec(event.globalPos())
 
             if action == resize_action:
@@ -134,7 +137,28 @@ class CustomTextEdit(QTextEdit):
                         self.handle_next_frame(image_name)
             return
 
-        super().contextMenuEvent(event)
+        # If not on an image, create the general context menu
+        menu = QMenu(self)
+
+        # Find the nearest timecode to the click position
+        nearest_timecode = self.find_nearest_timecode(cursor.position())
+
+        insert_frame_action = menu.addAction("Inserisci frame")
+        # Disable the action if no timecode is found in the document
+        if nearest_timecode is None:
+            insert_frame_action.setEnabled(False)
+
+        # Add standard actions (Copy, Paste, etc.)
+        standard_menu = self.createStandardContextMenu()
+        if standard_menu and standard_menu.actions():
+            menu.addSeparator()
+            menu.addActions(standard_menu.actions())
+
+        action = menu.exec(event.globalPos())
+
+        if action == insert_frame_action and nearest_timecode is not None:
+            # Emit the signal with the nearest timecode and the current cursor position for insertion
+            self.insert_frame_requested.emit(nearest_timecode, cursor.position())
 
     def crop_image(self, image_format):
         """
