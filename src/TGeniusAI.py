@@ -2950,7 +2950,13 @@ class VideoAudioManager(QMainWindow):
             end_time = end_pos / 1000.0
             self.show_status_message(f"Il ritaglio sarà limitato al bookmark: {start_time:.2f}s - {end_time:.2f}s")
 
-        dialog = CropDialog(self.videoPathLineEdit, start_time, end_time, self)
+        dialog = CropDialog(
+            video_path=self.videoPathLineEdit,
+            current_time=self.player.position(),
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
 
