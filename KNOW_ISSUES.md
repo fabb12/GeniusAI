@@ -80,7 +80,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] inserire timeline
 - [x] sistemare timecode trascrzione 
 - [x] aggiugni il nome del file quadno uso uno trascrzione
-- [x] sistemare spunta per trascrzione   
+- [x] sistemare spunta per trascrzione    
 - 
 mettere un titolo nel riassuto
 ## [1.2.2] - 2024-06-30
