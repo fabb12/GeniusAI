@@ -139,12 +139,31 @@ class CropDialog(QDialog):
         self._recalculate_scale_factor()
 
     def get_crop_rect(self):
-        geom = self.rubber_band.geometry()
+        pixmap = self.image_label.pixmap()
+        if not pixmap or pixmap.isNull():
+            return QRect()
+
+        label_size = self.image_label.size()
+        pixmap_size = pixmap.size()
+
+        offset_x = (label_size.width() - pixmap_size.width()) / 2
+        offset_y = (label_size.height() - pixmap_size.height()) / 2
+
+        rubber_band_geometry = self.rubber_band.geometry()
+
+        crop_x = rubber_band_geometry.x() - offset_x
+        crop_y = rubber_band_geometry.y() - offset_y
+
+        original_crop_x = int(crop_x * self.scale_factor)
+        original_crop_y = int(crop_y * self.scale_factor)
+        original_crop_width = int(rubber_band_geometry.width() * self.scale_factor)
+        original_crop_height = int(rubber_band_geometry.height() * self.scale_factor)
+
         return QRect(
-            int(geom.x() * self.scale_factor),
-            int(geom.y() * self.scale_factor),
-            int(geom.width() * self.scale_factor),
-            int(geom.height() * self.scale_factor)
+            original_crop_x,
+            original_crop_y,
+            original_crop_width,
+            original_crop_height
         )
 
     def get_cropped_pixmap(self):
