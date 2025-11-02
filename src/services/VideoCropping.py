@@ -148,7 +148,7 @@ class CropThread(QThread):
                 audio_codec='aac',
                 audio_fps=44100,
                 logger=logger,
-                ffmpeg_params=['-fflags', '+genpts', '-pix_fmt', 'yuv420p']
+                ffmpeg_params=['-movflags', 'faststart', '-fflags', '+genpts', '-pix_fmt', 'yuv420p']
             )
 
             if self.running:
