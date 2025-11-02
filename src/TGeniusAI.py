@@ -73,6 +73,7 @@ from src.services.OperationalGuideThread import OperationalGuideThread
 from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
+from src.ui.FrameEditorDialog import FrameEditorDialog
 from src.ui.CursorOverlay import CursorOverlay
 from src.ui.MultiLineInputDialog import MultiLineInputDialog
 from src.ui.AddMediaDialog import AddMediaDialog
@@ -1618,6 +1619,16 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
 
+        # Connect frame edit signals
+        self.singleTranscriptionTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+
+
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
 
@@ -2090,9 +2101,17 @@ class VideoAudioManager(QMainWindow):
             # Get the selected frame (not the crop rect)
             final_frame_pos = dialog.current_frame_pos
             final_timestamp = final_frame_pos / dialog.fps
-            frame_qimage = dialog._get_current_frame_as_pixmap().toImage()
 
-            if not frame_qimage:
+            original_qimage = dialog.original_pixmap.toImage()
+            cropped_pixmap = dialog.get_cropped_pixmap()
+
+            if cropped_pixmap.isNull():
+                self.show_status_message("Impossibile estrarre il frame ritagliato.", error=True)
+                return
+
+            cropped_qimage = cropped_pixmap.toImage()
+
+            if not cropped_qimage:
                 self.show_status_message("Impossibile estrarre il frame selezionato.", error=True)
                 return
 
@@ -2100,8 +2119,8 @@ class VideoAudioManager(QMainWindow):
             size_dialog = ImageSizeDialog(self)
             if size_dialog.exec():
                 size_percentage = size_dialog.get_selected_size_percentage()
-                width = int(frame_qimage.width() * (size_percentage / 100))
-                height = int(frame_qimage.height() * (size_percentage / 100))
+                width = int(cropped_qimage.width() * (size_percentage / 100))
+                height = int(cropped_qimage.height() * (size_percentage / 100))
 
                 # Insert the image at the original cursor position
                 if target_text_edit:
@@ -2113,13 +2132,48 @@ class VideoAudioManager(QMainWindow):
                     cursor.insertText("\n")
 
                     target_text_edit.insert_image_with_metadata(
-                        frame_qimage, width, height, video_path, final_timestamp
+                        displayed_image=cropped_qimage,
+                        width=width,
+                        height=height,
+                        video_path=video_path,
+                        timestamp=final_timestamp,
+                        original_image=original_qimage
                     )
 
                     # Insert another newline after the image for spacing
                     cursor.insertText("\n")
 
                     self.show_status_message("Frame inserito con successo.")
+
+    def handle_frame_edit_request(self, image_name):
+        """Handles the request to edit an inserted frame."""
+        # Find the widget that sent the signal
+        sender_widget = self.sender()
+        if not isinstance(sender_widget, CustomTextEdit):
+            return
+
+        # Get the original image from the widget's metadata storage
+        metadata = sender_widget.image_metadata.get(image_name)
+        if not metadata:
+            self.show_status_message("Metadati dell'immagine non trovati.", error=True)
+            return
+
+        original_image = metadata.get('original_image')
+        if not original_image:
+            self.show_status_message("Immagine originale non trovata.", error=True)
+            return
+
+        pixmap = QPixmap.fromImage(original_image)
+        dialog = FrameEditorDialog(pixmap, self)
+        if dialog.exec():
+            edited_pixmap = dialog.get_edited_pixmap()
+            if not edited_pixmap.isNull():
+                edited_image = edited_pixmap.toImage()
+                sender_widget.update_image_resource(
+                    image_name, edited_image, edited_pixmap.width(), edited_pixmap.height()
+                )
+                self.show_status_message("Frame aggiornato con successo.")
+
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
