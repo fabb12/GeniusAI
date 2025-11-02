@@ -68,6 +68,8 @@ class CustomTextEdit(QTextEdit):
         image_format.setWidth(width)
         image_format.setHeight(height)
 
+        # Inserisce un a capo prima dell'immagine per assicurarsi che sia su una nuova riga
+        cursor.insertText("\n")
         cursor.insertImage(image_format)
 
         # Store metadata
@@ -95,16 +97,19 @@ class CustomTextEdit(QTextEdit):
                 total_seconds = parse_timestamp_to_seconds(time_str)
 
                 if total_seconds is not None:
+                    from PyQt6.QtGui import QIcon
+                    from src.config import get_resource
+
                     menu = self.createStandardContextMenu()
                     menu.addSeparator()
-                    insert_frame_action = menu.addAction("Inserisci Frame")
+                    insert_frame_action = menu.addAction(QIcon(get_resource("frame_get.png")), "Inserisci Frame")
                     action = menu.exec(event.globalPos())
 
                     if action == insert_frame_action:
                         self.insert_frame_requested.emit(total_seconds, cursor.position())
                     return
 
-        # Se non siamo su un timestamp, mostra il menu standard
+        # Se non siamo su un timestamp, controlla se siamo su un'immagine
         cursor = self.cursorForPosition(event.pos())
         image_format = self.get_image_format_at_cursor(cursor)
 
@@ -174,11 +179,10 @@ class CustomTextEdit(QTextEdit):
         Extracts the image name from the format and calls the cropping handler.
         """
         uri_string = image_format.name()
-        if uri_string.startswith("frame://"):
-            image_name = uri_string[len("frame://"):]
-            self.handle_crop_image(image_name)
+        if not uri_string.startswith("frame://"):
+            return
 
-    def handle_crop_image(self, image_name):
+        image_name = uri_string[len("frame://"):]
         metadata = self.image_metadata.get(image_name)
         if not metadata:
             return
@@ -186,14 +190,40 @@ class CustomTextEdit(QTextEdit):
         original_image = metadata['original_image']
         pixmap = QPixmap.fromImage(original_image)
 
-        dialog = ImageCropDialog(pixmap, self.window())
-        if dialog.exec():
-            crop_rect = dialog.get_crop_rect()
-            cropped_pixmap = pixmap.copy(crop_rect)
-            cropped_image = cropped_pixmap.toImage()
+        dialog = ImageEditorDialog(pixmap, self.window())
 
-            # Update the image resource and replace it in the document
-            self.update_image_resource(image_name, cropped_image, crop_rect.width(), crop_rect.height())
+        # Connect frame navigation signals
+        dialog.prev_frame_button.clicked.connect(lambda: self.navigate_frame(dialog, image_name, -1))
+        dialog.next_frame_button.clicked.connect(lambda: self.navigate_frame(dialog, image_name, 1))
+
+        if dialog.exec():
+            edited_data = dialog.get_edited_data()
+            self.update_image_resource(
+                image_name,
+                edited_data["image"],
+                edited_data["width"],
+                edited_data["height"]
+            )
+
+    def navigate_frame(self, dialog, image_name, direction):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        fps = self._get_fps(metadata['video_path'])
+        frame_duration = 1 / fps
+        new_timestamp = metadata['timestamp'] + (direction * frame_duration)
+
+        # Ensure timestamp is not negative
+        new_timestamp = max(0, new_timestamp)
+
+        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
+        if new_image:
+            # Update the dialog's pixmap
+            dialog.set_new_pixmap(QPixmap.fromImage(new_image))
+            # Update the metadata in the main editor
+            metadata['timestamp'] = new_timestamp
+            metadata['original_image'] = new_image
 
     def update_image_resource(self, image_name, new_image, new_width, new_height):
         uri = QUrl(f"frame://{image_name}")
@@ -224,59 +254,11 @@ class CustomTextEdit(QTextEdit):
         cap.release()
         return fps if fps > 0 else 30
 
-    def handle_previous_frame(self, image_name):
-        metadata = self.image_metadata.get(image_name)
-        if not metadata:
-            return
-
-        fps = self._get_fps(metadata['video_path'])
-        new_timestamp = max(0, metadata['timestamp'] - (1 / fps))
-
-        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
-        if new_image:
-            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
-            metadata['timestamp'] = new_timestamp
-
-    def handle_next_frame(self, image_name):
-        metadata = self.image_metadata.get(image_name)
-        if not metadata:
-            return
-
-        fps = self._get_fps(metadata['video_path'])
-        new_timestamp = metadata['timestamp'] + (1 / fps)
-
-        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
-        if new_image:
-            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
-            metadata['timestamp'] = new_timestamp
-
     def get_image_format_at_cursor(self, cursor):
         char_format = cursor.charFormat()
         if char_format.isImageFormat():
             return char_format.toImageFormat()
         return None
-
-    def resize_image(self, image_format):
-        from src.ui.ImageSizeDialog import ResizedImageDialog
-        dialog = ResizedImageDialog(image_format.width(), image_format.height(), self)
-        if dialog.exec():
-            new_width, new_height = dialog.get_new_size()
-            self.update_image_size(image_format, new_width, new_height)
-
-    def update_image_size(self, image_format, width, height):
-        new_format = image_format
-        new_format.setWidth(width)
-        new_format.setHeight(height)
-
-        cursor = self.textCursor()
-        cursor.beginEditBlock()
-
-        # Move the cursor to the start of the image and select it
-        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1)
-        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
-
-        cursor.setCharFormat(new_format)
-        cursor.endEditBlock()
 
     def wheelEvent(self, event):
         """
@@ -361,6 +343,19 @@ class CustomTextEdit(QTextEdit):
                 self.update_image_size(self.resizing_image, new_width, new_height)
         else:
             super().mouseMoveEvent(event)
+
+    def update_image_size(self, image_format, new_width, new_height):
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        new_format = QTextImageFormat()
+        new_format.setName(image_format.name())
+        new_format.setWidth(new_width)
+        new_format.setHeight(new_height)
+
+        cursor.setCharFormat(new_format)
+
 
     def mouseReleaseEvent(self, event):
         self.resizing_image = None
