@@ -1,7 +1,7 @@
 import cv2
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
 from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
-from PyQt6.QtCore import Qt, QRect, QSize
+from PyQt6.QtCore import Qt, QRect, QSize, QRectF
 from .ResizableRubberBand import ResizableRubberBand
 from screeninfo import get_monitors
 
