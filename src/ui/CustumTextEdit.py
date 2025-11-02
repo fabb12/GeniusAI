@@ -9,7 +9,6 @@ from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
 import time
-from .ImageEditorDialog import ImageEditorDialog  # Importa il nuovo dialogo unificato
 from services.utils import get_frame_at_timestamp
 
 class CustomTextDocument(QTextDocument):
@@ -37,6 +36,7 @@ class CustomTextEdit(QTextEdit):
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
     insert_frame_requested = pyqtSignal(float, int)
+    frame_edit_requested = pyqtSignal(str, dict)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
@@ -115,20 +115,69 @@ class CustomTextEdit(QTextEdit):
 
         if image_format:
             menu = self.createStandardContextMenu()
-            menu.addSeparator()
-            edit_action = menu.addAction("Modifica Frame")
-            delete_action = menu.addAction("Elimina Frame")
+            edit_action = menu.addAction("Edit Frame")
+            delete_action = menu.addAction("Delete Frame")
             action = menu.exec(event.globalPos())
 
             if action == edit_action:
-                self.open_image_editor(image_format)
+                self.edit_frame(image_format)
             elif action == delete_action:
-                cursor.removeSelectedText() # Rimuove l'immagine selezionata
+                self.delete_frame()
             return
 
         super().contextMenuEvent(event)
 
-    def open_image_editor(self, image_format):
+    def delete_frame(self):
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+             # Select the character under the cursor, which should be the image
+            cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1)
+            cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
+
+        # Check if the selection is an image before removing
+        char_format = cursor.charFormat()
+        if char_format.isImageFormat():
+            cursor.removeSelectedText()
+
+    def edit_frame(self, image_format):
+        uri_string = image_format.name()
+        if uri_string.startswith("frame://"):
+            image_name = uri_string[len("frame://"):]
+            metadata = self.image_metadata.get(image_name)
+            if metadata:
+                self.frame_edit_requested.emit(image_name, metadata)
+
+    def update_edited_frame(self, image_name, new_image, new_width, new_height):
+        uri = QUrl(f"frame://{image_name}")
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, new_image)
+
+        # Update metadata
+        if image_name in self.image_metadata:
+            self.image_metadata[image_name]['original_image'] = new_image
+
+        # Find the image in the document and update its format
+        cursor = QTextCursor(self.document())
+        while not cursor.isNull() and not cursor.atEnd():
+            cursor = self.document().find(uri.toString(), cursor, QTextDocument.FindFlag.FindCaseSensitively)
+            if not cursor.isNull():
+                char_format = cursor.charFormat()
+                if char_format.isImageFormat():
+                    image_format = char_format.toImageFormat()
+                    if image_format.name() == uri.toString():
+                        image_format.setWidth(new_width)
+                        image_format.setHeight(new_height)
+
+                        # Create a temporary cursor to apply the new format
+                        temp_cursor = QTextCursor(self.document())
+                        temp_cursor.setPosition(cursor.selectionStart())
+                        temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
+                        temp_cursor.setCharFormat(image_format)
+                        break # Stop after finding and updating the first instance
+
+    def crop_image(self, image_format):
+        """
+        Extracts the image name from the format and calls the cropping handler.
+        """
         uri_string = image_format.name()
         if not uri_string.startswith("frame://"):
             return

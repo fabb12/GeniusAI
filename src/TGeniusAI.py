@@ -32,7 +32,7 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
-from moviepy.audio.AudioClip import CompositeAudioClip
+from moviepy.audio.AudioClip import CompositeAudioClip, AudioArrayClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 import cv2
@@ -62,6 +62,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
+from src.ui.FrameEditorDialog import FrameEditorDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -582,6 +583,85 @@ class AudioProcessingThread(QThread):
             if 'new_audio_clip' in locals(): new_audio_clip.close()
 
 
+class ReverseVideoThread(QThread):
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)
+
+    def __init__(self, video_path, start_time=None, end_time=None, is_audio_only=False, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.start_time = start_time
+        self.end_time = end_time
+        self.is_audio_only = is_audio_only
+        self.main_window = parent
+        self._is_running = True
+
+    def run(self):
+        clip = None
+        reversed_media = None
+        try:
+            if not self.video_path or not os.path.exists(self.video_path):
+                self.error.emit("Media file not found.")
+                return
+
+            self.progress.emit(10, "Loading and clipping media...")
+            if self.is_audio_only:
+                clip = AudioFileClip(self.video_path)
+                if self.start_time is not None and self.end_time is not None:
+                    clip = clip.subclip(self.start_time, self.end_time)
+
+                if not self._is_running: return
+
+                self.progress.emit(50, "Reversing audio...")
+                audio_frames = [frame for frame in clip.iter_frames()]
+                reversed_audio_frames = audio_frames[::-1]
+                reversed_media = AudioArrayClip(np.array(reversed_audio_frames), fps=clip.fps)
+
+                temp_path = self.main_window.get_temp_filepath(suffix=".mp3", prefix="reversed_")
+                self.progress.emit(70, "Saving reversed audio...")
+                reversed_media.write_audiofile(temp_path)
+            else:
+                clip = VideoFileClip(self.video_path)
+                if self.start_time is not None and self.end_time is not None:
+                    clip = clip.subclip(self.start_time, self.end_time)
+
+                if not self._is_running: return
+
+                self.progress.emit(30, "Reversing video frames...")
+                frames = [frame for frame in clip.iter_frames()]
+                reversed_frames = frames[::-1]
+                reversed_media = ImageSequenceClip(reversed_frames, fps=clip.fps)
+
+                if clip.audio:
+                    self.progress.emit(50, "Reversing audio...")
+                    audio_frames = [frame for frame in clip.audio.iter_frames()]
+                    reversed_audio_frames = audio_frames[::-1]
+                    reversed_audio = AudioArrayClip(np.array(reversed_audio_frames), fps=clip.audio.fps)
+                    reversed_media = reversed_media.set_audio(reversed_audio)
+
+                if not self._is_running: return
+
+                temp_path = self.main_window.get_temp_filepath(suffix=".mp4", prefix="reversed_")
+                self.progress.emit(70, "Saving reversed video...")
+                logger = MergeProgressLogger(self.progress)
+                reversed_media.write_videofile(temp_path, codec='libx264', audio_codec='aac', logger=logger)
+
+            if self._is_running:
+                self.completed.emit(temp_path)
+
+        except Exception as e:
+            if self._is_running:
+                self.error.emit(str(e))
+        finally:
+            if clip: clip.close()
+            if reversed_media: reversed_media.close()
+
+    def stop(self):
+        self._is_running = False
+        self.progress.emit(0, "Cancelling...")
+
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -705,6 +785,7 @@ class VideoAudioManager(QMainWindow):
         }
         self.active_summary_type = None # e.g., 'detailed', 'meeting_combined'
         self.original_audio_ai_html = ""
+        self.reversed_video_path = None
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -1161,6 +1242,14 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBox.setSingleStep(0.1)
         self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
         speedLayout.addWidget(self.speedSpinBox)
+
+        self.reverseButton = QPushButton('')
+        self.reverseButton.setIcon(QIcon(get_resource("rewind_play.png")))
+        self.reverseButton.setToolTip("Inverti riproduzione audio/video")
+        self.reverseButton.clicked.connect(self.toggleReversePlayback)
+        self.reverseButton.setFixedSize(32, 32)
+        speedLayout.addWidget(self.reverseButton)
+
         videoPlayerLayout.addLayout(speedLayout)
 
         videoPlayerLayout.addLayout(playbackControlLayout)
@@ -1475,6 +1564,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedTextArea, timestamp, pos)
         )
+        self.summaryDetailedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryDetailedTextArea, name, meta)
+        )
         self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
@@ -1484,6 +1576,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingTextArea, timestamp, pos)
+        )
+        self.summaryMeetingTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryMeetingTextArea, name, meta)
         )
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
@@ -1495,6 +1590,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
             lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedIntegratedTextArea, timestamp, pos)
         )
+        self.summaryDetailedIntegratedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryDetailedIntegratedTextArea, name, meta)
+        )
         self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
@@ -1502,8 +1600,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(
-            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingIntegratedTextArea, timestamp, pos)
+        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryMeetingIntegratedTextArea, name, meta)
         )
         self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
@@ -1512,8 +1611,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(
-            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedDetailedTextArea, timestamp, pos)
+        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedDetailedTextArea, name, meta)
         )
         self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
@@ -1522,8 +1622,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(
-            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedMeetingTextArea, timestamp, pos)
+        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(
+            lambda name, meta: self.handle_frame_edit_request(self.summaryCombinedMeetingTextArea, name, meta)
         )
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
@@ -1982,32 +2083,27 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
 
     def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
-        """
-        Handles the request to insert a video frame. It opens an editor dialog
-        to allow the user to configure the frame before insertion.
-        """
-        video_path = self.videoPathLineEdit
+        video_path = self._get_selected_analysis_video_path()
         if not video_path:
             self.show_status_message("Nessun video caricato nel player di input.", error=True)
             return
 
-        # Extract the frame as a QPixmap to show in the dialog
-        frame_pixmap = self.get_frame_at(int(timestamp_seconds * 1000), video_path, return_qimage=False)
-        if not frame_pixmap:
+        frame_qimage = self.get_frame_at(int(timestamp_seconds * 1000), return_qimage=True)
+        if not frame_qimage:
             self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
             return
 
-        dialog = ImageEditorDialog(frame_pixmap, self)
-
-        # Disable frame navigation buttons since we are inserting a new frame
-        dialog.prev_frame_button.setEnabled(False)
-        dialog.next_frame_button.setEnabled(False)
-
+        dialog = FrameEditorDialog(QPixmap.fromImage(frame_qimage), self)
+        dialog.size_slider.setValue(50)  # Default to 50% size
         if dialog.exec():
-            edited_data = dialog.get_edited_data()
-            frame_qimage = edited_data["image"]
-            width = edited_data["width"]
-            height = edited_data["height"]
+            crop_rect = dialog.get_crop_rect()
+            size_percentage = dialog.get_size_percentage()
+
+            cropped_pixmap = QPixmap.fromImage(frame_qimage).copy(crop_rect)
+            final_image = cropped_pixmap.toImage()
+
+            width = int(final_image.width() * (size_percentage / 100))
+            height = int(final_image.height() * (size_percentage / 100))
 
             if target_text_edit:
                 cursor = target_text_edit.textCursor()
@@ -2017,9 +2113,8 @@ class VideoAudioManager(QMainWindow):
                 if not cursor.atBlockStart():
                     cursor.insertBlock()
                 target_text_edit.setTextCursor(cursor)
-
                 target_text_edit.insert_image_with_metadata(
-                    frame_qimage, width, height, video_path, timestamp_seconds
+                    final_image, width, height, video_path, timestamp_seconds
                 )
 
                 # Add another newline after the image for spacing
@@ -2027,6 +2122,26 @@ class VideoAudioManager(QMainWindow):
                 cursor.insertBlock()
                 target_text_edit.setTextCursor(cursor)
                 self.show_status_message("Frame inserito con successo.")
+
+    def handle_frame_edit_request(self, target_text_edit, image_name, metadata):
+        original_image = metadata.get('original_image')
+        if not original_image:
+            self.show_status_message("Metadati immagine non trovati o immagine non valida.", error=True)
+            return
+
+        dialog = FrameEditorDialog(QPixmap.fromImage(original_image), self)
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+            size_percentage = dialog.get_size_percentage()
+
+            cropped_pixmap = QPixmap.fromImage(original_image).copy(crop_rect)
+            final_image = cropped_pixmap.toImage()
+
+            new_width = int(final_image.width() * (size_percentage / 100))
+            new_height = int(final_image.height() * (size_percentage / 100))
+
+            target_text_edit.update_edited_frame(image_name, final_image, new_width, new_height)
+            self.show_status_message("Frame aggiornato con successo.")
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -2877,12 +2992,36 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        frame_pixmap = self.get_frame_at(self.player.position(), self.videoPathLineEdit)
+        # Determine start and end times for the dialog
+        start_time_ms = 0
+        video_duration_ms = self.player.duration()
+        end_time_ms = video_duration_ms
+
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark if available
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time_ms = start_pos
+            end_time_ms = end_pos
+
+        initial_position_ms = self.player.position()
+        # If the current position is outside the bookmark range, clamp it to the start.
+        if self.videoSlider.bookmarks and not (start_time_ms <= initial_position_ms <= end_time_ms):
+            initial_position_ms = start_time_ms
+
+        frame_pixmap = self.get_frame_at(initial_position_ms)
         if not frame_pixmap:
             QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
             return
 
-        dialog = CropDialog(frame_pixmap, self)
+        dialog = CropDialog(
+            parent=self,
+            video_path=self.videoPathLineEdit,
+            initial_pixmap=frame_pixmap,
+            video_duration_ms=video_duration_ms,
+            start_time_ms=start_time_ms,
+            end_time_ms=end_time_ms,
+            initial_position_ms=initial_position_ms
+        )
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
@@ -2943,11 +3082,28 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Un'altra operazione è già in corso.", error=True)
             return
 
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Cropping bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Cropping entire video...")
+
         self.statusLabel.setText("Ritaglio del video in corso...")
         self.progressBar.setVisible(True)
         self.cancelButton.setVisible(True)
 
-        thread = CropThread(self.videoPathLineEdit, crop_rect, self.current_project_path, self)
+        thread = CropThread(
+            self.videoPathLineEdit,
+            crop_rect,
+            self.current_project_path,
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         self.current_thread = thread
 
         thread.progress.connect(self.progressBar.setValue)
@@ -3641,6 +3797,13 @@ class VideoAudioManager(QMainWindow):
     def closeEvent(self, event):
         # Salva tutte le modifiche correnti prima di chiudere
         self.save_all_tabs_to_json(show_message=False)
+
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path):
+            try:
+                os.remove(self.reversed_video_path)
+                logging.info("Cleaned up temporary reversed video file on exit.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file on exit: {e}")
 
         self.dockSettingsManager.save_settings()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
@@ -5012,6 +5175,14 @@ class VideoAudioManager(QMainWindow):
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path) and not video_path == self.reversed_video_path:
+            try:
+                os.remove(self.reversed_video_path)
+                self.reversed_video_path = None
+                logging.info("Cleaned up previous reversed video file.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file: {e}")
+
         self.player.stop()
         self.reset_view()
         self.speedSpinBox.setValue(1.0)
@@ -8175,6 +8346,40 @@ class VideoAudioManager(QMainWindow):
         doc = docx.Document(file_path)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
+
+    def toggleReversePlayback(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("No video loaded to reverse.", error=True)
+            return
+
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark for reversal
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Reversing bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Reversing entire video...")
+
+        is_audio_only = self.isAudioOnly(self.videoPathLineEdit)
+        thread = ReverseVideoThread(self.videoPathLineEdit, start_time=start_time, end_time=end_time, is_audio_only=is_audio_only, parent=self)
+        self.start_task(
+            thread,
+            on_complete=self.onReverseCompleted,
+            on_error=self.onReverseError,
+            on_progress=self.update_status_progress
+        )
+
+    def onReverseCompleted(self, reversed_path):
+        self.reversed_video_path = reversed_path
+        self.loadVideoOutput(self.reversed_video_path)
+        self.playerOutput.play()
+        self.show_status_message("Reversed video is now playing in the output player.")
+
+    def onReverseError(self, error_message):
+        self.show_status_message(f"Error reversing video: {error_message}", error=True)
 
 
 def get_application_path():
