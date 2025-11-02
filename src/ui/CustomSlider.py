@@ -10,9 +10,8 @@ class CustomSlider(QSlider):
         self.is_zoomed = False
         self.original_min = self.minimum()
         self.original_max = self.maximum()
-        self.current_zoom_level = 1
         self.magnet_enabled = False
-        self.setStyleSheet("""
+        self.original_stylesheet = """
             QSlider::groove:horizontal {
                 border: 1px solid #5c5c5c;
                 background: #3e3e3e;
@@ -198,16 +197,33 @@ class CustomSlider(QSlider):
         current_max = self.maximum()
         current_val = self.value()
 
-        range_size = (current_max - current_min) / 2
-        new_min = int(current_val - range_size / 2)
-        new_max = int(current_val + range_size / 2)
+        if current_max == current_min:
+            return
+
+        pos_ratio = (current_val - current_min) / (current_max - current_min)
+
+        new_range_size = (current_max - current_min) / 2
+
+        new_min = current_val - pos_ratio * new_range_size
+        new_max = current_val + (1 - pos_ratio) * new_range_size
+
+        if new_min < self.original_min:
+            new_max -= (new_min - self.original_min)
+            new_min = self.original_min
+
+        if new_max > self.original_max:
+            new_min -= (new_max - self.original_max)
+            new_max = self.original_max
 
         if new_min < self.original_min:
             new_min = self.original_min
-        if new_max > self.original_max:
-            new_max = self.original_max
 
-        self.setRange(new_min, new_max)
+        if new_max <= new_min:
+            return
+
+        self.setRange(int(new_min), int(new_max))
+        self.setStyleSheet(self.original_stylesheet.replace("height: 20px", "height: 40px"))
+
 
     def zoom_out(self):
         if not self.is_zoomed:
@@ -217,28 +233,45 @@ class CustomSlider(QSlider):
         current_max = self.maximum()
         current_val = self.value()
 
-        range_size = (current_max - current_min) * 2
-        new_min = int(current_val - range_size / 2)
-        new_max = int(current_val + range_size / 2)
+        if current_max == current_min:
+            return
+
+        pos_ratio = (current_val - current_min) / (current_max - current_min)
+
+        new_range_size = (current_max - current_min) * 2
+
+        if new_range_size > (self.original_max - self.original_min):
+            self.reset_zoom()
+            return
+
+        new_min = current_val - pos_ratio * new_range_size
+        new_max = current_val + (1 - pos_ratio) * new_range_size
 
         if new_min < self.original_min:
             new_min = self.original_min
         if new_max > self.original_max:
             new_max = self.original_max
 
-        self.setRange(new_min, new_max)
+        self.setRange(int(new_min), int(new_max))
 
-        if new_min == self.original_min and new_max == self.original_max:
+        if self.minimum() == self.original_min and self.maximum() == self.original_max:
             self.is_zoomed = False
+            self.setStyleSheet(self.original_stylesheet)
 
     def reset_zoom(self):
         self.is_zoomed = False
         self.setRange(self.original_min, self.original_max)
+        self.setStyleSheet(self.original_stylesheet)
 
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw start and end markers
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawLine(0, 0, 0, self.height())
+        painter.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
 
         if self.maximum() == 0: # Avoid division by zero
             return
