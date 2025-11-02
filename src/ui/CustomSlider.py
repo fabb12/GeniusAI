@@ -46,7 +46,7 @@ class CustomSlider(QSlider):
                 background: #0078d7;
                 border: 1px solid #e0e0e0;
             }
-        """)
+        """
 
     def setPendingBookmarkStart(self, position):
         self.pending_bookmark_start = position
