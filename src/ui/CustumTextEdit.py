@@ -9,6 +9,7 @@ from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
 import time
+import base64
 from .ImageCropDialog import ImageCropDialog
 from services.utils import get_frame_at_timestamp
 
@@ -58,8 +59,11 @@ class CustomTextEdit(QTextEdit):
     def insert_image_with_metadata(self, displayed_image, width, height, video_path, timestamp, original_image=None):
         """
         Inserts an image as a document resource and stores its metadata.
+        The video path is base64 encoded to avoid invalid characters in the URI.
         """
-        image_name = f"frame_{video_path}_{timestamp}_{time.time()}"
+        # Codifica il percorso del video in Base64 per garantire un URI valido
+        safe_video_path = base64.urlsafe_b64encode(video_path.encode()).decode()
+        image_name = f"frame_{safe_video_path}_{timestamp}_{time.time()}"
         uri = QUrl(f"frame://{image_name}")
         self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_image)
 
