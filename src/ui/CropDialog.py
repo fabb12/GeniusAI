@@ -79,6 +79,9 @@ class CropDialog(QDialog):
         container_size = self.image_label.size()
         w, h = container_size.width(), container_size.height()
 
+        if w == 0 or h == 0:
+            return
+
         if self.aspect_ratio > w / h:
             new_width = w
             new_height = int(w / self.aspect_ratio)
@@ -93,12 +96,14 @@ class CropDialog(QDialog):
         )
         self.image_label.setPixmap(self.display_pixmap)
 
-        # Aggiorna la geometria del rubber band in modo proporzionale
+        offset_x = (self.image_label.width() - new_width) // 2
+        offset_y = (self.image_label.height() - new_height) // 2
+
         if hasattr(self, 'rubber_band_ratio'):
             rb_w = int(new_width * self.rubber_band_ratio.width())
             rb_h = int(new_height * self.rubber_band_ratio.height())
-            rb_x = int(new_width * self.rubber_band_ratio.x())
-            rb_y = int(new_height * self.rubber_band_ratio.y())
+            rb_x = int(new_width * self.rubber_band_ratio.x()) + offset_x
+            rb_y = int(new_height * self.rubber_band_ratio.y()) + offset_y
             self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_w, rb_h))
 
     def _get_current_frame_as_pixmap(self):
@@ -112,14 +117,24 @@ class CropDialog(QDialog):
         return QPixmap()
 
     def _center_rubber_band(self):
-        w = self.display_pixmap.width()
-        h = self.display_pixmap.height()
-        rb_w = w // 2
-        rb_h = h // 2
-        rb_x = (w - rb_w) // 2
-        rb_y = (h - rb_h) // 2
-        self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_w, rb_h))
-        self.rubber_band_ratio = QRectF(rb_x/w, rb_y/h, rb_w/w, rb_h/h)
+        pixmap_w = self.display_pixmap.width()
+        pixmap_h = self.display_pixmap.height()
+
+        if pixmap_w == 0 or pixmap_h == 0:
+            return
+
+        offset_x = (self.image_label.width() - pixmap_w) // 2
+        offset_y = (self.image_label.height() - pixmap_h) // 2
+
+        rb_w = pixmap_w // 2
+        rb_h = pixmap_h // 2
+
+        rb_pixmap_x = (pixmap_w - rb_w) // 2
+        rb_pixmap_y = (pixmap_h - rb_h) // 2
+
+        self.rubber_band.setGeometry(QRect(rb_pixmap_x + offset_x, rb_pixmap_y + offset_y, rb_w, rb_h))
+
+        self.rubber_band_ratio = QRectF(rb_pixmap_x / pixmap_w, rb_pixmap_y / pixmap_h, rb_w / pixmap_w, rb_h / pixmap_h)
 
     def update_frame(self, new_frame_pos):
         if self.start_frame <= new_frame_pos <= self.end_frame:
@@ -135,19 +150,31 @@ class CropDialog(QDialog):
         self.update_frame(self.current_frame_pos - 1)
 
     def get_crop_rect(self):
-        scale_factor_w = self.original_pixmap.width() / self.display_pixmap.width() if self.display_pixmap.width() > 0 else 1
-        scale_factor_h = self.original_pixmap.height() / self.display_pixmap.height() if self.display_pixmap.height() > 0 else 1
+        pixmap_w = self.display_pixmap.width()
+        pixmap_h = self.display_pixmap.height()
+
+        if pixmap_w == 0 or pixmap_h == 0:
+            return QRect()
+
+        offset_x = (self.image_label.width() - pixmap_w) // 2
+        offset_y = (self.image_label.height() - pixmap_h) // 2
 
         geom = self.rubber_band.geometry()
+
+        pixmap_x = geom.x() - offset_x
+        pixmap_y = geom.y() - offset_y
+
+        scale_factor_w = self.original_pixmap.width() / pixmap_w
+        scale_factor_h = self.original_pixmap.height() / pixmap_h
+
         return QRect(
-            int(geom.x() * scale_factor_w),
-            int(geom.y() * scale_factor_h),
+            int(pixmap_x * scale_factor_w),
+            int(pixmap_y * scale_factor_h),
             int(geom.width() * scale_factor_w),
             int(geom.height() * scale_factor_h)
         )
 
     def get_cropped_pixmap(self):
-        """Returns the selected area of the original pixmap as a new pixmap."""
         crop_rect = self.get_crop_rect()
         return self.original_pixmap.copy(crop_rect)
 
@@ -166,9 +193,22 @@ class CropDialog(QDialog):
         super().closeEvent(event)
 
     def accept(self):
-        # Salva le proporzioni del rubber band prima di chiudere
-        w = self.display_pixmap.width()
-        h = self.display_pixmap.height()
-        geom = self.rubber_band.geometry()
-        self.rubber_band_ratio = QRectF(geom.x()/w, geom.y()/h, geom.width()/w, geom.height()/h)
+        pixmap_w = self.display_pixmap.width()
+        pixmap_h = self.display_pixmap.height()
+
+        if pixmap_w > 0 and pixmap_h > 0:
+            offset_x = (self.image_label.width() - pixmap_w) // 2
+            offset_y = (self.image_label.height() - pixmap_h) // 2
+
+            geom = self.rubber_band.geometry()
+
+            rb_pixmap_x = geom.x() - offset_x
+            rb_pixmap_y = geom.y() - offset_y
+
+            self.rubber_band_ratio = QRectF(
+                rb_pixmap_x / pixmap_w,
+                rb_pixmap_y / pixmap_h,
+                geom.width() / pixmap_w,
+                geom.height() / pixmap_h
+            )
         super().accept()
