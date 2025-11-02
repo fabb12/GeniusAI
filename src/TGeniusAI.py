@@ -2941,15 +2941,21 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        frame_pixmap = self.get_frame_at(self.player.position())
-        if not frame_pixmap:
-            QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
-            return
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Se ci sono bookmark, usa il primo per il ritaglio
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Il ritaglio sarà limitato al bookmark: {start_time:.2f}s - {end_time:.2f}s")
 
-        dialog = CropDialog(frame_pixmap, self)
+        dialog = CropDialog(self.videoPathLineEdit, start_time, end_time, self)
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
-            self.perform_crop(crop_rect)
+
+            # Passa anche i tempi del bookmark al thread di crop
+            self.perform_crop(crop_rect, start_time, end_time)
 
     def get_frame_at(self, position_ms, return_qimage=False):
         video_path = self._get_selected_analysis_video_path()
@@ -3006,7 +3012,7 @@ class VideoAudioManager(QMainWindow):
             new_pos = current_pos - (1000 / fps)
             self.player.setPosition(int(new_pos))
 
-    def perform_crop(self, crop_rect):
+    def perform_crop(self, crop_rect, start_time=None, end_time=None):
         if self.current_thread and self.current_thread.isRunning():
             self.show_status_message("Un'altra operazione è già in corso.", error=True)
             return
@@ -3015,7 +3021,14 @@ class VideoAudioManager(QMainWindow):
         self.progressBar.setVisible(True)
         self.cancelButton.setVisible(True)
 
-        thread = CropThread(self.videoPathLineEdit, crop_rect, self.current_project_path, self)
+        thread = CropThread(
+            self.videoPathLineEdit,
+            crop_rect,
+            self.current_project_path,
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         self.current_thread = thread
 
         thread.progress.connect(self.progressBar.setValue)

@@ -1,62 +1,68 @@
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
-from PyQt6.QtGui import QPixmap
-from PyQt6.QtCore import Qt, QRect, QSize
+import cv2
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QSlider
+from PyQt6.QtGui import QPixmap, QImage
+from PyQt6.QtCore import Qt, QRect
 from .ResizableRubberBand import ResizableRubberBand
 from screeninfo import get_monitors
 
 class CropDialog(QDialog):
-    def __init__(self, pixmap: QPixmap, parent=None):
+    def __init__(self, video_path, start_time=None, end_time=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Ritaglia Video")
         self.setModal(True)
 
-        self.original_pixmap = pixmap
-        self.parent_window = parent
+        self.video_path = video_path
+        self.cap = cv2.VideoCapture(video_path)
+        self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        self.fps = self.cap.get(cv2.CAP_PROP_FPS)
+
+        # Gestione dei bookmark
+        self.start_frame = 0
+        if start_time:
+            self.start_frame = int(start_time * self.fps)
+
+        self.end_frame = self.total_frames - 1
+        if end_time:
+            self.end_frame = int(end_time * self.fps)
+
+        self.current_frame_pos = self.start_frame
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_pos)
+
+        self.original_pixmap = self._get_current_frame_as_pixmap()
         self.scale_factor = 1.0
 
-        # Set the dialog size to half of the screen
         monitor = get_monitors()[0]
         dialog_width = monitor.width // 2
         dialog_height = monitor.height // 2
-
-        # We set the size of the dialog directly.
         self.resize(dialog_width, dialog_height)
 
-        # Scale the pixmap to fit within the dialog, preserving aspect ratio
         self.display_pixmap = self.original_pixmap.scaled(
-            dialog_width,
-            dialog_height,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
+            dialog_width, dialog_height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
         )
-
-        # Recalculate scale factor based on the actual scaling
-        if self.display_pixmap.width() > 0:
-             self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
-        else:
-             self.scale_factor = 1.0
+        self._recalculate_scale_factor()
 
         main_layout = QVBoxLayout(self)
         main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.image_label = QLabel()
         self.image_label.setPixmap(self.display_pixmap)
-        self.image_label.setFixedSize(self.display_pixmap.size())
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.rubber_band = ResizableRubberBand(self.image_label)
-
-        # Center the rubber band initially (now smaller)
-        rb_width = self.display_pixmap.width() // 4
-        rb_height = self.display_pixmap.height() // 4
-        rb_x = (self.display_pixmap.width() - rb_width) // 2
-        rb_y = (self.display_pixmap.height() - rb_height) // 2
-        self.initial_rb_geometry = QRect(rb_x, rb_y, rb_width, rb_height)
-        self.rubber_band.setGeometry(self.initial_rb_geometry)
+        self._center_rubber_band()
 
         main_layout.addWidget(self.image_label)
 
-        # Layout for frame navigation
+        # Slider per lo zoom
+        zoom_layout = QHBoxLayout()
+        zoom_layout.addWidget(QLabel("Zoom:"))
+        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+        self.zoom_slider.setRange(50, 200) # dal 50% al 200%
+        self.zoom_slider.setValue(100)
+        self.zoom_slider.valueChanged.connect(self.update_zoom)
+        zoom_layout.addWidget(self.zoom_slider)
+        main_layout.addLayout(zoom_layout)
+
         frame_nav_layout = QHBoxLayout()
         self.prev_frame_button = QPushButton("<")
         self.next_frame_button = QPushButton(">")
@@ -66,30 +72,73 @@ class CropDialog(QDialog):
         frame_nav_layout.addStretch()
         main_layout.addLayout(frame_nav_layout)
 
-        # Layout for main buttons
         button_layout = QHBoxLayout()
         self.reset_button = QPushButton("Reset")
         self.apply_button = QPushButton("Applica")
         self.cancel_button = QPushButton("Annulla")
-
         button_layout.addStretch()
         button_layout.addWidget(self.reset_button)
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
-
         main_layout.addLayout(button_layout)
 
-        self.reset_button.clicked.connect(self.reset_rubber_band)
+        self.reset_button.clicked.connect(self._center_rubber_band)
         self.apply_button.clicked.connect(self.accept)
         self.cancel_button.clicked.connect(self.reject)
-        self.prev_frame_button.clicked.connect(self.previous_frame)
+        self.prev_frame_button.clicked.connect(self.prev_frame)
         self.next_frame_button.clicked.connect(self.next_frame)
 
-    def reset_rubber_band(self):
-        self.rubber_band.setGeometry(self.initial_rb_geometry)
+    def _get_current_frame_as_pixmap(self):
+        ret, frame = self.cap.read()
+        if ret:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            h, w, ch = frame_rgb.shape
+            bytes_per_line = ch * w
+            qt_image = QImage(frame_rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888)
+            return QPixmap.fromImage(qt_image)
+        return QPixmap()
+
+    def _recalculate_scale_factor(self):
+        if self.display_pixmap.width() > 0:
+            self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
+        else:
+            self.scale_factor = 1.0
+
+    def _center_rubber_band(self):
+        rb_width = self.display_pixmap.width() // 2
+        rb_height = self.display_pixmap.height() // 2
+        rb_x = (self.display_pixmap.width() - rb_width) // 2
+        rb_y = (self.display_pixmap.height() - rb_height) // 2
+        self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_width, rb_height))
+
+    def update_frame(self, new_frame_pos):
+        if self.start_frame <= new_frame_pos <= self.end_frame:
+            self.current_frame_pos = new_frame_pos
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_pos)
+            self.original_pixmap = self._get_current_frame_as_pixmap()
+            self.update_zoom(self.zoom_slider.value()) # Ridisegna con lo zoom corrente
+
+    def next_frame(self):
+        self.update_frame(self.current_frame_pos + 1)
+
+    def prev_frame(self):
+        self.update_frame(self.current_frame_pos - 1)
+
+    def update_zoom(self, value):
+        zoom_factor = value / 100.0
+        new_width = int(self.original_pixmap.width() * zoom_factor)
+        new_height = int(self.original_pixmap.height() * zoom_factor)
+
+        self.display_pixmap = self.original_pixmap.scaled(
+            new_width, new_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self.image_label.setPixmap(self.display_pixmap)
+        self.image_label.adjustSize()
+        self._recalculate_scale_factor()
 
     def get_crop_rect(self):
-        # Return the crop rectangle relative to the original pixmap size
         geom = self.rubber_band.geometry()
         return QRect(
             int(geom.x() * self.scale_factor),
@@ -102,48 +151,12 @@ class CropDialog(QDialog):
         super().showEvent(event)
         self.rubber_band.show()
 
-    def update_pixmap(self, pixmap):
-        if pixmap:
-            self.original_pixmap = pixmap
-
-            # Get the dialog's current size to fit the new pixmap
-            dialog_size = self.size()
-
-            self.display_pixmap = self.original_pixmap.scaled(
-                dialog_size.width(),
-                dialog_size.height(),
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation
-            )
-            if self.display_pixmap.width() > 0:
-                 self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
-            else:
-                 self.scale_factor = 1.0
-
-            self.image_label.setPixmap(self.display_pixmap)
-            self.image_label.setFixedSize(self.display_pixmap.size())
-
-            # Reset rubber band on new frame
-            rb_width = self.display_pixmap.width() // 4
-            rb_height = self.display_pixmap.height() // 4
-            rb_x = (self.display_pixmap.width() - rb_width) // 2
-            rb_y = (self.display_pixmap.height() - rb_height) // 2
-            self.initial_rb_geometry = QRect(rb_x, rb_y, rb_width, rb_height)
-            self.rubber_band.setGeometry(self.initial_rb_geometry)
-
-    def next_frame(self):
-        if self.parent_window:
-            new_pixmap = self.parent_window.get_next_frame()
-            self.update_pixmap(new_pixmap)
-
-    def previous_frame(self):
-        if self.parent_window:
-            new_pixmap = self.parent_window.get_previous_frame()
-            self.update_pixmap(new_pixmap)
-
     def keyPressEvent(self, event):
-        """Accept the dialog when Enter or Return is pressed."""
         if event.key() == Qt.Key.Key_Return or event.key() == Qt.Key.Key_Enter:
             self.accept()
         else:
             super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        self.cap.release()
+        super().closeEvent(event)
