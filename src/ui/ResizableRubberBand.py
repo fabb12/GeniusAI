@@ -19,7 +19,7 @@ class ResizableRubberBand(QWidget):
         painter = QPainter(self)
 
         # Disegna il bordo giallo solido
-        pen = QPen(QColor("yellow"), 2, Qt.PenStyle.SolidLine)
+        pen = QPen(QColor("yellow"), 2, Qt.PenStyle.DashLine)
         painter.setPen(pen)
 
         # Disegna il riempimento giallo semi-trasparente
