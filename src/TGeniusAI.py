@@ -76,7 +76,6 @@ from src.ui.CropDialog import CropDialog
 from src.ui.CursorOverlay import CursorOverlay
 from src.ui.MultiLineInputDialog import MultiLineInputDialog
 from src.ui.AddMediaDialog import AddMediaDialog
-from src.ui.ImageEditorDialog import ImageEditorDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
@@ -755,7 +754,6 @@ class VideoAudioManager(QMainWindow):
         self.video_writer = None
         self.current_video_path = None
         self.current_audio_path = None
-        self.current_fps = 0
         self.updateViewMenu()
         self.videoSharingManager = VideoSharingManager(self)
 
@@ -2091,7 +2089,7 @@ class VideoAudioManager(QMainWindow):
     def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
         video_path = self._get_selected_analysis_video_path()
         if not video_path:
-            self.show_status_message("Nessun video caricato nel player di input.", error=True)
+            self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
             return
 
         frame_qimage = self.get_frame_at(video_path, int(timestamp_seconds * 1000), return_qimage=True)
@@ -2114,19 +2112,10 @@ class VideoAudioManager(QMainWindow):
             if target_text_edit:
                 cursor = target_text_edit.textCursor()
                 cursor.setPosition(position)
-
-                # Ensure the frame is inserted on a new line for better formatting
-                if not cursor.atBlockStart():
-                    cursor.insertBlock()
                 target_text_edit.setTextCursor(cursor)
                 target_text_edit.insert_image_with_metadata(
                     final_image, width, height, video_path, timestamp_seconds
                 )
-
-                # Add another newline after the image for spacing
-                cursor.movePosition(QTextCursor.MoveOperation.End)
-                cursor.insertBlock()
-                target_text_edit.setTextCursor(cursor)
                 self.show_status_message("Frame inserito con successo.")
 
     def handle_frame_edit_request(self, target_text_edit, image_name, metadata):
@@ -2878,7 +2867,6 @@ class VideoAudioManager(QMainWindow):
         self.totalTimeLabel.setText('/ 00:00:00:000')
         self.player.setSource(QUrl())
         self.videoPathLineEdit = ''
-        self.current_fps = 0
         self.fileNameLabel.setText("Nessun video caricato")
         self.videoNotesListWidget.clear()
         self.transcriptionDock.setTitle("Trascrizione e Sintesi Audio")
@@ -3033,7 +3021,7 @@ class VideoAudioManager(QMainWindow):
             crop_rect = dialog.get_crop_rect()
             self.perform_crop(crop_rect)
 
-    def get_frame_at(self, position_ms, video_path, return_qimage=False):
+    def get_frame_at(self, video_path, position_ms, return_qimage=False):
         if not video_path or not os.path.exists(video_path):
             logging.warning("get_frame_at called with no valid video path.")
             return None
@@ -3067,22 +3055,25 @@ class VideoAudioManager(QMainWindow):
             cap.release()
 
     def get_current_fps(self):
-        """Returns the cached FPS of the current video."""
-        return self.current_fps or 30 # Return cached FPS or a default value
+        try:
+            return VideoFileClip(self.videoPathLineEdit).fps
+        except Exception as e:
+            print(f"Error getting FPS: {e}")
+            return 0
 
     def get_next_frame(self):
         fps = self.get_current_fps()
-        current_pos = self.player.position()
-        new_pos = current_pos + (1000 / fps)
-        self.player.setPosition(int(new_pos))
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos + (1000 / fps)
+            self.player.setPosition(int(new_pos))
 
     def get_previous_frame(self):
         fps = self.get_current_fps()
-        current_pos = self.player.position()
-        new_pos = current_pos - (1000 / fps)
-        if new_pos < 0:
-            new_pos = 0
-        self.player.setPosition(int(new_pos))
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos - (1000 / fps)
+            self.player.setPosition(int(new_pos))
 
     def perform_crop(self, crop_rect):
         if self.current_thread and self.current_thread.isRunning():
@@ -5221,14 +5212,6 @@ class VideoAudioManager(QMainWindow):
         if not self.transcription_original:
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
-
-        # Cache the FPS
-        try:
-            with VideoFileClip(video_path) as clip:
-                self.current_fps = clip.fps
-        except Exception as e:
-            logging.error(f"Error caching FPS for {video_path}: {e}")
-            self.current_fps = 30 # Fallback to a default value
 
     def loadVideoOutput(self, video_path):
 
