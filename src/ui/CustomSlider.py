@@ -7,43 +7,40 @@ class CustomSlider(QSlider):
         super().__init__(orientation, parent)
         self.bookmarks = []
         self.pending_bookmark_start = None
-        self.is_zoomed = False
-        self.original_min = self.minimum()
-        self.original_max = self.maximum()
         self.magnet_enabled = False
-        self.original_stylesheet = """
+        self.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #5c5c5c;
                 background: #3e3e3e;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::sub-page:horizontal {
                 background: #0078d7;
                 border: 1px solid #5c5c5c;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::add-page:horizontal {
                 background: #3e3e3e;
                 border: 1px solid #5c5c5c;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::handle:horizontal {
-                background: #0099cc;
+                background: #ffcc00;
                 border: 1px solid #b0b0b0;
-                width: 8px;
-                height: 24px;
+                width: 12px;
+                height: 36px;
                 margin: -4px 0;
-                border-radius: 4px;
+                border-radius: 6px;
             }
             QSlider::handle:horizontal:hover {
-                background: #00aaff;
+                background: #ffdd44;
                 border: 1px solid #c0c0c0;
             }
             QSlider::handle:horizontal:pressed {
-                background: #0078d7;
+                background: #ffaa00;
                 border: 1px solid #e0e0e0;
             }
         """
@@ -113,20 +110,6 @@ class CustomSlider(QSlider):
 
         context_menu.addSeparator()
 
-        zoom_in_action = QAction("Zoom In", self)
-        zoom_in_action.triggered.connect(self.zoom_in)
-        context_menu.addAction(zoom_in_action)
-
-        zoom_out_action = QAction("Zoom Out", self)
-        zoom_out_action.triggered.connect(self.zoom_out)
-        context_menu.addAction(zoom_out_action)
-
-        reset_zoom_action = QAction("Reset Zoom", self)
-        reset_zoom_action.triggered.connect(self.reset_zoom)
-        context_menu.addAction(reset_zoom_action)
-
-        context_menu.addSeparator()
-
         magnet_action = QAction("Magnet to Bookmarks", self)
         magnet_action.setCheckable(True)
         magnet_action.setChecked(self.magnet_enabled)
@@ -187,81 +170,6 @@ class CustomSlider(QSlider):
 
     def setRange(self, min_val, max_val):
         super().setRange(min_val, max_val)
-        if not self.is_zoomed:
-            self.original_min = min_val
-            self.original_max = max_val
-
-    def zoom_in(self):
-        self.is_zoomed = True
-        current_min = self.minimum()
-        current_max = self.maximum()
-        current_val = self.value()
-
-        if current_max == current_min:
-            return
-
-        pos_ratio = (current_val - current_min) / (current_max - current_min)
-
-        new_range_size = (current_max - current_min) / 2
-
-        new_min = current_val - pos_ratio * new_range_size
-        new_max = current_val + (1 - pos_ratio) * new_range_size
-
-        if new_min < self.original_min:
-            new_max -= (new_min - self.original_min)
-            new_min = self.original_min
-
-        if new_max > self.original_max:
-            new_min -= (new_max - self.original_max)
-            new_max = self.original_max
-
-        if new_min < self.original_min:
-            new_min = self.original_min
-
-        if new_max <= new_min:
-            return
-
-        self.setRange(int(new_min), int(new_max))
-        self.setStyleSheet(self.original_stylesheet.replace("height: 20px", "height: 40px"))
-
-
-    def zoom_out(self):
-        if not self.is_zoomed:
-            return
-
-        current_min = self.minimum()
-        current_max = self.maximum()
-        current_val = self.value()
-
-        if current_max == current_min:
-            return
-
-        pos_ratio = (current_val - current_min) / (current_max - current_min)
-
-        new_range_size = (current_max - current_min) * 2
-
-        if new_range_size > (self.original_max - self.original_min):
-            self.reset_zoom()
-            return
-
-        new_min = current_val - pos_ratio * new_range_size
-        new_max = current_val + (1 - pos_ratio) * new_range_size
-
-        if new_min < self.original_min:
-            new_min = self.original_min
-        if new_max > self.original_max:
-            new_max = self.original_max
-
-        self.setRange(int(new_min), int(new_max))
-
-        if self.minimum() == self.original_min and self.maximum() == self.original_max:
-            self.is_zoomed = False
-            self.setStyleSheet(self.original_stylesheet)
-
-    def reset_zoom(self):
-        self.is_zoomed = False
-        self.setRange(self.original_min, self.original_max)
-        self.setStyleSheet(self.original_stylesheet)
 
     def paintEvent(self, event):
         super().paintEvent(event)
