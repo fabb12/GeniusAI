@@ -17,8 +17,15 @@ class ResizableRubberBand(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
+
+        # Disegna il bordo giallo solido
         pen = QPen(QColor("yellow"), 2, Qt.PenStyle.SolidLine)
         painter.setPen(pen)
+
+        # Disegna il riempimento giallo semi-trasparente
+        fill_color = QColor(255, 255, 0, 80)  # Giallo con 80/255 di opacità
+        painter.setBrush(fill_color)
+
         painter.drawRect(self.rect().adjusted(0, 0, -1, -1))
 
         # Disegna le maniglie di ridimensionamento

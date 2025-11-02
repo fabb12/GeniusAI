@@ -1,12 +1,12 @@
 import cv2
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QSlider
-from PyQt6.QtGui import QPixmap, QImage
-from PyQt6.QtCore import Qt, QRect
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
+from PyQt6.QtCore import Qt, QRect, QSize
 from .ResizableRubberBand import ResizableRubberBand
 from screeninfo import get_monitors
 
 class CropDialog(QDialog):
-    def __init__(self, video_path, start_time=None, end_time=None, parent=None):
+    def __init__(self, video_path, current_time=0, start_time=None, end_time=None, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Ritaglia Video")
         self.setModal(True)
@@ -16,52 +16,32 @@ class CropDialog(QDialog):
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
 
-        # Gestione dei bookmark
-        self.start_frame = 0
-        if start_time:
-            self.start_frame = int(start_time * self.fps)
+        self.start_frame = int(start_time * self.fps) if start_time else 0
+        self.end_frame = int(end_time * self.fps) if end_time else self.total_frames - 1
 
-        self.end_frame = self.total_frames - 1
-        if end_time:
-            self.end_frame = int(end_time * self.fps)
+        self.current_frame_pos = int(current_time / 1000 * self.fps)
+        if not (self.start_frame <= self.current_frame_pos <= self.end_frame):
+             self.current_frame_pos = self.start_frame
 
-        self.current_frame_pos = self.start_frame
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_pos)
 
         self.original_pixmap = self._get_current_frame_as_pixmap()
-        self.scale_factor = 1.0
+        self.aspect_ratio = self.original_pixmap.width() / self.original_pixmap.height() if self.original_pixmap.height() > 0 else 1.0
 
         monitor = get_monitors()[0]
         dialog_width = monitor.width // 2
         dialog_height = monitor.height // 2
         self.resize(dialog_width, dialog_height)
 
-        self.display_pixmap = self.original_pixmap.scaled(
-            dialog_width, dialog_height, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
-        )
-        self._recalculate_scale_factor()
-
         main_layout = QVBoxLayout(self)
-        main_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        main_layout.setContentsMargins(5, 5, 5, 5)
+        main_layout.setSpacing(5)
 
         self.image_label = QLabel()
-        self.image_label.setPixmap(self.display_pixmap)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.rubber_band = ResizableRubberBand(self.image_label)
-        self._center_rubber_band()
-
         main_layout.addWidget(self.image_label)
 
-        # Slider per lo zoom
-        zoom_layout = QHBoxLayout()
-        zoom_layout.addWidget(QLabel("Zoom:"))
-        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
-        self.zoom_slider.setRange(50, 200) # dal 50% al 200%
-        self.zoom_slider.setValue(100)
-        self.zoom_slider.valueChanged.connect(self.update_zoom)
-        zoom_layout.addWidget(self.zoom_slider)
-        main_layout.addLayout(zoom_layout)
+        self.rubber_band = ResizableRubberBand(self.image_label)
 
         frame_nav_layout = QHBoxLayout()
         self.prev_frame_button = QPushButton("<")
@@ -88,6 +68,39 @@ class CropDialog(QDialog):
         self.prev_frame_button.clicked.connect(self.prev_frame)
         self.next_frame_button.clicked.connect(self.next_frame)
 
+        self.update_pixmap_display()
+        self._center_rubber_band()
+
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        self.update_pixmap_display()
+
+    def update_pixmap_display(self):
+        container_size = self.image_label.size()
+        w, h = container_size.width(), container_size.height()
+
+        if self.aspect_ratio > w / h:
+            new_width = w
+            new_height = int(w / self.aspect_ratio)
+        else:
+            new_height = h
+            new_width = int(h * self.aspect_ratio)
+
+        self.display_pixmap = self.original_pixmap.scaled(
+            new_width, new_height,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self.image_label.setPixmap(self.display_pixmap)
+
+        # Aggiorna la geometria del rubber band in modo proporzionale
+        if hasattr(self, 'rubber_band_ratio'):
+            rb_w = int(new_width * self.rubber_band_ratio.width())
+            rb_h = int(new_height * self.rubber_band_ratio.height())
+            rb_x = int(new_width * self.rubber_band_ratio.x())
+            rb_y = int(new_height * self.rubber_band_ratio.y())
+            self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_w, rb_h))
+
     def _get_current_frame_as_pixmap(self):
         ret, frame = self.cap.read()
         if ret:
@@ -98,25 +111,22 @@ class CropDialog(QDialog):
             return QPixmap.fromImage(qt_image)
         return QPixmap()
 
-    def _recalculate_scale_factor(self):
-        if self.display_pixmap.width() > 0:
-            self.scale_factor = self.original_pixmap.width() / self.display_pixmap.width()
-        else:
-            self.scale_factor = 1.0
-
     def _center_rubber_band(self):
-        rb_width = self.display_pixmap.width() // 2
-        rb_height = self.display_pixmap.height() // 2
-        rb_x = (self.display_pixmap.width() - rb_width) // 2
-        rb_y = (self.display_pixmap.height() - rb_height) // 2
-        self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_width, rb_height))
+        w = self.display_pixmap.width()
+        h = self.display_pixmap.height()
+        rb_w = w // 2
+        rb_h = h // 2
+        rb_x = (w - rb_w) // 2
+        rb_y = (h - rb_h) // 2
+        self.rubber_band.setGeometry(QRect(rb_x, rb_y, rb_w, rb_h))
+        self.rubber_band_ratio = QRectF(rb_x/w, rb_y/h, rb_w/w, rb_h/h)
 
     def update_frame(self, new_frame_pos):
         if self.start_frame <= new_frame_pos <= self.end_frame:
             self.current_frame_pos = new_frame_pos
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_pos)
             self.original_pixmap = self._get_current_frame_as_pixmap()
-            self.update_zoom(self.zoom_slider.value()) # Ridisegna con lo zoom corrente
+            self.update_pixmap_display()
 
     def next_frame(self):
         self.update_frame(self.current_frame_pos + 1)
@@ -124,27 +134,16 @@ class CropDialog(QDialog):
     def prev_frame(self):
         self.update_frame(self.current_frame_pos - 1)
 
-    def update_zoom(self, value):
-        zoom_factor = value / 100.0
-        new_width = int(self.original_pixmap.width() * zoom_factor)
-        new_height = int(self.original_pixmap.height() * zoom_factor)
-
-        self.display_pixmap = self.original_pixmap.scaled(
-            new_width, new_height,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-        self.image_label.setPixmap(self.display_pixmap)
-        self.image_label.adjustSize()
-        self._recalculate_scale_factor()
-
     def get_crop_rect(self):
+        scale_factor_w = self.original_pixmap.width() / self.display_pixmap.width() if self.display_pixmap.width() > 0 else 1
+        scale_factor_h = self.original_pixmap.height() / self.display_pixmap.height() if self.display_pixmap.height() > 0 else 1
+
         geom = self.rubber_band.geometry()
         return QRect(
-            int(geom.x() * self.scale_factor),
-            int(geom.y() * self.scale_factor),
-            int(geom.width() * self.scale_factor),
-            int(geom.height() * self.scale_factor)
+            int(geom.x() * scale_factor_w),
+            int(geom.y() * scale_factor_h),
+            int(geom.width() * scale_factor_w),
+            int(geom.height() * scale_factor_h)
         )
 
     def showEvent(self, event):
@@ -160,3 +159,11 @@ class CropDialog(QDialog):
     def closeEvent(self, event):
         self.cap.release()
         super().closeEvent(event)
+
+    def accept(self):
+        # Salva le proporzioni del rubber band prima di chiudere
+        w = self.display_pixmap.width()
+        h = self.display_pixmap.height()
+        geom = self.rubber_band.geometry()
+        self.rubber_band_ratio = QRectF(geom.x()/w, geom.y()/h, geom.width()/w, geom.height()/h)
+        super().accept()
