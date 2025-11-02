@@ -66,16 +66,34 @@ class FrameEditorDialog(QDialog):
 
 
     def get_edited_pixmap(self):
-        scale_x = self.original_pixmap.width() / self.display_pixmap.width()
-        scale_y = self.original_pixmap.height() / self.display_pixmap.height()
+        pixmap = self.image_label.pixmap()
+        if not pixmap or pixmap.isNull():
+            return QPixmap()
 
-        crop_rect = self.rubber_band.geometry()
+        label_size = self.image_label.size()
+        pixmap_size = pixmap.size()
+
+        offset_x = (label_size.width() - pixmap_size.width()) / 2
+        offset_y = (label_size.height() - pixmap_size.height()) / 2
+
+        rubber_band_geometry = self.rubber_band.geometry()
+
+        crop_x = rubber_band_geometry.x() - offset_x
+        crop_y = rubber_band_geometry.y() - offset_y
+
+        scale_x = self.original_pixmap.width() / pixmap_size.width()
+        scale_y = self.original_pixmap.height() / pixmap_size.height()
+
+        original_crop_x = int(crop_x * scale_x)
+        original_crop_y = int(crop_y * scale_y)
+        original_crop_width = int(rubber_band_geometry.width() * scale_x)
+        original_crop_height = int(rubber_band_geometry.height() * scale_y)
 
         crop_rect_on_original = QRect(
-            int(crop_rect.x() * scale_x),
-            int(crop_rect.y() * scale_y),
-            int(crop_rect.width() * scale_x),
-            int(crop_rect.height() * scale_y)
+            original_crop_x,
+            original_crop_y,
+            original_crop_width,
+            original_crop_height
         )
         return self.original_pixmap.copy(crop_rect_on_original)
 
