@@ -2592,6 +2592,42 @@ class VideoAudioManager(QMainWindow):
             self.summary_autosave_timer.stop()
         self.summary_autosave_timer.start(1500) # 1.5 secondi di ritardo
 
+    def _save_images_from_document(self, html_content, document):
+        """
+        Finds all frame:// images in the HTML, saves them to the project's 'frames'
+        folder, and replaces the src attribute with a relative file path.
+        """
+        if not self.current_project_path:
+            return html_content # Cannot save images without an active project
+
+        frames_dir = os.path.join(self.current_project_path, "frames")
+        os.makedirs(frames_dir, exist_ok=True)
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frame://'):
+                uri = QUrl(src)
+                image_data = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_data:
+                    # Generate a unique filename
+                    timestamp = int(time.time() * 1000)
+                    image_filename = f"frame_{timestamp}.png"
+                    image_path = os.path.join(frames_dir, image_filename)
+
+                    # Save the QImage to the file
+                    image_data.save(image_path, "PNG")
+
+                    # Update the src to the relative path
+                    relative_path = os.path.join("frames", image_filename).replace("\\", "/")
+                    img['src'] = relative_path
+                    modified = True
+
+        return str(soup) if modified else html_content
+
     def _sync_active_summary_to_model(self):
         """
         Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati.
@@ -2609,42 +2645,22 @@ class VideoAudioManager(QMainWindow):
             logging.warning("Could not determine summary key for active widget.")
             return
 
-        html_content = active_widget.toHtml()
-        doc = active_widget.document()
-        soup = BeautifulSoup(html_content, 'html.parser')
-
-        if self.current_project_path:
-            frames_dir = os.path.join(self.current_project_path, "frames")
-            os.makedirs(frames_dir, exist_ok=True)
-
-            for img_tag in soup.find_all('img'):
-                src = img_tag.get('src')
-                if src and src.startswith('frame://'):
-
-                    image_name = src.replace('frame://', '')
-
-                    resource = doc.resource(QTextDocument.ResourceType.ImageResource, QUrl(src))
-                    if isinstance(resource, QImage):
-
-                        image_filename = f"{image_name}.png"
-                        image_path = os.path.join(frames_dir, image_filename)
-
-                        resource.save(image_path)
-
-
-                        img_tag['src'] = os.path.join("frames", image_filename).replace('\\', '/')
-
-
-        html_content = str(soup)
-
         if "combined" in summary_key:
             data_source = self.combined_summary
         else:
             data_source = self.summaries
 
-        markdown_content = markdownify(html_content, heading_style="ATX")
+        # 1. Get HTML and the document
+        html_content = active_widget.toHtml()
+        document = active_widget.document()
+
+        # 2. Save embedded images to files and update HTML with relative paths
+        html_with_relative_paths = self._save_images_from_document(html_content, document)
+
+        # 3. Convert the modified HTML to Markdown for storage
+        markdown_content = markdownify(html_with_relative_paths, heading_style="ATX")
         data_source[summary_key] = markdown_content
-        logging.debug(f"Synced UI to model for key: {summary_key} after converting to Markdown.")
+        logging.debug(f"Synced UI to model for key: {summary_key} after processing images.")
 
     def onProcessComplete(self, result):
         if isinstance(result, dict):
@@ -2740,6 +2756,41 @@ class VideoAudioManager(QMainWindow):
 
             self.active_summary_type = None
 
+    def _load_images_into_document(self, html_content, document):
+        """
+        Finds all images with relative paths in the HTML, loads them from the
+        project's 'frames' folder, and adds them as resources to the QTextDocument.
+        Returns the updated HTML with src attributes pointing to frame:// URIs.
+        """
+        if not self.current_project_path:
+            return html_content
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frames/'):
+                # Assicurati che il percorso sia corretto per il sistema operativo corrente
+                normalized_src = os.path.normpath(src)
+                image_path = os.path.join(self.current_project_path, normalized_src)
+
+                if os.path.exists(image_path):
+                    q_image = QImage(image_path)
+                    if not q_image.isNull():
+                        # Usa un nome univoco per la risorsa per evitare conflitti
+                        unique_id = f"frame_{int(time.time() * 1000)}_{os.path.basename(src)}"
+                        uri = QUrl(f"frame://{unique_id}")
+                        document.addResource(QTextDocument.ResourceType.ImageResource, uri, q_image)
+                        img['src'] = uri.toString()
+                        modified = True
+                else:
+                    logging.warning(f"Image file not found at path: {image_path}")
+
+
+        return str(soup) if modified else html_content
+
     def _update_summary_view(self):
         """
         Metodo centralizzato per aggiornare la vista del riassunto.
@@ -2765,9 +2816,12 @@ class VideoAudioManager(QMainWindow):
 
         # 2. Converti il Markdown in HTML
         html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
-        html_content = self._load_images_into_document(html_content, target_widget)
 
-        # 3. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
+        # 3. Carica le immagini dai file relativi nel documento e aggiorna l'HTML
+        #    Questo deve essere fatto prima di qualsiasi altra manipolazione dell'HTML
+        html_content = self._load_images_into_document(html_content, target_widget.document())
+
+        # 4. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
         show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
         display_html = html_content
         if show_timestamps:
@@ -2777,12 +2831,14 @@ class VideoAudioManager(QMainWindow):
             # Altrimenti, rimuovili per la visualizzazione.
             display_html = remove_timestamps_from_html(html_content)
 
-        # 4. Aggiorna la UI
+        # 5. Aggiorna la UI
         target_widget.blockSignals(True)
+        # Svuota le risorse esistenti prima di caricare il nuovo contenuto
+        target_widget.document().clear()
         target_widget.setHtml(display_html)
         target_widget.blockSignals(False)
 
-        # 5. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
+        # 6. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
         # per prevenire la perdita di dati (salvataggio di una vista parziale).
         # L'utente può modificare solo quando vede il contenuto completo (con timecode).
         target_widget.setReadOnly(not show_timestamps)
@@ -2791,34 +2847,6 @@ class VideoAudioManager(QMainWindow):
         # This is now a generic error handler for AI text processes.
         # The main error display is handled by finish_task.
         self.show_status_message(f"Errore processo AI: {error_message}", error=True)
-
-    def _load_images_into_document(self, html_content, target_widget):
-        if not self.current_project_path or not html_content:
-            return html_content
-
-        soup = BeautifulSoup(html_content, 'html.parser')
-        doc = target_widget.document()
-
-        for img_tag in soup.find_all('img'):
-            src = img_tag.get('src')
-            # Assicurati che il percorso sia relativo e non un URL web
-            if src and src.startswith('frames/') and '://' not in src:
-                # Usa os.path.normpath per gestire correttamente i separatori di percorso ('/' vs '\')
-                normalized_src = os.path.normpath(src)
-                image_path = os.path.join(self.current_project_path, normalized_src)
-
-                if os.path.exists(image_path):
-                    image = QImage(image_path)
-                    if not image.isNull():
-                        # Genera un nome univoco per la risorsa per evitare conflitti
-                        image_name = f"frame_{os.path.basename(image_path)}_{int(time.time() * 1000)}"
-                        uri = QUrl(f"frame://{image_name}")
-                        doc.addResource(QTextDocument.ResourceType.ImageResource, uri, image)
-                        img_tag['src'] = uri.toString()
-                else:
-                    logging.warning(f"Immagine non trovata al percorso: {image_path}")
-
-        return str(soup)
 
     def highlight_selected_text(self):
         """Applies or removes the selected highlight color from the text."""
@@ -4640,8 +4668,9 @@ class VideoAudioManager(QMainWindow):
 
     def export_summary(self):
         """
-        Prepara l'HTML per l'esportazione risolvendo i percorsi delle immagini in percorsi
-        di file temporanei assoluti, quindi esporta in DOCX o PDF.
+        Esporta il contenuto del riassunto (con formattazione) in un documento Word o PDF,
+        utilizzando un dialogo personalizzato per le opzioni.
+        Esporta esattamente ciò che l'utente vede (WYSIWYG).
         """
         active_summary_area = self.get_current_summary_text_area()
         if not active_summary_area.document().toPlainText().strip():
@@ -4655,144 +4684,99 @@ class VideoAudioManager(QMainWindow):
         options = dialog.get_options()
         path = options['filepath']
         file_format = options['format']
+
         if not path:
             self.show_status_message("Percorso del file non valido.", error=True)
             return
 
-        original_html = active_summary_area.toHtml()
-        soup = BeautifulSoup(original_html, 'html.parser')
-        temp_image_files = []
+        # Esporta il contenuto HTML così come è visualizzato nel widget
+        export_html = active_summary_area.toHtml()
 
+        if file_format == 'docx':
+            self._export_to_docx(export_html, path)
+        elif file_format == 'pdf':
+            self._export_to_pdf(export_html, path)
+
+    def _resolve_image_path_for_export(self, src_attribute, document):
+        """
+        Resolves an image's src attribute (frame:// or relative) to an absolute
+        temporary file path suitable for embedding in an export file.
+        Returns the path to the temporary file, which the caller is responsible for deleting.
+        """
+        temp_file = None
         try:
-            # Pre-processa l'HTML per sostituire tutti i src delle immagini con percorsi assoluti
-            for img_tag in soup.find_all('img'):
-                src = img_tag.get('src')
-                if not src:
-                    continue
-
-                # Risolve il percorso (frame:// o relativo) in un percorso file assoluto temporaneo
-                resolved_path = self._resolve_image_path(src, temp_image_files)
-                if resolved_path:
-                    img_tag['src'] = resolved_path
-                else:
-                    # Rimuove il tag se l'immagine non può essere risolta
-                    img_tag.decompose()
-
-            processed_html = str(soup)
-
-            # Esegui l'esportazione con l'HTML processato
-            if file_format == 'docx':
-                self._export_to_docx(processed_html, path)
-            elif file_format == 'pdf':
-                self._export_to_pdf(processed_html, path)
-
-        finally:
-            # Pulisce tutti i file temporanei creati
-            for temp_file in temp_image_files:
-                try:
-                    os.remove(temp_file)
-                except OSError as e:
-                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_file}: {e}")
-
-    def _resolve_image_path(self, src, temp_files_list):
-        """
-        Risolve un attributo 'src' di un'immagine in un percorso file assoluto.
-        Gestisce URI 'frame://' e percorsi relativi 'frames/'.
-        Aggiunge i percorsi dei file temporanei creati a 'temp_files_list'.
-        """
-        active_summary_area = self.get_current_summary_text_area()
-        doc = active_summary_area.document()
-
-        if src.startswith('frame://'):
-            # Risorsa in memoria dal QTextDocument
-            resource = doc.resource(QTextDocument.ResourceType.ImageResource, QUrl(src))
-            if isinstance(resource, QImage):
-                try:
-                    # Crea un file temporaneo per l'immagine
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".png", prefix="export_") as tmp:
-                        resource.save(tmp, "PNG")
-                        temp_path = tmp.name
-                    temp_files_list.append(temp_path) # Aggiungi alla lista per la pulizia
+            if src_attribute.startswith('frame://'):
+                uri = QUrl(src_attribute)
+                image_qimage = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qimage and not image_qimage.isNull():
+                    # Create a temporary file to save the QImage
+                    fd, temp_path = tempfile.mkstemp(suffix=".png")
+                    os.close(fd)
+                    image_qimage.save(temp_path)
                     return temp_path
-                except Exception as e:
-                    logging.error(f"Impossibile salvare la risorsa immagine temporanea da {src}: {e}")
-                    return None
+            elif src_attribute.startswith('frames/'):
+                if self.current_project_path:
+                    # Create an absolute path from the relative project path
+                    abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
+                    if os.path.exists(abs_path):
+                        return abs_path # Return the direct path, no temp file needed
+        except Exception as e:
+            logging.error(f"Error resolving image path '{src_attribute}': {e}")
 
-        elif src.startswith('frames/'):
-            # Percorso file relativo all'interno del progetto
-            if self.current_project_path:
-                full_path = os.path.join(self.current_project_path, src)
-                if os.path.exists(full_path):
-                    return full_path
-
-        # Se non è nessuno dei casi precedenti o il file non esiste, ritorna None
-        return None
+        return None # Return None if path resolution fails
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF, gestendo correttamente le immagini."""
+        """Esporta il contenuto HTML in un file PDF, utilizzando image_map per la gestione delle immagini."""
+        temp_files_to_clean = []
         try:
             pdf = FPDF()
             pdf.add_page()
-            pdf.set_auto_page_break(auto=True, margin=15)
 
             font_path = get_resource("fonts/DejaVuSans.ttf")
             if not os.path.exists(font_path):
-                raise FileNotFoundError("Font DejaVuSans.ttf non trovato.")
+                raise FileNotFoundError("Font DejaVuSans.ttf non trovato. Assicurati che sia in src/res/fonts/.")
 
             pdf.add_font("DejaVu", "", font_path, uni=True)
             pdf.set_font("DejaVu", size=12)
 
+            active_summary_area = self.get_current_summary_text_area()
+            doc = active_summary_area.document()
+
+            def map_image(src):
+                # Funzione per mappare gli URI delle immagini a percorsi di file locali
+                image_path = self._resolve_image_path_for_export(src, doc)
+                if image_path:
+                    if not src.startswith('frames/'):
+                        temp_files_to_clean.append(image_path)
+                    return image_path
+                return src  # Restituisce l'originale se non risolto
+
+            # Rimuove i tag body/html per evitare problemi di parsing con fpdf
             soup = BeautifulSoup(html_content, 'html.parser')
+            body_content = soup.body.decode_contents() if soup.body else str(soup)
 
-            if soup.body:
-                for element in soup.body.contents:
-                    if element.name == 'p':
-                        # Gestisce paragrafi che possono contenere testo e/o immagini.
-                        # FPDF non supporta il testo a capo automatico attorno alle immagini,
-                        # quindi testo e immagini vengono resi in sequenza.
-                        for content in element.contents:
-                            if isinstance(content, str):
-                                pdf.write(5, content)
-                            elif content.name == 'img' and content.get('src'):
-                                image_path = content['src']
-                                if os.path.exists(image_path):
-                                    try:
-                                        # Calcola la larghezza mantenendo l'aspect ratio
-                                        image = Image.open(image_path)
-                                        img_w, img_h = image.size
-                                        available_width = pdf.w - pdf.l_margin - pdf.r_margin
-
-                                        # Ridimensiona se l'immagine è più larga della pagina
-                                        width = min(img_w, available_width)
-
-                                        pdf.ln(5) # Spazio prima dell'immagine
-                                        pdf.image(image_path, w=width)
-                                        pdf.ln(5) # Spazio dopo l'immagine
-                                    except Exception as e:
-                                        logging.error(f"Errore nell'incorporare l'immagine {image_path} nel PDF: {e}")
-                        pdf.ln() # Nuova riga dopo ogni paragrafo
-                    elif element.name in ['h1', 'h2', 'h3', 'h4']:
-                        # Gestione semplice degli header
-                        level = int(element.name[1])
-                        size = 24 - (level * 2)
-                        pdf.set_font("DejaVu", size=size)
-                        pdf.write(10, element.get_text())
-                        pdf.ln(10)
-                        pdf.set_font("DejaVu", size=12) # Ripristina il font
-                    elif isinstance(element, str) and element.strip():
-                        # Testo che non si trova all'interno di un tag noto
-                        pdf.write(5, element)
-                        pdf.ln()
+            pdf.write_html(body_content, image_map=map_image)
 
             pdf.output(path)
-            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+            self.show_status_message(f"Riassunto esportato con successo in PDF: {os.path.basename(path)}")
+
         except Exception as e:
-            self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
+            self.show_status_message(f"Errore durante l'esportazione in PDF: {e}", error=True)
             import traceback
-            logging.error(f"Errore durante l'esportazione in PDF: {e}\n{traceback.format_exc()}")
+            logging.error(f"Dettagli errore esportazione PDF: {traceback.format_exc()}")
+            raise
+        finally:
+            # Pulisce tutti i file temporanei creati
+            for temp_path in temp_files_to_clean:
+                try:
+                    os.remove(temp_path)
+                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
+                except OSError as e:
+                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
     def _export_to_docx(self, summary_html, path):
-        """Esporta il contenuto HTML (con percorsi immagine assoluti) in un file DOCX."""
+        """Esporta il contenuto HTML in un file DOCX, gestendo la pulizia dei file temporanei."""
+        temp_files_to_clean = []
         try:
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
@@ -4808,49 +4792,70 @@ class VideoAudioManager(QMainWindow):
                 if element.name.startswith('h') and element.name[1:].isdigit():
                     level = int(element.name[1:])
                     p = document.add_heading(level=min(level, 4))
-                    self._add_runs_to_paragraph(element, p)
+                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
                 elif element.name == 'p':
                     p = document.add_paragraph()
-                    self._add_runs_to_paragraph(element, p)
+                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
                 elif element.name in ['ul', 'ol']:
                     for li in element.find_all('li', recursive=False):
                         p = document.add_paragraph(style='List Bullet')
-                        self._add_runs_to_paragraph(li, p)
+                        temp_files_to_clean.extend(self._add_runs_to_paragraph(li, p))
 
             document.save(path)
-            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+            self.show_status_message(f"Riassunto esportato con successo in DOCX: {os.path.basename(path)}")
         except Exception as e:
-            self.show_status_message(f"Impossibile esportare il riassunto: {e}", error=True)
+            self.show_status_message(f"Impossibile esportare il riassunto in DOCX: {e}", error=True)
             import traceback
             logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
+        finally:
+            # Pulisce tutti i file temporanei raccolti
+            for temp_path in temp_files_to_clean:
+                try:
+                    os.remove(temp_path)
+                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
+                except OSError as e:
+                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
     def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Analizza ricorsivamente un elemento HTML, aggiunge 'run' formattati a un paragrafo DOCX
-        e gestisce le immagini inline da percorsi file.
+        Recursively parses an HTML element, adds formatted runs to a DOCX paragraph,
+        and handles inline images. Returns a list of temporary file paths to be cleaned up.
         """
         from docx.shared import Inches, Pt
+        temp_files_to_clean = []
+        active_summary_area = self.get_current_summary_text_area()
+        doc = active_summary_area.document()
 
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
                 self._apply_styles_to_run(element, run)
-            elif child.name == 'img' and child.get('src'):
-                image_path = child['src']
-                if os.path.exists(image_path):
+            elif child.name == 'img':
+                src = child.get('src', '')
+                image_path = self._resolve_image_path_for_export(src, doc)
+                if image_path:
+                    # If the image was from a frame:// URI, it's a temporary file
+                    if not src.startswith('frames/'):
+                        temp_files_to_clean.append(image_path)
+
                     try:
                         style = child.get('style', '')
                         width_match = re.search(r'width:\s*(\d+)', style)
                         height_match = re.search(r'height:\s*(\d+)', style)
 
+                        # Use Pt for width and height for better control
                         width = Pt(int(width_match.group(1))) if width_match else Inches(6)
                         height = Pt(int(height_match.group(1))) if height_match else None
 
                         paragraph.add_run().add_picture(image_path, width=width, height=height)
-                    except Exception as e:
-                        logging.error(f"Impossibile aggiungere l'immagine {image_path} al DOCX: {e}")
+                    except Exception as img_e:
+                        logging.error(f"Could not embed image {image_path} in DOCX: {img_e}")
+
             elif child.name:
-                self._add_runs_to_paragraph(child, paragraph)
+                # Extend the list with temp files from recursive calls
+                temp_files_to_clean.extend(self._add_runs_to_paragraph(child, paragraph))
+
+        return temp_files_to_clean
 
     def _apply_styles_to_run(self, element, run):
         """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
@@ -6003,15 +6008,12 @@ class VideoAudioManager(QMainWindow):
         # Decide quale testo mostrare e imposta lo stato del toggle
         if self.transcription_corrected:
             html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
-            html_content = self._load_images_into_document(html_content, self.singleTranscriptionTextArea)
             self.singleTranscriptionTextArea.setHtml(html_content)
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
         else:
             # Carica il Markdown direttamente, che verrà renderizzato correttamente
-            html_content = markdown.markdown(self.transcription_original, extensions=['fenced_code', 'tables'])
-            html_content = self._load_images_into_document(html_content, self.singleTranscriptionTextArea)
-            self.singleTranscriptionTextArea.setHtml(html_content)
+            self.singleTranscriptionTextArea.setMarkdown(self.transcription_original)
             self.transcriptionViewToggle.setEnabled(False)
             self.transcriptionViewToggle.setChecked(False)
 
