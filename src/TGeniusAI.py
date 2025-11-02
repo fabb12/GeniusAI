@@ -4729,7 +4729,7 @@ class VideoAudioManager(QMainWindow):
         return None
 
     def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML (con percorsi immagine assoluti) in un file PDF."""
+        """Esporta il contenuto HTML in un file PDF, gestendo correttamente le immagini."""
         try:
             pdf = FPDF()
             pdf.add_page()
@@ -4745,8 +4745,44 @@ class VideoAudioManager(QMainWindow):
             soup = BeautifulSoup(html_content, 'html.parser')
 
             if soup.body:
-                # Usa write_html che gestisce la maggior parte dei tag di base
-                pdf.write_html(str(soup.body))
+                for element in soup.body.contents:
+                    if element.name == 'p':
+                        # Gestisce paragrafi che possono contenere testo e/o immagini.
+                        # FPDF non supporta il testo a capo automatico attorno alle immagini,
+                        # quindi testo e immagini vengono resi in sequenza.
+                        for content in element.contents:
+                            if isinstance(content, str):
+                                pdf.write(5, content)
+                            elif content.name == 'img' and content.get('src'):
+                                image_path = content['src']
+                                if os.path.exists(image_path):
+                                    try:
+                                        # Calcola la larghezza mantenendo l'aspect ratio
+                                        image = Image.open(image_path)
+                                        img_w, img_h = image.size
+                                        available_width = pdf.w - pdf.l_margin - pdf.r_margin
+
+                                        # Ridimensiona se l'immagine è più larga della pagina
+                                        width = min(img_w, available_width)
+
+                                        pdf.ln(5) # Spazio prima dell'immagine
+                                        pdf.image(image_path, w=width)
+                                        pdf.ln(5) # Spazio dopo l'immagine
+                                    except Exception as e:
+                                        logging.error(f"Errore nell'incorporare l'immagine {image_path} nel PDF: {e}")
+                        pdf.ln() # Nuova riga dopo ogni paragrafo
+                    elif element.name in ['h1', 'h2', 'h3', 'h4']:
+                        # Gestione semplice degli header
+                        level = int(element.name[1])
+                        size = 24 - (level * 2)
+                        pdf.set_font("DejaVu", size=size)
+                        pdf.write(10, element.get_text())
+                        pdf.ln(10)
+                        pdf.set_font("DejaVu", size=12) # Ripristina il font
+                    elif isinstance(element, str) and element.strip():
+                        # Testo che non si trova all'interno di un tag noto
+                        pdf.write(5, element)
+                        pdf.ln()
 
             pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
