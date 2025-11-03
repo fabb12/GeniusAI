@@ -9,11 +9,12 @@ import logging
 import json
 import markdown
 import torch
+import base64
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 
 # Librerie PyQt6
-from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings)
-from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor)
+from PyQt6.QtCore import (Qt, QUrl, QEvent, QTimer, QPoint, QTime, QSettings, QBuffer, QIODevice)
+from PyQt6.QtGui import (QIcon, QAction, QDesktopServices, QImage, QPixmap, QFont, QColor, QTextCharFormat, QTextCursor, QImage, QTextDocument)
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QGridLayout,
     QPushButton, QLabel, QCheckBox, QRadioButton, QLineEdit,
@@ -31,7 +32,7 @@ from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
     concatenate_videoclips, VideoFileClip, AudioFileClip, vfx, TextClip, ImageSequenceClip
 )
-from moviepy.audio.AudioClip import CompositeAudioClip
+from moviepy.audio.AudioClip import CompositeAudioClip, AudioArrayClip
 from pydub import AudioSegment
 from PIL import Image, ImageDraw, ImageFont
 import cv2
@@ -61,7 +62,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
-from src.ui.ImageSizeDialog import ImageSizeDialog
+from src.ui.ImageSizeDialog import ImageSizeDialog, ResizedImageDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -72,6 +73,7 @@ from src.services.OperationalGuideThread import OperationalGuideThread
 from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
+from src.ui.FrameEditorDialog import FrameEditorDialog
 from src.ui.CursorOverlay import CursorOverlay
 from src.ui.MultiLineInputDialog import MultiLineInputDialog
 from src.ui.AddMediaDialog import AddMediaDialog
@@ -581,6 +583,85 @@ class AudioProcessingThread(QThread):
             if 'new_audio_clip' in locals(): new_audio_clip.close()
 
 
+class ReverseVideoThread(QThread):
+    completed = pyqtSignal(str)
+    error = pyqtSignal(str)
+    progress = pyqtSignal(int, str)
+
+    def __init__(self, video_path, start_time=None, end_time=None, is_audio_only=False, parent=None):
+        super().__init__(parent)
+        self.video_path = video_path
+        self.start_time = start_time
+        self.end_time = end_time
+        self.is_audio_only = is_audio_only
+        self.main_window = parent
+        self._is_running = True
+
+    def run(self):
+        clip = None
+        reversed_media = None
+        try:
+            if not self.video_path or not os.path.exists(self.video_path):
+                self.error.emit("Media file not found.")
+                return
+
+            self.progress.emit(10, "Loading and clipping media...")
+            if self.is_audio_only:
+                clip = AudioFileClip(self.video_path)
+                if self.start_time is not None and self.end_time is not None:
+                    clip = clip.subclip(self.start_time, self.end_time)
+
+                if not self._is_running: return
+
+                self.progress.emit(50, "Reversing audio...")
+                audio_frames = [frame for frame in clip.iter_frames()]
+                reversed_audio_frames = audio_frames[::-1]
+                reversed_media = AudioArrayClip(np.array(reversed_audio_frames), fps=clip.fps)
+
+                temp_path = self.main_window.get_temp_filepath(suffix=".mp3", prefix="reversed_")
+                self.progress.emit(70, "Saving reversed audio...")
+                reversed_media.write_audiofile(temp_path)
+            else:
+                clip = VideoFileClip(self.video_path)
+                if self.start_time is not None and self.end_time is not None:
+                    clip = clip.subclip(self.start_time, self.end_time)
+
+                if not self._is_running: return
+
+                self.progress.emit(30, "Reversing video frames...")
+                frames = [frame for frame in clip.iter_frames()]
+                reversed_frames = frames[::-1]
+                reversed_media = ImageSequenceClip(reversed_frames, fps=clip.fps)
+
+                if clip.audio:
+                    self.progress.emit(50, "Reversing audio...")
+                    audio_frames = [frame for frame in clip.audio.iter_frames()]
+                    reversed_audio_frames = audio_frames[::-1]
+                    reversed_audio = AudioArrayClip(np.array(reversed_audio_frames), fps=clip.audio.fps)
+                    reversed_media = reversed_media.set_audio(reversed_audio)
+
+                if not self._is_running: return
+
+                temp_path = self.main_window.get_temp_filepath(suffix=".mp4", prefix="reversed_")
+                self.progress.emit(70, "Saving reversed video...")
+                logger = MergeProgressLogger(self.progress)
+                reversed_media.write_videofile(temp_path, codec='libx264', audio_codec='aac', logger=logger)
+
+            if self._is_running:
+                self.completed.emit(temp_path)
+
+        except Exception as e:
+            if self._is_running:
+                self.error.emit(str(e))
+        finally:
+            if clip: clip.close()
+            if reversed_media: reversed_media.close()
+
+    def stop(self):
+        self._is_running = False
+        self.progress.emit(0, "Cancelling...")
+
+
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -703,6 +784,7 @@ class VideoAudioManager(QMainWindow):
         }
         self.active_summary_type = None # e.g., 'detailed', 'meeting_combined'
         self.original_audio_ai_html = ""
+        self.reversed_video_path = None
 
 
         # Avvia la registrazione automatica delle chiamate
@@ -1159,6 +1241,14 @@ class VideoAudioManager(QMainWindow):
         self.speedSpinBox.setSingleStep(0.1)
         self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
         speedLayout.addWidget(self.speedSpinBox)
+
+        self.reverseButton = QPushButton('')
+        self.reverseButton.setIcon(QIcon(get_resource("rewind_play.png")))
+        self.reverseButton.setToolTip("Inverti riproduzione audio/video")
+        self.reverseButton.clicked.connect(self.toggleReversePlayback)
+        self.reverseButton.setFixedSize(32, 32)
+        speedLayout.addWidget(self.reverseButton)
+
         videoPlayerLayout.addLayout(speedLayout)
 
         videoPlayerLayout.addLayout(playbackControlLayout)
@@ -1348,6 +1438,9 @@ class VideoAudioManager(QMainWindow):
         self.singleTranscriptionTextArea.setPlaceholderText("La trascrizione del video corrente apparirà qui...")
         self.singleTranscriptionTextArea.textChanged.connect(self.handleTextChange)
         self.singleTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.singleTranscriptionTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.singleTranscriptionTextArea, timestamp, pos)
+        )
         self.transcriptionTabs.addTab(self.singleTranscriptionTextArea, "Trascrizione Singola")
 
         # Tab per la Trascrizione Multipla
@@ -1470,7 +1563,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedTextArea = CustomTextEdit(self)
         self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
         self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedTextArea, timestamp, pos)
+        )
         self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
@@ -1478,7 +1573,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingTextArea = CustomTextEdit(self)
         self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingTextArea, timestamp, pos)
+        )
         self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
@@ -1486,7 +1583,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
         self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
         self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedIntegratedTextArea, timestamp, pos)
+        )
         self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
@@ -1494,7 +1593,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingIntegratedTextArea, timestamp, pos)
+        )
         self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
 
@@ -1502,7 +1603,9 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedDetailedTextArea, timestamp, pos)
+        )
         self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
 
@@ -1510,9 +1613,21 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(self.handle_insert_frame_request)
+        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedMeetingTextArea, timestamp, pos)
+        )
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
+
+        # Connect frame edit signals
+        self.singleTranscriptionTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+
 
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
@@ -1967,40 +2082,98 @@ class VideoAudioManager(QMainWindow):
     def onIntegrazioneError(self, error_message):
         self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
 
-    def handle_insert_frame_request(self, timestamp_seconds):
+    def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
         """
-        Handles the request to insert a video frame at a specific timestamp.
+        Handles the request to insert a video frame at a specific timestamp by opening a CropDialog.
         """
-        if not self.videoPathLineEdit:
-            self.show_status_message("Nessun video caricato.", error=True)
+        video_path = self._get_selected_analysis_video_path()
+        if not video_path:
+            self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
             return
 
-        dialog = ImageSizeDialog(self)
-        if dialog.exec():
-            size_percentage = dialog.get_selected_size_percentage()
+        # Open the CropDialog to let the user select the precise frame
+        dialog = CropDialog(video_path, start_time=timestamp_seconds, end_time=timestamp_seconds + 1, parent=self)
 
-            # Extract the frame
-            frame_pixmap = self.get_frame_at(int(timestamp_seconds * 1000))
-            if not frame_pixmap:
-                self.show_status_message("Impossibile estrarre il frame dal video.", error=True)
+        # Set the initial frame in the dialog
+        dialog.update_frame(int(timestamp_seconds * dialog.fps))
+
+        if dialog.exec():
+            # Get the selected frame (not the crop rect)
+            final_frame_pos = dialog.current_frame_pos
+            final_timestamp = final_frame_pos / dialog.fps
+
+            original_qimage = dialog.original_pixmap.toImage()
+            cropped_pixmap = dialog.get_cropped_pixmap()
+
+            if cropped_pixmap.isNull():
+                self.show_status_message("Impossibile estrarre il frame ritagliato.", error=True)
                 return
 
-            # Convert pixmap to base64
-            from io import BytesIO
-            buffer = BytesIO()
-            frame_pixmap.toImage().save(buffer, "JPG")
-            b64_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            cropped_qimage = cropped_pixmap.toImage()
 
-            # Create the img tag
-            style = f'max-width: {size_percentage}%; height: auto; display: block; margin-left: auto; margin-right: auto; margin-top: 5px; margin-bottom: 5px; border: 1px solid #ccc; border-radius: 5px;'
-            img_tag = f'<br><img src="data:image/jpeg;base64,{b64_data}" alt="Frame at {timestamp_seconds:.1f}s" style="{style}"><br>'
+            if not cropped_qimage:
+                self.show_status_message("Impossibile estrarre il frame selezionato.", error=True)
+                return
 
-            # Insert the image into the active text edit
-            active_text_edit = self.get_current_summary_text_area()
-            if active_text_edit:
-                cursor = active_text_edit.textCursor()
-                cursor.insertHtml(img_tag)
-                self.show_status_message("Frame inserito con successo.")
+            # Ask for size
+            size_dialog = ImageSizeDialog(self)
+            if size_dialog.exec():
+                size_percentage = size_dialog.get_selected_size_percentage()
+                width = int(cropped_qimage.width() * (size_percentage / 100))
+                height = int(cropped_qimage.height() * (size_percentage / 100))
+
+                # Insert the image at the original cursor position
+                if target_text_edit:
+                    cursor = target_text_edit.textCursor()
+                    cursor.setPosition(position)
+                    target_text_edit.setTextCursor(cursor)
+
+                    # Insert a newline before the image to ensure it's on its own line
+                    cursor.insertText("\n")
+
+                    target_text_edit.insert_image_with_metadata(
+                        displayed_image=cropped_qimage,
+                        width=width,
+                        height=height,
+                        video_path=video_path,
+                        timestamp=final_timestamp,
+                        original_image=original_qimage
+                    )
+
+                    # Insert another newline after the image for spacing
+                    cursor.insertText("\n")
+
+                    self.show_status_message("Frame inserito con successo.")
+
+    def handle_frame_edit_request(self, image_name):
+        """Handles the request to edit an inserted frame."""
+        # Find the widget that sent the signal
+        sender_widget = self.sender()
+        if not isinstance(sender_widget, CustomTextEdit):
+            return
+
+        # Get the original image from the widget's metadata storage
+        metadata = sender_widget.image_metadata.get(image_name)
+        if not metadata:
+            self.show_status_message("Metadati dell'immagine non trovati.", error=True)
+            return
+
+        original_image = metadata.get('original_image')
+        if not original_image:
+            self.show_status_message("Immagine originale non trovata.", error=True)
+            return
+
+        pixmap = QPixmap.fromImage(original_image)
+        dialog = FrameEditorDialog(pixmap, self)
+        if dialog.exec():
+            edited_pixmap = dialog.get_edited_pixmap()
+            if not edited_pixmap.isNull():
+                edited_image = edited_pixmap.toImage()
+                sender_widget.update_image_resource(
+                    image_name, edited_image, edited_pixmap.width(), edited_pixmap.height()
+                )
+                self.show_status_message("Frame aggiornato con successo.")
+
 
     def toggle_recording_indicator(self):
         """Toggles the visibility of the recording indicator to make it blink."""
@@ -2419,6 +2592,42 @@ class VideoAudioManager(QMainWindow):
             self.summary_autosave_timer.stop()
         self.summary_autosave_timer.start(1500) # 1.5 secondi di ritardo
 
+    def _save_images_from_document(self, html_content, document):
+        """
+        Finds all frame:// images in the HTML, saves them to the project's 'frames'
+        folder, and replaces the src attribute with a relative file path.
+        """
+        if not self.current_project_path:
+            return html_content # Cannot save images without an active project
+
+        frames_dir = os.path.join(self.current_project_path, "frames")
+        os.makedirs(frames_dir, exist_ok=True)
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frame://'):
+                uri = QUrl(src)
+                image_data = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_data:
+                    # Generate a unique filename
+                    timestamp = int(time.time() * 1000)
+                    image_filename = f"frame_{timestamp}.png"
+                    image_path = os.path.join(frames_dir, image_filename)
+
+                    # Save the QImage to the file
+                    image_data.save(image_path, "PNG")
+
+                    # Update the src to the relative path
+                    relative_path = os.path.join("frames", image_filename).replace("\\", "/")
+                    img['src'] = relative_path
+                    modified = True
+
+        return str(soup) if modified else html_content
+
     def _sync_active_summary_to_model(self):
         """
         Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati.
@@ -2427,8 +2636,6 @@ class VideoAudioManager(QMainWindow):
         """
         active_widget = self.get_current_summary_text_area()
 
-        # CRUCIALE: non salvare se il widget è in sola lettura.
-        # Questo previene la perdita di dati quando la vista è filtrata (es. timecode nascosti).
         if not active_widget or active_widget.isReadOnly():
             logging.debug("Sync to model skipped: widget is read-only or not available.")
             return
@@ -2438,18 +2645,22 @@ class VideoAudioManager(QMainWindow):
             logging.warning("Could not determine summary key for active widget.")
             return
 
-        # Determina quale dizionario usare (singolo, combinato)
         if "combined" in summary_key:
             data_source = self.combined_summary
         else:
             data_source = self.summaries
 
-        # Salva il contenuto del widget, convertito in Markdown, nel modello dati.
+        # 1. Get HTML and the document
         html_content = active_widget.toHtml()
-        # Converte l'HTML in Markdown, preservando la formattazione di base.
-        markdown_content = markdownify(html_content, heading_style="ATX")
+        document = active_widget.document()
+
+        # 2. Save embedded images to files and update HTML with relative paths
+        html_with_relative_paths = self._save_images_from_document(html_content, document)
+
+        # 3. Convert the modified HTML to Markdown for storage
+        markdown_content = markdownify(html_with_relative_paths, heading_style="ATX")
         data_source[summary_key] = markdown_content
-        logging.debug(f"Synced UI to model for key: {summary_key} after converting to Markdown.")
+        logging.debug(f"Synced UI to model for key: {summary_key} after processing images.")
 
     def onProcessComplete(self, result):
         if isinstance(result, dict):
@@ -2545,6 +2756,41 @@ class VideoAudioManager(QMainWindow):
 
             self.active_summary_type = None
 
+    def _load_images_into_document(self, html_content, document):
+        """
+        Finds all images with relative paths in the HTML, loads them from the
+        project's 'frames' folder, and adds them as resources to the QTextDocument.
+        Returns the updated HTML with src attributes pointing to frame:// URIs.
+        """
+        if not self.current_project_path:
+            return html_content
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frames/'):
+                # Assicurati che il percorso sia corretto per il sistema operativo corrente
+                normalized_src = os.path.normpath(src)
+                image_path = os.path.join(self.current_project_path, normalized_src)
+
+                if os.path.exists(image_path):
+                    q_image = QImage(image_path)
+                    if not q_image.isNull():
+                        # Usa un nome univoco per la risorsa per evitare conflitti
+                        unique_id = f"frame_{int(time.time() * 1000)}_{os.path.basename(src)}"
+                        uri = QUrl(f"frame://{unique_id}")
+                        document.addResource(QTextDocument.ResourceType.ImageResource, uri, q_image)
+                        img['src'] = uri.toString()
+                        modified = True
+                else:
+                    logging.warning(f"Image file not found at path: {image_path}")
+
+
+        return str(soup) if modified else html_content
+
     def _update_summary_view(self):
         """
         Metodo centralizzato per aggiornare la vista del riassunto.
@@ -2571,7 +2817,11 @@ class VideoAudioManager(QMainWindow):
         # 2. Converti il Markdown in HTML
         html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
 
-        # 3. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
+        # 3. Carica le immagini dai file relativi nel documento e aggiorna l'HTML
+        #    Questo deve essere fatto prima di qualsiasi altra manipolazione dell'HTML
+        html_content = self._load_images_into_document(html_content, target_widget.document())
+
+        # 4. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
         show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
         display_html = html_content
         if show_timestamps:
@@ -2581,12 +2831,12 @@ class VideoAudioManager(QMainWindow):
             # Altrimenti, rimuovili per la visualizzazione.
             display_html = remove_timestamps_from_html(html_content)
 
-        # 4. Aggiorna la UI
+        # 5. Aggiorna la UI
         target_widget.blockSignals(True)
         target_widget.setHtml(display_html)
         target_widget.blockSignals(False)
 
-        # 5. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
+        # 6. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
         # per prevenire la perdita di dati (salvataggio di una vista parziale).
         # L'utente può modificare solo quando vede il contenuto completo (con timecode).
         target_widget.setReadOnly(not show_timestamps)
@@ -2850,40 +3100,55 @@ class VideoAudioManager(QMainWindow):
 
         self.player.pause()
 
-        frame_pixmap = self.get_frame_at(self.player.position())
-        if not frame_pixmap:
-            QMessageBox.critical(self, "Errore", "Impossibile estrarre il frame dal video.")
-            return
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Se ci sono bookmark, usa il primo per il ritaglio
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Il ritaglio sarà limitato al bookmark: {start_time:.2f}s - {end_time:.2f}s")
 
-        dialog = CropDialog(frame_pixmap, self)
+        dialog = CropDialog(
+            video_path=self.videoPathLineEdit,
+            current_time=self.player.position(),
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         if dialog.exec():
             crop_rect = dialog.get_crop_rect()
-            self.perform_crop(crop_rect)
 
-    def get_frame_at(self, position_ms):
-        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            # Passa anche i tempi del bookmark al thread di crop
+            self.perform_crop(crop_rect, start_time, end_time)
+
+    def get_frame_at(self, position_ms, return_qimage=False):
+        video_path = self._get_selected_analysis_video_path()
+        if not video_path or not os.path.exists(video_path):
             logging.warning("get_frame_at called with no valid video path.")
             return None
 
-        cap = cv2.VideoCapture(self.videoPathLineEdit)
+        cap = cv2.VideoCapture(video_path)
         if not cap.isOpened():
-            logging.error(f"Failed to open video file with OpenCV: {self.videoPathLineEdit}")
+            logging.error(f"Failed to open video file with OpenCV: {video_path}")
             return None
 
         try:
-            # Imposta la posizione del frame in millisecondi
             cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
             success, frame = cap.read()
 
             if success:
-                # Converte il frame da BGR (formato di OpenCV) a RGB
                 rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 height, width, channel = rgb_frame.shape
                 bytes_per_line = 3 * width
                 q_image = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
-                return QPixmap.fromImage(q_image)
+
+                if return_qimage:
+                    return q_image
+                else:
+                    return QPixmap.fromImage(q_image)
             else:
-                logging.warning(f"Failed to read frame at {position_ms}ms from {self.videoPathLineEdit}")
+                logging.warning(f"Failed to read frame at {position_ms}ms from {video_path}")
                 return None
         except Exception as e:
             logging.error(f"Error getting frame at {position_ms}ms with OpenCV: {e}")
@@ -2912,7 +3177,7 @@ class VideoAudioManager(QMainWindow):
             new_pos = current_pos - (1000 / fps)
             self.player.setPosition(int(new_pos))
 
-    def perform_crop(self, crop_rect):
+    def perform_crop(self, crop_rect, start_time=None, end_time=None):
         if self.current_thread and self.current_thread.isRunning():
             self.show_status_message("Un'altra operazione è già in corso.", error=True)
             return
@@ -2921,7 +3186,14 @@ class VideoAudioManager(QMainWindow):
         self.progressBar.setVisible(True)
         self.cancelButton.setVisible(True)
 
-        thread = CropThread(self.videoPathLineEdit, crop_rect, self.current_project_path, self)
+        thread = CropThread(
+            self.videoPathLineEdit,
+            crop_rect,
+            self.current_project_path,
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
         self.current_thread = thread
 
         thread.progress.connect(self.progressBar.setValue)
@@ -3615,6 +3887,13 @@ class VideoAudioManager(QMainWindow):
     def closeEvent(self, event):
         # Salva tutte le modifiche correnti prima di chiudere
         self.save_all_tabs_to_json(show_message=False)
+
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path):
+            try:
+                os.remove(self.reversed_video_path)
+                logging.info("Cleaned up temporary reversed video file on exit.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file on exit: {e}")
 
         self.dockSettingsManager.save_settings()
         if hasattr(self, 'monitor_preview') and self.monitor_preview:
@@ -4416,59 +4695,86 @@ class VideoAudioManager(QMainWindow):
         elif file_format == 'pdf':
             self._export_to_pdf(export_html, path)
 
-    def _export_to_pdf(self, html_content, path):
-        """Esporta il contenuto HTML in un file PDF, gestendo immagini incorporate in Base64."""
-        from io import BytesIO
-        import base64
+    def _resolve_image_path_for_export(self, src_attribute, document):
+        """
+        Resolves an image's src attribute (frame:// or relative) to an absolute
+        temporary file path suitable for embedding in an export file.
+        Returns the path to the temporary file, which the caller is responsible for deleting.
+        """
+        temp_file = None
+        try:
+            if src_attribute.startswith('frame://'):
+                uri = QUrl(src_attribute)
+                image_qimage = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qimage and not image_qimage.isNull():
+                    # Create a temporary file to save the QImage
+                    fd, temp_path = tempfile.mkstemp(suffix=".png")
+                    os.close(fd)
+                    image_qimage.save(temp_path)
+                    return temp_path
+            elif src_attribute.startswith('frames/'):
+                if self.current_project_path:
+                    # Create an absolute path from the relative project path
+                    abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
+                    if os.path.exists(abs_path):
+                        return abs_path # Return the direct path, no temp file needed
+        except Exception as e:
+            logging.error(f"Error resolving image path '{src_attribute}': {e}")
 
+        return None # Return None if path resolution fails
+
+    def _export_to_pdf(self, html_content, path):
+        """Esporta il contenuto HTML in un file PDF, utilizzando image_map per la gestione delle immagini."""
+        temp_files_to_clean = []
         try:
             pdf = FPDF()
             pdf.add_page()
 
             font_path = get_resource("fonts/DejaVuSans.ttf")
             if not os.path.exists(font_path):
-                raise FileNotFoundError("Font DejaVuSans.ttf non trovato.")
+                raise FileNotFoundError("Font DejaVuSans.ttf non trovato. Assicurati che sia in src/res/fonts/.")
 
             pdf.add_font("DejaVu", "", font_path, uni=True)
             pdf.set_font("DejaVu", size=12)
 
+            active_summary_area = self.get_current_summary_text_area()
+            doc = active_summary_area.document()
+
+            def map_image(src):
+                # Funzione per mappare gli URI delle immagini a percorsi di file locali
+                image_path = self._resolve_image_path_for_export(src, doc)
+                if image_path:
+                    if not src.startswith('frames/'):
+                        temp_files_to_clean.append(image_path)
+                    return image_path
+                return src  # Restituisce l'originale se non risolto
+
+            # Rimuove i tag body/html per evitare problemi di parsing con fpdf
             soup = BeautifulSoup(html_content, 'html.parser')
+            body_content = soup.body.decode_contents() if soup.body else str(soup)
 
-            # Processa ogni elemento nel body
-            if soup.body:
-                for element in soup.body.find_all(recursive=False):
-                    if element.name == 'img' and element.get('src', '').startswith('data:image/jpeg;base64,'):
-                        # Estrai i dati Base64
-                        b64_data = element['src'].split(',')[1]
-                        image_data = base64.b64decode(b64_data)
-
-                        # Carica l'immagine da un buffer di byte
-                        img = Image.open(BytesIO(image_data))
-
-                        # Aggiungi l'immagine al PDF
-                        # Usiamo un nome temporaneo per l'immagine in memoria
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmpfile:
-                            img.save(tmpfile, format="JPEG")
-                            tmp_path = tmpfile.name
-
-                        # Calcola la larghezza mantenendo l'aspect ratio
-                        page_width = pdf.w - 2 * pdf.l_margin
-                        pdf.image(tmp_path, w=page_width)
-                        os.remove(tmp_path)
-
-                    else:
-                        # Per il testo e altri elementi HTML, usa write_html
-                        pdf.write_html(str(element))
+            pdf.write_html(body_content, image_map=map_image)
 
             pdf.output(path)
-            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+            self.show_status_message(f"Riassunto esportato con successo in PDF: {os.path.basename(path)}")
+
         except Exception as e:
-            self.show_status_message(f"Impossibile esportare il riassunto in PDF: {e}", error=True)
+            self.show_status_message(f"Errore durante l'esportazione in PDF: {e}", error=True)
             import traceback
-            logging.error(f"Errore durante l'esportazione in PDF con fpdf2: {e}\n{traceback.format_exc()}")
+            logging.error(f"Dettagli errore esportazione PDF: {traceback.format_exc()}")
+            raise
+        finally:
+            # Pulisce tutti i file temporanei creati
+            for temp_path in temp_files_to_clean:
+                try:
+                    os.remove(temp_path)
+                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
+                except OSError as e:
+                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
     def _export_to_docx(self, summary_html, path):
-        """Esporta il contenuto HTML in un file DOCX, gestendo paragrafi, titoli e liste."""
+        """Esporta il contenuto HTML in un file DOCX, gestendo la pulizia dei file temporanei."""
+        temp_files_to_clean = []
         try:
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
@@ -4483,47 +4789,71 @@ class VideoAudioManager(QMainWindow):
 
                 if element.name.startswith('h') and element.name[1:].isdigit():
                     level = int(element.name[1:])
-                    p = document.add_heading(level=min(level, 4)) # Limita a 4 livelli di heading
-                    self._add_runs_to_paragraph(element, p)
+                    p = document.add_heading(level=min(level, 4))
+                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
                 elif element.name == 'p':
                     p = document.add_paragraph()
-                    self._add_runs_to_paragraph(element, p)
+                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
                 elif element.name in ['ul', 'ol']:
                     for li in element.find_all('li', recursive=False):
-                        # Aggiunge ogni <li> come un paragrafo con lo stile "List Bullet"
                         p = document.add_paragraph(style='List Bullet')
-                        self._add_runs_to_paragraph(li, p)
+                        temp_files_to_clean.extend(self._add_runs_to_paragraph(li, p))
 
             document.save(path)
-            self.show_status_message(f"Riassunto esportato con successo in: {os.path.basename(path)}")
+            self.show_status_message(f"Riassunto esportato con successo in DOCX: {os.path.basename(path)}")
         except Exception as e:
-            self.show_status_message(f"Impossibile esportare il riassunto: {e}", error=True)
+            self.show_status_message(f"Impossibile esportare il riassunto in DOCX: {e}", error=True)
             import traceback
             logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
+        finally:
+            # Pulisce tutti i file temporanei raccolti
+            for temp_path in temp_files_to_clean:
+                try:
+                    os.remove(temp_path)
+                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
+                except OSError as e:
+                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
     def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Analizza ricorsivamente un elemento HTML, aggiunge 'run' formattati a un paragrafo DOCX,
-        e gestisce le immagini inline.
+        Recursively parses an HTML element, adds formatted runs to a DOCX paragraph,
+        and handles inline images. Returns a list of temporary file paths to be cleaned up.
         """
-        from io import BytesIO
-        import base64
-        from docx.shared import Inches
+        from docx.shared import Inches, Pt
+        temp_files_to_clean = []
+        active_summary_area = self.get_current_summary_text_area()
+        doc = active_summary_area.document()
 
         for child in element.children:
             if isinstance(child, str):
                 run = paragraph.add_run(child)
                 self._apply_styles_to_run(element, run)
-            elif child.name == 'img' and child.get('src', '').startswith('data:image/jpeg;base64,'):
-                b64_data = child['src'].split(',')[1]
-                image_data = base64.b64decode(b64_data)
-                image_stream = BytesIO(image_data)
+            elif child.name == 'img':
+                src = child.get('src', '')
+                image_path = self._resolve_image_path_for_export(src, doc)
+                if image_path:
+                    # If the image was from a frame:// URI, it's a temporary file
+                    if not src.startswith('frames/'):
+                        temp_files_to_clean.append(image_path)
 
-                # Aggiungi l'immagine al paragrafo, con una larghezza massima di 6 pollici
-                paragraph.add_run().add_picture(image_stream, width=Inches(6.0))
+                    try:
+                        style = child.get('style', '')
+                        width_match = re.search(r'width:\s*(\d+)', style)
+                        height_match = re.search(r'height:\s*(\d+)', style)
+
+                        # Use Pt for width and height for better control
+                        width = Pt(int(width_match.group(1))) if width_match else Inches(6)
+                        height = Pt(int(height_match.group(1))) if height_match else None
+
+                        paragraph.add_run().add_picture(image_path, width=width, height=height)
+                    except Exception as img_e:
+                        logging.error(f"Could not embed image {image_path} in DOCX: {img_e}")
+
             elif child.name:
-                # Process nested tags recursively
-                self._add_runs_to_paragraph(child, paragraph)
+                # Extend the list with temp files from recursive calls
+                temp_files_to_clean.extend(self._add_runs_to_paragraph(child, paragraph))
+
+        return temp_files_to_clean
 
     def _apply_styles_to_run(self, element, run):
         """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
@@ -4968,6 +5298,14 @@ class VideoAudioManager(QMainWindow):
 
     def loadVideo(self, video_path, video_title = 'Video Track'):
         """Load and play video or audio, updating UI based on file type."""
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path) and not video_path == self.reversed_video_path:
+            try:
+                os.remove(self.reversed_video_path)
+                self.reversed_video_path = None
+                logging.info("Cleaned up previous reversed video file.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file: {e}")
+
         self.player.stop()
         self.reset_view()
         self.speedSpinBox.setValue(1.0)
@@ -7036,6 +7374,15 @@ class VideoAudioManager(QMainWindow):
         # Asynchronously load the most recent clip to avoid blocking the UI
         QTimer.singleShot(100, self._load_most_recent_clip)
 
+        # Prepara i dati per l'aggiornamento dell'interfaccia utente, inclusi i riassunti
+        ui_data = {
+            "summaries": project_data.get('projectSummaries', {}),
+            "combined_summary": project_data.get('combined_summary', {})
+            # Aggiungi qui altri dati specifici della clip se necessario
+        }
+        self._update_ui_from_json_data(ui_data)
+
+
     def load_project_clip(self, video_path, metadata_filename):
         if os.path.exists(video_path):
             # Disconnect the signal to prevent unintended reloads
@@ -8123,6 +8470,40 @@ class VideoAudioManager(QMainWindow):
         doc = docx.Document(file_path)
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
+
+    def toggleReversePlayback(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("No video loaded to reverse.", error=True)
+            return
+
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark for reversal
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Reversing bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Reversing entire video...")
+
+        is_audio_only = self.isAudioOnly(self.videoPathLineEdit)
+        thread = ReverseVideoThread(self.videoPathLineEdit, start_time=start_time, end_time=end_time, is_audio_only=is_audio_only, parent=self)
+        self.start_task(
+            thread,
+            on_complete=self.onReverseCompleted,
+            on_error=self.onReverseError,
+            on_progress=self.update_status_progress
+        )
+
+    def onReverseCompleted(self, reversed_path):
+        self.reversed_video_path = reversed_path
+        self.loadVideoOutput(self.reversed_video_path)
+        self.playerOutput.play()
+        self.show_status_message("Reversed video is now playing in the output player.")
+
+    def onReverseError(self, error_message):
+        self.show_status_message(f"Error reversing video: {error_message}", error=True)
 
 
 def get_application_path():

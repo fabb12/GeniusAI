@@ -7,42 +7,43 @@ class CustomSlider(QSlider):
         super().__init__(orientation, parent)
         self.bookmarks = []
         self.pending_bookmark_start = None
+        self.magnet_enabled = False
         self.setStyleSheet("""
             QSlider::groove:horizontal {
                 border: 1px solid #5c5c5c;
                 background: #3e3e3e;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::sub-page:horizontal {
                 background: #0078d7;
                 border: 1px solid #5c5c5c;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::add-page:horizontal {
                 background: #3e3e3e;
                 border: 1px solid #5c5c5c;
-                height: 20px;
-                border-radius: 10px;
+                height: 30px;
+                border-radius: 15px;
             }
             QSlider::handle:horizontal {
-                background: #0099cc;
+                background: #ffcc00;
                 border: 1px solid #b0b0b0;
-                width: 8px;
-                height: 24px;
+                width: 12px;
+                height: 36px;
                 margin: -4px 0;
-                border-radius: 4px;
+                border-radius: 6px;
             }
             QSlider::handle:horizontal:hover {
-                background: #00aaff;
+                background: #ffdd44;
                 border: 1px solid #c0c0c0;
             }
             QSlider::handle:horizontal:pressed {
-                background: #0078d7;
+                background: #ffaa00;
                 border: 1px solid #e0e0e0;
             }
-        """)
+        """
 
     def setPendingBookmarkStart(self, position):
         self.pending_bookmark_start = position
@@ -107,12 +108,78 @@ class CustomSlider(QSlider):
             remove_single_action.setEnabled(False)
         context_menu.addAction(remove_single_action)
 
+        context_menu.addSeparator()
+
+        magnet_action = QAction("Magnet to Bookmarks", self)
+        magnet_action.setCheckable(True)
+        magnet_action.setChecked(self.magnet_enabled)
+        magnet_action.triggered.connect(self.toggle_magnet)
+        context_menu.addAction(magnet_action)
+
         context_menu.exec(event.globalPos())
+
+    def mouseMoveEvent(self, event):
+        if self.magnet_enabled and event.buttons() == Qt.MouseButton.LeftButton:
+
+            opt = QStyleOptionSlider()
+            self.initStyleOption(opt)
+
+            value = self.style().sliderValueFromPosition(self.minimum(), self.maximum(), int(event.position().x()), self.width())
+
+            nearest_bookmark = self.find_nearest_bookmark(value)
+
+            if nearest_bookmark is not None:
+
+                start_pos, end_pos = self.bookmarks[nearest_bookmark]
+
+                if abs(value - start_pos) < abs(value - end_pos):
+                    snap_to = start_pos
+                else:
+                    snap_to = end_pos
+
+                if abs(value-snap_to) < (self.maximum()-self.minimum())*0.05:
+                    self.setValue(snap_to)
+                    return
+
+        super().mouseMoveEvent(event)
+
+    def find_nearest_bookmark(self, value):
+        if not self.bookmarks:
+            return None
+
+        nearest_b_index = -1
+        min_dist = float('inf')
+
+        for i, (start,end) in enumerate(self.bookmarks):
+
+            dist_to_start = abs(value-start)
+            dist_to_end = abs(value-end)
+
+            if dist_to_start < min_dist:
+                min_dist = dist_to_start
+                nearest_b_index = i
+
+            if dist_to_end < min_dist:
+                min_dist = dist_to_end
+                nearest_b_index = i
+
+        return nearest_b_index
+
+    def toggle_magnet(self, checked):
+        self.magnet_enabled = checked
+
+    def setRange(self, min_val, max_val):
+        super().setRange(min_val, max_val)
 
     def paintEvent(self, event):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # Draw start and end markers
+        painter.setPen(QColor(255, 255, 255))
+        painter.drawLine(0, 0, 0, self.height())
+        painter.drawLine(self.width() - 1, 0, self.width() - 1, self.height())
 
         if self.maximum() == 0: # Avoid division by zero
             return

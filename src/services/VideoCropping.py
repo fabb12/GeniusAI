@@ -45,11 +45,13 @@ class CropThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int)
 
-    def __init__(self, video_path, crop_rect, project_path, parent=None):
+    def __init__(self, video_path, crop_rect, project_path, start_time=None, end_time=None, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.crop_rect = crop_rect
         self.project_path = project_path
+        self.start_time = start_time
+        self.end_time = end_time
         self.process = None
         self.running = True
         self.original_popen = None
@@ -89,6 +91,11 @@ class CropThread(QThread):
         self._monkey_patch_subprocess()
         try:
             video = VideoFileClip(self.video_path)
+
+            # Se sono specificati start_time e end_time (bookmark), taglia il video prima
+            if self.start_time is not None and self.end_time is not None:
+                video = video.subclip(self.start_time, self.end_time)
+
             video_width, video_height = video.size
 
             x1 = self.crop_rect.x()
@@ -99,6 +106,15 @@ class CropThread(QThread):
             # Ensure coordinates are within the video dimensions
             x1, y1 = max(0, x1), max(0, y1)
             x2, y2 = min(video_width, x2), min(video_height, y2)
+
+            # Adjust dimensions to be even to avoid codec errors
+            width = x2 - x1
+            if width % 2 != 0:
+                x2 -= 1
+
+            height = y2 - y1
+            if height % 2 != 0:
+                y2 -= 1
 
             if x1 >= x2 or y1 >= y2:
                 self.error.emit("L'area di ritaglio non è valida.")
@@ -132,7 +148,7 @@ class CropThread(QThread):
                 audio_codec='aac',
                 audio_fps=44100,
                 logger=logger,
-                ffmpeg_params=['-fflags', '+genpts', '-pix_fmt', 'yuv420p']
+                ffmpeg_params=['-movflags', 'faststart', '-fflags', '+genpts', '-pix_fmt', 'yuv420p']
             )
 
             if self.running:

@@ -4,13 +4,30 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QPalette, QFont) # Aggiunto QFont
-from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings
+                         QTextDocument, QPalette, QFont, QPixmap, QTextImageFormat) # Aggiunto QFont
+from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
+import time
+import base64
+from .ImageCropDialog import ImageCropDialog
+from services.utils import get_frame_at_timestamp
+
+class CustomTextDocument(QTextDocument):
+    def loadResource(self, type, name):
+        """
+        Loads the resource for the given type and name.
+        This is overridden to handle the custom 'frame://' scheme.
+        """
+        if type == QTextDocument.ResourceType.ImageResource and name.scheme() == 'frame':
+            # The resource is already in the document's cache, added via addResource.
+            # The base implementation will retrieve it for us.
+            return super().loadResource(type, name)
+        return super().loadResource(type, name)
 
 class CustomTextEdit(QTextEdit):
     """
+
     Un QTextEdit personalizzato con funzionalità aggiuntive:
     - Segnale per il cambio posizione cursore.
     - Ricerca (Ctrl+F) con dialogo separato, navigazione (F3/Shift+F3) ed evidenziazione.
@@ -20,11 +37,13 @@ class CustomTextEdit(QTextEdit):
     """
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
-    insert_frame_requested = pyqtSignal(float)
+    insert_frame_requested = pyqtSignal(float, int)
+    frame_edit_requested = pyqtSignal(str)
     fontSizeChanged = pyqtSignal(int) # Nuovo segnale
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setDocument(CustomTextDocument(self))
         # Memorizza l'istanza del dialogo di ricerca per evitare duplicati
         self.search_dialog_instance = None
 
@@ -33,35 +52,221 @@ class CustomTextEdit(QTextEdit):
         self.current_search_index = -1
         self.search_results_cursors = []
         self.last_search_options = {}
+        self.resizing_image = None
+        self.resizing_start_pos = None
+        self.image_metadata = {}
 
-    def contextMenuEvent(self, event):
+    def insert_image_with_metadata(self, displayed_image, width, height, video_path, timestamp, original_image=None):
         """
-        Mostra un menu contestuale personalizzato se il click destro è su un timestamp.
+        Inserts an image as a document resource and stores its metadata.
+        The video path is base64 encoded to avoid invalid characters in the URI.
         """
-        cursor = self.cursorForPosition(event.pos())
-        block_text = cursor.block().text()
-        click_pos_in_block = cursor.positionInBlock()
+        # Codifica il percorso del video in Base64 per garantire un URI valido
+        safe_video_path = base64.urlsafe_b64encode(video_path.encode()).decode()
+        image_name = f"frame_{safe_video_path}_{timestamp}_{time.time()}"
+        uri = QUrl(f"frame://{image_name}")
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_image)
 
+        cursor = self.textCursor()
+        image_format = QTextImageFormat()
+        image_format.setName(uri.toString())
+        image_format.setWidth(width)
+        image_format.setHeight(height)
+
+        cursor.insertImage(image_format)
+
+        # Store metadata
+        image_to_store = original_image if original_image is not None else displayed_image
+        self.image_metadata[image_name] = {
+            'video_path': video_path,
+            'timestamp': timestamp,
+            'original_image': image_to_store
+        }
+        return image_name
+
+    def find_nearest_timecode(self, cursor_pos):
+        """Finds the nearest timecode to the given cursor position."""
+        doc = self.document()
         timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
-        for match in timecode_pattern.finditer(block_text):
-            start_pos, end_pos = match.span(0)
-            if start_pos <= click_pos_in_block < end_pos:
+
+        nearest_timecode = None
+        min_distance = float('inf')
+
+        block = doc.begin()
+        while block.isValid():
+            block_text = block.text()
+            for match in timecode_pattern.finditer(block_text):
                 time_str = match.group(1)
                 from src.services.utils import parse_timestamp_to_seconds
                 total_seconds = parse_timestamp_to_seconds(time_str)
 
                 if total_seconds is not None:
-                    menu = self.createStandardContextMenu()
-                    menu.addSeparator()
-                    insert_frame_action = menu.addAction("Inserisci Frame")
-                    action = menu.exec(event.globalPos())
+                    match_pos = block.position() + match.start()
+                    distance = abs(cursor_pos - match_pos)
 
-                    if action == insert_frame_action:
-                        self.insert_frame_requested.emit(total_seconds)
-                    return
+                    if distance < min_distance:
+                        min_distance = distance
+                        nearest_timecode = total_seconds
 
-        # Se non siamo su un timestamp, mostra il menu standard
-        super().contextMenuEvent(event)
+            block = block.next()
+
+        return nearest_timecode
+
+    def contextMenuEvent(self, event):
+        """
+        Shows a custom context menu. "Insert Frame" is always available if timecodes exist.
+        """
+        cursor = self.cursorForPosition(event.pos())
+
+        # Check for image context first
+        image_format = self.get_image_format_at_cursor(cursor)
+        if image_format and image_format.name().startswith("frame://"):
+            menu = QMenu(self)
+            edit_action = menu.addAction("Modifica Frame")
+            delete_action = menu.addAction("Rimuovi Frame")
+            action = menu.exec(event.globalPos())
+
+            if action == edit_action:
+                image_name = image_format.name().replace("frame://", "")
+                self.frame_edit_requested.emit(image_name)
+            elif action == delete_action:
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+                cursor.removeSelectedText()
+                cursor.endEditBlock()
+            return
+
+        # If not on an image, create the general context menu
+        menu = QMenu(self)
+
+        # Find the nearest timecode to the click position
+        nearest_timecode = self.find_nearest_timecode(cursor.position())
+
+        insert_frame_action = menu.addAction("Inserisci frame")
+        # Disable the action if no timecode is found in the document
+        if nearest_timecode is None:
+            insert_frame_action.setEnabled(False)
+
+        # Add standard actions (Copy, Paste, etc.)
+        standard_menu = self.createStandardContextMenu()
+        if standard_menu and standard_menu.actions():
+            menu.addSeparator()
+            menu.addActions(standard_menu.actions())
+
+        action = menu.exec(event.globalPos())
+
+        if action == insert_frame_action and nearest_timecode is not None:
+            # Emit the signal with the nearest timecode and the current cursor position for insertion
+            self.insert_frame_requested.emit(nearest_timecode, cursor.position())
+
+    def crop_image(self, image_format):
+        """
+        Extracts the image name from the format and calls the cropping handler.
+        """
+        uri_string = image_format.name()
+        if uri_string.startswith("frame://"):
+            image_name = uri_string[len("frame://"):]
+            self.handle_crop_image(image_name)
+
+    def handle_crop_image(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        original_image = metadata['original_image']
+        pixmap = QPixmap.fromImage(original_image)
+
+        dialog = ImageCropDialog(pixmap, self.window())
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+            cropped_pixmap = pixmap.copy(crop_rect)
+            cropped_image = cropped_pixmap.toImage()
+
+            # Update the image resource and replace it in the document
+            self.update_image_resource(image_name, cropped_image, crop_rect.width(), crop_rect.height())
+
+    def update_image_resource(self, image_name, new_image, new_width, new_height):
+        uri = QUrl(f"frame://{image_name}")
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, new_image)
+
+        # Find the image in the document and update its size
+        cursor = QTextCursor(self.document())
+        while not cursor.isNull() and not cursor.atEnd():
+            cursor = self.document().find(uri.toString(), cursor, QTextDocument.FindFlag.FindCaseSensitively)
+            if not cursor.isNull():
+                char_format = cursor.charFormat()
+                if char_format.isImageFormat():
+                    image_format = char_format.toImageFormat()
+                    if image_format.name() == uri.toString():
+                        image_format.setWidth(new_width)
+                        image_format.setHeight(new_height)
+
+                        temp_cursor = QTextCursor(cursor)
+                        temp_cursor.setPosition(cursor.selectionStart())
+                        temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
+                        temp_cursor.setCharFormat(image_format)
+                        break
+
+    def _get_fps(self, video_path):
+        import cv2
+        cap = cv2.VideoCapture(video_path)
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
+        return fps if fps > 0 else 30
+
+    def handle_previous_frame(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        fps = self._get_fps(metadata['video_path'])
+        new_timestamp = max(0, metadata['timestamp'] - (1 / fps))
+
+        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
+        if new_image:
+            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
+            metadata['timestamp'] = new_timestamp
+
+    def handle_next_frame(self, image_name):
+        metadata = self.image_metadata.get(image_name)
+        if not metadata:
+            return
+
+        fps = self._get_fps(metadata['video_path'])
+        new_timestamp = metadata['timestamp'] + (1 / fps)
+
+        new_image = get_frame_at_timestamp(metadata['video_path'], new_timestamp)
+        if new_image:
+            self.update_image_resource(image_name, new_image, new_image.width(), new_image.height())
+            metadata['timestamp'] = new_timestamp
+
+    def get_image_format_at_cursor(self, cursor):
+        char_format = cursor.charFormat()
+        if char_format.isImageFormat():
+            return char_format.toImageFormat()
+        return None
+
+    def resize_image(self, image_format):
+        from src.ui.ImageSizeDialog import ResizedImageDialog
+        dialog = ResizedImageDialog(image_format.width(), image_format.height(), self)
+        if dialog.exec():
+            new_width, new_height = dialog.get_new_size()
+            self.update_image_size(image_format, new_width, new_height)
+
+    def update_image_size(self, image_format, width, height):
+        new_format = image_format
+        new_format.setWidth(width)
+        new_format.setHeight(height)
+
+        cursor = self.textCursor()
+        cursor.beginEditBlock()
+
+        # Move the cursor to the start of the image and select it
+        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1)
+        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
+
+        cursor.setCharFormat(new_format)
+        cursor.endEditBlock()
 
     def wheelEvent(self, event):
         """
@@ -128,8 +333,29 @@ class CustomTextEdit(QTextEdit):
 
     def mousePressEvent(self, event):
         """Gestisce gli eventi di pressione del mouse."""
-        super().mousePressEvent(event)
+        cursor = self.cursorForPosition(event.pos())
+        self.resizing_image = self.get_image_format_at_cursor(cursor)
+        if self.resizing_image:
+            self.resizing_start_pos = event.pos()
+            self.setTextCursor(cursor)
+        else:
+            super().mousePressEvent(event)
         self.cursorPositionChanged.emit()
+
+    def mouseMoveEvent(self, event):
+        if self.resizing_image and self.resizing_start_pos:
+            delta = event.pos() - self.resizing_start_pos
+            new_width = self.resizing_image.width() + delta.x()
+            new_height = self.resizing_image.height() + delta.y()
+            if new_width > 10 and new_height > 10:
+                self.update_image_size(self.resizing_image, new_width, new_height)
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.resizing_image = None
+        self.resizing_start_pos = None
+        super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event):
         """

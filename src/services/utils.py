@@ -28,26 +28,33 @@ def generate_unique_filename(filepath):
 def remove_timestamps_from_html(html_content):
     """
     Removes timestamp tags and raw timestamps (e.g., [00:12:34.5] or [01:23]) from an HTML string,
-    and cleans up surrounding whitespace.
+    ensuring that other HTML tags like <img> are not affected.
     """
     if not html_content:
         return ""
 
-    # Remove styled timestamps, replacing with a space to preserve word separation.
-    font_timestamp_pattern = re.compile(r'\s*<font[^>]*color=["\']?#ADD8E6["\']?[^>]*>\[.*?\]</font>\s*', re.IGNORECASE)
+    # This pattern is now highly specific to the timestamp format to avoid over-matching.
+    # It targets <font> tags with the specific timestamp color and a timestamp-like content.
+    font_timestamp_pattern = re.compile(
+        r'\s*<font[^>]*color=["\']?#ADD8E6["\']?[^>]*>\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\]</font>\s*',
+        re.IGNORECASE
+    )
     content = font_timestamp_pattern.sub(' ', html_content)
 
-    # Remove raw timestamps, also replacing with a space.
-    raw_timestamp_pattern = re.compile(r'\s*\[\d{1,2}:\d{2}(:\d{2})?(\.\d{1,2})?\]\s*')
+    # This pattern for raw timestamps is already specific.
+    raw_timestamp_pattern = re.compile(r'\s*\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\]\s*')
     content = raw_timestamp_pattern.sub(' ', content)
 
     # Clean up whitespace issues that may result from the removal.
     # Collapse multiple spaces into a single space.
-    content = re.sub(r'\s+', ' ', content)
+    content = re.sub(r'\s{2,}', ' ', content)
     # Remove space that might be left after an opening <p> tag.
-    content = re.sub(r'<p>\s+', '<p>', content)
+    content = re.sub(r'(<p[^>]*>)\s+', r'\1', content, flags=re.IGNORECASE)
     # Remove space that might be left before a closing </p> tag.
     content = re.sub(r'\s+</p>', '</p>', content)
+    # Qt sometimes uses <br />. Let's not leave hanging spaces before it.
+    content = re.sub(r'\s+<br\s*/?>', '<br />', content)
+
 
     return content.strip()
 
@@ -153,3 +160,32 @@ def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, images=No
     except Exception as e:
         logging.error(f"Anche il fallback a /api/generate è fallito: {e}")
         raise e
+
+def get_frame_at_timestamp(video_path, seconds):
+    """
+    Extracts a single frame from a video at a specific timestamp.
+    """
+    try:
+        import cv2
+        from PyQt6.QtGui import QImage
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            return None
+
+        # Convert seconds to milliseconds for OpenCV
+        position_ms = seconds * 1000
+        cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
+
+        success, frame = cap.read()
+        cap.release()
+
+        if success:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            height, width, channel = rgb_frame.shape
+            bytes_per_line = 3 * width
+            return QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+        return None
+    except Exception as e:
+        print(f"Error getting frame at timestamp: {e}")
+        return None
