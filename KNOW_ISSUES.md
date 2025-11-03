@@ -76,13 +76,15 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] aggiungi transazioni automatiche
 - [x] riconoscere oggetti, volti, luoghi, emozioni;
 - [x] permettere ricerche come: “mostrami le clip dove il relatore sorride” o “trova i momenti in cui appare il cane
-- [ ] integrare trascrzione con documenti esterni
+- [x] integrare trascrzione con documenti esterni
 - [ ] inserire timeline
 - [x] sistemare timecode trascrzione 
 - [x] aggiugni il nome del file quadno uso uno trascrzione
 - [x] sistemare spunta per trascrzione   
-- 
-mettere un titolo nel riassuto
+- [ ] sistemare guida operativa mostra timecode 
+- [ ] inserire immagine nella file da esportare 
+- [ ] non si vede watermark
+- [ ] salva correttametne le trascrizioni
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
