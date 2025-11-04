@@ -62,7 +62,7 @@ from src.ui.CustumTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
-from src.ui.ImageSizeDialog import ImageSizeDialog, ResizedImageDialog
+from src.ui.FrameDisplayDialog import FrameDisplayDialog
 from src.services.ProcessTextAI import ProcessTextAI
 from src.ui.SplashScreen import SplashScreen
 from src.services.ShareVideo import VideoSharingManager
@@ -2116,11 +2116,11 @@ class VideoAudioManager(QMainWindow):
                 return
 
             # Ask for size
-            size_dialog = ImageSizeDialog(self)
-            if size_dialog.exec():
-                size_percentage = size_dialog.get_selected_size_percentage()
-                width = int(cropped_qimage.width() * (size_percentage / 100))
-                height = int(cropped_qimage.height() * (size_percentage / 100))
+            display_dialog = FrameDisplayDialog(cropped_pixmap, self)
+            if display_dialog.exec():
+                display_size = display_dialog.get_display_size()
+                width = display_size.width()
+                height = display_size.height()
 
                 # Insert the image at the original cursor position
                 if target_text_edit:

@@ -12,6 +12,7 @@ import time
 import base64
 from .ImageCropDialog import ImageCropDialog
 from services.utils import get_frame_at_timestamp
+from .ImageSizeDialog import ResizedImageDialog
 
 class CustomTextDocument(QTextDocument):
     def loadResource(self, type, name):
@@ -247,26 +248,24 @@ class CustomTextEdit(QTextEdit):
         return None
 
     def resize_image(self, image_format):
-        from src.ui.ImageSizeDialog import ResizedImageDialog
         dialog = ResizedImageDialog(image_format.width(), image_format.height(), self)
         if dialog.exec():
             new_width, new_height = dialog.get_new_size()
             self.update_image_size(image_format, new_width, new_height)
 
     def update_image_size(self, image_format, width, height):
-        new_format = image_format
-        new_format.setWidth(width)
-        new_format.setHeight(height)
+        if not image_format.isValid():
+            return
 
         cursor = self.textCursor()
-        cursor.beginEditBlock()
+        if not cursor.hasSelection():
+            # If no text is selected, find the image under the cursor
+            cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.KeepAnchor, 1)
 
-        # Move the cursor to the start of the image and select it
-        cursor.movePosition(QTextCursor.MoveOperation.Left, QTextCursor.MoveMode.MoveAnchor, 1)
-        cursor.movePosition(QTextCursor.MoveOperation.Right, QTextCursor.MoveMode.KeepAnchor, 1)
-
-        cursor.setCharFormat(new_format)
-        cursor.endEditBlock()
+        if cursor.charFormat().isImageFormat():
+            image_format.setWidth(width)
+            image_format.setHeight(height)
+            cursor.setCharFormat(image_format)
 
     def wheelEvent(self, event):
         """
