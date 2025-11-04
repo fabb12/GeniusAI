@@ -96,6 +96,7 @@ from src.ui.ProjectDock import ProjectDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.services.utils import remove_timestamps_from_html, generate_unique_filename
+from src.services.Translator import TranslationService
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
@@ -668,6 +669,7 @@ class VideoAudioManager(QMainWindow):
 
         self.project_manager = ProjectManager(base_dir="projects")
         self.bookmark_manager = BookmarkManager(self)
+        self.translation_service = TranslationService()
         self.current_project_path = None
 
         setup_logging()
@@ -933,6 +935,15 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionDock.setStyleSheet(self.styleSheet())
         self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
         area.addDock(self.transcriptionDock, 'right')
+
+        self.translationDock = CustomDock("Traduzione", closable=True)
+        self.translationDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.translationDock.setStyleSheet(self.styleSheet())
+        self.translationDock.setToolTip("Dock per visualizzare il testo tradotto")
+        self.translatedTextArea = CustomTextEdit(self)
+        self.translatedTextArea.setPlaceholderText("Il testo tradotto apparirà qui...")
+        self.translationDock.addWidget(self.translatedTextArea)
+        area.addDock(self.translationDock, 'bottom', self.transcriptionDock)
 
         self.editingDock = CustomDock("Generazione Audio AI", closable=True)
         self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
@@ -1304,6 +1315,20 @@ class VideoAudioManager(QMainWindow):
         language_layout.addWidget(self.transcriptionLanguageLabel)
         main_controls_layout.addLayout(language_layout)
 
+        # Translation controls
+        translation_layout = QHBoxLayout()
+        translation_layout.addWidget(QLabel("Traduci in:"))
+        self.translationComboBox = QComboBox()
+        supported_langs = self.translation_service.get_supported_languages()
+        for code, name in supported_langs.items():
+            self.translationComboBox.addItem(name.title(), code)
+        self.translationComboBox.setCurrentText("English")
+        translation_layout.addWidget(self.translationComboBox)
+        self.translateTranscriptionButton = QPushButton("Traduci Trascrizione")
+        self.translateTranscriptionButton.clicked.connect(self.translate_transcription)
+        translation_layout.addWidget(self.translateTranscriptionButton)
+        main_controls_layout.addLayout(translation_layout)
+
         # --- Riga 2: Modalità di Trascrizione (Online/Offline) ---
         mode_layout = QHBoxLayout()
         self.onlineModeCheckbox = QCheckBox("Online (Google)")
@@ -1476,6 +1501,10 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout = QHBoxLayout()
 
         # Pulsanti Azioni AI
+        self.translateSummaryButton = QPushButton("Traduci Riassunto")
+        self.translateSummaryButton.clicked.connect(self.translate_summary)
+        top_controls_layout.addWidget(self.translateSummaryButton)
+
         summarize_button = QPushButton('')
         summarize_button.setIcon(QIcon(get_resource("text_sum.png")))
         summarize_button.setFixedSize(32, 32)
@@ -1690,7 +1719,8 @@ class VideoAudioManager(QMainWindow):
             'videoPlayerOutput': self.videoPlayerOutput,
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock,
-            'infoExtractionDock': self.infoExtractionDock
+            'infoExtractionDock': self.infoExtractionDock,
+            'translationDock': self.translationDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -5630,6 +5660,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
         self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
+        self.actionToggleTranslationDock = self.createToggleAction(self.translationDock, 'Mostra/Nascondi Traduzione')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -5641,6 +5672,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
         viewMenu.addAction(self.actionToggleInfoExtractionDock)
+        viewMenu.addAction(self.actionToggleTranslationDock)
 
 
 
@@ -5717,6 +5749,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
         self.actionToggleInfoExtractionDock.setChecked(True)
+        self.actionToggleTranslationDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -5730,6 +5763,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
         self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
+        self.actionToggleTranslationDock.setChecked(self.translationDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -8504,6 +8538,25 @@ class VideoAudioManager(QMainWindow):
 
     def onReverseError(self, error_message):
         self.show_status_message(f"Error reversing video: {error_message}", error=True)
+
+    def translate_transcription(self):
+        text_to_translate = self.singleTranscriptionTextArea.toPlainText()
+        self._translate_text(text_to_translate)
+
+    def translate_summary(self):
+        active_summary_area = self.get_current_summary_text_area()
+        text_to_translate = active_summary_area.toPlainText()
+        self._translate_text(text_to_translate)
+
+    def _translate_text(self, text):
+        if not text.strip():
+            self.show_status_message("Nessun testo da tradurre.", error=True)
+            return
+
+        dest_lang_code = self.translationComboBox.currentData()
+        translated_text = self.translation_service.translate_text(text, dest_lang_code)
+        self.translatedTextArea.setPlainText(translated_text)
+        self.show_status_message(f"Testo tradotto in {self.translationComboBox.currentText()}.")
 
 
 def get_application_path():
