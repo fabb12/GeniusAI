@@ -190,8 +190,13 @@ class DownloadThread(QThread):
         subprocess.Popen = custom_popen
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                result = ydl.extract_info(url_or_info, download=True)
-                return result
+                info = ydl.extract_info(url_or_info, download=True)
+                if info:
+                    # The 'filepath' is not a standard key from yt-dlp, so we construct it
+                    # based on the download location and filename provided by the library.
+                    downloaded_path = ydl.prepare_filename(info)
+                    info['filepath'] = downloaded_path
+                return info
         finally:
             subprocess.Popen = original_popen
             self.process = None
@@ -269,11 +274,18 @@ class DownloadThread(QThread):
                 'ffmpeg_location': self.ffmpeg_path,
                 'progress_hooks': [self.yt_progress_hook],
             }
-            self._execute_download(ydl_opts, stream_url)
-            if self.running:
-                processed_path = self._post_process_video(output_path)
+            info = self._execute_download(ydl_opts, stream_url)
+            if self.running and info:
+                video_file_path = info.get('filepath')
+                if not video_file_path or not os.path.exists(video_file_path):
+                    self.error.emit("Could not determine the downloaded file path from stream.")
+                    return
+
+                processed_path = self._post_process_video(video_file_path)
                 if processed_path:
                     self.completed.emit([processed_path, base_name, "it", None])
+            elif self.running:
+                self.error.emit("Video download from stream failed.")
         except Exception as e:
             if self.running:
                 self.error.emit(f"Errore durante il download del video: {str(e)}")
@@ -292,18 +304,17 @@ class DownloadThread(QThread):
         }
         try:
             info = self._execute_download(audio_options, self.url)
-            if self.running and 'id' in info:
-                files_in_temp = os.listdir(self.temp_dir)
-                if not files_in_temp:
-                    self.error.emit("No file found in temporary directory after download.")
+            if self.running and info:
+                audio_file_path = info.get('filepath')
+                if not audio_file_path or not os.path.exists(audio_file_path):
+                    self.error.emit("Could not determine the downloaded audio file path.")
                     return
-                audio_file_path = os.path.join(self.temp_dir, files_in_temp[0])
                 video_title = info.get('title', 'Unknown Title')
                 video_language = info.get('language', 'Lingua non rilevata')
                 upload_date = info.get('upload_date', None)
                 self.completed.emit([audio_file_path, video_title, video_language, upload_date])
             elif self.running:
-                self.error.emit("Video ID not found.")
+                self.error.emit("Audio download failed.")
         except Exception as e:
             if self.running:
                 self.error.emit(str(e))
@@ -321,12 +332,12 @@ class DownloadThread(QThread):
         }
         try:
             info = self._execute_download(video_options, self.url)
-            if self.running and 'id' in info:
-                files_in_temp = os.listdir(self.temp_dir)
-                if not files_in_temp:
-                    self.error.emit("No file found in temporary directory after download.")
+            if self.running and info:
+                video_file_path = info.get('filepath')
+                if not video_file_path or not os.path.exists(video_file_path):
+                    self.error.emit("Could not determine the downloaded file path.")
                     return
-                video_file_path = os.path.join(self.temp_dir, files_in_temp[0])
+
                 processed_path = self._post_process_video(video_file_path)
                 if processed_path:
                     video_title = info.get('title', 'Unknown Title')
@@ -334,7 +345,7 @@ class DownloadThread(QThread):
                     upload_date = info.get('upload_date', None)
                     self.completed.emit([processed_path, video_title, video_language, upload_date])
             elif self.running:
-                self.error.emit("Video ID not found.")
+                self.error.emit("Video download failed.")
         except Exception as e:
             if self.running:
                 self.error.emit(str(e))
