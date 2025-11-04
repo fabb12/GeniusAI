@@ -1,5 +1,5 @@
 import cv2
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QComboBox
 from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
 from PyQt6.QtCore import Qt, QRect, QSize, QRectF
 from .ResizableRubberBand import ResizableRubberBand
@@ -60,6 +60,18 @@ class CropDialog(QDialog):
         button_layout.addWidget(self.reset_button)
         button_layout.addWidget(self.apply_button)
         button_layout.addWidget(self.cancel_button)
+
+        # Add size selection dropdown
+        size_layout = QHBoxLayout()
+        size_layout.addStretch()
+        size_layout.addWidget(QLabel("Dimensione di Inserimento:"))
+        self.size_combo = QComboBox()
+        self.size_combo.addItems(["Micro (10%)", "Molto Piccola (15%)", "Piccola (25%)", "Media (50%)", "Grande (75%)", "Originale (100%)"])
+        self.size_combo.setCurrentIndex(3)  # Default to Medium
+        size_layout.addWidget(self.size_combo)
+        size_layout.addStretch()
+        main_layout.addLayout(size_layout)
+
         main_layout.addLayout(button_layout)
 
         self.reset_button.clicked.connect(self._center_rubber_band)
@@ -177,6 +189,18 @@ class CropDialog(QDialog):
     def get_cropped_pixmap(self):
         crop_rect = self.get_crop_rect()
         return self.original_pixmap.copy(crop_rect)
+
+    def get_selected_size_percentage(self):
+        """
+        Returns the selected size as an integer percentage.
+        """
+        text = self.size_combo.currentText()
+        # Extracts the number from the string like "Medium (50%)"
+        import re
+        match = re.search(r'\((\d+)%\)', text)
+        if match:
+            return int(match.group(1))
+        return 100 # Default to 100% if parsing fails
 
     def showEvent(self, event):
         super().showEvent(event)
