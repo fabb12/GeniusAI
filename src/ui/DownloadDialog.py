@@ -9,6 +9,8 @@ from PyQt6.QtWidgets import (
 from src.services.DownloadVideo import DownloadThread
 from src.config import FFMPEG_PATH_DOWNLOAD
 from src.services import utils
+
+class DownloadDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_window = parent
