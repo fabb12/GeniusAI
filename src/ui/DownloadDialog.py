@@ -75,36 +75,42 @@ class DownloadDialog(QDialog):
         self.parent_window.video_download_language = video_language
         logging.debug(video_language)
 
-        # Se un progetto è attivo, salva nella cartella 'downloads' del progetto,
-        # altrimenti nella cartella 'downloads' principale.
-        if self.parent_window.current_project_path:
-            downloads_dir = os.path.join(self.parent_window.current_project_path, "downloads")
-        else:
-            downloads_dir = os.path.join(os.getcwd(), "downloads")
+        if not self.parent_window.current_project_path:
+            self.parent_window.show_status_message("Nessun progetto attivo. Crea o carica un progetto prima di scaricare.", error=True)
+            return
 
-        os.makedirs(downloads_dir, exist_ok=True)
+        clips_dir = os.path.join(self.parent_window.current_project_path, "clips")
+        os.makedirs(clips_dir, exist_ok=True)
 
         try:
             file_name = os.path.basename(temp_file_path)
-            permanent_file_path = os.path.join(downloads_dir, file_name)
+            permanent_file_path = os.path.join(clips_dir, file_name)
+
             shutil.move(temp_file_path, permanent_file_path)
 
             temp_dir = os.path.dirname(temp_file_path)
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
-            self.parent_window.loadVideo(permanent_file_path, video_title)
+            clip_data = {
+                "name": video_title,
+                "path": permanent_file_path,
+                "status": "online" # Indica che è stato scaricato
+            }
 
             if upload_date:
                 try:
-                    video_date = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
-                    self.parent_window._update_json_file(permanent_file_path, {"video_date": video_date})
+                    clip_data["video_date"] = datetime.datetime.strptime(upload_date, '%Y%m%d').isoformat()
                 except (ValueError, TypeError) as e:
-                    logging.warning(f"Non è stato possibile analizzare o salvare la data di caricamento: {upload_date}. Errore: {e}")
+                    logging.warning(f"Could not parse or save upload date: {upload_date}. Error: {e}")
+
+            self.parent_window.project_manager.add_clip(clip_data)
+            self.parent_window.show_status_message(f"Clip '{video_title}' aggiunta al progetto.")
+            self.parent_window.loadVideo(permanent_file_path, video_title)
 
         except Exception as e:
-            self.parent_window.show_status_message(f"Errore durante lo spostamento del file scaricato: {e}", error=True)
-            logging.error(f"Failed to move downloaded file: {e}")
+            self.parent_window.show_status_message(f"Error moving downloaded file: {e}", error=True)
+            logging.error(f"Failed to move and add downloaded file to project: {e}")
 
     def onDownloadError(self, error_message):
         self.parent_window.show_status_message(f"Errore di download: {error_message}", error=True)
