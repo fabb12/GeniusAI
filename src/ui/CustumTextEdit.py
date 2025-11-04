@@ -66,7 +66,10 @@ class CustomTextEdit(QTextEdit):
         safe_video_path = base64.urlsafe_b64encode(video_path.encode()).decode()
         image_name = f"frame_{safe_video_path}_{timestamp}_{time.time()}"
         uri = QUrl(f"frame://{image_name}")
-        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_image)
+
+        # Convert QImage to QPixmap before adding it as a resource for better display reliability
+        pixmap_for_display = QPixmap.fromImage(displayed_image)
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, pixmap_for_display)
 
         cursor = self.textCursor()
         image_format = QTextImageFormat()
