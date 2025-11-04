@@ -2796,10 +2796,12 @@ class VideoAudioManager(QMainWindow):
                 if os.path.exists(image_path):
                     q_image = QImage(image_path)
                     if not q_image.isNull():
+                        # Convert to QPixmap for reliable rendering, then add as a resource
+                        pixmap = QPixmap.fromImage(q_image)
                         # Usa un nome univoco per la risorsa per evitare conflitti
                         unique_id = f"frame_{int(time.time() * 1000)}_{os.path.basename(src)}"
                         uri = QUrl(f"frame://{unique_id}")
-                        document.addResource(QTextDocument.ResourceType.ImageResource, uri, q_image)
+                        document.addResource(QTextDocument.ResourceType.ImageResource, uri, pixmap)
                         img['src'] = uri.toString()
                         modified = True
                 else:
