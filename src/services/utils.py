@@ -2,24 +2,43 @@ import re
 import os
 import datetime
 
-def generate_unique_filename(filepath):
+def sanitize_filename(filename):
     """
-    Checks if a file exists at the given path. If it does, appends a timestamp
-    to the filename to make it unique.
+    Sanitizes a string to be used as a filename.
+    Removes invalid characters and truncates the length.
     """
+    # Remove invalid characters
+    sanitized = re.sub(r'[\\/*?:"<>|]', "", filename)
+    # Truncate to a reasonable length
+    sanitized = sanitized[:200]
+    return sanitized
+
+def generate_unique_filename(base_path):
+    """
+    Generates a unique filename by appending a timestamp if the file already exists.
+    It sanitizes the filename part of the path.
+    """
+    directory, filename = os.path.split(base_path)
+    name, ext = os.path.splitext(filename)
+
+    # Sanitize the base name
+    sanitized_name = sanitize_filename(name)
+
+    # Reconstruct the filepath with the sanitized name
+    filepath = os.path.join(directory, f"{sanitized_name}{ext}")
+
     if not os.path.exists(filepath):
         return filepath
 
-    directory, filename = os.path.split(filepath)
-    name, ext = os.path.splitext(filename)
+    # If the file exists, create a unique name with a timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    new_filename = f"{name}_{timestamp}{ext}"
+    new_filename = f"{sanitized_name}_{timestamp}{ext}"
     new_filepath = os.path.join(directory, new_filename)
 
     # In the rare case the timestamped file also exists, add a counter
     counter = 1
     while os.path.exists(new_filepath):
-        new_filename = f"{name}_{timestamp}_{counter}{ext}"
+        new_filename = f"{sanitized_name}_{timestamp}_{counter}{ext}"
         new_filepath = os.path.join(directory, new_filename)
         counter += 1
 
