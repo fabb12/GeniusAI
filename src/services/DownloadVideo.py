@@ -196,6 +196,62 @@ class DownloadThread(QThread):
             subprocess.Popen = original_popen
             self.process = None
 
+    def _post_process_video(self, input_path):
+        """
+        Post-process the video to fix potential issues like 'moov atom not found'.
+        This function remuxes the video file, creating a clean copy.
+        """
+        if not self.running:
+            return None
+
+        self.progress.emit(100, "Finalizing video file...")
+
+        output_filename = f"{os.path.splitext(os.path.basename(input_path))[0]}_processed.mp4"
+        output_path = os.path.join(os.path.dirname(input_path), output_filename)
+
+        try:
+            # Using ffmpeg to remux the file, which can fix the moov atom issue
+            command = [
+                self.ffmpeg_path,
+                '-i', input_path,
+                '-codec', 'copy',
+                '-movflags', '+faststart',
+                output_path
+            ]
+
+            # Using CREATE_NO_WINDOW for Windows to prevent console pop-up
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+
+            result = subprocess.run(
+                command,
+                check=True,
+                capture_output=True,
+                text=True,
+                startupinfo=startupinfo
+            )
+
+            if os.path.exists(output_path):
+                # Clean up the original file
+                try:
+                    os.remove(input_path)
+                except OSError as e:
+                    # Log if the original file can't be removed, but don't fail
+                    print(f"Warning: Could not remove original downloaded file: {e}")
+                return output_path
+            else:
+                self.error.emit("Failed to create the processed video file.")
+                return None
+        except subprocess.CalledProcessError as e:
+            error_message = f"Error during video post-processing: {e.stderr}"
+            self.error.emit(error_message)
+            return None
+        except Exception as e:
+            self.error.emit(f"An unexpected error occurred during post-processing: {e}")
+            return None
+
 
     def download_from_stream_url(self, stream_url):
         """Scarica un video dall'URL del flusso usando yt-dlp"""
@@ -215,7 +271,9 @@ class DownloadThread(QThread):
             }
             self._execute_download(ydl_opts, stream_url)
             if self.running:
-                self.completed.emit([output_path, base_name, "it", None])
+                processed_path = self._post_process_video(output_path)
+                if processed_path:
+                    self.completed.emit([processed_path, base_name, "it", None])
         except Exception as e:
             if self.running:
                 self.error.emit(f"Errore durante il download del video: {str(e)}")
@@ -269,10 +327,12 @@ class DownloadThread(QThread):
                     self.error.emit("No file found in temporary directory after download.")
                     return
                 video_file_path = os.path.join(self.temp_dir, files_in_temp[0])
-                video_title = info.get('title', 'Unknown Title')
-                video_language = info.get('language', 'Lingua non rilevata')
-                upload_date = info.get('upload_date', None)
-                self.completed.emit([video_file_path, video_title, video_language, upload_date])
+                processed_path = self._post_process_video(video_file_path)
+                if processed_path:
+                    video_title = info.get('title', 'Unknown Title')
+                    video_language = info.get('language', 'Lingua non rilevata')
+                    upload_date = info.get('upload_date', None)
+                    self.completed.emit([processed_path, video_title, video_language, upload_date])
             elif self.running:
                 self.error.emit("Video ID not found.")
         except Exception as e:
