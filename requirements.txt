@@ -37,3 +37,4 @@ docx2pdf
 fpdf2
 pypdf
 python-docx
+googletrans==4.0.0-rc1
