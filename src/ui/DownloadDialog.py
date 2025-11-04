@@ -8,8 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from src.services.DownloadVideo import DownloadThread
 from src.config import FFMPEG_PATH_DOWNLOAD
-
-class DownloadDialog(QDialog):
+from src.services import utils
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_window = parent
@@ -75,25 +74,42 @@ class DownloadDialog(QDialog):
         self.parent_window.video_download_language = video_language
         logging.debug(video_language)
 
-        # Se un progetto è attivo, salva nella cartella 'downloads' del progetto,
-        # altrimenti nella cartella 'downloads' principale.
-        if self.parent_window.current_project_path:
-            downloads_dir = os.path.join(self.parent_window.current_project_path, "downloads")
-        else:
-            downloads_dir = os.path.join(os.getcwd(), "downloads")
+        if not self.parent_window.current_project_path:
+            self.parent_window.show_status_message("Nessun progetto attivo. Creane o aprine uno per aggiungere il video.", error=True)
+            return
 
-        os.makedirs(downloads_dir, exist_ok=True)
+        clips_dir = os.path.join(self.parent_window.current_project_path, "clips")
+        os.makedirs(clips_dir, exist_ok=True)
 
         try:
-            file_name = os.path.basename(temp_file_path)
-            permanent_file_path = os.path.join(downloads_dir, file_name)
+            # Get the file extension from the temporary file
+            _, file_extension = os.path.splitext(temp_file_path)
+
+            # Construct the initial desired path
+            base_filename = f"{video_title}{file_extension}"
+            initial_path = os.path.join(clips_dir, base_filename)
+
+            # Generate a unique path, ensuring the filename is sanitized and unique
+            permanent_file_path = utils.generate_unique_filename(initial_path)
+
+            # Move the downloaded file to the clips directory with the new name
             shutil.move(temp_file_path, permanent_file_path)
 
+            # Clean up the temporary directory
             temp_dir = os.path.dirname(temp_file_path)
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
+            # Add the new clip to the project
+            self.parent_window.project_manager.add_clip_to_project_from_path(
+                self.parent_window.projectDock.gnai_path, permanent_file_path, status="online"
+            )
+
+            # Load the new video into the input player
             self.parent_window.loadVideo(permanent_file_path, video_title)
+
+            # Refresh the project dock to show the new clip
+            self.parent_window.load_project(self.parent_window.projectDock.gnai_path)
 
             if upload_date:
                 try:
