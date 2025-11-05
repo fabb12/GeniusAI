@@ -190,9 +190,14 @@ class CustomTextEdit(QTextEdit):
 
     def update_image_resource(self, image_name, new_image, new_width, new_height):
         uri = QUrl(f"frame://{image_name}")
+        # Update the resource in the document's cache
         self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, new_image)
 
-        # Find the image in the document and update its size
+        # Update the metadata with the new cropped image
+        if image_name in self.image_metadata:
+            self.image_metadata[image_name]['original_image'] = new_image
+
+        # Find all instances of the image in the document and update them
         cursor = QTextCursor(self.document())
         while not cursor.isNull() and not cursor.atEnd():
             cursor = self.document().find(uri.toString(), cursor, QTextDocument.FindFlag.FindCaseSensitively)
@@ -201,14 +206,19 @@ class CustomTextEdit(QTextEdit):
                 if char_format.isImageFormat():
                     image_format = char_format.toImageFormat()
                     if image_format.name() == uri.toString():
+                        # Update the size of the image format
                         image_format.setWidth(new_width)
                         image_format.setHeight(new_height)
 
+                        # Apply the updated format
                         temp_cursor = QTextCursor(cursor)
                         temp_cursor.setPosition(cursor.selectionStart())
                         temp_cursor.setPosition(cursor.selectionEnd(), QTextCursor.MoveMode.KeepAnchor)
                         temp_cursor.setCharFormat(image_format)
-                        break
+
+        # Force a relayout of the document to ensure the new image is displayed
+        self.document().adjustSize()
+        self.viewport().update()
 
     def _get_fps(self, video_path):
         import cv2
