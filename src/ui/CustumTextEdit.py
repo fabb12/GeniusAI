@@ -57,18 +57,18 @@ class CustomTextEdit(QTextEdit):
         self.resizing_start_pos = None
         self.image_metadata = {}
 
-    def insert_image_with_metadata(self, displayed_image, width, height, video_path, timestamp, original_image=None):
+    def insert_image_with_metadata(self, displayed_pixmap, width, height, video_path, timestamp, original_image=None):
         """
         Inserts an image as a document resource and stores its metadata.
         The video path is base64 encoded to avoid invalid characters in the URI.
         """
         # Codifica il percorso del video in Base64 per garantire un URI valido
         safe_video_path = base64.urlsafe_b64encode(video_path.encode()).decode()
-        image_name = f"frame_{safe_video_path}_{timestamp}_{time.time()}"
+        image_name = f"frame_{safe_video_path}_{int(timestamp * 1000)}_{int(time.time() * 1000)}"
         uri = QUrl(f"frame://{image_name}")
 
-        # Add the QImage object directly as a resource.
-        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_image)
+        # Add the QPixmap object directly as a resource, as it's optimized for display.
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_pixmap)
 
         cursor = self.textCursor()
         image_format = QTextImageFormat()
@@ -78,8 +78,11 @@ class CustomTextEdit(QTextEdit):
 
         cursor.insertImage(image_format)
 
-        # Store metadata
-        image_to_store = original_image if original_image is not None else displayed_image
+        # Force a relayout to ensure the new image is displayed correctly
+        self.viewport().update()
+
+        # Store metadata, always using QImage for consistency and manipulation
+        image_to_store = original_image if original_image is not None else displayed_pixmap.toImage()
         self.image_metadata[image_name] = {
             'video_path': video_path,
             'timestamp': timestamp,

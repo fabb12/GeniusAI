@@ -2149,7 +2149,7 @@ class VideoAudioManager(QMainWindow):
                     cursor.insertText("\n")
 
                     target_text_edit.insert_image_with_metadata(
-                        displayed_image=cropped_qimage,
+                        displayed_pixmap=cropped_pixmap,
                         width=width,
                         height=height,
                         video_path=video_path,
