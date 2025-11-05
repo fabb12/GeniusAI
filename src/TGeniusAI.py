@@ -2839,27 +2839,43 @@ class VideoAudioManager(QMainWindow):
         html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
 
         # 3. Carica le immagini dai file relativi nel documento e aggiorna l'HTML
-        #    Questo deve essere fatto prima di qualsiasi altra manipolazione dell'HTML
         html_content = self._load_images_into_document(html_content, target_widget.document())
 
-        # 4. Applica le trasformazioni di visualizzazione (es. nascondi timecode)
+        # 4. Applica le trasformazioni di visualizzazione
         show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
         display_html = html_content
+
         if show_timestamps:
-            # Se dobbiamo mostrare i timestamp, assicuriamoci che siano colorati.
             display_html = self._style_timestamps_in_html(html_content)
         else:
-            # Altrimenti, rimuovili per la visualizzazione.
-            display_html = remove_timestamps_from_html(html_content)
+            # Preserve images when hiding timestamps
+            soup = BeautifulSoup(html_content, 'html.parser')
+
+            # 1. Find all image tags and store them with unique placeholders
+            image_map = {}
+            for i, img_tag in enumerate(soup.find_all('img')):
+                placeholder = f"__IMAGE_PLACEHOLDER_{i}__"
+                image_map[placeholder] = str(img_tag)
+                # Replace the tag with the placeholder text
+                img_tag.replace_with(placeholder)
+
+            # 2. Get the HTML content with placeholders instead of images
+            html_with_placeholders = str(soup)
+
+            # 3. Remove timestamps from this placeholder-d content
+            html_without_timestamps = remove_timestamps_from_html(html_with_placeholders)
+
+            # 4. Restore the images by replacing placeholders with the original image tags
+            display_html = html_without_timestamps
+            for placeholder, original_img_tag in image_map.items():
+                display_html = display_html.replace(placeholder, original_img_tag)
 
         # 5. Aggiorna la UI
         target_widget.blockSignals(True)
         target_widget.setHtml(display_html)
         target_widget.blockSignals(False)
 
-        # 6. CRUCIALE: Rendi l'editor di sola lettura quando la vista è filtrata
-        # per prevenire la perdita di dati (salvataggio di una vista parziale).
-        # L'utente può modificare solo quando vede il contenuto completo (con timecode).
+        # 6. Rendi l'editor di sola lettura quando la vista è filtrata
         target_widget.setReadOnly(not show_timestamps)
 
     def onProcessError(self, error_message):
