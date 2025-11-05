@@ -62,7 +62,7 @@ Il software segue un’architettura a livelli che semplifica l’organizzazione 
 
 1. **UI Layer (Presentazione)**  
    - **PyQt6** fornisce le interfacce grafiche: Dock personalizzati, pulsanti, menù, slider, ecc.  
-   - Esempi: *CustomSlider, CustumTextEdit, CropVideoWidget* e i Docks di gestione (editing, recording, audio dock).  
+   - Esempi: *CustomSlider, CustomTextEdit, CropVideoWidget* e i Docks di gestione (editing, recording, audio dock).
 
 2. **Application/Business Logic Layer**  
    - Contiene le regole di business e l’orchestrazione delle operazioni.  
@@ -123,7 +123,7 @@ GeniusAI/
 │  ├─ ui/                           # Componenti UI personalizzati (dock, slider, splash, ecc.)
 │  │  ├─ CropOverlay.py
 │  │  ├─ CustomSlider.py
-│  │  ├─ CustumTextEdit.py
+│  │  ├─ CustomTextEdit.py
 │  │  ├─ CustVideoWidget.py
 │  │  ├─ ScreenButton.py
 │  │  ├─ SplashScreen.py

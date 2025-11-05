@@ -1,4 +1,4 @@
-# File: src/ui/CustumTextEdit.py (Versione con Dialogo di Ricerca)
+# File: src/ui/CustomTextEdit.py (Versione con Dialogo di Ricerca)
 
 from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLayout,
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
@@ -65,14 +65,24 @@ class CustomTextEdit(QTextEdit):
     def insert_image_with_metadata(self, displayed_pixmap, width, height, video_path, timestamp, original_image=None):
         """
         Inserts an image as a document resource and stores its metadata.
-        The video path is base64 encoded to avoid invalid characters in the URI.
+        Generates a unique but simpler name for the image resource.
         """
-        # Codifica il percorso del video in Base64 per garantire un URI valido
-        safe_video_path = base64.urlsafe_b64encode(video_path.encode()).decode()
-        image_name = f"frame_{safe_video_path}_{int(timestamp * 1000)}_{int(time.time() * 1000)}"
+        # Generate a unique name for the image resource. Using a timestamp is a good way to ensure uniqueness.
+        image_name = f"frame_{int(time.time() * 1000)}"
         uri = QUrl(f"frame://{image_name}")
 
-        # Convert the QPixmap to a QImage before adding it as a resource to ensure it's device-independent.
+        # The document will use this URI to request the image data via the loadResource method.
+        # We store the actual image data in our metadata dictionary.
+        # Convert QPixmap to QImage for storage to ensure it's device-independent.
+        image_to_store = original_image if original_image is not None else displayed_pixmap.toImage()
+        self.image_metadata[image_name] = {
+            'video_path': video_path,
+            'timestamp': timestamp,
+            'original_image': image_to_store # This is what loadResource will return
+        }
+
+        # The document itself doesn't store the image, just a reference (the URI).
+        # We need to add the *displayed* pixmap as the resource for the initial display.
         self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_pixmap.toImage())
 
         cursor = self.textCursor()
@@ -86,13 +96,6 @@ class CustomTextEdit(QTextEdit):
         # Force a relayout to ensure the new image is displayed correctly
         self.viewport().update()
 
-        # Store metadata, always using QImage for consistency and manipulation
-        image_to_store = original_image if original_image is not None else displayed_pixmap.toImage()
-        self.image_metadata[image_name] = {
-            'video_path': video_path,
-            'timestamp': timestamp,
-            'original_image': image_to_store
-        }
         return image_name
 
     def find_nearest_timecode(self, cursor_pos):
