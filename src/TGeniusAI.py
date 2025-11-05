@@ -58,7 +58,7 @@ from src.ui.CustVideoWidget import CropVideoWidget
 from src.ui.CustomSlider import CustomSlider
 from src.managers.Settings import SettingsDialog
 from src.ui.ScreenButton import ScreenButton
-from src.ui.CustumTextEdit import CustomTextEdit
+from src.ui.CustomTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
@@ -2099,64 +2099,59 @@ class VideoAudioManager(QMainWindow):
 
     def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
         """
-        Handles the request to insert a video frame at a specific timestamp by opening a CropDialog.
+        Gestisce la richiesta di inserire un fotogramma video a un timestamp specifico.
+        Apre un CropDialog per consentire all'utente di selezionare, ritagliare e ridimensionare il fotogramma.
+        Utilizza lo schema URI frame:// per un inserimento robusto.
         """
-        video_path = self._get_selected_analysis_video_path()
-        if not video_path:
-            self.show_status_message("Nessun video caricato nel player selezionato.", error=True)
+        # 1. Ottieni il percorso del video dal player di input
+        video_path = self.videoPathLineEdit
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Carica un video nel Player Input prima di inserire un frame.", error=True)
             return
 
-        # Open the CropDialog to let the user select the precise frame
-        dialog = CropDialog(video_path, start_time=timestamp_seconds, end_time=timestamp_seconds + 1, parent=self)
+        self.player.pause()
 
-        # Set the initial frame in the dialog
-        dialog.update_frame(int(timestamp_seconds * dialog.fps))
+        # 2. Apri il CropDialog per permettere all'utente di selezionare il frame
+        dialog = CropDialog(video_path, current_time=int(timestamp_seconds * 1000), parent=self)
 
         if dialog.exec():
-            # Get the selected frame (not the crop rect)
-            final_frame_pos = dialog.current_frame_pos
-            final_timestamp = final_frame_pos / dialog.fps
-
-            original_qimage = dialog.original_pixmap.toImage()
+            # 3. Ottieni i dati necessari dal dialogo
             cropped_pixmap = dialog.get_cropped_pixmap()
-
             if cropped_pixmap.isNull():
-                self.show_status_message("Impossibile estrarre il frame ritagliato.", error=True)
+                self.show_status_message("Operazione annullata o frame non valido.", error=True)
                 return
 
-            cropped_qimage = cropped_pixmap.toImage()
-
-            if not cropped_qimage:
-                self.show_status_message("Impossibile estrarre il frame selezionato.", error=True)
-                return
-
-            # Get the selected size percentage from the CropDialog
+            final_timestamp = dialog.current_frame_pos / dialog.fps
+            original_qimage = dialog.original_pixmap.toImage()
             size_percentage = dialog.get_selected_size_percentage()
-            width = int(cropped_qimage.width() * (size_percentage / 100))
-            height = int(cropped_qimage.height() * (size_percentage / 100))
+            width = int(cropped_pixmap.width() * (size_percentage / 100))
+            height = int(cropped_pixmap.height() * (size_percentage / 100))
 
-            # Insert the image at the original cursor position
-            if target_text_edit:
-                    cursor = target_text_edit.textCursor()
-                    cursor.setPosition(position)
-                    target_text_edit.setTextCursor(cursor)
+            # 4. Inserisci l'immagine nel target_text_edit
+            cursor = target_text_edit.textCursor()
+            # Mantiene la posizione originale del cursore passata dal segnale
+            cursor.setPosition(position)
+            target_text_edit.setTextCursor(cursor)
 
-                    # Insert a newline before the image to ensure it's on its own line
-                    cursor.insertText("\n")
+            # Inserisce un a capo per assicurare che l'immagine sia su una nuova riga
+            cursor.insertBlock()
 
-                    target_text_edit.insert_image_with_metadata(
-                        displayed_pixmap=cropped_pixmap,
-                        width=width,
-                        height=height,
-                        video_path=video_path,
-                        timestamp=final_timestamp,
-                        original_image=original_qimage
-                    )
+            # Inserisce l'immagine con i metadati associati
+            target_text_edit.insert_image_with_metadata(
+                displayed_pixmap=cropped_pixmap,
+                width=width,
+                height=height,
+                video_path=video_path,
+                timestamp=final_timestamp,
+                original_image=original_qimage
+            )
 
-                    # Insert another newline after the image for spacing
-                    cursor.insertText("\n")
+            # Inserisce un altro a capo per spaziatura e continua a scrivere sotto
+            cursor.insertBlock()
 
-                    self.show_status_message("Frame inserito con successo.")
+            # Forza un ridisegno per assicurarsi che l'immagine sia visibile subito
+            target_text_edit.viewport().update()
+            self.show_status_message("Frame inserito con successo.")
 
     def handle_frame_edit_request(self, image_name):
         """Handles the request to edit an inserted frame."""

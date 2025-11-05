@@ -63,7 +63,7 @@ hiddenimports = (
     # ['playwright.sync_api', 'playwright.async_api'] +
     # Internal project modules
     ['src.ui', 'src.ui.CustomDock', 'src.ui.CustomSlider', 'src.ui.CustVideoWidget',
-     'src.ui.CustumTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
+     'src.ui.CustomTextEdit', 'src.ui.ScreenButton', 'src.ui.SplashScreen', 'src.ui.VideoOverlay', 'src.ui.CropOverlay',
      'src.services', 'src.managers', 'src.recorder', 'src.config']
 )
 
