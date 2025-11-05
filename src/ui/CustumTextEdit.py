@@ -18,12 +18,17 @@ class CustomTextDocument(QTextDocument):
     def loadResource(self, type, name):
         """
         Loads the resource for the given type and name.
-        This is overridden to handle the custom 'frame://' scheme.
+        This is overridden to handle the custom 'frame://' scheme by looking up
+        the image in the parent's metadata dictionary.
         """
         if type == QTextDocument.ResourceType.ImageResource and name.scheme() == 'frame':
-            # The resource is already in the document's cache, added via addResource.
-            # The base implementation will retrieve it for us.
-            return super().loadResource(type, name)
+            parent_widget = self.parent()
+            if isinstance(parent_widget, CustomTextEdit):
+                image_name = name.toString().replace("frame://", "")
+                metadata = parent_widget.image_metadata.get(image_name)
+                if metadata and 'original_image' in metadata:
+                    return metadata['original_image']
+
         return super().loadResource(type, name)
 
 class CustomTextEdit(QTextEdit):
