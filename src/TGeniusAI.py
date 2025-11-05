@@ -4777,9 +4777,13 @@ class VideoAudioManager(QMainWindow):
                     return image_path
                 return src  # Restituisce l'originale se non risolto
 
-            # Rimuove i tag body/html per evitare problemi di parsing con fpdf
+            # Rimuove i tag <img> con src vuoto e i tag body/html per evitare problemi di parsing con fpdf
             soup = BeautifulSoup(html_content, 'html.parser')
+            for img in soup.find_all('img'):
+                if not img.get('src'):
+                    img.decompose() # Rimuove il tag
             body_content = soup.body.decode_contents() if soup.body else str(soup)
+
 
             pdf.write_html(body_content, image_map=map_image)
 
