@@ -67,8 +67,8 @@ class CustomTextEdit(QTextEdit):
         image_name = f"frame_{safe_video_path}_{int(timestamp * 1000)}_{int(time.time() * 1000)}"
         uri = QUrl(f"frame://{image_name}")
 
-        # Add the QPixmap object directly as a resource, as it's optimized for display.
-        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_pixmap)
+        # Convert the QPixmap to a QImage before adding it as a resource to ensure it's device-independent.
+        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_pixmap.toImage())
 
         cursor = self.textCursor()
         image_format = QTextImageFormat()
