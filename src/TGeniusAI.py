@@ -2635,13 +2635,15 @@ class VideoAudioManager(QMainWindow):
                     image_filename = f"frame_{timestamp}.png"
                     image_path = os.path.join(frames_dir, image_filename)
 
-                    # Save the QImage to the file
-                    image_data.save(image_path, "PNG")
+                    # Convert the returned QVariant to a QPixmap for saving
+                    pixmap = QPixmap(image_data)
+                    if not pixmap.isNull():
+                        pixmap.save(image_path, "PNG")
 
-                    # Update the src to the relative path
-                    relative_path = os.path.join("frames", image_filename).replace("\\", "/")
-                    img['src'] = relative_path
-                    modified = True
+                        # Update the src to the relative path
+                        relative_path = os.path.join("frames", image_filename).replace("\\", "/")
+                        img['src'] = relative_path
+                        modified = True
 
         return str(soup) if modified else html_content
 
