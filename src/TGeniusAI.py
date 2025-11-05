@@ -1491,10 +1491,6 @@ class VideoAudioManager(QMainWindow):
         top_controls_layout = QHBoxLayout()
 
         # Pulsanti Azioni AI
-        self.translateSummaryButton = QPushButton("Traduci Riassunto")
-        self.translateSummaryButton.clicked.connect(self.translate_summary)
-        top_controls_layout.addWidget(self.translateSummaryButton)
-
         summarize_button = QPushButton('')
         summarize_button.setIcon(QIcon(get_resource("text_sum.png")))
         summarize_button.setFixedSize(32, 32)
@@ -8544,10 +8540,6 @@ class VideoAudioManager(QMainWindow):
 
     def translate_transcription(self):
         self._translate_text(self.singleTranscriptionTextArea)
-
-    def translate_summary(self):
-        active_summary_area = self.get_current_summary_text_area()
-        self._translate_text(active_summary_area)
 
     def _translate_text(self, text_widget):
         if not text_widget.toPlainText().strip():
