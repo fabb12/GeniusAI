@@ -7,6 +7,7 @@ import datetime
 import os
 import json
 from pathlib import Path
+from bs4 import BeautifulSoup
 
 class ProjectDock(CustomDock):
     """
@@ -316,18 +317,22 @@ class ProjectDock(CustomDock):
                     try:
                         with open(json_path, 'r', encoding='utf-8') as f:
                             json_data = json.load(f)
+                        # Funzione helper per verificare se il contenuto HTML ha testo visibile
+                        def html_has_text(html_content):
+                            if not html_content or not html_content.strip():
+                                return False
+                            soup = BeautifulSoup(html_content, 'html.parser')
+                            return soup.get_text(strip=True) != ""
+
                         # Verifica che il contenuto esista e non sia una stringa vuota/whitespace
                         transcription_original = json_data.get("transcription_original", "")
                         transcription_corrected = json_data.get("transcription_corrected", "")
-                        if (transcription_original and transcription_original.strip()) or \
-                           (transcription_corrected and transcription_corrected.strip()):
+                        if html_has_text(transcription_original) or html_has_text(transcription_corrected):
                             has_transcription = "✔️"
 
                         summaries = json_data.get("summaries", {})
-                        summary_detailed = summaries.get("detailed", "")
-                        summary_meeting = summaries.get("meeting", "")
-                        if (summary_detailed and summary_detailed.strip()) or \
-                           (summary_meeting and summary_meeting.strip()):
+                        # Controlla tutti i possibili riassunti
+                        if any(html_has_text(summary) for summary in summaries.values()):
                             has_summary = "✔️"
                     except (json.JSONDecodeError, IOError):
                         pass # Il file JSON potrebbe essere corrotto o vuoto
