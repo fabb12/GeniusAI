@@ -80,7 +80,7 @@ from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
                     DEFAULT_FRAME_RATE, DEFAULT_VOICES, SPLASH_IMAGES_DIR,
-                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS)
+                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS, get_model_for_action)
 import os
 AudioSegment.converter = FFMPEG_PATH
 from src.ui.VideoOverlay import VideoOverlay
@@ -989,6 +989,7 @@ class VideoAudioManager(QMainWindow):
         self.chatDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         area.addDock(self.chatDock, 'right', self.transcriptionDock)
         self.chatDock.sendMessage.connect(self.handle_chat_message)
+        self.chatDock.timestampClicked.connect(self.sincronizza_video)
 
         # ---------------------
         # PLAYER INPUT
@@ -8580,16 +8581,45 @@ class VideoAudioManager(QMainWindow):
 
         summary_text = summary_text_area.toPlainText()
 
+        selected_model = get_model_for_action('chat')
+
         thread = ProcessTextAI(
             mode="chat_summary",
+            model_name=selected_model,
             language=self.languageComboBox.currentText(),
             prompt_vars={'summary_text': summary_text, 'user_query': query}
         )
         self.start_task(thread, self.on_chat_response_received, self.onProcessError, self.update_status_progress)
 
+    def _make_timestamps_clickable(self, text):
+        """Finds timestamps in text and converts them to clickable HTML links."""
+        # This regex handles HH:MM:SS and MM:SS with optional decimals
+        timestamp_pattern = re.compile(r'\[(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d)?)\]')
+
+        def replacer(match):
+            timestamp_str = match.group(1)
+            try:
+                parts = timestamp_str.split(':')
+                total_seconds = 0
+                if len(parts) == 3:  # HH:MM:SS
+                    total_seconds = int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+                elif len(parts) == 2:  # MM:SS
+                    total_seconds = int(parts[0]) * 60 + float(parts[1])
+                else:
+                    return match.group(0)
+
+                return f'<a href="timestamp://{total_seconds}">{match.group(0)}</a>'
+            except (ValueError, IndexError):
+                return match.group(0)
+
+        return timestamp_pattern.sub(replacer, text)
+
     def on_chat_response_received(self, response):
         """Handles the completed signal from the ProcessTextAI thread for chat responses."""
-        self.chatDock.add_message("AI", response)
+        html_response = markdown.markdown(response, extensions=['fenced_code', 'tables'])
+        clickable_html = self._make_timestamps_clickable(html_response)
+
+        self.chatDock.add_message("AI", clickable_html)
 
         if isinstance(response, str) and response.startswith("Errore"):
             self.show_status_message(response, error=True)

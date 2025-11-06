@@ -1,14 +1,15 @@
 # File: src/ui/ChatDock.py
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton, QHBoxLayout
-from PyQt6.QtCore import pyqtSignal
+from PyQt6.QtCore import pyqtSignal, QUrl
 from src.ui.CustomDock import CustomDock
 
 class ChatDock(CustomDock):
     """
     A dock widget that provides a chat interface to interact with summaries.
     """
-    sendMessage = pyqtSignal(str)  # Signal to send the user's query
+    sendMessage = pyqtSignal(str)
+    timestampClicked = pyqtSignal(float)
 
     def __init__(self, title="Chat Riassunto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
@@ -24,6 +25,8 @@ class ChatDock(CustomDock):
         # 1. Chat History Display
         self.history_text_edit = QTextEdit()
         self.history_text_edit.setReadOnly(True)
+        self.history_text_edit.setOpenLinks(True)
+        self.history_text_edit.anchorClicked.connect(self._on_anchor_clicked)
         self.history_text_edit.setPlaceholderText("La cronologia della chat apparirà qui...")
         main_layout.addWidget(self.history_text_edit)
 
@@ -49,6 +52,18 @@ class ChatDock(CustomDock):
             self.sendMessage.emit(query)
             self.input_line_edit.clear()
 
+    def _on_anchor_clicked(self, url: QUrl):
+        """Handles clicks on links in the chat history."""
+        if url.scheme() == "timestamp":
+            try:
+                seconds = float(url.path())
+                self.timestampClicked.emit(seconds)
+            except (ValueError, TypeError):
+                print(f"Could not parse timestamp from URL: {url.toString()}")
+        else:
+            # Handle other links if necessary, e.g., open in browser
+            pass
+
     def add_message(self, sender, message):
         """
         Adds a message to the chat history, formatting it based on the sender.
@@ -56,10 +71,8 @@ class ChatDock(CustomDock):
         if sender.lower() == "user":
             formatted_message = f'<p style="color: #a9d18e;"><b>Tu:</b><br>{message}</p>'
         else: # AI or System
-            # Basic markdown-to-HTML conversion for simple formatting like bold and lists
-            import markdown
-            html_message = markdown.markdown(message)
-            formatted_message = f'<p style="color: #87ceeb;"><b>AI:</b></p>{html_message}'
+            # The message is already HTML, so just add the sender formatting
+            formatted_message = f'<div style="color: #87ceeb;"><b>AI:</b>{message}</div>'
 
         self.history_text_edit.append(formatted_message)
 

@@ -249,6 +249,13 @@ ACTION_MODELS_CONFIG = {
         'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)), # Tutti i modelli testuali vanno bene
         'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
     },
+    'chat': {
+        'display_name': "Chat",
+        'setting_key': "models/chat",
+        'default': os.getenv("DEFAULT_MODEL_CHAT", GEMINI_25_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)), # Tutti i modelli testuali vanno bene
+        'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
+    },
     # Esempio: Se avessi una generazione specifica per la guida operativa
     # 'operational_guide': {
     #     'display_name': "Guida Operativa (da Visione)",
