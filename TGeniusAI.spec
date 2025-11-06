@@ -58,6 +58,7 @@ hiddenimports = (
     collect_submodules('pycountry') +
     collect_submodules('speech_recognition') +
     collect_submodules('pydantic') +
+    collect_submodules('whisper') +
     # collect_submodules('playwright') +
     # collect_submodules('browser_use') +
     # ['playwright.sync_api', 'playwright.async_api'] +
@@ -74,7 +75,8 @@ datas = (
     collect_data_files('pydub') +
     collect_data_files('PyQt6') +
     collect_data_files('pycountry') +
-    collect_data_files('speech_recognition')
+    collect_data_files('speech_recognition') +
+    collect_data_files('whisper')
 )
 
 # Additional DLLs and plugins for PyQt6
