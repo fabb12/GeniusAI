@@ -14,7 +14,7 @@ from src.config import (
     OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
     PROMPT_TEXT_SUMMARY, PROMPT_TEXT_FIX, PROMPT_YOUTUBE_SUMMARY, PROMPT_VIDEO_INTEGRATION,
     PROMPT_COMBINED_ANALYSIS, PROMPT_COMBINED_SUMMARY_TEXT_ONLY, PROMPT_GENERATE_FILENAME,
-    PROMPT_DOCUMENT_INTEGRATION
+    PROMPT_DOCUMENT_INTEGRATION, PROMPT_CHAT_SUMMARY
 )
 from src.services.utils import _call_ollama_api
 
@@ -46,7 +46,7 @@ class ProcessTextAI(QThread):
         self.result = None
 
         # Valida la modalità
-        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary", "combined_summary_text_only", "generate_filename", "document_integration"]
+        valid_modes = ["summary", "fix", "youtube_summary", "video_integration", "combined_summary", "combined_summary_text_only", "generate_filename", "document_integration", "chat_summary"]
         if mode not in valid_modes:
             raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
@@ -106,6 +106,8 @@ class ProcessTextAI(QThread):
             prompt_file_path = PROMPT_GENERATE_FILENAME
         elif self.mode == "document_integration":
             prompt_file_path = PROMPT_DOCUMENT_INTEGRATION
+        elif self.mode == "chat_summary":
+            prompt_file_path = PROMPT_CHAT_SUMMARY
         else:
             error_msg = f"Modalità non valida: {self.mode}"
             logging.error(error_msg)
@@ -122,7 +124,7 @@ class ProcessTextAI(QThread):
                 prompt_template = f.read()
 
             # Logica di formattazione condizionale
-            if self.mode in ["video_integration", "combined_summary", "document_integration"]:
+            if self.mode in ["video_integration", "combined_summary", "document_integration", "chat_summary"]:
                 # Queste modalità usano un template completo con più variabili
                 format_data = self.prompt_vars.copy()
                 format_data['language'] = self.language

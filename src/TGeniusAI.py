@@ -92,6 +92,7 @@ from src.services.SilenceRemover import SilenceRemoverThread
 from src.managers.ProjectManager import ProjectManager
 from src.managers.BookmarkManager import BookmarkManager
 from src.ui.ProjectDock import ProjectDock
+from src.ui.ChatDock import ChatDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.services.utils import remove_timestamps_from_html, generate_unique_filename
@@ -984,6 +985,11 @@ class VideoAudioManager(QMainWindow):
         area.addDock(self.infoExtractionDock, 'right')
         self.createInfoExtractionDock()
 
+        self.chatDock = ChatDock()
+        self.chatDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.addDock(self.chatDock, 'right', self.transcriptionDock)
+        self.chatDock.sendMessage.connect(self.handle_chat_message)
+
         # ---------------------
         # PLAYER INPUT
         # ---------------------
@@ -1705,7 +1711,8 @@ class VideoAudioManager(QMainWindow):
             'videoPlayerOutput': self.videoPlayerOutput,
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock,
-            'infoExtractionDock': self.infoExtractionDock
+            'infoExtractionDock': self.infoExtractionDock,
+            'chatDock': self.chatDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -5662,6 +5669,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
         self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
+        self.actionToggleChatDock = self.createToggleAction(self.chatDock, 'Mostra/Nascondi Chat Riassunto')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -5673,6 +5681,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleProjectDock)
         viewMenu.addAction(self.actionToggleVideoNotesDock)
         viewMenu.addAction(self.actionToggleInfoExtractionDock)
+        viewMenu.addAction(self.actionToggleChatDock)
 
 
 
@@ -5762,6 +5771,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
         self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
+        self.actionToggleChatDock.setChecked(self.chatDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -8561,11 +8571,28 @@ class VideoAudioManager(QMainWindow):
         self.show_status_message(f"Traduzione in {self.translationComboBox.currentText()} in corso...")
         QApplication.processEvents()
 
-        # Traduci i testi
-        translated_texts = self.translation_service.translate_texts_sync(original_texts, dest_lang_code)
+    def handle_chat_message(self, query):
+        """Handles the sendMessage signal from the ChatDock."""
+        summary_text_area = self.get_current_summary_text_area()
+        if not summary_text_area or not summary_text_area.toPlainText().strip():
+            self.chatDock.add_message("AI", "Per favore, genera o carica un riassunto prima di fare una domanda.")
+            return
 
-        if isinstance(translated_texts, str) and translated_texts.startswith("Errore"):
-            self.show_status_message(translated_texts, error=True)
+        summary_text = summary_text_area.toPlainText()
+
+        thread = ProcessTextAI(
+            mode="chat_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'summary_text': summary_text, 'user_query': query}
+        )
+        self.start_task(thread, self.on_chat_response_received, self.onProcessError, self.update_status_progress)
+
+    def on_chat_response_received(self, response):
+        """Handles the completed signal from the ProcessTextAI thread for chat responses."""
+        self.chatDock.add_message("AI", response)
+
+        if isinstance(response, str) and response.startswith("Errore"):
+            self.show_status_message(response, error=True)
             return
 
         # Sostituisci il testo originale con quello tradotto
