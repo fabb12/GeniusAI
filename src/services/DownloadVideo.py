@@ -254,8 +254,8 @@ class DownloadThread(QThread):
         """Download both audio and video from a YouTube video and emit the title."""
         if not self.running: return
         video_options = {
-            'format': 'bestvideo+bestaudio/best',
-            'postprocessors': [{'key': 'FFmpegVideoConvertor', 'preferedformat': 'mp4'}],
+            'format': 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best',
+            'merge_output_format': 'mp4',
             'outtmpl': os.path.join(self.temp_dir, '%(id)s.%(ext)s'),
             'quiet': True,
             'ffmpeg_location': self.ffmpeg_path,
