@@ -84,7 +84,7 @@ Tutti i problemi noti e le funzionalità pianificate saranno documentati in ques
 - [ ] sistemare guida operativa mostra timecode 
 - [ ] inserire immagine nella file da esportare 
 - [ ] non si vede watermark
-- [ ] salva correttametne le trascrizioni 
+- [ ] salva correttametne le trascrizioni  
 ## [1.2.2] - 2024-06-30
 - [x] controllare periferiche audio come vengono associate
 - 
