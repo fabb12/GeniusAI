@@ -992,6 +992,7 @@ class VideoAudioManager(QMainWindow):
         self.chatDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         area.addDock(self.chatDock, 'right', self.transcriptionDock)
         self.chatDock.sendMessage.connect(self.handle_chat_message)
+        self.chatDock.history_text_edit.timestampDoubleClicked.connect(self.sincronizza_video)
 
         # ---------------------
         # PLAYER INPUT

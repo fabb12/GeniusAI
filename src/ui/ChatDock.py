@@ -1,8 +1,9 @@
 # File: src/ui/ChatDock.py
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog
 from PyQt6.QtCore import pyqtSignal, Qt
 from src.ui.CustomDock import CustomDock
+from src.ui.CustomTextEdit import CustomTextEdit
 
 class ChatDock(CustomDock):
     """
@@ -22,7 +23,7 @@ class ChatDock(CustomDock):
         main_layout.setContentsMargins(10, 10, 10, 10)
 
         # 1. Chat History Display
-        self.history_text_edit = QTextEdit()
+        self.history_text_edit = CustomTextEdit(self)
         self.history_text_edit.setReadOnly(True)
         self.history_text_edit.setPlaceholderText("La cronologia della chat apparirà qui...")
         self.history_text_edit.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
