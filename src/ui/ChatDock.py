@@ -81,12 +81,17 @@ class ChatDock(CustomDock):
         context_menu = QMenu(self)
         save_action = context_menu.addAction("Salva Chat")
         load_action = context_menu.addAction("Carica Chat")
+        context_menu.addSeparator()
+        reset_action = context_menu.addAction("Reset Chat")
+
         action = context_menu.exec(self.history_text_edit.mapToGlobal(position))
 
         if action == save_action:
             self._save_chat_history()
         elif action == load_action:
             self._load_chat_history()
+        elif action == reset_action:
+            self.clear_chat()
 
     def _load_chat_history(self):
         """Opens a file dialog to load a chat history from the project's 'chat' folder."""
