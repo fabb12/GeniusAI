@@ -103,6 +103,7 @@ from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
 from fpdf import FPDF
 from markdownify import markdownify
+import io
 
 
 class ProjectClipsMergeThread(QThread):
@@ -4783,9 +4784,41 @@ class VideoAudioManager(QMainWindow):
                 except OSError as e:
                     logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
+    def _get_image_stream_for_export(self, src_attribute, document):
+        """
+        Resolves an image's src attribute to an in-memory io.BytesIO stream.
+        This avoids creating temporary files on disk.
+        """
+        try:
+            if src_attribute.startswith('frame://'):
+                uri = QUrl(src_attribute)
+                image_qvariant = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qvariant:
+                    image_data = image_qvariant
+                    if isinstance(image_data, QPixmap):
+                        image_data = image_data.toImage()
+
+                    if not image_data.isNull():
+                        buffer = QBuffer()
+                        buffer.open(QIODevice.OpenModeFlag.ReadWrite)
+                        image_data.save(buffer, "PNG")
+                        stream = io.BytesIO(buffer.data())
+                        stream.seek(0)
+                        return stream
+            elif src_attribute.startswith('frames/'):
+                if self.current_project_path:
+                    abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
+                    if os.path.exists(abs_path):
+                        with open(abs_path, 'rb') as f:
+                            stream = io.BytesIO(f.read())
+                        stream.seek(0)
+                        return stream
+        except Exception as e:
+            logging.error(f"Error creating image stream for '{src_attribute}': {e}")
+        return None
+
     def _export_to_docx(self, summary_html, path):
-        """Esporta il contenuto HTML in un file DOCX, gestendo la pulizia dei file temporanei."""
-        temp_files_to_clean = []
+        """Esporta il contenuto HTML in un file DOCX, utilizzando stream in memoria per le immagini."""
         try:
             document = docx.Document()
             soup = BeautifulSoup(summary_html, 'html.parser')
@@ -4801,14 +4834,14 @@ class VideoAudioManager(QMainWindow):
                 if element.name.startswith('h') and element.name[1:].isdigit():
                     level = int(element.name[1:])
                     p = document.add_heading(level=min(level, 4))
-                    self._add_runs_to_paragraph(element, p, temp_files_to_clean)
+                    self._add_runs_to_paragraph(element, p)
                 elif element.name == 'p':
                     p = document.add_paragraph()
-                    self._add_runs_to_paragraph(element, p, temp_files_to_clean)
+                    self._add_runs_to_paragraph(element, p)
                 elif element.name in ['ul', 'ol']:
                     for li in element.find_all('li', recursive=False):
                         p = document.add_paragraph(style='List Bullet')
-                        self._add_runs_to_paragraph(li, p, temp_files_to_clean)
+                        self._add_runs_to_paragraph(li, p)
 
             document.save(path)
             self.show_status_message(f"Riassunto esportato con successo in DOCX: {os.path.basename(path)}")
@@ -4816,17 +4849,11 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message(f"Impossibile esportare il riassunto in DOCX: {e}", error=True)
             import traceback
             logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
-        finally:
-            for temp_path in temp_files_to_clean:
-                try:
-                    os.remove(temp_path)
-                except OSError as e:
-                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
-    def _add_runs_to_paragraph(self, element, paragraph, temp_files_to_clean):
+    def _add_runs_to_paragraph(self, element, paragraph):
         """
-        Recursively parses an HTML element, adds formatted runs to a DOCX paragraph,
-        and handles inline images, passing the list of temp files down.
+        Parses an HTML element and adds formatted runs to a DOCX paragraph,
+        handling inline images via in-memory streams.
         """
         from docx.shared import Inches, Pt
         active_summary_area = self.get_current_summary_text_area()
@@ -4838,23 +4865,24 @@ class VideoAudioManager(QMainWindow):
                 self._apply_styles_to_run(element, run)
             elif child.name == 'img':
                 src = child.get('src', '')
-                image_path = self._resolve_image_path_for_export(src, doc, temp_files_to_clean)
-                if image_path:
+                image_stream = self._get_image_stream_for_export(src, doc)
+                if image_stream:
                     try:
                         style = child.get('style', '')
-                        # Usa regex più robusti per estrarre width e height
                         width_match = re.search(r'width:\s*(\d+(?:\.\d+)?)(px)?;?', style)
                         height_match = re.search(r'height:\s*(\d+(?:\.\d+)?)(px)?;?', style)
 
                         width = Pt(float(width_match.group(1))) if width_match else Inches(2.0)
                         height = Pt(float(height_match.group(1))) if height_match else None
 
-                        paragraph.add_run().add_picture(image_path, width=width, height=height)
+                        paragraph.add_run().add_picture(image_stream, width=width, height=height)
                     except Exception as img_e:
-                        logging.error(f"Could not embed image {image_path} in DOCX: {img_e}")
+                        logging.error(f"Could not embed image from stream in DOCX: {img_e}")
+                    finally:
+                        image_stream.close() # Assicura che lo stream venga chiuso
 
             elif child.name:
-                self._add_runs_to_paragraph(child, paragraph, temp_files_to_clean)
+                self._add_runs_to_paragraph(child, paragraph)
 
     def _apply_styles_to_run(self, element, run):
         """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
