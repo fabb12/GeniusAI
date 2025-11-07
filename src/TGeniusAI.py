@@ -7321,6 +7321,7 @@ class VideoAudioManager(QMainWindow):
 
         # 5. Pulisci i dock informativi
         self.projectDock.clear_project()
+        self.chatDock.clear_chat()
 
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
 
