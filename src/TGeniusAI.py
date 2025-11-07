@@ -837,7 +837,8 @@ class VideoAudioManager(QMainWindow):
         self.cancelButton.clicked.connect(self.cancel_task)
 
         # Connette i segnali del thread
-        thread.progress.connect(on_progress)
+        if hasattr(thread, 'progress'):
+            thread.progress.connect(on_progress)
         thread.completed.connect(lambda result: self.finish_task(True, result, on_complete))
         thread.error.connect(lambda error: self.finish_task(False, error, on_error))
 
