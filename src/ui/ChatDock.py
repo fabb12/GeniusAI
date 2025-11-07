@@ -1,7 +1,7 @@
 # File: src/ui/ChatDock.py
 
 import os
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog, QMessageBox
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog, QMessageBox, QInputDialog
 from PyQt6.QtCore import pyqtSignal, Qt
 from src.ui.CustomDock import CustomDock
 from src.ui.CustomTextEdit import CustomTextEdit
@@ -103,21 +103,21 @@ class ChatDock(CustomDock):
             self,
             "Carica Cronologia Chat",
             chat_dir,
-            "Text Files (*.txt);;All Files (*)"
+            "HTML Files (*.html);;All Files (*)"
         )
 
         if file_path:
             try:
                 with open(file_path, 'r', encoding='utf-8') as f:
                     chat_content = f.read()
-                # Carica come testo semplice, non HTML, perché è così che viene salvato
-                self.history_text_edit.setPlainText(chat_content)
+                # Load as HTML to preserve formatting
+                self.history_text_edit.setHtml(chat_content)
                 QMessageBox.information(self, "Successo", "Cronologia chat caricata con successo.")
             except Exception as e:
                 QMessageBox.critical(self, "Errore di Caricamento", f"Impossibile caricare il file della chat:\n{e}")
 
     def _save_chat_history(self):
-        """Opens a file dialog to save the chat history within the project's 'chat' folder."""
+        """Asks for a filename and saves the chat history as an HTML file in the project's 'chat' folder."""
         if not self.history_text_edit.toPlainText().strip():
             return  # Do nothing if chat is empty
 
@@ -125,20 +125,22 @@ class ChatDock(CustomDock):
             QMessageBox.warning(self, "Nessun Progetto Attivo", "Per favore, apri o crea un progetto prima di salvare una chat.")
             return
 
+        file_name, ok = QInputDialog.getText(self, "Salva Chat", "Inserisci il nome del file:")
+        if not ok or not file_name.strip():
+            return  # User cancelled or entered empty name
+
         chat_dir = os.path.join(self.project_path, "chat")
         os.makedirs(chat_dir, exist_ok=True)
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Salva Cronologia Chat",
-            chat_dir,  # Default directory
-            "Text Files (*.txt);;All Files (*)"
-        )
+        # Ensure the filename ends with .html
+        if not file_name.lower().endswith('.html'):
+            file_name += '.html'
 
-        if file_path:
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(self.history_text_edit.toPlainText())
-                QMessageBox.information(self, "Successo", f"Chat salvata con successo in:\n{os.path.basename(file_path)}")
-            except Exception as e:
-                QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file della chat:\n{e}")
+        file_path = os.path.join(chat_dir, file_name)
+
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(self.history_text_edit.toHtml())
+            QMessageBox.information(self, "Successo", f"Chat salvata con successo in:\n{file_name}")
+        except Exception as e:
+            QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file della chat:\n{e}")
