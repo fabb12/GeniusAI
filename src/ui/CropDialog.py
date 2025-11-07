@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayo
 from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
 from PyQt6.QtCore import Qt, QRect, QSize, QRectF
 from .ResizableRubberBand import ResizableRubberBand
+from .CustomSlider import CustomSlider
 from screeninfo import get_monitors
 
 class CropDialog(QDialog):
@@ -43,6 +44,12 @@ class CropDialog(QDialog):
 
         self.rubber_band = ResizableRubberBand(self.image_label)
 
+        # Timeline Slider
+        self.timeline_slider = CustomSlider(Qt.Orientation.Horizontal)
+        self.timeline_slider.setRange(self.start_frame, self.end_frame)
+        self.timeline_slider.setValue(self.current_frame_pos)
+        main_layout.addWidget(self.timeline_slider)
+
         frame_nav_layout = QHBoxLayout()
         self.prev_frame_button = QPushButton("<")
         self.next_frame_button = QPushButton(">")
@@ -79,6 +86,7 @@ class CropDialog(QDialog):
         self.cancel_button.clicked.connect(self.reject)
         self.prev_frame_button.clicked.connect(self.prev_frame)
         self.next_frame_button.clicked.connect(self.next_frame)
+        self.timeline_slider.valueChanged.connect(self.update_frame)
 
         self.update_pixmap_display()
         self._center_rubber_band()
@@ -149,11 +157,15 @@ class CropDialog(QDialog):
         self.rubber_band_ratio = QRectF(rb_pixmap_x / pixmap_w, rb_pixmap_y / pixmap_h, rb_w / pixmap_w, rb_h / pixmap_h)
 
     def update_frame(self, new_frame_pos):
-        if self.start_frame <= new_frame_pos <= self.end_frame:
+        if self.start_frame <= new_frame_pos <= self.end_frame and new_frame_pos != self.current_frame_pos:
             self.current_frame_pos = new_frame_pos
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, self.current_frame_pos)
             self.original_pixmap = self._get_current_frame_as_pixmap()
             self.update_pixmap_display()
+
+            self.timeline_slider.blockSignals(True)
+            self.timeline_slider.setValue(self.current_frame_pos)
+            self.timeline_slider.blockSignals(False)
 
     def next_frame(self):
         self.update_frame(self.current_frame_pos + 1)
