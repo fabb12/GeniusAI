@@ -7351,6 +7351,7 @@ class VideoAudioManager(QMainWindow):
         # 5. Pulisci i dock informativi
         self.projectDock.clear_project()
         self.chatDock.clear_chat()
+        self.chatDock.set_project_path(None)
 
         self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
 
@@ -7391,6 +7392,7 @@ class VideoAudioManager(QMainWindow):
             return
 
         self.current_project_path = os.path.dirname(gnai_path)
+        self.chatDock.set_project_path(self.current_project_path)
         self.folderPathLineEdit.setText(self.current_project_path)
         self.projectDock.load_project_data(project_data, self.current_project_path, gnai_path)
         self.show_status_message(f"Progetto '{project_data.get('projectName')}' caricato.")

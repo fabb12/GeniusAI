@@ -1,6 +1,7 @@
 # File: src/ui/ChatDock.py
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog
+import os
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog, QMessageBox
 from PyQt6.QtCore import pyqtSignal, Qt
 from src.ui.CustomDock import CustomDock
 from src.ui.CustomTextEdit import CustomTextEdit
@@ -14,7 +15,12 @@ class ChatDock(CustomDock):
     def __init__(self, title="Chat Riassunto", closable=True, parent=None):
         super().__init__(title, closable=closable, parent=parent)
         self.setToolTip("Interroga il riassunto attualmente selezionato.")
+        self.project_path = None
         self._setup_ui()
+
+    def set_project_path(self, path):
+        """Sets the current project path to enable project-specific actions."""
+        self.project_path = path
 
     def _setup_ui(self):
         """Sets up the UI components of the dock."""
@@ -74,20 +80,58 @@ class ChatDock(CustomDock):
         """Shows the context menu for the chat history."""
         context_menu = QMenu(self)
         save_action = context_menu.addAction("Salva Chat")
+        load_action = context_menu.addAction("Carica Chat")
         action = context_menu.exec(self.history_text_edit.mapToGlobal(position))
 
         if action == save_action:
             self._save_chat_history()
+        elif action == load_action:
+            self._load_chat_history()
+
+    def _load_chat_history(self):
+        """Opens a file dialog to load a chat history from the project's 'chat' folder."""
+        if not self.project_path:
+            QMessageBox.warning(self, "Nessun Progetto Attivo", "Per favore, apri o crea un progetto prima di caricare una chat.")
+            return
+
+        chat_dir = os.path.join(self.project_path, "chat")
+        if not os.path.isdir(chat_dir):
+            QMessageBox.information(self, "Nessuna Chat Salvata", "Nessuna chat salvata trovata per questo progetto.")
+            return
+
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Carica Cronologia Chat",
+            chat_dir,
+            "Text Files (*.txt);;All Files (*)"
+        )
+
+        if file_path:
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    chat_content = f.read()
+                # Carica come testo semplice, non HTML, perché è così che viene salvato
+                self.history_text_edit.setPlainText(chat_content)
+                QMessageBox.information(self, "Successo", "Cronologia chat caricata con successo.")
+            except Exception as e:
+                QMessageBox.critical(self, "Errore di Caricamento", f"Impossibile caricare il file della chat:\n{e}")
 
     def _save_chat_history(self):
-        """Opens a file dialog to save the chat history."""
+        """Opens a file dialog to save the chat history within the project's 'chat' folder."""
         if not self.history_text_edit.toPlainText().strip():
-            return # Non fare nulla se la chat è vuota
+            return  # Do nothing if chat is empty
+
+        if not self.project_path:
+            QMessageBox.warning(self, "Nessun Progetto Attivo", "Per favore, apri o crea un progetto prima di salvare una chat.")
+            return
+
+        chat_dir = os.path.join(self.project_path, "chat")
+        os.makedirs(chat_dir, exist_ok=True)
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Salva Cronologia Chat",
-            "",
+            chat_dir,  # Default directory
             "Text Files (*.txt);;All Files (*)"
         )
 
@@ -95,6 +139,6 @@ class ChatDock(CustomDock):
             try:
                 with open(file_path, 'w', encoding='utf-8') as f:
                     f.write(self.history_text_edit.toPlainText())
+                QMessageBox.information(self, "Successo", f"Chat salvata con successo in:\n{os.path.basename(file_path)}")
             except Exception as e:
-                # In un'applicazione reale, mostreremmo un QMessageBox di errore
-                print(f"Error saving chat history: {e}")
+                QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file della chat:\n{e}")
