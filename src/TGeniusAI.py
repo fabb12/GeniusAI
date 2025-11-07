@@ -1395,6 +1395,13 @@ class VideoAudioManager(QMainWindow):
         self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.singleTranscriptionTextArea))
         file_actions_layout.addWidget(self.pasteToAudioAIButton)
 
+        search_button = QPushButton('')
+        search_button.setIcon(QIcon(get_resource("search.png")))
+        search_button.setFixedSize(32, 32)
+        search_button.setToolTip("Apre il dialogo di ricerca per il testo attivo (Ctrl+F)")
+        search_button.clicked.connect(self.open_search_dialog)
+        file_actions_layout.addWidget(search_button)
+
         groups_layout.addWidget(file_actions_group)
 
         # --- Gruppo 2: Strumenti ---
@@ -1674,18 +1681,9 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
         self.transcriptionTabWidget.addTab(self.audio_ai_tab, "Audio AI")
 
-        # --- Barra Pulsanti Inferiore ---
-        bottom_button_bar = QHBoxLayout()
-        search_button = QPushButton(QIcon(get_resource("search.png")), " Cerca")
-        search_button.setToolTip("Apre il dialogo di ricerca per il testo attivo (Ctrl+F)")
-        search_button.clicked.connect(self.open_search_dialog)
-        bottom_button_bar.addWidget(search_button)
-        bottom_button_bar.addStretch()
-
         # Aggiungi il tab widget e la barra dei pulsanti al layout del dock
         dock_layout = QVBoxLayout()
         dock_layout.addWidget(self.transcriptionTabWidget)
-        dock_layout.addLayout(bottom_button_bar)
 
         # Il widget contenitore per il layout del dock
         container_widget = QWidget()
