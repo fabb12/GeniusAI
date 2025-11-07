@@ -97,6 +97,7 @@ from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.services.utils import remove_timestamps_from_html, generate_unique_filename
 from src.services.Translator import TranslationService
+from src.services.TranslationThread import TranslationThread
 import docx
 from docx.enum.text import WD_COLOR_INDEX
 from docx.shared import RGBColor
@@ -796,6 +797,7 @@ class VideoAudioManager(QMainWindow):
         self.cursor_overlay = CursorOverlay()
         self.current_thread = None
         self.original_status_bar_stylesheet = self.statusBar.styleSheet()
+        self.current_translation_widget = None
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
@@ -8555,21 +8557,18 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun testo da tradurre.", error=True)
             return
 
+        self.current_translation_widget = text_widget
         dest_lang_code = self.translationComboBox.currentData()
         html_content = text_widget.toHtml()
 
-        soup = BeautifulSoup(html_content, 'html.parser')
+        thread = TranslationThread(html_content, dest_lang_code, self)
 
-        # Estrai tutti i testi che non sono vuoti
-        text_nodes = [node for node in soup.find_all(string=True) if node.strip()]
-        original_texts = [str(node) for node in text_nodes]
-
-        if not original_texts:
-            self.show_status_message("Nessun contenuto testuale trovato da tradurre.", error=True)
-            return
-
-        self.show_status_message(f"Traduzione in {self.translationComboBox.currentText()} in corso...")
-        QApplication.processEvents()
+        self.start_task(
+            thread,
+            on_complete=self.on_translation_complete,
+            on_error=self.on_translation_error,
+            on_progress=lambda v, s: self.update_status_progress(v, s) # Placeholder, il thread non ha progress
+        )
 
     def handle_chat_message(self, query):
         """Handles the sendMessage signal from the ChatDock."""
@@ -8591,27 +8590,20 @@ class VideoAudioManager(QMainWindow):
         """Handles the completed signal from the ProcessTextAI thread for chat responses."""
         self.chatDock.add_message("AI", response)
 
-        if isinstance(response, str) and response.startswith("Errore"):
-            self.show_status_message(response, error=True)
-            return
+    def on_translation_complete(self, translated_html):
+        """Gestisce il completamento della traduzione."""
+        if self.current_translation_widget:
+            self.current_translation_widget.blockSignals(True)
+            self.current_translation_widget.setHtml(translated_html)
+            self.current_translation_widget.blockSignals(False)
+            self.show_status_message(f"Testo tradotto con successo in {self.translationComboBox.currentText()}.")
 
-        # Sostituisci il testo originale con quello tradotto
-        translated_iter = iter(translated_texts)
-        for node in text_nodes:
-            new_text = next(translated_iter)
-            # Preserva gli spazi originali se il nuovo testo non ne ha
-            if node.startswith(' ') and not new_text.startswith(' '):
-                new_text = ' ' + new_text
-            if node.endswith(' ') and not new_text.endswith(' '):
-                new_text = new_text + ' '
-            node.replace_with(new_text)
+        self.current_translation_widget = None
 
-        # Aggiorna il widget con l'HTML tradotto
-        text_widget.blockSignals(True)
-        text_widget.setHtml(str(soup))
-        text_widget.blockSignals(False)
-
-        self.show_status_message(f"Testo tradotto con successo in {self.translationComboBox.currentText()}.")
+    def on_translation_error(self, error_message):
+        """Gestisce gli errori durante la traduzione."""
+        self.show_status_message(f"Errore di traduzione: {error_message}", error=True)
+        self.current_translation_widget = None
 
 
 def get_application_path():
