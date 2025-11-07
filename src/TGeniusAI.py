@@ -1887,32 +1887,49 @@ class VideoAudioManager(QMainWindow):
 
     def apply_and_save_font_settings(self):
         """
-        Applica le impostazioni del font (famiglia e dimensione) alle aree di testo
-        e salva la dimensione se viene modificata.
+        Applica le impostazioni del font (famiglia e dimensione) a tutte le aree di testo,
+        preservando la formattazione esistente come grassetto, corsivo e intestazioni.
         """
         settings = QSettings("Genius", "GeniusAI")
-
         font_family = settings.value("editor/fontFamily", "Arial")
         font_size = settings.value("editor/fontSize", 14, type=int)
-        font = QFont(font_family, font_size)
+
+        # Crea il formato carattere desiderato
+        new_char_format = QTextCharFormat()
+        new_font = QFont(font_family, font_size)
+        new_char_format.setFont(new_font)
 
         text_areas = [
-            self.singleTranscriptionTextArea,
-            self.batchTranscriptionTextArea,
-            self.summaryDetailedTextArea,
-            self.summaryMeetingTextArea,
-            self.summaryDetailedIntegratedTextArea,
-            self.summaryMeetingIntegratedTextArea,
-            self.summaryCombinedDetailedTextArea,
-            self.summaryCombinedMeetingTextArea,
-            self.infoExtractionResultArea,
+            self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
+            self.summaryDetailedTextArea, self.summaryMeetingTextArea,
+            self.summaryDetailedIntegratedTextArea, self.summaryMeetingIntegratedTextArea,
+            self.summaryCombinedDetailedTextArea, self.summaryCombinedMeetingTextArea,
+            self.infoExtractionResultArea, self.audioAiTextArea,
+            self.chatDock.history_text_edit
         ]
-        if hasattr(self, 'audioAiTextArea'):
-            text_areas.append(self.audioAiTextArea)
 
         for area in text_areas:
-            if area: # Assicura che l'area esista prima di applicare il font
-                area.setFont(font)
+            if not area:
+                continue
+
+            # Applica il formato al testo appena digitato
+            area.setCurrentFont(new_font)
+
+            cursor = QTextCursor(area.document())
+            cursor.beginEditBlock()
+
+            # Itera su tutti i blocchi di testo del documento
+            block = area.document().begin()
+            while block.isValid():
+                block_cursor = QTextCursor(block)
+                # Controlla se il blocco è un'intestazione
+                if not block_cursor.charFormat().isHeading():
+                    block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+                    # Unisce il nuovo formato font, preservando stili esistenti (grassetto, etc.)
+                    block_cursor.mergeCharFormat(new_char_format)
+                block = block.next()
+
+            cursor.endEditBlock()
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
