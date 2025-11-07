@@ -1396,7 +1396,7 @@ class VideoAudioManager(QMainWindow):
         file_actions_layout.addWidget(self.pasteToAudioAIButton)
 
         search_button = QPushButton('')
-        search_button.setIcon(QIcon(get_resource("search.png")))
+        search_button.setIcon(QIcon(get_resource("find.png")))
         search_button.setFixedSize(32, 32)
         search_button.setToolTip("Apre il dialogo di ricerca per il testo attivo (Ctrl+F)")
         search_button.clicked.connect(self.open_search_dialog)
