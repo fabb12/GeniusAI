@@ -2677,9 +2677,8 @@ class VideoAudioManager(QMainWindow):
         # 2. Save embedded images to files and update HTML with relative paths
         html_with_relative_paths = self._save_images_from_document(html_content, document)
 
-        # 3. Convert the modified HTML to Markdown for storage
-        markdown_content = markdownify(html_with_relative_paths, heading_style="ATX")
-        data_source[summary_key] = markdown_content
+        # 3. Save the modified HTML directly to the model for storage
+        data_source[summary_key] = html_with_relative_paths
         logging.debug(f"Synced UI to model for key: {summary_key} after processing images.")
 
     def onProcessComplete(self, result):
@@ -2704,9 +2703,10 @@ class VideoAudioManager(QMainWindow):
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                # Salva il risultato grezzo (Markdown) nel modello dati.
+                # Converti il risultato Markdown in HTML prima di salvarlo.
                 # Questa è la nuova fonte di verità.
-                self.summaries[self.active_summary_type] = result
+                html_result = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+                self.summaries[self.active_summary_type] = html_result
 
                 # Invalida il riassunto integrato corrispondente.
                 integrated_key = f"{self.active_summary_type}_integrated"
@@ -2833,13 +2833,10 @@ class VideoAudioManager(QMainWindow):
         else:
             data_source = self.summaries
 
-        # 1. Leggi il testo Markdown grezzo dal modello dati
-        raw_markdown = data_source.get(summary_key, "")
+        # 1. Read the raw HTML from the data model
+        html_content = data_source.get(summary_key, "")
 
-        # 2. Converti il Markdown in HTML
-        html_content = markdown.markdown(raw_markdown, extensions=['fenced_code', 'tables'])
-
-        # 3. Carica le immagini dai file relativi nel documento e aggiorna l'HTML
+        # 2. Load images from relative files into the document and update HTML
         html_content = self._load_images_into_document(html_content, target_widget.document())
 
         # 4. Applica le trasformazioni di visualizzazione
@@ -2849,27 +2846,8 @@ class VideoAudioManager(QMainWindow):
         if show_timestamps:
             display_html = self._style_timestamps_in_html(html_content)
         else:
-            # Preserve images when hiding timestamps
-            soup = BeautifulSoup(html_content, 'html.parser')
+            display_html = remove_timestamps_from_html(html_content)
 
-            # 1. Find all image tags and store them with unique placeholders
-            image_map = {}
-            for i, img_tag in enumerate(soup.find_all('img')):
-                placeholder = f"__IMAGE_PLACEHOLDER_{i}__"
-                image_map[placeholder] = str(img_tag)
-                # Replace the tag with the placeholder text
-                img_tag.replace_with(placeholder)
-
-            # 2. Get the HTML content with placeholders instead of images
-            html_with_placeholders = str(soup)
-
-            # 3. Remove timestamps from this placeholder-d content
-            html_without_timestamps = remove_timestamps_from_html(html_with_placeholders)
-
-            # 4. Restore the images by replacing placeholders with the original image tags
-            display_html = html_without_timestamps
-            for placeholder, original_img_tag in image_map.items():
-                display_html = display_html.replace(placeholder, original_img_tag)
 
         # 5. Aggiorna la UI
         target_widget.blockSignals(True)
@@ -4733,33 +4711,36 @@ class VideoAudioManager(QMainWindow):
         elif file_format == 'pdf':
             self._export_to_pdf(export_html, path)
 
-    def _resolve_image_path_for_export(self, src_attribute, document):
+    def _resolve_image_path_for_export(self, src_attribute, document, temp_file_list):
         """
-        Resolves an image's src attribute (frame:// or relative) to an absolute
-        temporary file path suitable for embedding in an export file.
-        Returns the path to the temporary file, which the caller is responsible for deleting.
+        Resolves an image's src attribute to an absolute file path.
+        If a temporary file is created (for frame:// URIs), its path is added to
+        the provided temp_file_list for later cleanup.
         """
-        temp_file = None
         try:
             if src_attribute.startswith('frame://'):
                 uri = QUrl(src_attribute)
-                image_qimage = document.resource(QTextDocument.ResourceType.ImageResource, uri)
-                if image_qimage and not image_qimage.isNull():
-                    # Create a temporary file to save the QImage
-                    fd, temp_path = tempfile.mkstemp(suffix=".png")
-                    os.close(fd)
-                    image_qimage.save(temp_path)
-                    return temp_path
+                # Use value() to get the underlying QImage from the QVariant
+                image_qvariant = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qvariant:
+                    image_qimage = image_qvariant
+                    if isinstance(image_qimage, QPixmap): # Handle both QPixmap and QImage
+                        image_qimage = image_qimage.toImage()
+
+                    if not image_qimage.isNull():
+                        fd, temp_path = tempfile.mkstemp(suffix=".png")
+                        os.close(fd)
+                        image_qimage.save(temp_path)
+                        temp_file_list.append(temp_path) # Add to list for cleanup
+                        return temp_path
             elif src_attribute.startswith('frames/'):
                 if self.current_project_path:
-                    # Create an absolute path from the relative project path
                     abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
                     if os.path.exists(abs_path):
-                        return abs_path # Return the direct path, no temp file needed
+                        return abs_path
         except Exception as e:
             logging.error(f"Error resolving image path '{src_attribute}': {e}")
-
-        return None # Return None if path resolution fails
+        return None
 
     def _export_to_pdf(self, html_content, path):
         """Esporta il contenuto HTML in un file PDF, utilizzando image_map per la gestione delle immagini."""
@@ -4779,24 +4760,15 @@ class VideoAudioManager(QMainWindow):
             doc = active_summary_area.document()
 
             def map_image(src):
-                # Funzione per mappare gli URI delle immagini a percorsi di file locali
-                image_path = self._resolve_image_path_for_export(src, doc)
-                if image_path:
-                    if not src.startswith('frames/'):
-                        temp_files_to_clean.append(image_path)
-                    return image_path
-                return src  # Restituisce l'originale se non risolto
+                return self._resolve_image_path_for_export(src, doc, temp_files_to_clean) or src
 
-            # Rimuove i tag <img> con src vuoto e i tag body/html per evitare problemi di parsing con fpdf
             soup = BeautifulSoup(html_content, 'html.parser')
             for img in soup.find_all('img'):
                 if not img.get('src'):
-                    img.decompose() # Rimuove il tag
+                    img.decompose()
             body_content = soup.body.decode_contents() if soup.body else str(soup)
 
-
             pdf.write_html(body_content, image_map=map_image)
-
             pdf.output(path)
             self.show_status_message(f"Riassunto esportato con successo in PDF: {os.path.basename(path)}")
 
@@ -4804,13 +4776,10 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message(f"Errore durante l'esportazione in PDF: {e}", error=True)
             import traceback
             logging.error(f"Dettagli errore esportazione PDF: {traceback.format_exc()}")
-            raise
         finally:
-            # Pulisce tutti i file temporanei creati
             for temp_path in temp_files_to_clean:
                 try:
                     os.remove(temp_path)
-                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
                 except OSError as e:
                     logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
@@ -4832,14 +4801,14 @@ class VideoAudioManager(QMainWindow):
                 if element.name.startswith('h') and element.name[1:].isdigit():
                     level = int(element.name[1:])
                     p = document.add_heading(level=min(level, 4))
-                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
+                    self._add_runs_to_paragraph(element, p, temp_files_to_clean)
                 elif element.name == 'p':
                     p = document.add_paragraph()
-                    temp_files_to_clean.extend(self._add_runs_to_paragraph(element, p))
+                    self._add_runs_to_paragraph(element, p, temp_files_to_clean)
                 elif element.name in ['ul', 'ol']:
                     for li in element.find_all('li', recursive=False):
                         p = document.add_paragraph(style='List Bullet')
-                        temp_files_to_clean.extend(self._add_runs_to_paragraph(li, p))
+                        self._add_runs_to_paragraph(li, p, temp_files_to_clean)
 
             document.save(path)
             self.show_status_message(f"Riassunto esportato con successo in DOCX: {os.path.basename(path)}")
@@ -4848,21 +4817,18 @@ class VideoAudioManager(QMainWindow):
             import traceback
             logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
         finally:
-            # Pulisce tutti i file temporanei raccolti
             for temp_path in temp_files_to_clean:
                 try:
                     os.remove(temp_path)
-                    logging.info(f"Rimosso file temporaneo di esportazione: {temp_path}")
                 except OSError as e:
                     logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
 
-    def _add_runs_to_paragraph(self, element, paragraph):
+    def _add_runs_to_paragraph(self, element, paragraph, temp_files_to_clean):
         """
         Recursively parses an HTML element, adds formatted runs to a DOCX paragraph,
-        and handles inline images. Returns a list of temporary file paths to be cleaned up.
+        and handles inline images, passing the list of temp files down.
         """
         from docx.shared import Inches, Pt
-        temp_files_to_clean = []
         active_summary_area = self.get_current_summary_text_area()
         doc = active_summary_area.document()
 
@@ -4872,30 +4838,23 @@ class VideoAudioManager(QMainWindow):
                 self._apply_styles_to_run(element, run)
             elif child.name == 'img':
                 src = child.get('src', '')
-                image_path = self._resolve_image_path_for_export(src, doc)
+                image_path = self._resolve_image_path_for_export(src, doc, temp_files_to_clean)
                 if image_path:
-                    # If the image was from a frame:// URI, it's a temporary file
-                    if not src.startswith('frames/'):
-                        temp_files_to_clean.append(image_path)
-
                     try:
                         style = child.get('style', '')
-                        width_match = re.search(r'width:\s*(\d+)', style)
-                        height_match = re.search(r'height:\s*(\d+)', style)
+                        # Usa regex più robusti per estrarre width e height
+                        width_match = re.search(r'width:\s*(\d+(?:\.\d+)?)(px)?;?', style)
+                        height_match = re.search(r'height:\s*(\d+(?:\.\d+)?)(px)?;?', style)
 
-                        # Use Pt for width and height for better control
-                        width = Pt(int(width_match.group(1))) if width_match else Inches(6)
-                        height = Pt(int(height_match.group(1))) if height_match else None
+                        width = Pt(float(width_match.group(1))) if width_match else Inches(2.0)
+                        height = Pt(float(height_match.group(1))) if height_match else None
 
                         paragraph.add_run().add_picture(image_path, width=width, height=height)
                     except Exception as img_e:
                         logging.error(f"Could not embed image {image_path} in DOCX: {img_e}")
 
             elif child.name:
-                # Extend the list with temp files from recursive calls
-                temp_files_to_clean.extend(self._add_runs_to_paragraph(child, paragraph))
-
-        return temp_files_to_clean
+                self._add_runs_to_paragraph(child, paragraph, temp_files_to_clean)
 
     def _apply_styles_to_run(self, element, run):
         """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
@@ -6062,9 +6021,18 @@ class VideoAudioManager(QMainWindow):
 
         # Carica i riassunti, gestendo la retrocompatibilità
         self.summaries = data.get('summaries', {})
-        if not self.summaries: # Se 'summaries' è vuoto o non esiste
-             self.summaries['detailed'] = data.get('summary_generated', '')
-             self.summaries['detailed_integrated'] = data.get('summary_generated_integrated', '')
+        if not self.summaries:  # Se 'summaries' è vuoto o non esiste (vecchio formato)
+            raw_detailed = data.get('summary_generated', '')
+            raw_integrated = data.get('summary_generated_integrated', '')
+            # Converti in HTML perché i vecchi formati erano Markdown
+            self.summaries['detailed'] = markdown.markdown(raw_detailed, extensions=['fenced_code', 'tables'])
+            self.summaries['detailed_integrated'] = markdown.markdown(raw_integrated, extensions=['fenced_code', 'tables'])
+
+        # Per i nuovi file json, controlla se qualche valore è ancora in Markdown e convertilo
+        for key, value in self.summaries.items():
+            if value and not value.strip().startswith('<'):
+                logging.debug(f"Converting legacy Markdown summary for key '{key}' to HTML.")
+                self.summaries[key] = markdown.markdown(value, extensions=['fenced_code', 'tables'])
 
         # Rimosso il caricamento di 'combined_summary' dal JSON del singolo clip.
         # Questa informazione è ora gestita a livello di progetto nel file .gnai.
