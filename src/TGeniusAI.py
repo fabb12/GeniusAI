@@ -1846,12 +1846,6 @@ class VideoAudioManager(QMainWindow):
         # Applica le impostazioni del font
         self.apply_and_save_font_settings()
 
-        # Connetti i segnali per il cambio di font
-        self.singleTranscriptionTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.summaryDetailedTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.summaryMeetingTextArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-        self.infoExtractionResultArea.fontSizeChanged.connect(self.apply_and_save_font_settings)
-
     def open_search_dialog(self):
         """
         Apre il dialogo di ricerca per l'area di testo attualmente attiva e visibile.
@@ -1891,7 +1885,7 @@ class VideoAudioManager(QMainWindow):
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
 
-    def apply_and_save_font_settings(self, size=None):
+    def apply_and_save_font_settings(self):
         """
         Applica le impostazioni del font (famiglia e dimensione) alle aree di testo
         e salva la dimensione se viene modificata.
@@ -1899,13 +1893,7 @@ class VideoAudioManager(QMainWindow):
         settings = QSettings("Genius", "GeniusAI")
 
         font_family = settings.value("editor/fontFamily", "Arial")
-
-        if size is None:
-            font_size = settings.value("editor/fontSize", 14, type=int)
-        else:
-            font_size = size
-            settings.setValue("editor/fontSize", font_size)
-
+        font_size = settings.value("editor/fontSize", 14, type=int)
         font = QFont(font_family, font_size)
 
         text_areas = [
