@@ -1,8 +1,9 @@
 import cv2
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QComboBox
+from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QComboBox, QLineEdit
 from PyQt6.QtGui import QPixmap, QImage, QResizeEvent
 from PyQt6.QtCore import Qt, QRect, QSize, QRectF
 from .ResizableRubberBand import ResizableRubberBand
+from src.services.utils import parse_timestamp_to_seconds
 from .CustomSlider import CustomSlider
 from screeninfo import get_monitors
 
@@ -50,6 +51,18 @@ class CropDialog(QDialog):
         self.timeline_slider.setValue(self.current_frame_pos)
         main_layout.addWidget(self.timeline_slider)
 
+        # Timecode input
+        timecode_layout = QHBoxLayout()
+        timecode_layout.addStretch()
+        timecode_layout.addWidget(QLabel("Vai al timecode:"))
+        self.timecode_input = QLineEdit()
+        self.timecode_input.setPlaceholderText("MM:SS or HH:MM:SS")
+        go_button = QPushButton("Vai")
+        timecode_layout.addWidget(self.timecode_input)
+        timecode_layout.addWidget(go_button)
+        timecode_layout.addStretch()
+        main_layout.addLayout(timecode_layout)
+
         frame_nav_layout = QHBoxLayout()
         self.prev_frame_button = QPushButton("<")
         self.next_frame_button = QPushButton(">")
@@ -87,9 +100,25 @@ class CropDialog(QDialog):
         self.prev_frame_button.clicked.connect(self.prev_frame)
         self.next_frame_button.clicked.connect(self.next_frame)
         self.timeline_slider.valueChanged.connect(self.update_frame)
+        go_button.clicked.connect(self.go_to_timecode)
+        self.timecode_input.returnPressed.connect(self.go_to_timecode)
 
         self.update_pixmap_display()
         self._center_rubber_band()
+        self._update_timecode_input()
+
+    def go_to_timecode(self):
+        timecode_str = self.timecode_input.text()
+        seconds = parse_timestamp_to_seconds(timecode_str)
+        if seconds is not None:
+            frame_pos = int(seconds * self.fps)
+            self.update_frame(frame_pos)
+
+    def _update_timecode_input(self):
+        seconds = self.current_frame_pos / self.fps
+        minutes = int(seconds // 60)
+        seconds = int(seconds % 60)
+        self.timecode_input.setText(f"{minutes:02d}:{seconds:02d}")
 
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
@@ -166,6 +195,7 @@ class CropDialog(QDialog):
             self.timeline_slider.blockSignals(True)
             self.timeline_slider.setValue(self.current_frame_pos)
             self.timeline_slider.blockSignals(False)
+            self._update_timecode_input()
 
     def next_frame(self):
         self.update_frame(self.current_frame_pos + 1)
