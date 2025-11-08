@@ -63,12 +63,17 @@ class ChatDock(CustomDock):
         Adds a message to the chat history, formatting it based on the sender.
         """
         if sender.lower() == "user":
-            formatted_message = f'<p style="color: #a9d18e;"><b>Tu:</b><br>{message}</p>'
+            # Use div to prevent paragraph styling issues like automatic bullet points.
+            # Added margin-bottom for spacing.
+            formatted_message = f'<div style="color: #a9d18e; margin-bottom: 10px;"><b>Tu:</b><br>{message}</div>'
         else: # AI or System
-            # Basic markdown-to-HTML conversion for simple formatting like bold and lists
             import markdown
+            # Convert the AI's message from markdown to HTML.
             html_message = markdown.markdown(message)
-            formatted_message = f'<p style="color: #87ceeb;"><b>AI:</b></p>{html_message}'
+            # Combine the "AI:" label and the message into a single div.
+            # This prevents the label and the message from being treated as separate
+            # list items, which was causing the formatting issue.
+            formatted_message = f'<div style="color: #87ceeb; margin-bottom: 10px;"><b>AI:</b><br>{html_message}</div>'
 
         self.history_text_edit.append(formatted_message)
 
