@@ -1887,17 +1887,24 @@ class VideoAudioManager(QMainWindow):
 
     def apply_and_save_font_settings(self):
         """
-        Applica le impostazioni del font (famiglia e dimensione) a tutte le aree di testo,
-        preservando la formattazione esistente come grassetto, corsivo e intestazioni.
+        Applica le impostazioni del font a tutte le aree di testo.
+        - Applica la famiglia di caratteri a tutto il testo (paragrafi e intestazioni).
+        - Applica la dimensione del carattere solo ai paragrafi, preservando le dimensioni delle intestazioni.
         """
         settings = QSettings("Genius", "GeniusAI")
         font_family = settings.value("editor/fontFamily", "Arial")
         font_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Crea il formato carattere desiderato
-        new_char_format = QTextCharFormat()
-        new_font = QFont(font_family, font_size)
-        new_char_format.setFont(new_font)
+        # Formato per i paragrafi (famiglia + dimensione)
+        paragraph_font = QFont(font_family, font_size)
+        paragraph_format = QTextCharFormat()
+        paragraph_format.setFont(paragraph_font)
+
+        # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
+        heading_font = QFont()
+        heading_font.setFamily(font_family)
+        heading_format = QTextCharFormat()
+        heading_format.setFont(heading_font)
 
         text_areas = [
             self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
@@ -1912,21 +1919,26 @@ class VideoAudioManager(QMainWindow):
             if not area:
                 continue
 
-            # Applica il formato al testo appena digitato
-            area.setCurrentFont(new_font)
+            # Imposta il formato per il nuovo testo che verrà digitato
+            area.setCurrentCharFormat(paragraph_format)
 
             cursor = QTextCursor(area.document())
             cursor.beginEditBlock()
 
-            # Itera su tutti i blocchi di testo del documento
             block = area.document().begin()
             while block.isValid():
                 block_cursor = QTextCursor(block)
-                # Controlla se il blocco è un'intestazione
-                if not block_cursor.charFormat().isHeading():
-                    block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-                    # Unisce il nuovo formato font, preservando stili esistenti (grassetto, etc.)
-                    block_cursor.mergeCharFormat(new_char_format)
+                block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+
+                is_heading = block.blockFormat().headingLevel() > 0
+
+                if is_heading:
+                    # Per le intestazioni, unisci solo la famiglia del carattere
+                    block_cursor.mergeCharFormat(heading_format)
+                else:
+                    # Per i paragrafi, unisci sia la famiglia che la dimensione
+                    block_cursor.mergeCharFormat(paragraph_format)
+
                 block = block.next()
 
             cursor.endEditBlock()
