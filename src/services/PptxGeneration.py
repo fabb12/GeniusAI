@@ -366,31 +366,70 @@ class PptxGeneration:
                 title_slide_layout = content_slide_layout
 
 
-            # --- Parsing del testo AI con Regex robusto ---
+            # --- Parsing del testo AI con una logica più robusta ---
             slides_data = []
             # Pulisce i tag in stile Markdown (es. **Titolo:**) in tag semplici (es. Titolo:)
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto)\*\*:', r'\1:', testo, flags=re.IGNORECASE)
 
-            # Pattern per trovare un intero blocco slide (da "Titolo:" fino al prossimo "Titolo:" o alla fine del testo)
-            slide_block_pattern = re.compile(r"Titolo:.*?(?=\n?Titolo:|$)", re.DOTALL | re.IGNORECASE)
+            # Divide il testo in blocchi per ogni slide, usando "Titolo:" come separatore
+            # Il lookahead (?=...) assicura che il separatore "Titolo:" non venga consumato e rimanga nel blocco successivo
+            slide_blocks = re.split(r'\n(?=Titolo:)', clean_text.strip(), flags=re.IGNORECASE)
 
-            # Pattern per estrarre i dettagli da un singolo blocco slide
-            detail_pattern = re.compile(
-                r"Titolo:\s*(?P<titolo>[^\n]*)"
-                r"(?:\n\s*Sottotitolo:\s*(?P<sottotitolo>[^\n]*))?"
-                r"(?:\n\s*Contenuto:\s*(?P<contenuto>.*))?",
-                re.DOTALL | re.IGNORECASE
-            )
+            for block in slide_blocks:
+                if not block.strip():
+                    continue
 
-            for block in slide_block_pattern.finditer(clean_text):
-                match = detail_pattern.match(block.group(0).strip())
-                if match:
-                    slide_dict = {
-                        'titolo': match.group('titolo').strip() if match.group('titolo') else '',
-                        'sottotitolo': match.group('sottotitolo').strip() if match.group('sottotitolo') else '',
-                        'contenuto': match.group('contenuto').strip() if match.group('contenuto') else ''
-                    }
-                    slides_data.append(slide_dict)
+                # Inizializza i campi per la slide corrente
+                titolo, sottotitolo, contenuto = '', '', ''
+                current_field = None # Campo corrente che stiamo leggendo (es. 'contenuto')
+                content_lines = []
+
+                for line in block.strip().split('\n'):
+                    line_stripped = line.strip()
+
+                    # Rileva un nuovo campo (Titolo, Sottotitolo, Contenuto)
+                    match_titolo = re.match(r'Titolo:\s*(.*)', line_stripped, re.IGNORECASE)
+                    match_sottotitolo = re.match(r'Sottotitolo:\s*(.*)', line_stripped, re.IGNORECASE)
+                    match_contenuto = re.match(r'Contenuto:\s*(.*)', line_stripped, re.IGNORECASE)
+
+                    if match_titolo:
+                        # Se stavamo leggendo il contenuto, salvalo prima di passare al nuovo campo
+                        if current_field == 'contenuto' and content_lines:
+                            contenuto = '\n'.join(content_lines).strip()
+                            content_lines = []
+
+                        titolo = match_titolo.group(1).strip()
+                        current_field = 'titolo'
+                    elif match_sottotitolo:
+                        if current_field == 'contenuto' and content_lines:
+                            contenuto = '\n'.join(content_lines).strip()
+                            content_lines = []
+
+                        sottotitolo = match_sottotitolo.group(1).strip()
+                        current_field = 'sottotitolo'
+                    elif match_contenuto:
+                        if current_field == 'contenuto' and content_lines:
+                            contenuto = '\n'.join(content_lines).strip()
+                            content_lines = []
+
+                        # Inizia a leggere il contenuto, anche quello sulla stessa riga
+                        content_lines.append(match_contenuto.group(1).strip())
+                        current_field = 'contenuto'
+                    elif current_field == 'contenuto':
+                        # Se siamo nella sezione 'Contenuto', aggiungi la riga
+                        content_lines.append(line.strip())
+
+                # Assicura che l'ultimo blocco di contenuto venga salvato
+                if content_lines:
+                    contenuto = '\n'.join(content_lines).strip()
+
+                # Aggiungi la slide solo se ha un titolo
+                if titolo:
+                    slides_data.append({
+                        'titolo': titolo,
+                        'sottotitolo': sottotitolo,
+                        'contenuto': contenuto
+                    })
 
             if not slides_data:
                 if hasattr(parent, 'show_status_message'):
