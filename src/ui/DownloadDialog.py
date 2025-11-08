@@ -2,6 +2,8 @@ import os
 import shutil
 import logging
 import datetime
+import torch
+from PyQt6.QtCore import QSettings
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QGroupBox, QGridLayout, QLabel,
     QLineEdit, QCheckBox, QPushButton, QMessageBox
@@ -9,6 +11,8 @@ from PyQt6.QtWidgets import (
 from src.services.DownloadVideo import DownloadThread
 from src.config import FFMPEG_PATH_DOWNLOAD
 from src.services import utils
+from src.services.WhisperTranscript import WhisperTranscriptionThread
+
 
 class DownloadDialog(QDialog):
     def __init__(self, parent=None):
@@ -34,10 +38,15 @@ class DownloadDialog(QDialog):
         self.video_checkbox.setChecked(True)
         grid_layout.addWidget(self.video_checkbox, 1, 1)
 
-        # Riga 2: Pulsante di download
+        # Riga 2: Trascrizione Automatica
+        self.transcribe_checkbox = QCheckBox("Avvia trascrizione dopo il download")
+        self.transcribe_checkbox.setChecked(True)
+        grid_layout.addWidget(self.transcribe_checkbox, 2, 1)
+
+        # Riga 3: Pulsante di download
         download_btn = QPushButton("Scarica")
         download_btn.clicked.connect(self.handleDownload)
-        grid_layout.addWidget(download_btn, 2, 1)
+        grid_layout.addWidget(download_btn, 3, 1)
 
         # Imposta lo stretch per la colonna 1 per farla espandere
         grid_layout.setColumnStretch(1, 1)
@@ -83,6 +92,7 @@ class DownloadDialog(QDialog):
         clips_dir = os.path.join(self.parent_window.current_project_path, "clips")
         os.makedirs(clips_dir, exist_ok=True)
 
+        permanent_file_path = ""
         try:
             # Get the file extension from the temporary file
             _, file_extension = os.path.splitext(temp_file_path)
@@ -123,6 +133,27 @@ class DownloadDialog(QDialog):
         except Exception as e:
             self.parent_window.show_status_message(f"Errore durante lo spostamento del file scaricato: {e}", error=True)
             logging.error(f"Failed to move downloaded file: {e}")
+            return # Non procedere con la trascrizione se il file non è stato gestito correttamente
+
+        # Avvia la trascrizione se richiesto
+        if self.transcribe_checkbox.isChecked() and permanent_file_path:
+            self.parent_window.show_status_message("Avvio trascrizione automatica (Whisper)...")
+            settings = QSettings("Genius", "GeniusAI")
+            model_name = settings.value("whisper/model", "base")
+            use_gpu = settings.value("whisper/use_gpu", torch.cuda.is_available(), type=bool)
+
+            transcription_thread = WhisperTranscriptionThread(
+                media_path=permanent_file_path,
+                main_window=self.parent_window,
+                model_name=model_name,
+                use_gpu=use_gpu
+            )
+            self.parent_window.start_task(
+                transcription_thread,
+                self.parent_window.onTranscriptionComplete,
+                self.parent_window.onTranscriptionError,
+                self.parent_window.update_status_progress
+            )
 
     def onDownloadError(self, error_message):
         self.parent_window.show_status_message(f"Errore di download: {error_message}", error=True)
