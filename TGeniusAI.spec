@@ -59,6 +59,9 @@ hiddenimports = (
     collect_submodules('speech_recognition') +
     collect_submodules('pydantic') +
     collect_submodules('whisper') +
+    collect_submodules('torch') +
+    collect_submodules('torchvision') +
+    collect_submodules('torchaudio') +
     # collect_submodules('playwright') +
     # collect_submodules('browser_use') +
     # ['playwright.sync_api', 'playwright.async_api'] +
@@ -76,7 +79,10 @@ datas = (
     collect_data_files('PyQt6') +
     collect_data_files('pycountry') +
     collect_data_files('speech_recognition') +
-    collect_data_files('whisper')
+    collect_data_files('whisper') +
+    collect_data_files('torch') +
+    collect_data_files('torchvision') +
+    collect_data_files('torchaudio')
 )
 
 # Additional DLLs and plugins for PyQt6
