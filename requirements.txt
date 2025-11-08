@@ -34,5 +34,6 @@ Pillow
 docx2pdf
 fpdf2
 pypdf
+markdownify
 python-docx
 googletrans
