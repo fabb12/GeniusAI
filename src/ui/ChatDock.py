@@ -3,6 +3,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog, QMessageBox, QInputDialog
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QTextBlockFormat
 from src.ui.CustomDock import CustomDock
 from src.ui.CustomTextEdit import CustomTextEdit
 
@@ -68,35 +69,35 @@ class ChatDock(CustomDock):
     def add_message(self, sender, message):
         """
         Adds a message to the chat history, formatting it based on the sender.
-        Uses <div> for block-level elements to avoid extra margins from <p>.
+        This method explicitly resets block formatting to prevent style inheritance from previous messages.
         """
         cursor = self.history_text_edit.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
 
-        # Ensure we start on a new line if the history is not empty
-        if not self.history_text_edit.toPlainText().strip() == "":
-            cursor.insertBlock()
+        # Force insert a new block with default formatting. This is the key to breaking list formatting.
+        if not self.history_text_edit.document().isEmpty():
+             cursor.insertBlock(QTextBlockFormat())
+
+        # Common style for all chat entries
+        style = f"font-family: '{self.font_family}'; font-size: {self.font_size}pt;"
 
         if sender.lower() == "user":
-            # User messages are on a single line, with "Tu:" and the message together.
-            html = f"""
-            <div style="font-family: {self.font_family}; font-size: {self.font_size}pt;">
-                <span style="color: #a9d18e;"><b>Tu:</b> </span>
-                <span>{message}</span>
-            </div>
-            """
-        else:  # AI or System
-            # AI messages have "AI:" on one line and the content on the next.
-            import markdown
-            html_message = markdown.markdown(message, extensions=['fenced_code', 'tables'])
-            html = f"""
-            <div style="font-family: {self.font_family}; font-size: {self.font_size}pt;">
-                <span style="color: #87ceeb;"><b>AI:</b></span>
-            </div>
-            {html_message}
-            """
+            # User messages are on a single line.
+            html = f'<div style="{style}"><span style="color: #a9d18e;"><b>Tu:</b> </span>{message}</div>'
+            cursor.insertHtml(html)
 
-        cursor.insertHtml(html.strip())
+        else:  # AI or System
+            # AI messages: "AI:" label on one line, then the content.
+            # The label is inserted first to establish the new block.
+            label_html = f'<div style="{style}"><span style="color: #87ceeb;"><b>AI:</b></span></div>'
+            cursor.insertHtml(label_html)
+
+            # Insert the markdown content, which may contain its own block elements (like lists).
+            # The markdown converter will handle the structure.
+            import markdown
+            # The `nl2br` extension helps preserve line breaks from the AI's response.
+            html_message = markdown.markdown(message, extensions=['fenced_code', 'tables', 'nl2br'])
+            cursor.insertHtml(html_message)
 
         # Ensure the view scrolls to the bottom
         self.history_text_edit.ensureCursorVisible()
