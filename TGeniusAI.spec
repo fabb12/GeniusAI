@@ -133,7 +133,7 @@ try:
         print(f"Inclusione delle DLL dalla cartella torch/lib: {torch_lib_path}")
         dll_files = [f for f in os.listdir(torch_lib_path) if f.endswith('.dll')]
         for dll in dll_files:
-            binaries.append((os.path.join(torch_lib_path, dll), '.'))
+            binaries.append((os.path.join(torch_lib_path, dll), 'torch/lib'))
         print(f"Aggiunte {len(dll_files)} DLL di PyTorch ai binaries.")
     else:
         print("ATTENZIONE: La cartella torch/lib non è stata trovata.")

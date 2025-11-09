@@ -7003,7 +7003,7 @@ class VideoAudioManager(QMainWindow):
                 height: 13px;
                 border-radius: 2px;
             }
-            
+
             /* Stile per la casella QUANDO è spuntata */
             QCheckBox::indicator:checked {
                 background-color: #55aaff; /* Un colore acceso per indicare la selezione */
