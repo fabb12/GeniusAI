@@ -16,8 +16,8 @@ try:
 
         # Definisci i percorsi da aggiungere alla ricerca delle DLL
         # 1. La directory principale dell'app (_MEIPASS) per le DLL generiche.
-        # 2. La directory specifica 'torch/lib' per le dipendenze di PyTorch.
-        torch_lib_path = os.path.join(meipass_dir, 'torch', 'lib')
+        # 2. La directory specifica '_internal/torch/lib' per le dipendenze di PyTorch.
+        torch_lib_path = os.path.join(meipass_dir, '_internal', 'torch', 'lib')
         paths_to_add = [meipass_dir]
 
         if os.path.isdir(torch_lib_path):
