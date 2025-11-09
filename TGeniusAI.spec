@@ -149,7 +149,7 @@ a = Analysis(
     binaries=binaries,
     datas=resource_files + datas + playwright_datas,
     hiddenimports=hiddenimports,
-    hookspath=[],
+    hookspath=['hooks'],
     runtime_hooks=[],
     excludes=[
         'PyQt5',
