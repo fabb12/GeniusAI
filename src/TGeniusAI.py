@@ -1943,6 +1943,10 @@ class VideoAudioManager(QMainWindow):
 
             cursor.endEditBlock()
 
+        # Propagate font settings to ChatDock
+        if hasattr(self, 'chatDock'):
+            self.chatDock.set_font(font_family, font_size)
+
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
         if self.zoom_level == 1.0:

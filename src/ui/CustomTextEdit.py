@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (QTextEdit, QLineEdit, QDialog, QVBoxLayout, QGridLa
                              QPushButton, QHBoxLayout, QApplication, QLabel, QCheckBox, QMessageBox, QComboBox)
 # Import necessari per la gestione del testo, Markdown e colori
 from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
-                         QTextDocument, QPalette, QFont, QPixmap, QTextImageFormat) # Aggiunto QFont
+                         QTextDocument, QPalette, QFont, QPixmap, QTextImageFormat, QIcon)
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
 import re
@@ -13,6 +13,7 @@ import base64
 from .ImageCropDialog import ImageCropDialog
 from services.utils import get_frame_at_timestamp
 from .ImageSizeDialog import ResizedImageDialog
+from src.config import get_resource
 
 class CustomTextDocument(QTextDocument):
     def loadResource(self, type, name):
@@ -155,7 +156,7 @@ class CustomTextEdit(QTextEdit):
         # Find the nearest timecode to the click position
         nearest_timecode = self.find_nearest_timecode(cursor.position())
 
-        insert_frame_action = menu.addAction("Inserisci frame")
+        insert_frame_action = menu.addAction(QIcon(get_resource("frame_get.png")), "Inserisci frame")
         # Disable the action if no timecode is found in the document
         if nearest_timecode is None:
             insert_frame_action.setEnabled(False)
