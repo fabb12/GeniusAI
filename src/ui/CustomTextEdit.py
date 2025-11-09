@@ -46,6 +46,7 @@ class CustomTextEdit(QTextEdit):
     timestampDoubleClicked = pyqtSignal(float)
     insert_frame_requested = pyqtSignal(float, int)
     frame_edit_requested = pyqtSignal(str)
+    fontSizeChanged = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -294,12 +295,24 @@ class CustomTextEdit(QTextEdit):
         """
         Gestisce l'evento della rotellina del mouse per lo zoom del testo.
         """
+        Gestisce l'evento della rotellina del mouse per lo zoom del testo
+        ed emette un segnale quando la dimensione del font cambia.
+        """
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             angle = event.angleDelta().y()
+            current_size = self.fontPointSize()
+
             if angle > 0:
-                self.zoomIn()
+                new_size = current_size + 1
             elif angle < 0:
-                self.zoomOut()
+                new_size = max(6, current_size - 1) # Imposta una dimensione minima
+            else:
+                return
+
+            if new_size != current_size:
+                self.setFontPointSize(new_size)
+                self.fontSizeChanged.emit(int(new_size))
+
             event.accept()
         else:
             super().wheelEvent(event)
