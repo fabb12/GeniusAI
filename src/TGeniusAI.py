@@ -26,6 +26,7 @@ from PyQt6.QtWidgets import (
 
 # PyQtGraph (docking)
 from pyqtgraph.dockarea.DockArea import DockArea
+from src.ui.CustomDock import CustomDock
 
 from moviepy.editor import (
     ImageClip, CompositeVideoClip, concatenate_audioclips,
@@ -53,10 +54,11 @@ from src.services.AudioGenerationREST import AudioGenerationThread
 from src.services.VideoCutting import VideoCuttingThread
 from src.recorder.ScreenRecorder import ScreenRecorder
 from src.managers.SettingsManager import DockSettingsManager
-from src.managers.UIManager import UIManager
-from src.managers.PlayerManager import PlayerManager
-from src.managers.ActionManager import ActionManager
+from src.ui.CustVideoWidget import CropVideoWidget
+from src.ui.CustomSlider import CustomSlider
 from src.managers.Settings import SettingsDialog
+from src.ui.ScreenButton import ScreenButton
+from src.ui.CustomTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
@@ -667,7 +669,7 @@ class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
 
-        self.project_manager = ProjectManager(self)
+        self.project_manager = ProjectManager(base_dir="projects")
         self.bookmark_manager = BookmarkManager(self)
         self.translation_service = TranslationService()
         self.current_project_path = None
@@ -743,16 +745,7 @@ class VideoAudioManager(QMainWindow):
         default_color_name = next(iter(self.highlight_colors))
         self.current_highlight_color_name = default_color_name
 
-        self.ui_manager = UIManager(self)
-        self.player_manager = PlayerManager(self, self.player, self.playerOutput, self.ui_manager)
-        self.action_manager = ActionManager(self, self.ui_manager, self.player_manager)
-        self.ui_manager.initUI()
-        self.ui_manager.setupMenuBar() # Create the menu bar via the UI manager
-        self._connect_signals()
-
-        # Load font settings at startup
-        self.apply_and_save_font_settings()
-
+        self.initUI()
 
         # Move these initializations to after initUI
         self.videoContainer.resizeEvent = self.videoContainerResizeEvent
@@ -911,295 +904,7758 @@ class VideoAudioManager(QMainWindow):
         if self.audio_device_layout is not None:
             self.update_audio_device_list()
 
-    def _connect_signals(self):
-        # ProjectDock Signals
-        self.ui_manager.projectDock.clip_selected.connect(self.load_project_clip)
-        self.ui_manager.projectDock.open_folder_requested.connect(self.open_project_folder)
-        self.ui_manager.projectDock.delete_clip_requested.connect(self.delete_project_clip)
-        self.ui_manager.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
-        self.ui_manager.projectDock.open_in_input_player_requested.connect(self.player_manager.load_video)
-        self.ui_manager.projectDock.open_in_output_player_requested.connect(self.player_manager.load_video_output)
-        self.ui_manager.projectDock.rename_clip_requested.connect(self.rename_project_clip)
-        self.ui_manager.projectDock.rename_from_summary_requested.connect(self.rename_clip_from_summary)
-        self.ui_manager.projectDock.relink_clip_requested.connect(self.relink_project_clip)
-        self.ui_manager.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
-        self.ui_manager.projectDock.batch_summarize_requested.connect(self.start_batch_summarization)
-        self.ui_manager.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
+    def initUI(self):
+        """
+        Inizializza l'interfaccia utente creando e configurando l'area dei dock,
+        impostando i dock principali (video input, video output, trascrizione, editing AI, ecc.)
+        e definendo la sezione di trascrizione con QTabWidget e area di testo sempre visibile.
+        """
+        # Impostazione dell'icona della finestra
+        self.setWindowIcon(QIcon(get_resource('eye.png')))
 
-        # ChatDock Signals
-        self.ui_manager.chatDock.sendMessage.connect(self.handle_chat_message)
-        self.ui_manager.chatDock.history_text_edit.timestampDoubleClicked.connect(self.sincronizza_video)
+        # Creazione dell'area dei dock
+        area = DockArea()
+        self.setCentralWidget(area)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.setToolTip("Area principale dei dock")
 
-        # Player Input Signals
-        self.ui_manager.videoCropWidget.spacePressed.connect(lambda: self.player_manager.toggle_play_pause('input'))
-        self.ui_manager.videoOverlay.panned.connect(self.handle_pan)
-        self.ui_manager.videoOverlay.zoomed.connect(self.handle_zoom)
-        self.ui_manager.videoOverlay.view_reset.connect(self.reset_view)
-        self.ui_manager.playButton.clicked.connect(lambda: self.player_manager.toggle_play_pause('input'))
-        self.ui_manager.stopButton.clicked.connect(lambda: self.player_manager.stop_video('input'))
-        self.ui_manager.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
-        self.ui_manager.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
-        self.ui_manager.clearBookmarksButton.clicked.connect(self.clearBookmarks)
-        self.ui_manager.cutButton.clicked.connect(self.bookmark_manager.cut_all_bookmarks)
-        self.ui_manager.cropButton.clicked.connect(self.open_crop_dialog)
-        self.ui_manager.rewindButton.clicked.connect(lambda: self.player_manager.rewind_5_seconds('input'))
-        self.ui_manager.forwardButton.clicked.connect(lambda: self.player_manager.forward_5_seconds('input'))
-        self.ui_manager.frameBackwardButton.clicked.connect(self.player_manager.frame_backward)
-        self.ui_manager.frameForwardButton.clicked.connect(self.player_manager.frame_forward)
-        self.ui_manager.deleteButton.clicked.connect(self.bookmark_manager.delete_all_bookmarks)
-        self.ui_manager.transferToOutputButton.clicked.connect(
-            lambda: self.player_manager.load_video_output(self.videoPathLineEdit) if self.videoPathLineEdit else None
+        # ---------------------
+        # CREAZIONE DOCK PRINCIPALI (invariati)
+        # ---------------------
+        self.videoPlayerDock = CustomDock("Video Player Input", closable=True)
+        self.videoPlayerDock.setStyleSheet(self.styleSheet())
+        self.videoPlayerDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerDock.setToolTip("Dock per la riproduzione video di input")
+        area.addDock(self.videoPlayerDock, 'left')
+
+        self.videoPlayerOutput = CustomDock("Video Player Output", closable=True)
+        self.videoPlayerOutput.setStyleSheet(self.styleSheet())
+        self.videoPlayerOutput.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerOutput.setToolTip("Dock per la riproduzione video di output")
+        area.addDock(self.videoPlayerOutput, 'left')
+
+        self.transcriptionDock = CustomDock("Trascrizione e Sintesi Audio", closable=True)
+        self.transcriptionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.transcriptionDock.setStyleSheet(self.styleSheet())
+        self.transcriptionDock.setToolTip("Dock per la trascrizione e sintesi audio")
+        area.addDock(self.transcriptionDock, 'right')
+
+        self.editingDock = CustomDock("Generazione Audio AI", closable=True)
+        self.editingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.editingDock.setStyleSheet(self.styleSheet())
+        self.editingDock.setToolTip("Dock per la generazione audio assistita da AI")
+        area.addDock(self.editingDock, 'right')
+
+        self.recordingDock = self.createRecordingDock()
+        self.recordingDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.recordingDock.setStyleSheet(self.styleSheet())
+        self.recordingDock.setToolTip("Dock per la registrazione")
+        area.addDock(self.recordingDock, 'right')
+
+        self.audioDock = self.createAudioDock()
+        self.audioDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioDock.setStyleSheet(self.styleSheet())
+        self.audioDock.setToolTip("Dock per la gestione Audio/Video")
+        area.addDock(self.audioDock, 'left')
+
+        self.projectDock = ProjectDock()
+        self.projectDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.projectDock.setStyleSheet(self.styleSheet())
+        area.addDock(self.projectDock, 'right', self.transcriptionDock)
+        self.projectDock.clip_selected.connect(self.load_project_clip)
+        self.projectDock.open_folder_requested.connect(self.open_project_folder)
+        self.projectDock.delete_clip_requested.connect(self.delete_project_clip)
+        self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
+        self.projectDock.open_in_input_player_requested.connect(self.loadVideo)
+        self.projectDock.open_in_output_player_requested.connect(self.loadVideoOutput)
+        self.projectDock.rename_clip_requested.connect(self.rename_project_clip)
+        self.projectDock.rename_from_summary_requested.connect(self.rename_clip_from_summary)
+        self.projectDock.relink_clip_requested.connect(self.relink_project_clip)
+        self.projectDock.batch_transcribe_requested.connect(self.start_batch_transcription)
+        self.projectDock.batch_summarize_requested.connect(self.start_batch_summarization)
+        self.projectDock.separate_audio_requested.connect(self.separate_audio_from_video)
+
+        self.videoNotesDock = CustomDock("Note Video", closable=True)
+        self.videoNotesDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoNotesDock.setStyleSheet(self.styleSheet())
+        self.videoNotesDock.setToolTip("Dock per le note video")
+        area.addDock(self.videoNotesDock, 'bottom', self.transcriptionDock)
+        self.createVideoNotesDock()
+
+
+        self.infoExtractionDock = CustomDock("Estrazione Info Video", closable=True)
+        self.infoExtractionDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.infoExtractionDock.setToolTip("Dock per l'estrazione di informazioni da video")
+        area.addDock(self.infoExtractionDock, 'right')
+        self.createInfoExtractionDock()
+
+        self.chatDock = ChatDock()
+        self.chatDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.addDock(self.chatDock, 'right', self.transcriptionDock)
+        self.chatDock.sendMessage.connect(self.handle_chat_message)
+        self.chatDock.history_text_edit.timestampDoubleClicked.connect(self.sincronizza_video)
+
+        # ---------------------
+        # PLAYER INPUT
+        # ---------------------
+        self.videoContainer = QWidget()
+        self.videoContainer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoContainer.setToolTip("Video container for panning and zooming")
+
+        self.videoCropWidget = CropVideoWidget(parent=self.videoContainer)
+        self.videoCropWidget.setAcceptDrops(True)
+        self.videoCropWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoCropWidget.setToolTip("Area di visualizzazione e ritaglio video input")
+        self.player.setVideoOutput(self.videoCropWidget)
+        self.videoCropWidget.spacePressed.connect(self.togglePlayPause)
+
+        # Aggiungi un QLabel per l'immagine "Solo audio"
+        self.audioOnlyLabel = QLabel(self.videoContainer)
+        self.audioOnlyLabel.setPixmap(QPixmap(get_resource("audio_only.png")).scaled(
+            self.videoContainer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        ))
+        self.audioOnlyLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.audioOnlyLabel.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.audioOnlyLabel.setVisible(False) # Inizialmente nascosto
+
+        self.videoOverlay = VideoOverlay(self, parent=self.videoContainer)
+        self.videoOverlay.show()
+        self.videoOverlay.raise_()
+
+        self.zoom_level = 1.0
+        self.is_panning = False
+        self.last_mouse_position = QPoint()
+
+        self.videoOverlay.panned.connect(self.handle_pan)
+        self.videoOverlay.zoomed.connect(self.handle_zoom)
+        self.videoOverlay.view_reset.connect(self.reset_view)
+        self.videoOverlay.installEventFilter(self)
+
+        self.videoSlider = CustomSlider(Qt.Orientation.Horizontal)
+        self.videoSlider.setToolTip("Slider per navigare all'interno del video input")
+
+        self.fileNameLabel = QLabel("Nessun video caricato")
+        self.fileNameLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fileNameLabel.setStyleSheet("QLabel { font-weight: bold; }")
+        self.fileNameLabel.setToolTip("Nome del file video attualmente caricato nel Player Input")
+
+        self.playButton = QPushButton('')
+        self.playButton.setIcon(QIcon(get_resource("play.png")))
+        self.playButton.setToolTip("Riproduci/Pausa il video input")
+        self.playButton.clicked.connect(self.togglePlayPause)
+
+        self.stopButton = QPushButton('')
+        self.stopButton.setIcon(QIcon(get_resource("stop.png")))
+        self.stopButton.setToolTip("Ferma la riproduzione del video input")
+
+        self.setStartBookmarkButton = QPushButton('')
+        self.setStartBookmarkButton.setIcon(QIcon(get_resource("bookmark_1.png")))
+        self.setStartBookmarkButton.setToolTip("Imposta segnalibro di inizio sul video input")
+
+        self.setEndBookmarkButton = QPushButton('')
+        self.setEndBookmarkButton.setIcon(QIcon(get_resource("bookmark_2.png")))
+        self.setEndBookmarkButton.setToolTip("Imposta segnalibro di fine sul video input")
+
+        self.clearBookmarksButton = QPushButton('')
+        self.clearBookmarksButton.setIcon(QIcon(get_resource("reset.png")))
+        self.clearBookmarksButton.setToolTip("Cancella tutti i segnalibri")
+
+        self.cutButton = QPushButton('')
+        self.cutButton.setIcon(QIcon(get_resource("taglia.png")))
+        self.cutButton.setToolTip("Taglia il video tra i segnalibri impostati")
+
+        self.cropButton = QPushButton('')
+        self.cropButton.setIcon(QIcon(get_resource("crop.png")))
+        self.cropButton.setToolTip("Apre la finestra di dialogo per ritagliare il video")
+
+
+        self.rewindButton = QPushButton('<< 5s')
+        self.rewindButton.setIcon(QIcon(get_resource("rewind.png")))
+        self.rewindButton.setToolTip("Riavvolgi il video di 5 secondi")
+
+        self.frameBackwardButton = QPushButton('|<')
+        self.frameBackwardButton.setToolTip("Indietro di un frame")
+
+        self.forwardButton = QPushButton('>> 5s')
+        self.forwardButton.setIcon(QIcon(get_resource("forward.png")))
+        self.forwardButton.setToolTip("Avanza il video di 5 secondi")
+
+        self.frameForwardButton = QPushButton('>|')
+        self.frameForwardButton.setToolTip("Avanti di un frame")
+
+        self.deleteButton = QPushButton('')
+        self.deleteButton.setIcon(QIcon(get_resource("trash-bin.png")))
+        self.deleteButton.setToolTip("Cancella la parte selezionata del video")
+
+        self.transferToOutputButton = QPushButton('')
+        self.transferToOutputButton.setIcon(QIcon(get_resource("change.png")))
+        self.transferToOutputButton.setToolTip("Sposta il video dall'input all'output")
+        self.transferToOutputButton.clicked.connect(
+            lambda: self.loadVideoOutput(self.videoPathLineEdit) if self.videoPathLineEdit else None
         )
-        self.ui_manager.timecodeInput.returnPressed.connect(self.player_manager.go_to_timecode)
-        self.ui_manager.go_button.clicked.connect(self.player_manager.go_to_timecode)
-        self.ui_manager.speedSpinBox.valueChanged.connect(lambda rate: self.player_manager.set_playback_rate(rate, 'input'))
-        self.ui_manager.reverseButton.clicked.connect(self.toggleReversePlayback)
-        self.ui_manager.volumeSlider.valueChanged.connect(lambda value: self.player_manager.set_volume(value, 'input'))
 
-        # Player Output Signals
-        self.ui_manager.videoOutputWidget.spacePressed.connect(lambda: self.player_manager.toggle_play_pause('output'))
-        self.ui_manager.playButtonOutput.clicked.connect(lambda: self.player_manager.toggle_play_pause('output'))
-        self.ui_manager.stopButtonOutput.clicked.connect(lambda: self.player_manager.stop_video('output'))
-        self.ui_manager.changeButtonOutput.clicked.connect(
-            lambda: self.player_manager.load_video(self.videoPathLineOutputEdit, os.path.basename(self.videoPathLineOutputEdit))
+        self.stopButton.clicked.connect(self.stopVideo)
+        self.setStartBookmarkButton.clicked.connect(self.setStartBookmark)
+        self.setEndBookmarkButton.clicked.connect(self.setEndBookmark)
+        self.clearBookmarksButton.clicked.connect(self.clearBookmarks)
+        self.cutButton.clicked.connect(self.bookmark_manager.cut_all_bookmarks)
+        self.cropButton.clicked.connect(self.open_crop_dialog)
+        self.rewindButton.clicked.connect(self.rewind5Seconds)
+        self.forwardButton.clicked.connect(self.forward5Seconds)
+        self.frameBackwardButton.clicked.connect(self.frameBackward)
+        self.frameForwardButton.clicked.connect(self.frameForward)
+        self.deleteButton.clicked.connect(self.bookmark_manager.delete_all_bookmarks)
+
+        self.totalTimeLabel = QLabel('/ 00:00:00:000')
+        self.totalTimeLabel.setToolTip("Mostra la durata totale del video input")
+
+        # ---------------------
+        # PLAYER OUTPUT
+        # ---------------------
+        self.videoOutputWidget = CropVideoWidget()
+        self.videoOutputWidget.setAcceptDrops(True)
+        self.videoOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoOutputWidget.setToolTip("Area di visualizzazione e ritaglio video output")
+        self.videoOutputWidget.spacePressed.connect(self.togglePlayPauseOutput)
+
+        self.playerOutput.setAudioOutput(self.audioOutputOutput)
+        self.playerOutput.setVideoOutput(self.videoOutputWidget)
+
+
+        self.playButtonOutput = QPushButton('')
+        self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+        self.playButtonOutput.setToolTip("Riproduci/Pausa il video output")
+        self.playButtonOutput.clicked.connect(self.togglePlayPauseOutput)
+
+        stopButtonOutput = QPushButton('')
+        stopButtonOutput.setIcon(QIcon(get_resource("stop.png")))
+        stopButtonOutput.setToolTip("Ferma la riproduzione del video output")
+
+        changeButtonOutput = QPushButton('')
+        changeButtonOutput.setIcon(QIcon(get_resource("change.png")))
+        changeButtonOutput.setToolTip("Sposta il video output nel Video Player Input")
+        changeButtonOutput.clicked.connect(
+            lambda: self.loadVideo(self.videoPathLineOutputEdit, os.path.basename(self.videoPathLineOutputEdit))
         )
-        self.ui_manager.syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
-        self.ui_manager.speedSpinBoxOutput.valueChanged.connect(lambda rate: self.player_manager.set_playback_rate(rate, 'output'))
-        self.ui_manager.volumeSliderOutput.valueChanged.connect(lambda value: self.player_manager.set_volume(value, 'output'))
 
-        # Transcription and Summary Signals
-        self.ui_manager.translateTranscriptionButton.clicked.connect(self.translate_transcription)
-        self.ui_manager.transcribeButton.clicked.connect(self.action_manager.transcribe_video)
-        self.ui_manager.loadButton.clicked.connect(self.loadText)
-        self.ui_manager.saveTranscriptionButton.clicked.connect(self.save_transcription_to_json)
-        self.ui_manager.resetButton.clicked.connect(lambda: self.ui_manager.singleTranscriptionTextArea.clear())
-        self.ui_manager.fixTranscriptionButton.clicked.connect(self.fixTranscriptionWithAI)
-        self.ui_manager.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.ui_manager.singleTranscriptionTextArea))
-        self.ui_manager.search_button.clicked.connect(self.open_search_dialog)
-        self.ui_manager.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
-        self.ui_manager.syncButton.clicked.connect(self.sync_video_to_transcription)
-        self.ui_manager.insertPauseButton.clicked.connect(self.insertPause)
-        self.ui_manager.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
-        self.ui_manager.generateGuideButton.clicked.connect(self.generate_operational_guide)
-        self.ui_manager.transcriptionViewToggle.toggled.connect(self.toggle_transcription_view)
+        syncPositionButton = QPushButton('Sync Position')
+        syncPositionButton.setIcon(QIcon(get_resource("sync.png")))
+        syncPositionButton.setToolTip('Sincronizza la posizione del video output con quella del video source')
+        syncPositionButton.clicked.connect(self.syncOutputWithSourcePosition)
 
-        # Transcription TextEdit
-        self.ui_manager.singleTranscriptionTextArea.textChanged.connect(self.handleTextChange)
-        self.ui_manager.singleTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
-        self.ui_manager.singleTranscriptionTextArea.insert_frame_requested.connect(
-            lambda timestamp, pos: self.handle_insert_frame_request(self.ui_manager.singleTranscriptionTextArea, timestamp, pos)
-        )
-        self.ui_manager.batchTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        stopButtonOutput.clicked.connect(lambda: self.playerOutput.stop())
 
+        playbackControlLayoutOutput = QHBoxLayout()
+        playbackControlLayoutOutput.addWidget(self.playButtonOutput)
+        playbackControlLayoutOutput.addWidget(stopButtonOutput)
+        playbackControlLayoutOutput.addWidget(changeButtonOutput)
+        playbackControlLayoutOutput.addWidget(syncPositionButton)
 
-        # Summary Controls
-        self.ui_manager.summarize_button.clicked.connect(self.action_manager.process_text_with_ai)
-        self.ui_manager.summarize_meeting_button.clicked.connect(self.action_manager.summarize_meeting)
-        self.ui_manager.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
-        self.ui_manager.highlightTextButton.clicked.connect(self.highlight_selected_text)
-        self.ui_manager.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.get_current_summary_text_area()))
-        self.ui_manager.saveSummaryButton.clicked.connect(self.save_summary_to_json)
-        self.ui_manager.integraInfoButton.clicked.connect(self.integraInfoVideo)
-        self.ui_manager.showTimecodeSummaryCheckbox.toggled.connect(self._update_summary_view)
+        videoSliderOutput = CustomSlider(Qt.Orientation.Horizontal)
+        videoSliderOutput.setRange(0, 1000)  # Range di esempio
+        videoSliderOutput.setToolTip("Slider per navigare all'interno del video output")
+        videoSliderOutput.sliderMoved.connect(lambda position: self.playerOutput.setPosition(position))
 
-        # Summary TextEdits
-        for text_area in self.ui_manager.summary_widget_map.keys():
-            text_area.timestampDoubleClicked.connect(self.sincronizza_video)
-            text_area.textChanged.connect(self._on_summary_text_changed)
-            text_area.frame_edit_requested.connect(self.handle_frame_edit_request)
-            text_area.insert_frame_requested.connect(
-                # Use a lambda to capture the current text_area
-                lambda timestamp, pos, widget=text_area: self.handle_insert_frame_request(widget, timestamp, pos)
-            )
+        self.currentTimeLabelOutput = QLabel('00:00')
+        self.currentTimeLabelOutput.setToolTip("Mostra il tempo corrente del video output")
+        self.totalTimeLabelOutput = QLabel('/ 00:00')
+        self.totalTimeLabelOutput.setToolTip("Mostra la durata totale del video output")
+        timecodeLayoutOutput = QHBoxLayout()
+        timecodeLayoutOutput.addWidget(self.currentTimeLabelOutput)
+        timecodeLayoutOutput.addWidget(self.totalTimeLabelOutput)
 
-        self.ui_manager.summaryTabWidget.currentChanged.connect(self._update_summary_view)
+        self.timecodeEnabled = False
 
+        self.fileNameLabelOutput = QLabel("Nessun video caricato")
+        self.fileNameLabelOutput.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.fileNameLabelOutput.setStyleSheet("QLabel { font-weight: bold; }")
+        self.fileNameLabelOutput.setToolTip("Nome del file video attualmente caricato nel Player Output")
 
-        # AI Audio Generation Signals
-        self.ui_manager.alignspeed.toggled.connect(self.ui_manager.alignspeed_replacement.setChecked)
-        self.ui_manager.alignspeed_replacement.toggled.connect(self.ui_manager.alignspeed.setChecked)
-        #TODO: add more connections for the audio generation dock
+        videoOutputLayout = QVBoxLayout()
+        videoOutputLayout.addWidget(self.fileNameLabelOutput)
+        videoOutputLayout.addWidget(self.videoOutputWidget)
+        videoOutputLayout.addLayout(timecodeLayoutOutput)
+        videoOutputLayout.addWidget(videoSliderOutput)
 
-        # Main Player Signals
-        self.player.durationChanged.connect(self.durationChanged)
-        self.player.positionChanged.connect(self.positionChanged)
-        self.player.playbackStateChanged.connect(self.updatePlayButtonIcon)
-        self.ui_manager.videoSlider.sliderMoved.connect(self.player_manager.set_position)
+        # Speed control for output player
+        speedLayoutOutput = QHBoxLayout()
+        speedLayoutOutput.addWidget(QLabel("Velocità:"))
+        self.speedSpinBoxOutput = QDoubleSpinBox()
+        self.speedSpinBoxOutput.setRange(-20.0, 20.0)
+        self.speedSpinBoxOutput.setSuffix("x")
+        self.speedSpinBoxOutput.setValue(1.0)
+        self.speedSpinBoxOutput.setSingleStep(0.1)
+        self.speedSpinBoxOutput.valueChanged.connect(self.setPlaybackRateOutput)
+        speedLayoutOutput.addWidget(self.speedSpinBoxOutput)
+        videoOutputLayout.addLayout(speedLayoutOutput)
 
-        # Output Player Signals
+        videoOutputLayout.addLayout(playbackControlLayoutOutput)
+
         self.playerOutput.durationChanged.connect(self.updateDurationOutput)
         self.playerOutput.positionChanged.connect(self.updateTimeCodeOutput)
         self.playerOutput.playbackStateChanged.connect(self.updatePlayButtonIconOutput)
-        self.ui_manager.videoSliderOutput.sliderMoved.connect(lambda p: self.player_manager.set_position(p, 'output'))
-        self.playerOutput.durationChanged.connect(lambda duration: self.ui_manager.videoSliderOutput.setRange(0, duration))
-        self.playerOutput.positionChanged.connect(lambda position: self.ui_manager.videoSliderOutput.setValue(position))
+
+        videoPlayerOutputWidget = QWidget()
+        videoPlayerOutputWidget.setLayout(videoOutputLayout)
+        videoPlayerOutputWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.videoPlayerOutput.addWidget(videoPlayerOutputWidget)
+
+        self.playerOutput.durationChanged.connect(lambda duration: videoSliderOutput.setRange(0, duration))
+        self.playerOutput.positionChanged.connect(lambda position: videoSliderOutput.setValue(position))
+
+        # Pulsante per trascrivere il video
+        self.transcribeButton = QPushButton('Trascrivi Video')
+        self.transcribeButton.setToolTip("Avvia la trascrizione del video attualmente caricato")
+        self.transcribeButton.clicked.connect(self.transcribeVideo)
+
+        # Layout di playback del Player Input
+        playbackControlLayout = QHBoxLayout()
+        playbackControlLayout.addWidget(self.rewindButton)
+        playbackControlLayout.addWidget(self.frameBackwardButton)
+        playbackControlLayout.addWidget(self.playButton)
+        playbackControlLayout.addWidget(self.stopButton)
+        playbackControlLayout.addWidget(self.forwardButton)
+        playbackControlLayout.addWidget(self.frameForwardButton)
+        playbackControlLayout.addWidget(self.setStartBookmarkButton)
+        playbackControlLayout.addWidget(self.setEndBookmarkButton)
+        playbackControlLayout.addWidget(self.cutButton)
+        playbackControlLayout.addWidget(self.cropButton)
+        playbackControlLayout.addWidget(self.deleteButton)
+        playbackControlLayout.addWidget(self.transferToOutputButton)
+
+        # Layout principale del Player Input
+        videoPlayerLayout = QVBoxLayout()
+        videoPlayerLayout.addWidget(self.fileNameLabel)
+        videoPlayerLayout.addWidget(self.videoContainer)
+        # Timecode input / display
+        timecode_layout = QHBoxLayout()
+        self.timecodeInput = QLineEdit()
+        self.timecodeInput.setToolTip("Tempo corrente / Vai al timecode (Premi Invio o clicca Go)")
+        self.timecodeInput.returnPressed.connect(self.goToTimecode) # Connect Enter key
+        timecode_layout.addWidget(self.timecodeInput)
+        timecode_layout.addWidget(self.totalTimeLabel)
+
+        go_button = QPushButton("Go")
+        go_button.setToolTip("Vai al timecode specificato")
+        go_button.clicked.connect(self.goToTimecode)
+        timecode_layout.addWidget(go_button)
+        videoPlayerLayout.addLayout(timecode_layout)
+
+        videoPlayerLayout.addWidget(self.videoSlider)
+
+        # Speed control
+        speedLayout = QHBoxLayout()
+        speedLayout.addWidget(QLabel("Velocità:"))
+        self.speedSpinBox = QDoubleSpinBox()
+        self.speedSpinBox.setRange(-20.0, 20.0)
+        self.speedSpinBox.setSuffix("x")
+        self.speedSpinBox.setValue(1.0)
+        self.speedSpinBox.setSingleStep(0.1)
+        self.speedSpinBox.valueChanged.connect(self.setPlaybackRateInput)
+        speedLayout.addWidget(self.speedSpinBox)
+
+        self.reverseButton = QPushButton('')
+        self.reverseButton.setIcon(QIcon(get_resource("rewind_play.png")))
+        self.reverseButton.setToolTip("Inverti riproduzione audio/video")
+        self.reverseButton.clicked.connect(self.toggleReversePlayback)
+        self.reverseButton.setFixedSize(32, 32)
+        speedLayout.addWidget(self.reverseButton)
+
+        videoPlayerLayout.addLayout(speedLayout)
+
+        videoPlayerLayout.addLayout(playbackControlLayout)
+
+        # Controlli volume input e velocità
+        self.volumeSlider = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSlider.setRange(0, 100)
+        self.volumeSlider.setValue(int(self.audioOutput.volume() * 100))
+        self.volumeSlider.setToolTip("Regola il volume dell'audio input")
+        self.volumeSlider.valueChanged.connect(self.setVolume)
+
+        self.volumeSliderOutput = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSliderOutput.setRange(0, 100)
+        self.volumeSliderOutput.setValue(int(self.audioOutputOutput.volume() * 100))
+        self.volumeSliderOutput.setToolTip("Regola il volume dell'audio output")
+        self.volumeSliderOutput.valueChanged.connect(self.setVolumeOutput)
+
+        videoOutputLayout.addWidget(QLabel("Volume"))
+        videoOutputLayout.addWidget(self.volumeSliderOutput)
+
+        videoPlayerWidget = QWidget()
+        videoPlayerWidget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        videoPlayerWidget.setLayout(videoPlayerLayout)
+        self.videoPlayerDock.addWidget(videoPlayerWidget)
+
+        # =================================================================================
+        # DOCK DI TRASCRIZIONE E RIASSUNTO (CON TAB WIDGET)
+        # =================================================================================
+        self.transcriptionTabWidget = QTabWidget()
+        self.transcriptionTabWidget.setToolTip("Gestisci la trascrizione e i riassunti generati.")
+
+        # --- Tab Trascrizione ---
+        transcription_tab = QWidget()
+        transcription_layout = QVBoxLayout(transcription_tab)
+
+        trans_controls_group = QGroupBox("Controlli Trascrizione")
+        main_controls_layout = QVBoxLayout(trans_controls_group)
+
+        # --- Riga 1: Lingua ---
+        language_layout = QHBoxLayout()
+        language_layout.addWidget(QLabel("Seleziona lingua video:"))
+        self.languageComboBox = QComboBox()
+        self.languageComboBox.addItems(["Rilevamento Automatico", "Italiano", "Inglese", "Francese", "Spagnolo", "Tedesco"])
+        self.languageComboBox.setItemData(0, "auto")
+        self.languageComboBox.setItemData(1, "it")
+        self.languageComboBox.setItemData(2, "en")
+        self.languageComboBox.setItemData(3, "fr")
+        self.languageComboBox.setItemData(4, "es")
+        self.languageComboBox.setItemData(5, "de")
+        language_layout.addWidget(self.languageComboBox)
+        language_layout.addStretch()
+        self.transcriptionLanguageLabel = QLabel("Lingua rilevata: N/A")
+        language_layout.addWidget(self.transcriptionLanguageLabel)
+        main_controls_layout.addLayout(language_layout)
+
+        # Translation controls
+        translation_layout = QHBoxLayout()
+        translation_layout.addWidget(QLabel("Traduci in:"))
+        self.translationComboBox = QComboBox()
+        supported_langs = self.translation_service.get_supported_languages()
+        for code, name in supported_langs.items():
+            self.translationComboBox.addItem(name.title(), code)
+        self.translationComboBox.setCurrentText("English")
+        translation_layout.addWidget(self.translationComboBox)
+        self.translateTranscriptionButton = QPushButton("Traduci Trascrizione")
+        self.translateTranscriptionButton.clicked.connect(self.translate_transcription)
+        translation_layout.addWidget(self.translateTranscriptionButton)
+        main_controls_layout.addLayout(translation_layout)
+
+        # --- Riga 2: Modalità di Trascrizione (Online/Offline) ---
+        mode_layout = QHBoxLayout()
+        self.onlineModeCheckbox = QCheckBox("Online (Google)")
+        self.offlineModeCheckbox = QCheckBox("Offline (Whisper)")
+        self.transcriptionModeGroup = QButtonGroup(self)
+        self.transcriptionModeGroup.addButton(self.onlineModeCheckbox)
+        self.transcriptionModeGroup.addButton(self.offlineModeCheckbox)
+        self.transcriptionModeGroup.setExclusive(True)
+        self.offlineModeCheckbox.setChecked(True) # Default to offline
+        mode_layout.addWidget(QLabel("Modalità:"))
+        mode_layout.addWidget(self.onlineModeCheckbox)
+        mode_layout.addWidget(self.offlineModeCheckbox)
+        mode_layout.addStretch()
+        main_controls_layout.addLayout(mode_layout)
+
+        # --- Riga 4: Gruppi di Controlli Affiancati ---
+        groups_layout = QHBoxLayout()
+
+        # --- Gruppo 1: Azioni sui File ---
+        file_actions_group = QGroupBox("File")
+        file_actions_layout = QHBoxLayout(file_actions_group)
+
+        self.transcribeButton = QPushButton('')
+        self.transcribeButton.setIcon(QIcon(get_resource("script.png")))
+        self.transcribeButton.setFixedSize(32, 32)
+        self.transcribeButton.setToolTip("Trascrivi Video")
+        self.transcribeButton.clicked.connect(self.transcribeVideo)
+        file_actions_layout.addWidget(self.transcribeButton)
+
+        self.loadButton = QPushButton('')
+        self.loadButton.setIcon(QIcon(get_resource("load.png")))
+        self.loadButton.setFixedSize(32, 32)
+        self.loadButton.setToolTip("Carica Testo")
+        self.loadButton.clicked.connect(self.loadText)
+        file_actions_layout.addWidget(self.loadButton)
+
+        self.saveTranscriptionButton = QPushButton('')
+        self.saveTranscriptionButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveTranscriptionButton.setFixedSize(32, 32)
+        self.saveTranscriptionButton.setToolTip("Salva Trascrizione nel JSON associato")
+        self.saveTranscriptionButton.clicked.connect(self.save_transcription_to_json)
+        file_actions_layout.addWidget(self.saveTranscriptionButton)
+
+        self.resetButton = QPushButton('')
+        self.resetButton.setIcon(QIcon(get_resource("reset.png")))
+        self.resetButton.setFixedSize(32, 32)
+        self.resetButton.setToolTip("Pulisci")
+        self.resetButton.clicked.connect(lambda: self.singleTranscriptionTextArea.clear())
+        file_actions_layout.addWidget(self.resetButton)
+
+        self.fixTranscriptionButton = QPushButton('')
+        self.fixTranscriptionButton.setIcon(QIcon(get_resource("text_fix.png")))
+        self.fixTranscriptionButton.setFixedSize(32, 32)
+        self.fixTranscriptionButton.setToolTip("Correggi Testo Trascrizione")
+        self.fixTranscriptionButton.clicked.connect(self.fixTranscriptionWithAI)
+        file_actions_layout.addWidget(self.fixTranscriptionButton)
+
+        # Pulsante per incollare nella tab Audio AI
+        self.pasteToAudioAIButton = QPushButton('')
+        self.pasteToAudioAIButton.setIcon(QIcon(get_resource("paste.png")))
+        self.pasteToAudioAIButton.setFixedSize(32, 32)
+        self.pasteToAudioAIButton.setToolTip("Incolla nella tab Audio AI")
+        self.pasteToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.singleTranscriptionTextArea))
+        file_actions_layout.addWidget(self.pasteToAudioAIButton)
+
+        search_button = QPushButton('')
+        search_button.setIcon(QIcon(get_resource("find.png")))
+        search_button.setFixedSize(32, 32)
+        search_button.setToolTip("Apre il dialogo di ricerca per il testo attivo (Ctrl+F)")
+        search_button.clicked.connect(self.open_search_dialog)
+        file_actions_layout.addWidget(search_button)
+
+        groups_layout.addWidget(file_actions_group)
+
+        # --- Gruppo 2: Strumenti ---
+        tools_group = QGroupBox("Strumenti")
+        tools_grid_layout = QGridLayout(tools_group)
+
+        self.timecodeCheckbox = QCheckBox("Inserisci timecode audio")
+        self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
+        tools_grid_layout.addWidget(self.timecodeCheckbox, 0, 0)
+
+        self.syncButton = QPushButton('')
+        self.syncButton.setIcon(QIcon(get_resource("sync.png")))
+        self.syncButton.setFixedSize(32, 32)
+        self.syncButton.setToolTip("Sincronizza Video da Timecode Vicino")
+        self.syncButton.clicked.connect(self.sync_video_to_transcription)
+        tools_grid_layout.addWidget(self.syncButton, 0, 1)
+
+        self.pauseTimeEdit = QLineEdit()
+        self.pauseTimeEdit.setPlaceholderText("Durata pausa (es. 1.0s)")
+        tools_grid_layout.addWidget(self.pauseTimeEdit, 1, 0)
+
+        self.insertPauseButton = QPushButton("Inserisci Pausa")
+        self.insertPauseButton.clicked.connect(self.insertPause)
+        tools_grid_layout.addWidget(self.insertPauseButton, 1, 1)
+
+        self.saveAudioAIButton = QPushButton('')
+        self.saveAudioAIButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveAudioAIButton.setFixedSize(32, 32)
+        self.saveAudioAIButton.setToolTip("Salva Testo Audio AI nel JSON associato")
+        self.saveAudioAIButton.clicked.connect(self.save_audio_ai_to_json)
+        tools_grid_layout.addWidget(self.saveAudioAIButton, 0, 2)
+
+        self.generateGuideButton = QPushButton('')
+        self.generateGuideButton.setIcon(QIcon(get_resource("script.png")))
+        self.generateGuideButton.setFixedSize(32, 32)
+        self.generateGuideButton.setToolTip("Genera Guida Operativa dal Video")
+        self.generateGuideButton.clicked.connect(self.generate_operational_guide)
+        tools_grid_layout.addWidget(self.generateGuideButton, 0, 3)
+
+        # groups_layout.addWidget(tools_group)
+
+        # LA SEGUENTE RIGA È STATA RIMOSSA PER PERMETTERE L'ESPANSIONE
+        # groups_layout.addStretch()
+
+        main_controls_layout.addLayout(groups_layout)
+
+        # --- Riga 3: Toggle per la visualizzazione ---
+        view_options_layout = QHBoxLayout()
+        self.transcriptionViewToggle = QCheckBox("Mostra testo corretto")
+        self.transcriptionViewToggle.setToolTip("Attiva/Disattiva la visualizzazione del testo corretto.")
+        self.transcriptionViewToggle.setEnabled(False) # Disabilitato di default
+        self.transcriptionViewToggle.toggled.connect(self.toggle_transcription_view)
+        view_options_layout.addWidget(self.transcriptionViewToggle)
+        view_options_layout.addStretch()
+        main_controls_layout.addLayout(view_options_layout)
+
+        transcription_layout.addWidget(trans_controls_group)
+
+        #--------------------
+
+        # Crea il QTabWidget annidato per le trascrizioni
+        self.transcriptionTabs = QTabWidget()
+        self.transcriptionTabs.setToolTip("Visualizza la trascrizione singola o multipla.")
+
+        # Tab per la Trascrizione Singola
+        self.singleTranscriptionTextArea = CustomTextEdit(self)
+        self.singleTranscriptionTextArea.setPlaceholderText("La trascrizione del video corrente apparirà qui...")
+        self.singleTranscriptionTextArea.textChanged.connect(self.handleTextChange)
+        self.singleTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.singleTranscriptionTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.singleTranscriptionTextArea, timestamp, pos)
+        )
+        self.transcriptionTabs.addTab(self.singleTranscriptionTextArea, "Trascrizione Singola")
+
+        # Tab per la Trascrizione Multipla
+        self.batchTranscriptionTextArea = CustomTextEdit(self)
+        self.batchTranscriptionTextArea.setPlaceholderText("I risultati della trascrizione multipla appariranno qui...")
+        self.batchTranscriptionTextArea.setReadOnly(True) # Inizialmente in sola lettura
+        self.batchTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.transcriptionTabs.addTab(self.batchTranscriptionTextArea, "Trascrizione Multipla")
+
+        transcription_layout.addWidget(self.transcriptionTabs)
+
+        self.transcriptionTabWidget.addTab(transcription_tab, "Trascrizione")
+
+        # --- Tab Audio AI ---
+        self.audio_ai_tab = QWidget()
+        audio_ai_layout = QVBoxLayout(self.audio_ai_tab)
+
+        # Sposta il gruppo "Strumenti" qui
+        audio_ai_layout.addWidget(tools_group)
+
+        self.audioAiTextArea = CustomTextEdit(self)
+        self.audioAiTextArea.setPlaceholderText("Incolla qui il testo da usare per la generazione audio o altre funzioni AI...")
+        audio_ai_layout.addWidget(self.audioAiTextArea)
+
+        # --- Tab Riassunto ---
+        summary_tab = QWidget()
+        summary_layout = QVBoxLayout(summary_tab)
+
+        summary_controls_group = QGroupBox("Controlli Riassunto e AI")
+        summary_controls_layout = QVBoxLayout(summary_controls_group)
+
+        # Layout orizzontale per tutti i pulsanti e controlli in linea
+        top_controls_layout = QHBoxLayout()
+
+        # Pulsanti Azioni AI
+        summarize_button = QPushButton('')
+        summarize_button.setIcon(QIcon(get_resource("text_sum.png")))
+        summarize_button.setFixedSize(32, 32)
+        summarize_button.setToolTip("Riassumi Testo")
+        summarize_button.clicked.connect(self.processTextWithAI)
+        top_controls_layout.addWidget(summarize_button)
+
+        #fix_text_button = QPushButton('')
+        #fix_text_button.setIcon(QIcon(get_resource("text_fix.png")))
+        #fix_text_button.setFixedSize(32, 32)
+        #fix_text_button.setToolTip("Correggi Testo")
+        #fix_text_button.clicked.connect(self.fixTextWithAI)
+        #top_controls_layout.addWidget(fix_text_button)
+
+        summarize_meeting_button = QPushButton('')
+        summarize_meeting_button.setIcon(QIcon(get_resource("meet_sum.png")))
+        summarize_meeting_button.setFixedSize(32, 32)
+        summarize_meeting_button.setToolTip("Riassumi Riunione")
+        summarize_meeting_button.clicked.connect(self.summarizeMeeting)
+        top_controls_layout.addWidget(summarize_meeting_button)
+
+        self.generatePptxActionBtn = QPushButton('')
+        self.generatePptxActionBtn.setIcon(QIcon(get_resource("powerpoint.png")))
+        self.generatePptxActionBtn.setFixedSize(32, 32)
+        self.generatePptxActionBtn.setToolTip("Genera Presentazione")
+        self.generatePptxActionBtn.clicked.connect(self.openPptxDialog)
+        top_controls_layout.addWidget(self.generatePptxActionBtn)
+
+        self.highlightTextButton = QPushButton('')
+        self.highlightTextButton.setIcon(QIcon(get_resource("key.png")))
+        self.highlightTextButton.setFixedSize(32, 32)
+        self.highlightTextButton.setToolTip("Evidenzia Testo Selezionato")
+        self.highlightTextButton.clicked.connect(self.highlight_selected_text)
+        top_controls_layout.addWidget(self.highlightTextButton)
+
+        # Pulsante per incollare il riassunto nella tab Audio AI
+        self.pasteSummaryToAudioAIButton = QPushButton('')
+        self.pasteSummaryToAudioAIButton.setIcon(QIcon(get_resource("paste.png")))
+        self.pasteSummaryToAudioAIButton.setFixedSize(32, 32)
+        self.pasteSummaryToAudioAIButton.setToolTip("Incolla riassunto nella tab Audio AI")
+        self.pasteSummaryToAudioAIButton.clicked.connect(lambda: self.paste_to_audio_ai(self.get_current_summary_text_area()))
+        top_controls_layout.addWidget(self.pasteSummaryToAudioAIButton)
+
+        self.saveSummaryButton = QPushButton('')
+        self.saveSummaryButton.setIcon(QIcon(get_resource("save.png")))
+        self.saveSummaryButton.setFixedSize(32, 32)
+        self.saveSummaryButton.setToolTip("Salva Riassunto nel JSON associato")
+        self.saveSummaryButton.clicked.connect(self.save_summary_to_json)
+        top_controls_layout.addWidget(self.saveSummaryButton)
+
+        # Separatore
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        top_controls_layout.addWidget(separator)
+
+        # Controlli di estrazione
+        self.integraInfoButton = QPushButton("")
+        self.integraInfoButton.setIcon(QIcon(get_resource("frame_get.png")))
+        self.integraInfoButton.setFixedSize(32, 32)
+        self.integraInfoButton.setToolTip("Integra info dal video nel riassunto (con estrazione smart)")
+        self.integraInfoButton.clicked.connect(self.integraInfoVideo)
+        top_controls_layout.addWidget(self.integraInfoButton)
+
+        top_controls_layout.addStretch()
+        summary_controls_layout.addLayout(top_controls_layout)
+
+        # Layout orizzontale per le checkbox
+        bottom_controls_layout = QHBoxLayout()
+        self.showTimecodeSummaryCheckbox = QCheckBox("Mostra timecode")
+        self.showTimecodeSummaryCheckbox.setChecked(True)
+        self.showTimecodeSummaryCheckbox.toggled.connect(self._update_summary_view)
+        bottom_controls_layout.addWidget(self.showTimecodeSummaryCheckbox)
+
+        bottom_controls_layout.addStretch()
+        summary_controls_layout.addLayout(bottom_controls_layout)
+
+        summary_layout.addWidget(summary_controls_group)
+
+        # Crea il QTabWidget per i riassunti
+        self.summaryTabWidget = QTabWidget()
+        self.summaryTabWidget.setToolTip("Visualizza i diversi tipi di riassunto generati.")
+
+        # Tab per il Riassunto Dettagliato
+        self.summaryDetailedTextArea = CustomTextEdit(self)
+        self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
+        self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedTextArea, timestamp, pos)
+        )
+        self.summaryDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
+
+        # Tab per le Note Riunione
+        self.summaryMeetingTextArea = CustomTextEdit(self)
+        self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
+        self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingTextArea, timestamp, pos)
+        )
+        self.summaryMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
+
+        # Tab per il Riassunto Dettagliato (Integrato)
+        self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
+        self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
+        self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryDetailedIntegratedTextArea, timestamp, pos)
+        )
+        self.summaryDetailedIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
+
+        # Tab per le Note Riunione (Integrato)
+        self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
+        self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
+        self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryMeetingIntegratedTextArea, timestamp, pos)
+        )
+        self.summaryMeetingIntegratedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
+
+        # Tab per il Riassunto Dettagliato Combinato
+        self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
+        self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
+        self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedDetailedTextArea, timestamp, pos)
+        )
+        self.summaryCombinedDetailedTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
+
+        # Tab per le Note Riunione Combinato
+        self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
+        self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
+        self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
+        self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(
+            lambda timestamp, pos: self.handle_insert_frame_request(self.summaryCombinedMeetingTextArea, timestamp, pos)
+        )
+        self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
+        self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
+
+        # Connect frame edit signals
+        self.singleTranscriptionTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryDetailedIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryMeetingIntegratedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
+        self.summaryCombinedMeetingTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
 
 
-        # Status Bar
-        self.ui_manager.cancelButton.clicked.connect(self.cancel_task)
+        # Connect the tab change signal to the update function
+        self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
 
-        # Toolbar Actions
-        self.ui_manager.summarizeMeetingAction.triggered.connect(self.action_manager.summarize_meeting)
-        self.ui_manager.summarizeAction.triggered.connect(self.action_manager.process_text_with_ai)
-        self.ui_manager.fixTextAction.triggered.connect(self.fixTextWithAI)
-        self.ui_manager.generatePptxAction.triggered.connect(self.openPptxDialog)
-        self.ui_manager.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
-        self.ui_manager.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
-        self.ui_manager.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
-        self.ui_manager.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
-        self.ui_manager.shareAction.triggered.connect(self.onShareButtonClicked)
-        self.ui_manager.settingsAction.triggered.connect(self.showSettingsDialog)
-        self.ui_manager.findAction.triggered.connect(self.open_search_dialog)
+        # Map widgets to their data keys for easier management
+        self.summary_widget_map = {
+            self.summaryDetailedTextArea: "detailed",
+            self.summaryMeetingTextArea: "meeting",
+            self.summaryDetailedIntegratedTextArea: "detailed_integrated",
+            self.summaryMeetingIntegratedTextArea: "meeting_integrated",
+            self.summaryCombinedDetailedTextArea: "detailed_combined",
+            self.summaryCombinedMeetingTextArea: "meeting_combined",
+        }
 
-        # Info Extraction Dock Connections
-        self.ui_manager.analysisPlayerSelectionCombo.currentIndexChanged.connect(self.on_analysis_player_selection_changed)
-        self.ui_manager.runAnalysisButton.clicked.connect(self.run_frame_extraction_and_analysis)
-        self.ui_manager.specificObjectSearchButton.clicked.connect(self.run_specific_object_search)
-        self.ui_manager.infoExtractionResultArea.timestampDoubleClicked.connect(self.seek_to_search_result_timecode)
-        self.ui_manager.smartExtractionCheckbox.toggled.connect(self._toggle_frame_count_spinbox)
+        summary_layout.addWidget(self.summaryTabWidget)
 
-        # Menu Connections
-        self._connect_menu_signals()
+
+        self.transcriptionTabWidget.addTab(summary_tab, "Riassunto")
+        self.transcriptionTabWidget.addTab(self.audio_ai_tab, "Audio AI")
+
+        # Aggiungi il tab widget e la barra dei pulsanti al layout del dock
+        dock_layout = QVBoxLayout()
+        dock_layout.addWidget(self.transcriptionTabWidget)
+
+        # Il widget contenitore per il layout del dock
+        container_widget = QWidget()
+        container_widget.setLayout(dock_layout)
+        self.transcriptionDock.addWidget(container_widget)
+
+
+        # Impostazioni voce per l'editing audio AI
+        voiceSettingsWidget = self.setupVoiceSettingsUI()
+        voiceSettingsWidget.setToolTip("Impostazioni voce per l'editing audio AI")
+        self.editingDock.addWidget(voiceSettingsWidget)
+
+        # Aggiungi la UI per gli audio generati
+        generatedAudiosWidget = self.createGeneratedAudiosUI()
+        self.editingDock.addWidget(generatedAudiosWidget)
+
+        # Sincronizza i checkbox di allineamento
+        self.alignspeed.toggled.connect(self.alignspeed_replacement.setChecked)
+        self.alignspeed_replacement.toggled.connect(self.alignspeed.setChecked)
+
+        # Dizionario per la gestione dei dock
+        docks = {
+            'videoPlayerDock': self.videoPlayerDock,
+            'transcriptionDock': self.transcriptionDock,
+            'editingDock': self.editingDock,
+            'recordingDock': self.recordingDock,
+            'audioDock': self.audioDock,
+            'videoPlayerOutput': self.videoPlayerOutput,
+            'projectDock': self.projectDock,
+            'videoNotesDock': self.videoNotesDock,
+            'infoExtractionDock': self.infoExtractionDock,
+            'chatDock': self.chatDock
+        }
+        self.dockSettingsManager = DockSettingsManager(self, docks, self)
+
+        # Collegamenti dei segnali del player
+        self.player.durationChanged.connect(self.durationChanged)
+        self.player.positionChanged.connect(self.positionChanged)
+        self.player.playbackStateChanged.connect(self.updatePlayButtonIcon)
+        self.videoSlider.sliderMoved.connect(self.setPosition)
+
+
+
+
+        # --- STATUS BAR ---
+        self.statusBar = QStatusBar()
+        self.setStatusBar(self.statusBar)
+        self.statusBar.setStyleSheet("QStatusBar { padding: 1px; } QStatusBar::item { border: none; }")
+        self.statusLabel = QLabel("Pronto")
+        self.statusLabel.setToolTip("Mostra lo stato corrente dell'applicazione")
+        self.statusBar.addWidget(self.statusLabel, 1) # Il secondo argomento è lo stretch factor
+
+        self.progressBar = QProgressBar(self)
+        self.progressBar.setToolTip("Mostra il progresso delle operazioni in corso")
+        self.progressBar.setMaximumWidth(300)
+        self.progressBar.setVisible(False)
+        self.statusBar.addPermanentWidget(self.progressBar)
+
+        self.cancelButton = QPushButton("Annulla")
+        self.cancelButton.setToolTip("Annulla l'operazione corrente")
+        self.cancelButton.setFixedWidth(100)
+        self.cancelButton.setVisible(False)
+        self.statusBar.addPermanentWidget(self.cancelButton)
+
+
+        # --- TOOLBAR (Principale) ---
+        mainToolbar = QToolBar("Main Toolbar")
+        mainToolbar.setToolTip("Barra degli strumenti principale per le azioni")
+        self.addToolBar(mainToolbar)
+
+        mainToolbar.addSeparator()
+
+        # Workflow Actions (Azioni AI)
+        self.summarizeMeetingAction = QAction(QIcon(get_resource("meet_sum.png")), 'Riassumi Riunione', self)
+        self.summarizeMeetingAction.setStatusTip('Crea un riassunto strutturato della trascrizione di una riunione')
+        self.summarizeMeetingAction.triggered.connect(self.summarizeMeeting)
+        mainToolbar.addAction(self.summarizeMeetingAction)
+
+        self.summarizeAction = QAction(QIcon(get_resource("text_sum.png")), 'Riassumi Testo', self)
+        self.summarizeAction.setStatusTip('Genera un riassunto del testo tramite AI')
+        self.summarizeAction.triggered.connect(self.processTextWithAI)
+        mainToolbar.addAction(self.summarizeAction)
+
+        self.fixTextAction = QAction(QIcon(get_resource("text_fix.png")), 'Correggi Testo', self)
+        self.fixTextAction.setStatusTip('Sistema e migliora il testo tramite AI')
+        self.fixTextAction.triggered.connect(self.fixTextWithAI)
+        mainToolbar.addAction(self.fixTextAction)
+
+        self.generatePptxAction = QAction(QIcon(get_resource("powerpoint.png")), 'Genera Presentazione', self)
+        self.generatePptxAction.setStatusTip('Crea una presentazione PowerPoint dal testo')
+        self.generatePptxAction.triggered.connect(self.openPptxDialog)
+        mainToolbar.addAction(self.generatePptxAction)
+
+        # --- SECONDA TOOLBAR (Workspace e Impostazioni) ---
+        workspaceToolbar = QToolBar("Workspace Toolbar")
+        workspaceToolbar.setToolTip("Barra degli strumenti per layout e impostazioni")
+        self.addToolBar(workspaceToolbar)
+
+        # Workspace Actions (Layouts)
+
+
+        self.recordingLayoutAction = QAction(QIcon(get_resource("rec.png")), 'Registrazione', self)
+        self.recordingLayoutAction.setToolTip("Layout per la registrazione")
+        self.recordingLayoutAction.triggered.connect(self.dockSettingsManager.loadRecordingLayout)
+        workspaceToolbar.addAction(self.recordingLayoutAction)
+
+        self.comparisonLayoutAction = QAction(QIcon(get_resource("compare.png")), 'Confronto', self)
+        self.comparisonLayoutAction.setToolTip("Layout per il confronto")
+        self.comparisonLayoutAction.triggered.connect(self.dockSettingsManager.loadComparisonLayout)
+        workspaceToolbar.addAction(self.comparisonLayoutAction)
+
+        self.transcriptionLayoutAction = QAction(QIcon(get_resource("script.png")), 'Trascrizione', self)
+        self.transcriptionLayoutAction.setToolTip("Layout per la trascrizione")
+        self.transcriptionLayoutAction.triggered.connect(self.dockSettingsManager.loadTranscriptionLayout)
+        workspaceToolbar.addAction(self.transcriptionLayoutAction)
+
+        self.defaultLayoutAction = QAction(QIcon(get_resource("default.png")), 'Default', self)
+        self.defaultLayoutAction.setToolTip("Layout di default")
+        self.defaultLayoutAction.triggered.connect(self.dockSettingsManager.loadDefaultLayout)
+        workspaceToolbar.addAction(self.defaultLayoutAction)
+        workspaceToolbar.addSeparator()
+
+        serviceToolbar = QToolBar("Rec Toolbar")
+        serviceToolbar.setToolTip("Barra servizio")
+        self.addToolBar(serviceToolbar)
+
+        # Aggiungi l'indicatore di registrazione lampeggiante
+        #serviceToolbar.addWidget(self.recording_indicator)
+
+        # Azione di condivisione
+        shareAction = QAction(QIcon(get_resource("share.png")), "Condividi Video", self)
+        shareAction.setToolTip("Condividi il video attualmente caricato")
+        shareAction.triggered.connect(self.onShareButtonClicked)
+        serviceToolbar.addAction(shareAction)
+
+        # Azione Impostazioni
+        settingsAction = QAction(QIcon(get_resource("gear.png")), "Impostazioni", self)
+        settingsAction.setToolTip("Apri le impostazioni dell'applicazione")
+        settingsAction.triggered.connect(self.showSettingsDialog)
+        serviceToolbar.addAction(settingsAction)
+
+        serviceToolbar.addSeparator()
+
+        # Azione di ricerca centralizzata
+        findAction = QAction("Cerca", self)
+        findAction.setShortcut("Ctrl+F")
+        findAction.triggered.connect(self.open_search_dialog)
+        self.addAction(findAction)
+
+        # Configurazione della menu bar (questa parte rimane invariata)
+        self.setupMenuBar()
+
+        # Applica il tema scuro, se disponibile
+        if hasattr(self, 'applyDarkMode'):
+            self.applyDarkMode()
+
+        # Applica lo stile a tutti i dock
+        self.applyStyleToAllDocks()
+
+        # Applica le impostazioni del font
+        self.apply_and_save_font_settings()
 
     def open_search_dialog(self):
         """
-        Apre un dialogo di ricerca per il CustomTextEdit attualmente attivo.
-        Determina quale tra le aree di testo (trascrizione, riassunti) ha il focus
-        e passa quel widget al dialogo di ricerca.
+        Apre il dialogo di ricerca per l'area di testo attualmente attiva e visibile.
+        Questo metodo determina quale CustomTextEdit ha il focus o è correntemente visualizzato
+        e invoca il suo metodo `openSearchDialog`.
         """
-        active_text_edit = self.get_active_text_edit()
-        if active_text_edit:
-            if not hasattr(self, 'search_dialog') or self.search_dialog is None:
-                self.search_dialog = SearchDialog(active_text_edit, self)
-            else:
-                self.search_dialog.set_target_widget(active_text_edit)
+        active_text_edit = None
 
-            if self.search_dialog.isHidden():
-                self.search_dialog.show()
-                self.search_dialog.activateWindow()
-                self.search_dialog.raise_()
-            else:
-                self.search_dialog.activateWindow()
+        # Controlla quale tab principale è attivo
+        current_main_tab = self.transcriptionTabWidget.currentWidget()
+
+        if self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Trascrizione":
+            # Se siamo nella tab "Trascrizione", controlla il tab interno
+            current_transcription_tab = self.transcriptionTabs.currentWidget()
+            if isinstance(current_transcription_tab, CustomTextEdit):
+                active_text_edit = current_transcription_tab
+
+        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Riassunto":
+            # Se siamo nella tab "Riassunto", prendi il widget corrente del tab dei riassunti
+            current_summary_tab = self.summaryTabWidget.currentWidget()
+            if isinstance(current_summary_tab, CustomTextEdit):
+                active_text_edit = current_summary_tab
+
+        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Audio AI":
+             if isinstance(self.audioAiTextArea, CustomTextEdit):
+                active_text_edit = self.audioAiTextArea
+
+        # Se abbiamo trovato un editor di testo attivo e visibile, apri il dialogo
+        if active_text_edit and active_text_edit.isVisible():
+            active_text_edit.openSearchDialog()
         else:
-            self.statusBar.showMessage("Nessun campo di testo attivo per la ricerca.", 3000)
+            self.show_status_message("Nessun campo di testo attivo per la ricerca.", error=True)
 
-    def get_active_text_edit(self):
+    def get_current_summary_text_area(self):
+        """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
+        # Mappatura diretta dall'indice del widget al widget stesso.
+        # Questo è più robusto dei controlli if/elif basati sull'indice.
+        return self.summaryTabWidget.currentWidget()
+
+    def apply_and_save_font_settings(self):
         """
-        Restituisce il widget CustomTextEdit che ha attualmente il focus.
-        Se nessun editor di testo ha il focus, cerca di determinare quello attivo
-        in base alla tab attualmente visibile.
+        Applica le impostazioni del font a tutte le aree di testo.
+        - Applica la famiglia di caratteri a tutto il testo (paragrafi e intestazioni).
+        - Applica la dimensione del carattere solo ai paragrafi, preservando le dimensioni delle intestazioni.
         """
-        widget = QApplication.focusWidget()
-        if isinstance(widget, CustomTextEdit):
-            return widget
+        settings = QSettings("Genius", "GeniusAI")
+        font_family = settings.value("editor/fontFamily", "Arial")
+        font_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Fallback se il focus non è direttamente sull'editor
-        if self.ui_manager.transcriptionTabWidget.currentIndex() == 0: # Tab Trascrizione
-             if self.ui_manager.transcriptionTabs.currentIndex() == 0:
-                 return self.ui_manager.singleTranscriptionTextArea
-             else:
-                 return self.ui_manager.batchTranscriptionTextArea
-        elif self.ui_manager.transcriptionTabWidget.currentIndex() == 1: # Tab Riassunto
-            return self.get_current_summary_text_area()
-        elif self.ui_manager.transcriptionTabWidget.currentIndex() == 2: # Tab Audio AI
-            return self.ui_manager.audioAiTextArea
+        # Formato per i paragrafi (famiglia + dimensione)
+        paragraph_font = QFont(font_family, font_size)
+        paragraph_format = QTextCharFormat()
+        paragraph_format.setFont(paragraph_font)
 
-        return None
+        # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
+        heading_font = QFont()
+        heading_font.setFamily(font_family)
+        heading_format = QTextCharFormat()
+        heading_format.setFont(heading_font)
 
-    def setupViewMenuActions(self, viewMenu):
-        """Imposta le azioni del menu Visualizza per i dock."""
-        self.dock_actions = {
-            'videoPlayerDock': self.ui_manager.toggleVideoPlayerDockAction,
-            'transcriptionDock': self.ui_manager.toggleTranscriptionDockAction,
-            'editingDock': self.ui_manager.toggleEditingDockAction,
-            'recordingDock': self.ui_manager.toggleRecordingDockAction,
-            'audioDock': self.ui_manager.toggleAudioDockAction,
-            'videoPlayerOutput': self.ui_manager.toggleVideoPlayerOutputDockAction,
-            'projectDock': self.ui_manager.toggleProjectDockAction,
-            'videoNotesDock': self.ui_manager.toggleVideoNotesDockAction,
-            'infoExtractionDock': self.ui_manager.toggleInfoExtractionDockAction,
-            'chatDock': self.ui_manager.toggleChatDockAction,
+        text_areas = [
+            self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
+            self.summaryDetailedTextArea, self.summaryMeetingTextArea,
+            self.summaryDetailedIntegratedTextArea, self.summaryMeetingIntegratedTextArea,
+            self.summaryCombinedDetailedTextArea, self.summaryCombinedMeetingTextArea,
+            self.infoExtractionResultArea, self.audioAiTextArea,
+            self.chatDock.history_text_edit
+        ]
+
+        for area in text_areas:
+            if not area:
+                continue
+
+            # Imposta il formato per il nuovo testo che verrà digitato
+            area.setCurrentCharFormat(paragraph_format)
+
+            cursor = QTextCursor(area.document())
+            cursor.beginEditBlock()
+
+            block = area.document().begin()
+            while block.isValid():
+                block_cursor = QTextCursor(block)
+                block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+
+                is_heading = block.blockFormat().headingLevel() > 0
+
+                if is_heading:
+                    # Per le intestazioni, unisci solo la famiglia del carattere
+                    block_cursor.mergeCharFormat(heading_format)
+                else:
+                    # Per i paragrafi, unisci sia la famiglia che la dimensione
+                    block_cursor.mergeCharFormat(paragraph_format)
+
+                block = block.next()
+
+            cursor.endEditBlock()
+
+        # Propagate font settings to ChatDock
+        if hasattr(self, 'chatDock'):
+            self.chatDock.set_font(font_family, font_size)
+
+    def videoContainerResizeEvent(self, event):
+        # When the container is resized, resize both the video widget and the overlay
+        if self.zoom_level == 1.0:
+            self.videoCropWidget.setGeometry(self.videoContainer.rect())
+            self.videoOverlay.setGeometry(self.videoContainer.rect())
+            self.audioOnlyLabel.setGeometry(self.videoContainer.rect())
+            self.audioOnlyLabel.setPixmap(QPixmap(get_resource("audio_only.png")).scaled(
+                self.videoContainer.size(), Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+            ))
+        QWidget.resizeEvent(self.videoContainer, event)
+
+    def videoCropWidgetResizeEvent(self, event):
+        # The overlay is now a sibling of the video widget, so we don't need to resize it here.
+        # Just call the original resize event.
+        CropVideoWidget.resizeEvent(self.videoCropWidget, event)
+
+    def handle_pan(self, delta):
+        new_pos = self.videoCropWidget.pos() + delta
+        self.videoCropWidget.move(new_pos)
+
+    def handle_zoom(self, delta, mouse_pos):
+        old_zoom_level = self.zoom_level
+        if delta > 0:
+            self.zoom_level *= 1.1
+        elif delta < 0:
+            self.zoom_level *= 0.9
+
+        original_size = self.videoContainer.size()
+        new_width = int(original_size.width() * self.zoom_level)
+        new_height = int(original_size.height() * self.zoom_level)
+        self.videoCropWidget.resize(new_width, new_height)
+
+        scale_change = self.zoom_level / old_zoom_level
+        new_x = mouse_pos.x() * scale_change - mouse_pos.x()
+        new_y = mouse_pos.y() * scale_change - mouse_pos.y()
+        current_pos = self.videoCropWidget.pos()
+        new_pos = QPoint(current_pos.x() - int(new_x), current_pos.y() - int(new_y))
+        self.videoCropWidget.move(new_pos)
+
+    def reset_view(self):
+        self.zoom_level = 1.0
+        self.videoCropWidget.setGeometry(self.videoContainer.rect())
+
+    def createWorkflow(self):
+        # Implementazione per creare un nuovo workflow
+        print("Funzione createWorkflow da implementare")
+        # Qui puoi mostrare un dialogo per creare un nuovo workflow
+
+    def loadWorkflow(self):
+        # Implementazione per caricare un workflow esistente
+        print("Funzione loadWorkflow da implementare")
+        # Qui puoi mostrare un dialogo per selezionare e caricare un workflow esistente
+
+    def configureAgent(self):
+        """
+        Configura l'agent AI mostrando il dialogo di configurazione
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.showConfigDialog()
+
+    def runAgent(self):
+        """
+        Esegue l'agent AI con la configurazione corrente
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.runAgent()
+
+    def showMediaInfo(self):
+        # Implementazione per mostrare informazioni sul media
+        print("Funzione showMediaInfo da implementare")
+        # Qui puoi mostrare un dialog con le informazioni sul media corrente
+    def onExtractFramesClicked(self):
+        if not self.videoPathLineEdit:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato.")
+            return
+
+        self.infoExtractionResultArea.setPlainText("Analisi in corso...")
+
+        self.analyzer = CombinedAnalyzer(
+            video_path=self.videoPathLineEdit,
+            num_frames=self.infoFrameCountSpin.value(),
+            language=self.languageInput.currentText(),
+            combined_mode=self.combinedAnalysisCheckbox.isChecked(),
+            parent_for_transcription=self
+        )
+        self.analyzer.analysis_complete.connect(self.onAnalysisComplete)
+        self.analyzer.analysis_error.connect(self.onAnalysisError)
+        self.analyzer.progress_update.connect(self.onAnalysisProgress)
+        self.analyzer.start_analysis()
+
+    def onAnalysisComplete(self, summary):
+        self.infoExtractionResultArea.setPlainText(summary)
+        self.show_status_message("Analisi completata con successo.")
+
+    def onAnalysisError(self, error_message):
+        self.infoExtractionResultArea.setPlainText(f"Errore durante l'analisi:\n{error_message}")
+        QMessageBox.critical(self, "Errore", f"Si è verificato un errore durante l'analisi:\n{error_message}")
+
+    def onAnalysisProgress(self, message):
+        self.infoExtractionResultArea.append(message)
+
+    def toggle_transcription_view(self, checked):
+        """
+        Alterna la visualizzazione nella casella di testo della trascrizione
+        tra la versione originale e quella corretta.
+        """
+        self.singleTranscriptionTextArea.blockSignals(True)
+        if checked:
+            # Mostra il testo corretto, se disponibile
+            if self.transcription_corrected:
+                # Converti il Markdown salvato in HTML per la visualizzazione
+                html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+                self.singleTranscriptionTextArea.setHtml(html_content)
+        else:
+            # Mostra il testo originale con formattazione
+            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+        self.singleTranscriptionTextArea.blockSignals(False)
+
+    def integraInfoVideo(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Nessun video caricato.", error=True)
+            return
+
+        # Determina quale riassunto integrare in base al tab attivo
+        current_tab_index = self.summaryTabWidget.currentIndex()
+        if current_tab_index == 0:
+            summary_to_integrate = self.summaries.get('detailed', '')
+            self.active_summary_type = 'detailed'
+        else:
+            summary_to_integrate = self.summaries.get('meeting', '')
+            self.active_summary_type = 'meeting'
+
+
+        if not summary_to_integrate or not summary_to_integrate.strip():
+            self.show_status_message("È necessario generare un riassunto standard prima di poterlo integrare.", error=True)
+            return
+
+        # Passa l'HTML del riassunto direttamente al thread
+        thread = VideoIntegrationThread(
+            video_path=self.videoPathLineEdit,
+            language=self.languageComboBox.currentText(),
+            current_summary_html=summary_to_integrate, # Passa l'HTML
+            parent=self
+        )
+        self.start_task(thread, self.onIntegrazioneComplete, self.onIntegrazioneError, self.update_status_progress)
+
+    def onIntegrazioneComplete(self, summary):
+        if not self.active_summary_type:
+            return # Non dovrebbe succedere
+
+        # Salva il riassunto integrato nel dizionario
+        integrated_key = f"{self.active_summary_type}_integrated"
+        self.summaries[integrated_key] = summary
+
+        # Aggiorna la vista per mostrare il nuovo contenuto
+        self._update_summary_view()
+        self.show_status_message("Integrazione delle informazioni dal video completata.")
+
+        # Passa automaticamente al tab corretto per mostrare il risultato
+        if self.active_summary_type == 'detailed':
+            self.summaryTabWidget.setCurrentWidget(self.summaryDetailedIntegratedTextArea)
+        elif self.active_summary_type == 'meeting':
+            self.summaryTabWidget.setCurrentWidget(self.summaryMeetingIntegratedTextArea)
+
+
+        # Salva l'intero dizionario dei riassunti nel JSON
+        update_data = {
+            "summaries": self.summaries,
+            "summary_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
+    def onIntegrazioneError(self, error_message):
+        self.show_status_message(f"Errore durante l'integrazione: {error_message}", error=True)
+
+    def handle_insert_frame_request(self, target_text_edit, timestamp_seconds, position):
+        """
+        Gestisce la richiesta di inserire un fotogramma video a un timestamp specifico.
+        Apre un CropDialog per consentire all'utente di selezionare, ritagliare e ridimensionare il fotogramma.
+        Utilizza lo schema URI frame:// per un inserimento robusto.
+        """
+        # 1. Ottieni il percorso del video dal player di input
+        video_path = self.videoPathLineEdit
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Carica un video nel Player Input prima di inserire un frame.", error=True)
+            return
+
+        self.player.pause()
+
+        # 2. Apri il CropDialog per permettere all'utente di selezionare il frame
+        dialog = CropDialog(video_path, current_time=int(timestamp_seconds * 1000), parent=self)
+
+        if dialog.exec():
+            # 3. Ottieni i dati necessari dal dialogo
+            cropped_pixmap = dialog.get_cropped_pixmap()
+            if cropped_pixmap.isNull():
+                self.show_status_message("Operazione annullata o frame non valido.", error=True)
+                return
+
+            final_timestamp = dialog.current_frame_pos / dialog.fps
+            original_qimage = dialog.original_pixmap.toImage()
+            size_percentage = dialog.get_selected_size_percentage()
+            width = int(cropped_pixmap.width() * (size_percentage / 100))
+            height = int(cropped_pixmap.height() * (size_percentage / 100))
+
+            # 4. Inserisci l'immagine nel target_text_edit
+            cursor = target_text_edit.textCursor()
+            # Mantiene la posizione originale del cursore passata dal segnale
+            cursor.setPosition(position)
+            target_text_edit.setTextCursor(cursor)
+
+            # Inserisce un a capo per assicurare che l'immagine sia su una nuova riga
+            cursor.insertBlock()
+
+            # Inserisce l'immagine con i metadati associati
+            target_text_edit.insert_image_with_metadata(
+                displayed_pixmap=cropped_pixmap,
+                width=width,
+                height=height,
+                video_path=video_path,
+                timestamp=final_timestamp,
+                original_image=original_qimage
+            )
+
+            # Inserisce un altro a capo per spaziatura e continua a scrivere sotto
+            cursor.insertBlock()
+
+            # Forza un ridisegno per assicurarsi che l'immagine sia visibile subito
+            target_text_edit.viewport().update()
+            self.show_status_message("Frame inserito con successo.")
+
+    def handle_frame_edit_request(self, image_name):
+        """Handles the request to edit an inserted frame."""
+        # Find the widget that sent the signal
+        sender_widget = self.sender()
+        if not isinstance(sender_widget, CustomTextEdit):
+            return
+
+        # Get the original image from the widget's metadata storage
+        metadata = sender_widget.image_metadata.get(image_name)
+        if not metadata:
+            self.show_status_message("Metadati dell'immagine non trovati.", error=True)
+            return
+
+        original_image = metadata.get('original_image')
+        if not original_image:
+            self.show_status_message("Immagine originale non trovata.", error=True)
+            return
+
+        pixmap = QPixmap.fromImage(original_image)
+        dialog = FrameEditorDialog(pixmap, self)
+        if dialog.exec():
+            edited_pixmap = dialog.get_edited_pixmap()
+            if not edited_pixmap.isNull():
+                edited_image = edited_pixmap.toImage()
+                sender_widget.update_image_resource(
+                    image_name, edited_image, edited_pixmap.width(), edited_pixmap.height()
+                )
+                self.show_status_message("Frame aggiornato con successo.")
+
+
+    def toggle_recording_indicator(self):
+        """Toggles the visibility of the recording indicator to make it blink."""
+        if self.is_recording:
+            self.recording_indicator.setVisible(not self.recording_indicator.isVisible())
+        else:
+            self.recording_indicator.setVisible(False)
+            if self.indicator_timer.isActive():
+                self.indicator_timer.stop()
+
+    def onShareButtonClicked(self):
+        # Usa il percorso del video nel dock Video Player Output
+        video_path = self.videoPathLineOutputEdit
+        self.videoSharingManager.shareVideo(video_path)
+    def load_version_info(self):
+        """
+        Carica le informazioni di versione e data dal file di versione.
+        """
+        version = "Sconosciuta"
+        build_date = "Sconosciuta"
+
+        # Verifica se il file esiste
+        if os.path.exists(self.version_file):
+            with open(self.version_file, 'r') as file:
+                lines = file.readlines()
+                for line in lines:
+                    if "Version" in line:
+                        version = line.split(":")[1].strip()  # Estrai la versione
+                    elif "Build Date" in line:
+                        build_date = line.split(":")[1].strip()  # Estrai la data di build
+        else:
+            print(f"File {self.version_file} non trovato.")
+
+        return version, build_date
+
+    def setPlaybackRateInput(self, rate):
+        if rate == 0:
+            rate = 1
+            self.speedSpinBox.setValue(1)
+
+        if rate > 0:
+            self.reverseTimer.stop()
+            self.player.setPlaybackRate(float(rate))
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.player.play()
+        else:  # rate < 0
+            self.player.pause()
+            self.player.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps() * abs(rate)))
+            if interval <= 0:
+                interval = 20
+            self.reverseTimer.start(interval)
+
+    def reversePlaybackStep(self):
+        current_pos = self.player.position()
+        step = 1000 / self.get_current_fps()
+        new_pos = current_pos - step
+        if new_pos < 0:
+            new_pos = 0
+            self.reverseTimer.stop()
+            self.playButton.setIcon(QIcon(get_resource("play.png")))
+        self.player.setPosition(int(new_pos))
+
+    def setPlaybackRateOutput(self, rate):
+        if rate == 0:
+            rate = 1
+            self.speedSpinBoxOutput.setValue(1)
+
+        if rate > 0:
+            self.reverseTimerOutput.stop()
+            self.playerOutput.setPlaybackRate(float(rate))
+            if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PausedState:
+                self.playerOutput.play()
+        else:  # rate < 0
+            self.playerOutput.pause()
+            self.playerOutput.setPlaybackRate(1.0)
+            interval = int(1000 / (self.get_current_fps_output() * abs(rate)))
+            if interval <= 0:
+                interval = 20
+            self.reverseTimerOutput.start(interval)
+
+    def reversePlaybackStepOutput(self):
+        current_pos = self.playerOutput.position()
+        step = 1000 / self.get_current_fps_output()
+        new_pos = current_pos - step
+        if new_pos < 0:
+            new_pos = 0
+            self.reverseTimerOutput.stop()
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+        self.playerOutput.setPosition(int(new_pos))
+
+    def get_current_fps_output(self):
+        if not self.videoPathLineOutputEdit:
+            return 30
+        try:
+            return VideoFileClip(self.videoPathLineOutputEdit).fps
+        except Exception as e:
+            print(f"Error getting FPS for output: {e}")
+            return 30  # default fps
+
+    def togglePlayPauseOutput(self):
+        rate = self.speedSpinBoxOutput.value()
+        if rate < 0:
+            if self.reverseTimerOutput.isActive():
+                self.reverseTimerOutput.stop()
+                self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+            else:
+                interval = int(1000 / (self.get_current_fps_output() * abs(rate)))
+                if interval <= 0: interval = 20
+                self.reverseTimerOutput.start(interval)
+                self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.playerOutput.pause()
+                self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+            else:
+                self.playerOutput.play()
+                self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+
+    def togglePlayPause(self):
+        rate = self.speedSpinBox.value()
+        if rate < 0:
+            if self.reverseTimer.isActive():
+                self.reverseTimer.stop()
+                self.playButton.setIcon(QIcon(get_resource("play.png")))
+            else:
+                interval = int(1000 / (self.get_current_fps() * abs(rate)))
+                if interval <= 0: interval = 20
+                self.reverseTimer.start(interval)
+                self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                self.player.pause()
+                self.playButton.setIcon(QIcon(get_resource("play.png")))  # Cambia l'icona in Play
+            else:
+                self.player.play()
+                self.playButton.setIcon(QIcon(get_resource("pausa.png")))  # Cambia l'icona in Pausa
+
+    def syncOutputWithSourcePosition(self):
+        source_position = self.player.position()
+        self.playerOutput.setPosition(source_position)
+        self.playVideo()
+        self.playerOutput.play()
+
+    def summarizeMeeting(self):
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("Inserisci la trascrizione della riunione da riassumere.", error=True)
+            return
+
+        self.original_text = current_text
+        self.active_summary_type = 'meeting'
+        self.summaryTabWidget.setCurrentIndex(1)
+
+
+        thread = MeetingSummarizer(
+            current_text,
+            self.languageComboBox.currentText()
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def processTextWithAI(self):
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("Inserisci del testo da riassumere.", error=True)
+            return
+
+        self.original_text = current_text
+        self.active_summary_type = 'detailed'
+        self.summaryTabWidget.setCurrentIndex(0)
+
+        thread = ProcessTextAI(
+            mode="summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def paste_to_audio_ai(self, source_text_edit):
+        """
+        Copia il testo dall'area di testo sorgente all'area di testo della tab Audio AI.
+        """
+        text_to_paste = source_text_edit.toPlainText()
+        self.audioAiTextArea.setPlainText(text_to_paste)
+        self.transcriptionTabWidget.setCurrentWidget(self.audio_ai_tab)
+        self.show_status_message("Testo incollato nella tab Audio AI.")
+
+    def fixTranscriptionWithAI(self):
+        """
+        Avvia il processo di correzione del testo nella tab di trascrizione.
+        """
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("La trascrizione è vuota. Non c'è nulla da correggere.", error=True)
+            return
+
+        # Salva la trascrizione corrente come originale, se non è già stato fatto
+        if not self.transcription_original:
+            self.transcription_original = current_text
+
+        self.active_summary_type = 'transcription_fix' # Tipo specifico per questa azione
+
+        thread = ProcessTextAI(
+            mode="fix",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def fixTextWithAI(self):
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("Inserisci del testo da correggere.", error=True)
+            return
+
+        self.original_text = current_text
+        self.active_summary_type = 'transcription_fix' # Assumendo che questo sia un tipo valido
+
+        thread = ProcessTextAI(
+            mode="fix",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': current_text}
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def summarizeYouTube(self):
+        url, ok = QInputDialog.getText(self, 'Riassunto YouTube', 'Inserisci l\'URL del video di YouTube:')
+        if ok and url:
+            thread = DownloadThread(url, download_video=False, ffmpeg_path=FFMPEG_PATH_DOWNLOAD)
+            self.start_task(thread, self.onYouTubeDownloadFinished, self.onProcessError, self.update_status_progress)
+
+    def onYouTubeDownloadFinished(self, result):
+        audio_path, _, _, _ = result
+        thread = TranscriptionThread(audio_path, self)
+        self.start_task(thread, self.onYouTubeTranscriptionFinished, self.onProcessError, self.update_status_progress)
+
+    def onYouTubeTranscriptionFinished(self, result):
+        transcript, temp_files = result
+        self.cleanupFiles(temp_files) # Pulisce i file temporanei della trascrizione
+
+        thread = ProcessTextAI(
+            mode="youtube_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': transcript}
+        )
+        # Il callback onProcessComplete gestirà già il risultato
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def _sync_transcription_state_from_ui(self):
+        """Sincronizza le variabili di stato della trascrizione con il contenuto della UI."""
+        if self.transcriptionViewToggle.isEnabled() and self.transcriptionViewToggle.isChecked():
+            # Se la vista corretta è attiva, converti il suo HTML in Markdown prima di salvarlo
+            html_content = self.singleTranscriptionTextArea.toHtml()
+            self.transcription_corrected = markdownify(html_content, heading_style="ATX")
+        else:
+            # Altrimenti, salva l'HTML della trascrizione originale
+            self.transcription_original = self.singleTranscriptionTextArea.toHtml()
+
+    def save_transcription_to_json(self):
+        """
+        Salva tutti i contenuti modificati nel file JSON associato.
+        """
+        self.save_all_tabs_to_json()
+
+    def save_summary_to_json(self):
+        """
+        Salva tutti i contenuti modificati nel file JSON associato.
+        """
+        self.save_all_tabs_to_json()
+
+    def save_audio_ai_to_json(self):
+        """
+        Salva tutti i contenuti modificati nel file JSON associato.
+        """
+        self.save_all_tabs_to_json()
+
+    def save_all_tabs_to_json(self, show_message=True):
+        """
+        Salva i contenuti di tutte le schede rilevanti (Trascrizione, Riassunto, Audio AI)
+        nel file JSON associato al video corrente. Legge i dati direttamente dai widget UI
+        per garantire che le modifiche più recenti vengano salvate.
+        """
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            if show_message:
+                self.show_status_message("Salvataggio fallito: nessun video sorgente caricato.", error=True)
+            return
+
+        logging.info(f"Salvataggio di tutti i contenuti nel JSON per {self.videoPathLineEdit}...")
+
+        # 1. Sincronizza lo stato interno della trascrizione con la UI
+        self._sync_transcription_state_from_ui()
+
+        # 2. Sincronizza l'ultimo stato del riassunto dalla UI al modello.
+        #    La funzione _sync_active_summary_to_model contiene già la logica di sicurezza
+        #    per non salvare se il widget è in sola lettura.
+        self._sync_active_summary_to_model()
+
+        # 3. Prepara e salva i dati aggiornati
+        update_data = {
+            "transcription_original": self.transcription_original,
+            "transcription_corrected": self.transcription_corrected,
+            "summaries": self.summaries,
+            "combined_summary": self.combined_summary,
+            "audio_ai_text": self.audioAiTextArea.toPlainText(),
+            "last_save_date": datetime.datetime.now().isoformat()
         }
 
-        for dock_name, action in self.dock_actions.items():
-            action.triggered.connect(lambda checked, name=dock_name: self.dockSettingsManager.toggleDockVisibilityAndUpdateMenu(name))
+        # La funzione _update_json_file gestirà la lettura, l'aggiornamento e la scrittura.
+        self._update_json_file(self.videoPathLineEdit, update_data)
 
-    def _connect_menu_signals(self):
-        # File Menu
-        self.ui_manager.newProjectAction.triggered.connect(self.project_manager.create_new_project)
-        self.ui_manager.loadProjectAction.triggered.connect(self.project_manager.select_project_to_load)
-        self.ui_manager.saveProjectAction.triggered.connect(self.save_project)
-        self.ui_manager.closeProjectAction.triggered.connect(self._clear_workspace)
-        self.ui_manager.importVideoAction.triggered.connect(self.import_videos_to_project)
-        self.ui_manager.downloadVideoAction.triggered.connect(self.download_video_from_url)
-        self.ui_manager.exportToTxtAction.triggered.connect(lambda: self.export_summary('txt'))
-        self.ui_manager.exportToDocxAction.triggered.connect(lambda: self.export_summary('docx'))
-        self.ui_manager.exportToPdfAction.triggered.connect(lambda: self.export_summary('pdf'))
-        self.ui_manager.exitAction.triggered.connect(self.close)
+        if show_message:
+            self.show_status_message("Tutte le modifiche sono state salvate nel file JSON.", timeout=3000)
 
-        # Edit Menu
-        self.ui_manager.undoAction.triggered.connect(self.undo_text)
-        self.ui_manager.redoAction.triggered.connect(self.redo_text)
-        self.ui_manager.cutAction.triggered.connect(self.cut_text)
-        self.ui_manager.copyAction.triggered.connect(self.copy_text)
-        self.ui_manager.pasteAction.triggered.connect(self.paste_text)
-        self.ui_manager.findActionMenu.triggered.connect(self.open_search_dialog)
+    def _update_json_file(self, video_path, update_dict):
+        """
+        Helper function to update specific fields in a video's JSON file.
+        """
+        if not video_path or not os.path.exists(video_path):
+            logging.warning("Aggiornamento JSON saltato: nessun video sorgente caricato.")
+            return
 
-        # Layout Menu
-        self.ui_manager.saveLayoutAction.triggered.connect(self.dockSettingsManager.save_settings)
-        self.ui_manager.resetLayoutAction.triggered.connect(self.dockSettingsManager.resetLayout)
+        json_path = os.path.splitext(video_path)[0] + ".json"
 
-        # Tools Menu
-        self.ui_manager.settingsActionMenu.triggered.connect(self.showSettingsDialog)
+        try:
+            # Leggi i dati esistenti
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            logging.error(f"Impossibile leggere il file JSON {json_path} per l'aggiornamento: {e}. L'operazione verrà annullata.")
+            return
 
-        # Help Menu
-        self.ui_manager.aboutAction.triggered.connect(self.about)
+        # Aggiorna i campi
+        data.update(update_dict)
 
-    def select_project_to_load(self):
-        """Opens a file dialog to select and load a project."""
-        gnai_path, _ = QFileDialog.getOpenFileName(self, "Open Project", self.project_manager.base_dir, "GeniusAI Project Files (*.gnai)")
+        # Rimuovi le chiavi obsolete per la pulizia del formato
+        if 'combined_summary' in data:
+            del data['combined_summary']
+        if 'transcription_raw' in data:
+            del data['transcription_raw']
+
+        # Salva i dati aggiornati
+        try:
+            with open(json_path, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+            logging.info(f"File JSON {json_path} aggiornato con successo.")
+        except Exception as e:
+            logging.error(f"Errore durante il salvataggio del file JSON aggiornato: {e}")
+
+    def handleTimecodeToggle(self, checked):
+        """
+        Gestisce il toggle per l'inserimento/visualizzazione dei timecode in modo non distruttivo.
+        """
+        # Il contenuto "master" è sempre quello con i timecode.
+        # La visualizzazione è solo una maschera.
+        current_html_with_timestamps = self.audioAiTextArea.toHtml()
+
+        # Se l'utente sta attivando i timecode, significa che la vista corrente non li ha.
+        # Dobbiamo calcolarli e salvarli come stato "master".
+        if checked:
+            # Rimuoviamo eventuali vecchi timestamp per sicurezza prima di ricalcolare
+            text_without_timestamps = remove_timestamps_from_html(current_html_with_timestamps)
+            # Calcoliamo i nuovi timestamp basandoci sul testo pulito
+            self.original_audio_ai_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(text_without_timestamps)
+        else:
+            # Se l'utente sta disattivando i timecode, il testo visualizzato li contiene.
+            # Questo testo è la nostra versione più aggiornata e con i timestamp.
+            # Lo salviamo come stato "master".
+            self.original_audio_ai_html = current_html_with_timestamps
+
+        # Aggiorniamo la vista in base allo stato del checkbox
+        self._update_text_area_view(self.audioAiTextArea, self.original_audio_ai_html, checked)
+
+    def _update_text_area_view(self, text_area, full_html_content, show_timestamps):
+        """
+        Aggiorna la visualizzazione di un'area di testo, mostrando o nascondendo
+        i timecode in modo non distruttivo.
+        """
+        text_area.blockSignals(True)
+        if show_timestamps:
+            # Mostra i timecode. Il full_html_content dovrebbe già averli.
+            # Assicuriamoci che siano stilizzati correttamente.
+            timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}\])')
+            def style_match(match):
+                return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+            # Prima rimuovi eventuali stili per evitare duplicazioni, poi applica quello nuovo.
+            temp_html = re.sub(r"<font color='#ADD8E6'>(.*?)</font>", r'\1', full_html_content, flags=re.IGNORECASE)
+            processed_html = timestamp_pattern.sub(style_match, temp_html)
+            text_area.setHtml(processed_html)
+        else:
+            # Nascondi i timecode usando la funzione di utilità.
+            cleaned_html = remove_timestamps_from_html(full_html_content)
+            text_area.setHtml(cleaned_html)
+        text_area.blockSignals(False)
+
+
+    def updateProgressDialog(self, value, label):
+        if not self.progressDialog.wasCanceled():
+            self.progressDialog.setValue(value)
+            self.progressDialog.setLabelText(label)
+
+    def _get_current_summary_key(self):
+        """
+        Determina la chiave corretta per il dizionario dei riassunti in base al tab attivo.
+        """
+        active_widget = self.summaryTabWidget.currentWidget()
+        return self.summary_widget_map.get(active_widget)
+
+    def _on_summary_text_changed(self):
+        """
+        Slot che viene chiamato quando il testo in una delle aree di riassunto cambia.
+        Avvia un timer per salvare le modifiche dopo un breve ritardo, per evitare
+        di salvare ad ogni singolo tasto premuto (debouncing).
+        """
+        if self.summary_autosave_timer.isActive():
+            self.summary_autosave_timer.stop()
+        self.summary_autosave_timer.start(1500) # 1.5 secondi di ritardo
+
+    def _save_images_from_document(self, html_content, document):
+        """
+        Finds all frame:// images in the HTML, saves them to the project's 'frames'
+        folder, and replaces the src attribute with a relative file path.
+        """
+        if not self.current_project_path:
+            return html_content # Cannot save images without an active project
+
+        frames_dir = os.path.join(self.current_project_path, "frames")
+        os.makedirs(frames_dir, exist_ok=True)
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frame://'):
+                uri = QUrl(src)
+                image_data = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_data:
+                    # Generate a unique filename
+                    timestamp = int(time.time() * 1000)
+                    image_filename = f"frame_{timestamp}.png"
+                    image_path = os.path.join(frames_dir, image_filename)
+
+                    # Convert the returned QVariant to a QPixmap for saving
+                    pixmap = QPixmap(image_data)
+                    if not pixmap.isNull():
+                        pixmap.save(image_path, "PNG")
+
+                        # Update the src to the relative path
+                        relative_path = os.path.join("frames", image_filename).replace("\\", "/")
+                        img['src'] = relative_path
+                        modified = True
+
+        return str(soup) if modified else html_content
+
+    def _sync_active_summary_to_model(self):
+        """
+        Sincronizza il contenuto dell'area di testo del riassunto attivo con il modello dati.
+        Questo è il "salvataggio" effettivo dalla vista al modello.
+        Viene attivato da un timer (debounce) per non salvare ad ogni tasto.
+        """
+        active_widget = self.get_current_summary_text_area()
+
+        if not active_widget or active_widget.isReadOnly():
+            logging.debug("Sync to model skipped: widget is read-only or not available.")
+            return
+
+        summary_key = self._get_current_summary_key()
+        if not summary_key:
+            logging.warning("Could not determine summary key for active widget.")
+            return
+
+        if "combined" in summary_key:
+            data_source = self.combined_summary
+        else:
+            data_source = self.summaries
+
+        # 1. Get HTML and the document
+        html_content = active_widget.toHtml()
+        document = active_widget.document()
+
+        # 2. Save embedded images to files and update HTML with relative paths
+        html_with_relative_paths = self._save_images_from_document(html_content, document)
+
+        # 3. Save the modified HTML directly to the model for storage
+        data_source[summary_key] = html_with_relative_paths
+        logging.debug(f"Synced UI to model for key: {summary_key} after processing images.")
+
+    def onProcessComplete(self, result):
+        if isinstance(result, dict):
+            # Questo gestisce i risultati della trascrizione che arrivano come dizionario
+            self.transcription_original = result.get('transcription_raw', '')
+            self.singleTranscriptionTextArea.setHtml(self.transcription_original)
+            self._style_existing_timestamps(self.singleTranscriptionTextArea)
+            self.transcription_corrected = "" # Resetta la correzione
+            self.transcriptionViewToggle.setEnabled(False)
+            self.transcriptionViewToggle.setChecked(False)
+            return
+
+        if self.active_summary_type:
+            if self.active_summary_type == 'transcription_fix':
+                # Salva il risultato grezzo (Markdown)
+                self.transcription_corrected = result
+                # Converti il Markdown in HTML per la visualizzazione
+                html_content = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+                self.singleTranscriptionTextArea.setHtml(html_content)
+                self.show_status_message("Correzione del testo completata.")
+                self.transcriptionViewToggle.setEnabled(True)
+                self.transcriptionViewToggle.setChecked(True)
+            else:
+                # Converti il risultato Markdown in HTML prima di salvarlo.
+                # Questa è la nuova fonte di verità.
+                html_result = markdown.markdown(result, extensions=['fenced_code', 'tables'])
+                self.summaries[self.active_summary_type] = html_result
+
+                # Invalida il riassunto integrato corrispondente.
+                integrated_key = f"{self.active_summary_type}_integrated"
+                if integrated_key in self.summaries:
+                    self.summaries[integrated_key] = ""
+
+                # Chiama il metodo di aggiornamento della vista, che ora leggerà
+                # dal modello e genererà l'HTML dinamicamente.
+                self._update_summary_view()
+
+                # Salva i dati aggiornati nel file JSON.
+                update_data = {
+                    "summaries": self.summaries,
+                    "summary_date": datetime.datetime.now().isoformat()
+                }
+                self._update_json_file(self.videoPathLineEdit, update_data)
+
+            self.active_summary_type = None
+
+    def generate_summary_from_batch_tab(self):
+        """
+        Genera un riassunto combinato utilizzando il testo presente nella
+        scheda "Trascrizione Multipla".
+        """
+        combined_text = self.batchTranscriptionTextArea.toPlainText()
+        if not combined_text.strip():
+            self.show_status_message("La scheda 'Trascrizione Multipla' è vuota. Non c'è nulla da riassumere.", error=True)
+            return
+
+        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto Combinato",
+                                                "Scegli il tipo di riassunto da generare:",
+                                                ["Dettagliato", "Note Riunione"], 0, False)
+        if not ok:
+            return
+
+        summary_key = 'detailed' if summary_type == "Dettagliato" else 'meeting'
+        self.active_summary_type = f"{summary_key}_combined"
+
+        # Pulisce i file sorgente precedenti perché ora la fonte è il testo della tab
+        self.combined_summary["source_files"] = ["Testo da Trascrizione Multipla"]
+
+        thread = ProcessTextAI(
+            mode="combined_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': combined_text}
+        )
+        # Usiamo lo stesso callback del riassunto combinato precedente
+        self.start_task(thread, self.on_combined_summary_complete, self.onProcessError, self.update_status_progress)
+
+    def on_combined_summary_complete(self, result):
+        """Gestisce il completamento della generazione del riassunto combinato."""
+        if self.active_summary_type:
+            # Salva il risultato nel modello dati
+            self.combined_summary[self.active_summary_type] = result
+
+            # Aggiorna la vista per mostrare il nuovo riassunto
+            self._update_summary_view()
+
+            # Salva i dati nel JSON del video ATTUALMENTE caricato.
+            # Questo è un compromesso, ma permette la persistenza.
+            if self.videoPathLineEdit:
+                update_data = {"combined_summary": self.combined_summary}
+                self._update_json_file(self.videoPathLineEdit, update_data)
+                self.show_status_message("Riassunto combinato generato e salvato.")
+            else:
+                self.show_status_message("Riassunto combinato generato. Salvalo manualmente o caricando un video.", error=True)
+
+            self.active_summary_type = None
+
+    def _load_images_into_document(self, html_content, document):
+        """
+        Finds all images with relative paths in the HTML, loads them from the
+        project's 'frames' folder, and adds them as resources to the QTextDocument.
+        Returns the updated HTML with src attributes pointing to frame:// URIs.
+        """
+        if not self.current_project_path:
+            return html_content
+
+        soup = BeautifulSoup(html_content, 'html.parser')
+        images = soup.find_all('img')
+        modified = False
+
+        for img in images:
+            src = img.get('src')
+            if src and src.startswith('frames/'):
+                # Assicurati che il percorso sia corretto per il sistema operativo corrente
+                normalized_src = os.path.normpath(src)
+                image_path = os.path.join(self.current_project_path, normalized_src)
+
+                if os.path.exists(image_path):
+                    q_image = QImage(image_path)
+                    if not q_image.isNull():
+                        # Convert to QPixmap for reliable rendering, then add as a resource
+                        pixmap = QPixmap.fromImage(q_image)
+                        # Usa un nome univoco per la risorsa per evitare conflitti
+                        unique_id = f"frame_{int(time.time() * 1000)}_{os.path.basename(src)}"
+                        uri = QUrl(f"frame://{unique_id}")
+                        document.addResource(QTextDocument.ResourceType.ImageResource, uri, pixmap)
+                        img['src'] = uri.toString()
+                        modified = True
+                else:
+                    logging.warning(f"Image file not found at path: {image_path}")
+
+
+        return str(soup) if modified else html_content
+
+    def _update_summary_view(self):
+        """
+        Metodo centralizzato per aggiornare la vista del riassunto.
+        Legge i dati grezzi dal modello, applica le opzioni di visualizzazione (es. timecode)
+        e aggiorna la UI. Questa è l'unica fonte di verità per la visualizzazione dei riassunti.
+        """
+        if not hasattr(self, 'summaries'): return
+
+        target_widget = self.get_current_summary_text_area()
+        if not target_widget: return
+
+        summary_key = self._get_current_summary_key()
+        if not summary_key: return
+
+        # Determina quale dizionario usare (singolo, combinato)
+        if "combined" in summary_key:
+            data_source = self.combined_summary
+        else:
+            data_source = self.summaries
+
+        # 1. Read the raw HTML from the data model
+        html_content = data_source.get(summary_key, "")
+
+        # 2. Load images from relative files into the document and update HTML
+        html_content = self._load_images_into_document(html_content, target_widget.document())
+
+        # 4. Applica le trasformazioni di visualizzazione
+        show_timestamps = self.showTimecodeSummaryCheckbox.isChecked()
+        display_html = html_content
+
+        if show_timestamps:
+            display_html = self._style_timestamps_in_html(html_content)
+        else:
+            display_html = remove_timestamps_from_html(html_content)
+
+
+        # 5. Aggiorna la UI
+        target_widget.blockSignals(True)
+        target_widget.setHtml(display_html)
+        target_widget.blockSignals(False)
+
+        # 6. Rendi l'editor di sola lettura quando la vista è filtrata
+        target_widget.setReadOnly(not show_timestamps)
+
+    def onProcessError(self, error_message):
+        # This is now a generic error handler for AI text processes.
+        # The main error display is handled by finish_task.
+        self.show_status_message(f"Errore processo AI: {error_message}", error=True)
+
+    def highlight_selected_text(self):
+        """Applies or removes the selected highlight color from the text."""
+        active_summary_area = self.get_current_summary_text_area()
+        cursor = active_summary_area.textCursor()
+        if not cursor.hasSelection():
+            return
+
+        # Safely get the color info. If the configured color is invalid,
+        # fall back to the first color in the dictionary.
+        default_color_name = next(iter(self.highlight_colors))
+        color_info = self.highlight_colors.get(self.current_highlight_color_name, self.highlight_colors[default_color_name])
+        if self.current_highlight_color_name not in self.highlight_colors:
+            logging.warning(f"Invalid highlight color '{self.current_highlight_color_name}' found in settings. Falling back to '{default_color_name}'.")
+            self.current_highlight_color_name = default_color_name
+
+        highlight_color = color_info["qcolor"]
+
+        # Determine if we are applying or removing the highlight
+        current_format = cursor.charFormat()
+        new_format = QTextCharFormat()
+
+        if current_format.background().color() == highlight_color:
+            # If the current background is the highlight color, remove it (make it transparent)
+            new_format.setBackground(QColor(Qt.GlobalColor.transparent))
+        else:
+            # Otherwise, apply the highlight color
+            new_format.setBackground(highlight_color)
+
+        cursor.mergeCharFormat(new_format)
+
+    def toggle_summary_view_mode(self, checked):
+        """
+        Alterna la visualizzazione dell'editor del riassunto tra testo formattato e sorgente HTML.
+        """
+        self.summary_view_is_raw = checked
+        active_summary_area = self.get_current_summary_text_area()
+        active_summary_area.blockSignals(True) # Blocca i segnali per evitare loop
+
+        if checked:
+            # Passa alla visualizzazione HTML grezzo
+            current_html = active_summary_area.toHtml()
+            active_summary_area.setPlainText(current_html)
+            self.toggleSummaryViewButton.setText("Mostra Testo")
+        else:
+            # Passa alla visualizzazione formattata
+            raw_html = active_summary_area.toPlainText()
+            active_summary_area.setHtml(raw_html)
+            self.toggleSummaryViewButton.setText("Mostra HTML")
+
+        active_summary_area.blockSignals(False) # Riattiva i segnali
+
+    def openPptxDialog(self):
+        """Apre il dialogo per la generazione della presentazione PowerPoint."""
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        if not current_text.strip():
+            self.show_status_message("Il campo della trascrizione è vuoto. Inserisci del testo prima di generare una presentazione.", error=True)
+            return
+
+        dialog = PptxDialog(self, transcription_text=current_text)
+        dialog.exec()
+
+    def showSettingsDialog(self):
+        dialog = SettingsDialog(self)
+        if dialog.exec():
+            self.load_recording_settings()
+            self.apply_and_save_font_settings()
+
+    def set_default_dock_layout(self):
+
+        # Set default visibility
+        self.videoPlayerOutput.setVisible(True)
+        self.recordingDock.setVisible(True)
+
+        # Set other docks as invisible
+        self.videoPlayerDock.setVisible(False)
+        self.audioDock.setVisible(False)
+        self.transcriptionDock.setVisible(False)
+        self.editingDock.setVisible(False)
+
+    def openRootFolder(self):
+        root_folder_path = os.path.dirname(os.path.abspath(__file__))
+        QDesktopServices.openUrl(QUrl.fromLocalFile(root_folder_path))
+
+    def insertPause(self):
+        cursor = self.audioAiTextArea.textCursor()
+        pause_time = self.pauseTimeEdit.text().strip()
+
+        if not re.match(r'^\d+(\.\d+)?s$', pause_time):
+            self.show_status_message("Inserisci un formato valido per la pausa (es. 1.0s)", error=True)
+            return
+
+        pause_tag = f'<break time="{pause_time}" />'
+        cursor.insertText(f' {pause_tag} ')
+        self.audioAiTextArea.setTextCursor(cursor)
+
+    def rewind5Seconds(self):
+        current_position = self.player.position()
+        new_position = max(0, current_position - 5000)
+        self.player.setPosition(new_position)
+
+    def forward5Seconds(self):
+        current_position = self.player.position()
+        new_position = current_position + 5000
+        self.player.setPosition(new_position)
+
+    def frameBackward(self):
+        self.get_previous_frame()
+
+    def frameForward(self):
+        self.get_next_frame()
+
+    def goToTimecode(self):
+        timecode_text = self.timecodeInput.text()
+        try:
+            parts = timecode_text.split(':')
+            if len(parts) != 4:
+                raise ValueError("Invalid timecode format")
+
+            hours = int(parts[0])
+            minutes = int(parts[1])
+            seconds = int(parts[2])
+            milliseconds = int(parts[3])
+
+            total_milliseconds = (hours * 3600 + minutes * 60 + seconds) * 1000 + milliseconds
+            self.player.setPosition(total_milliseconds)
+        except (ValueError, IndexError):
+            self.show_status_message("Formato timecode non valido. Usa HH:MM:SS:ms.", error=True)
+
+    def releaseSourceVideo(self):
+        self.player.stop()
+        time.sleep(.01)
+        self.timecodeInput.clear()
+        self.totalTimeLabel.setText('/ 00:00:00:000')
+        self.player.setSource(QUrl())
+        self.videoPathLineEdit = ''
+        self.fileNameLabel.setText("Nessun video caricato")
+        self.videoNotesListWidget.clear()
+        self.transcriptionDock.setTitle("Trascrizione e Sintesi Audio")
+    def releaseOutputVideo(self):
+        self.playerOutput.stop()
+        time.sleep(.01)
+        self.currentTimeLabelOutput.setText('00:00')
+        self.totalTimeLabelOutput.setText('00:00')
+        self.playerOutput.setSource(QUrl())
+        self.videoPathLineOutputEdit = ''
+        self.fileNameLabelOutput.setText("Nessun video caricato")
+
+    def get_nearest_timecode(self):
+        cursor_position = self.audioAiTextArea.textCursor().position()
+        text = self.audioAiTextArea.toPlainText()
+
+        # Regex per trovare [MM:SS.d] o [MM:SS]
+        timecode_pattern = re.compile(r'\[(\d{2}):(\d{2}(?:\.\d)?)\]')
+        matches = list(timecode_pattern.finditer(text))
+
+        if not matches:
+            logging.debug("Nessun timecode trovato nella trascrizione.")
+            return None
+
+        nearest_match = None
+        min_distance = float('inf')
+
+        for match in matches:
+            start, end = match.span()
+            distance = abs(cursor_position - start)
+            if distance < min_distance:
+                min_distance = distance
+                nearest_match = match
+
+        if nearest_match:
+            try:
+                time_str = nearest_match.group(1)
+                if '.' in time_str:
+                    minutes, seconds = map(float, time_str.split(':'))
+                else:
+                    minutes, seconds = map(int, time_str.split(':'))
+
+                total_seconds = minutes * 60 + seconds
+                logging.debug(f"Timecode più vicino: {total_seconds} secondi")
+                return total_seconds
+            except ValueError as e:
+                logging.error(f"Errore durante la conversione del timecode in secondi: {e}")
+                return None
+
+        logging.debug("Nessun timecode valido trovato.")
+        return None
+
+    def sync_video_to_transcription(self):
+        timecode_seconds = self.get_nearest_timecode()
+
+        if timecode_seconds is not None:
+            try:
+                self.player.setPosition(timecode_seconds * 1000)
+                logging.info(f"Video sincronizzato al timecode: {timecode_seconds} secondi")
+            except Exception as e:
+                logging.error(f"Errore durante la sincronizzazione del video: {e}")
+                QMessageBox.critical(self, "Errore", "Impossibile sincronizzare il video.")
+        else:
+            self.show_status_message("Nessun timecode trovato nella trascrizione.", error=True)
+
+    def sincronizza_video(self, seconds):
+        """
+        Sincronizza il video al timestamp specificato in secondi.
+        """
+        if self.player:
+            self.player.setPosition(int(seconds * 1000))
+
+    def setStartBookmark(self):
+        self.videoSlider.setPendingBookmarkStart(self.player.position())
+
+    def setEndBookmark(self):
+        if self.videoSlider.pending_bookmark_start is not None:
+            start_pos = self.videoSlider.pending_bookmark_start
+            end_pos = self.player.position()
+            self.videoSlider.addBookmark(start_pos, end_pos)
+        else:
+            self.show_status_message("Imposta prima un segnalibro di inizio.", error=True)
+
+    def clearBookmarks(self):
+        self.videoSlider.resetBookmarks()
+
+
+
+    def setVolume(self, value):
+        self.audioOutput.setVolume(value / 100.0)
+
+    def setVolumeOutput(self, value):
+        self.audioOutputOutput.setVolume(value / 100.0)
+
+    def updateTimeCodeOutput(self, position):
+        # Aggiorna il timecode corrente del video output
+        total_seconds = position // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = position % 1000
+        self.currentTimeLabelOutput.setText(f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
+
+    def updateDurationOutput(self, duration):
+        # Aggiorna la durata totale del video output
+        total_seconds = duration // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = duration % 1000
+        self.totalTimeLabelOutput.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
+
+    def open_crop_dialog(self):
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Carica un video prima di ritagliarlo.", error=True)
+            return
+
+        self.player.pause()
+
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Se ci sono bookmark, usa il primo per il ritaglio
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Il ritaglio sarà limitato al bookmark: {start_time:.2f}s - {end_time:.2f}s")
+
+        dialog = CropDialog(
+            video_path=self.videoPathLineEdit,
+            current_time=self.player.position(),
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
+        if dialog.exec():
+            crop_rect = dialog.get_crop_rect()
+
+            # Passa anche i tempi del bookmark al thread di crop
+            self.perform_crop(crop_rect, start_time, end_time)
+
+    def get_frame_at(self, position_ms, return_qimage=False):
+        video_path = self._get_selected_analysis_video_path()
+        if not video_path or not os.path.exists(video_path):
+            logging.warning("get_frame_at called with no valid video path.")
+            return None
+
+        cap = cv2.VideoCapture(video_path)
+        if not cap.isOpened():
+            logging.error(f"Failed to open video file with OpenCV: {video_path}")
+            return None
+
+        try:
+            cap.set(cv2.CAP_PROP_POS_MSEC, position_ms)
+            success, frame = cap.read()
+
+            if success:
+                rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                height, width, channel = rgb_frame.shape
+                bytes_per_line = 3 * width
+                q_image = QImage(rgb_frame.data, width, height, bytes_per_line, QImage.Format.Format_RGB888).copy()
+
+                if return_qimage:
+                    return q_image
+                else:
+                    return QPixmap.fromImage(q_image)
+            else:
+                logging.warning(f"Failed to read frame at {position_ms}ms from {video_path}")
+                return None
+        except Exception as e:
+            logging.error(f"Error getting frame at {position_ms}ms with OpenCV: {e}")
+            return None
+        finally:
+            cap.release()
+
+    def get_current_fps(self):
+        try:
+            return VideoFileClip(self.videoPathLineEdit).fps
+        except Exception as e:
+            print(f"Error getting FPS: {e}")
+            return 0
+
+    def get_next_frame(self):
+        fps = self.get_current_fps()
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos + (1000 / fps)
+            self.player.setPosition(int(new_pos))
+
+    def get_previous_frame(self):
+        fps = self.get_current_fps()
+        if fps > 0:
+            current_pos = self.player.position()
+            new_pos = current_pos - (1000 / fps)
+            self.player.setPosition(int(new_pos))
+
+    def perform_crop(self, crop_rect, start_time=None, end_time=None):
+        if self.current_thread and self.current_thread.isRunning():
+            self.show_status_message("Un'altra operazione è già in corso.", error=True)
+            return
+
+        self.statusLabel.setText("Ritaglio del video in corso...")
+        self.progressBar.setVisible(True)
+        self.cancelButton.setVisible(True)
+
+        thread = CropThread(
+            self.videoPathLineEdit,
+            crop_rect,
+            self.current_project_path,
+            start_time=start_time,
+            end_time=end_time,
+            parent=self
+        )
+        self.current_thread = thread
+
+        thread.progress.connect(self.progressBar.setValue)
+        thread.completed.connect(self.on_crop_completed)
+        thread.error.connect(self.on_crop_error)
+
+        try:
+            self.cancelButton.clicked.disconnect()
+        except TypeError:
+            pass
+        self.cancelButton.clicked.connect(self.cancel_task)
+
+        thread.start()
+
+    def on_crop_completed(self, output_path):
+        self.progressBar.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.current_thread = None
+        self.show_status_message(f"Video ritagliato e salvato in {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+    def on_crop_error(self, error_message):
+        self.progressBar.setVisible(False)
+        self.cancelButton.setVisible(False)
+        self.current_thread = None
+        QMessageBox.critical(self, "Errore durante il ritaglio", error_message)
+
+    def applyStyleToAllDocks(self):
+        style = self.getDarkStyle()
+        self.videoPlayerDock.setStyleSheet(style)
+        self.transcriptionDock.setStyleSheet(style)
+        self.editingDock.setStyleSheet(style)
+        self.recordingDock.setStyleSheet(style)
+        self.audioDock.setStyleSheet(style)
+        self.videoPlayerOutput.setStyleSheet(style)
+        self.videoNotesDock.setStyleSheet(style)
+
+    def createVideoNotesDock(self):
+        """Crea il dock per le note video."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.videoNotesListWidget = QListWidget()
+        self.videoNotesListWidget.setToolTip("Elenco delle note del video. Doppio click per andare al timecode.")
+        self.videoNotesListWidget.itemDoubleClicked.connect(self.seek_to_note_timecode)
+        layout.addWidget(self.videoNotesListWidget)
+
+        buttons_layout = QHBoxLayout()
+        self.editNoteButton = QPushButton("Modifica Nota")
+        self.editNoteButton.setToolTip("Modifica la nota selezionata.")
+        self.editNoteButton.clicked.connect(self.edit_video_note)
+        buttons_layout.addWidget(self.editNoteButton)
+
+        self.deleteNoteButton = QPushButton("Cancella Nota")
+        self.deleteNoteButton.setToolTip("Cancella la nota selezionata.")
+        self.deleteNoteButton.clicked.connect(self.delete_video_note)
+        buttons_layout.addWidget(self.deleteNoteButton)
+
+        layout.addLayout(buttons_layout)
+        self.videoNotesDock.addWidget(widget)
+
+    def getDarkStyle(self):
+        return """
+        QWidget {
+            background-color: #2b2b2b;
+            color: #dcdcdc;
+        }
+        QPushButton {
+            background-color: #555555;
+            border: 1px solid #666666;
+            border-radius: 2px;
+            padding: 5px;
+            color: #ffffff;
+        }
+        QPushButton:hover {
+            background-color: #666666;
+        }
+        QPushButton:pressed {
+            background-color: #777777;
+        }
+        QLabel {
+            color: #cccccc;
+        }
+        QLineEdit {
+            background-color: #333333;
+            border: 1px solid #555555;
+            border-radius: 2px;
+            padding: 5px;
+            color: #ffffff;
+        }
+        """
+
+    def setupVoiceSettingsUI(self):
+        voiceSettingsGroup = QGroupBox("Impostazioni Voce")
+        layout = QVBoxLayout()
+
+        # QComboBox per la selezione della voce con opzione per inserire custom ID
+        self.voiceSelectionComboBox = QComboBox()
+        self.voiceSelectionComboBox.setEditable(True)
+        for name, voice_id in DEFAULT_VOICES.items():
+            self.voiceSelectionComboBox.addItem(name, voice_id)
+
+        layout.addWidget(self.voiceSelectionComboBox)
+
+        # Campo di input per ID voce
+        self.voiceIdInput = QLineEdit()
+        self.voiceIdInput.setPlaceholderText("ID Voce")
+        layout.addWidget(self.voiceIdInput)
+
+        # Pulsante per aggiungere la voce personalizzata
+        self.addVoiceButton = QPushButton('Aggiungi Voce Personalizzata')
+        self.addVoiceButton.clicked.connect(self.addCustomVoice)
+        layout.addWidget(self.addVoiceButton)
+
+        # Radio buttons per la selezione del genere vocale
+
+        # Slider per la stabilità
+        stabilityLabel = QLabel("Stabilità:")
+        self.stabilitySlider = QSlider(Qt.Orientation.Horizontal)
+        self.stabilitySlider.setMinimum(0)
+        self.stabilitySlider.setMaximum(100)
+        self.stabilitySlider.setValue(DEFAULT_STABILITY)
+        self.stabilitySlider.setToolTip(
+            "Regola l'emozione e la coerenza. Minore per più emozione, maggiore per coerenza.")
+        self.stabilityValueLabel = QLabel("50%")  # Visualizza il valore corrente
+        self.stabilitySlider.valueChanged.connect(lambda value: self.stabilityValueLabel.setText(f"{value}%"))
+        layout.addWidget(stabilityLabel)
+        layout.addWidget(self.stabilitySlider)
+        layout.addWidget(self.stabilityValueLabel)
+
+        # Slider per la similarità
+        similarityLabel = QLabel("Similarità:")
+        self.similaritySlider = QSlider(Qt.Orientation.Horizontal)
+        self.similaritySlider.setMinimum(0)
+        self.similaritySlider.setMaximum(100)
+        self.similaritySlider.setValue(DEFAULT_SIMILARITY)
+        self.similaritySlider.setToolTip(
+            "Determina quanto la voce AI si avvicina all'originale. Alti valori possono includere artefatti.")
+        self.similarityValueLabel = QLabel("80%")  # Visualizza il valore corrente
+        self.similaritySlider.valueChanged.connect(lambda value: self.similarityValueLabel.setText(f"{value}%"))
+        layout.addWidget(similarityLabel)
+        layout.addWidget(self.similaritySlider)
+        layout.addWidget(self.similarityValueLabel)
+
+        # Slider per l'esagerazione dello stile
+        styleLabel = QLabel("Esagerazione Stile:")
+        self.styleSlider = QSlider(Qt.Orientation.Horizontal)
+        self.styleSlider.setMinimum(0)
+        self.styleSlider.setMaximum(10)
+        self.styleSlider.setValue(DEFAULT_STYLE)
+        self.styleSlider.setToolTip("Amplifica lo stile del parlante originale. Impostare a 0 per maggiore stabilità.")
+        self.styleValueLabel = QLabel("0")  # Visualizza il valore corrente
+        self.styleSlider.valueChanged.connect(lambda value: self.styleValueLabel.setText(f"{value}"))
+        layout.addWidget(styleLabel)
+        layout.addWidget(self.styleSlider)
+        layout.addWidget(self.styleValueLabel)
+
+        # Checkbox per l'uso di speaker boost
+        self.speakerBoostCheckBox = QCheckBox("Usa Speaker Boost")
+        self.speakerBoostCheckBox.setChecked(True)
+        self.speakerBoostCheckBox.setToolTip(
+            "Potenzia la somiglianza col parlante originale a costo di maggiori risorse.")
+        layout.addWidget(self.speakerBoostCheckBox)
+
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        layout.addWidget(separator)
+
+        # Sincronizzazione labiale
+        self.useWav2LipCheckbox = QCheckBox("Sincronizzazione labiale")
+        layout.addWidget(self.useWav2LipCheckbox)
+        self.useWav2LipCheckbox.setVisible(False)
+
+        # Pulsanti per le diverse funzionalità
+        self.generateAudioButton = QPushButton('Genera e Applica Audio con AI')
+        self.generateAudioButton.clicked.connect(self.generateAudioWithElevenLabs)
+
+        self.alignspeed = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed.setChecked(True)
+        layout.addWidget(self.alignspeed)
+        layout.addWidget(self.generateAudioButton)
+
+        voiceSettingsGroup.setLayout(layout)
+        return voiceSettingsGroup
+
+    def createGeneratedAudiosUI(self):
+        """
+        Crea il QGroupBox per la gestione degli audio generati.
+        """
+        generatedAudiosGroup = QGroupBox("Audio Generati per questo Video")
+        layout = QVBoxLayout()
+
+        self.generatedAudiosListWidget = QListWidget()
+        self.generatedAudiosListWidget.setToolTip("Lista degli audio generati per il video corrente.")
+        self.generatedAudiosListWidget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.generatedAudiosListWidget.customContextMenuRequested.connect(self.show_audio_context_menu)
+        layout.addWidget(self.generatedAudiosListWidget)
+
+        buttons_layout = QHBoxLayout()
+        applyButton = QPushButton("Applica Selezionato")
+        applyButton.setToolTip("Applica l'audio selezionato al video.")
+        applyButton.clicked.connect(self.apply_selected_audio)
+        buttons_layout.addWidget(applyButton)
+
+        deleteButton = QPushButton("Elimina Selezionato")
+        deleteButton.setToolTip("Elimina l'audio selezionato (il file verrà cancellato).")
+        deleteButton.clicked.connect(self.delete_selected_audio)
+        buttons_layout.addWidget(deleteButton)
+
+        layout.addLayout(buttons_layout)
+        generatedAudiosGroup.setLayout(layout)
+        return generatedAudiosGroup
+
+    def show_audio_context_menu(self, position):
+        """
+        Mostra il menu contestuale per gli elementi della lista di audio generati.
+        """
+        item = self.generatedAudiosListWidget.itemAt(position)
+        if item:
+            context_menu = QMenu(self)
+            preview_action = context_menu.addAction("Ascolta anteprima")
+            action = context_menu.exec(self.generatedAudiosListWidget.mapToGlobal(position))
+
+            if action == preview_action:
+                self.play_preview_audio(item)
+
+    def play_preview_audio(self, item):
+        """
+        Riproduce l'anteprima dell'audio selezionato.
+        """
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+        if audio_path and os.path.exists(audio_path):
+            self.previewPlayer.setSource(QUrl.fromLocalFile(audio_path))
+            self.previewPlayer.play()
+            self.show_status_message(f"Riproduzione anteprima: {os.path.basename(audio_path)}")
+        else:
+            self.show_status_message("File anteprima non trovato.", error=True)
+
+    def addCustomVoice(self):
+        custom_name = self.voiceSelectionComboBox.currentText().strip()
+        voice_id = self.voiceIdInput.text().strip()
+        if custom_name and voice_id:
+            self.voiceSelectionComboBox.addItem(custom_name, voice_id)
+            self.voiceSelectionComboBox.setCurrentText(custom_name)
+            self.voiceIdInput.clear()
+            self.show_status_message(f"Voce personalizzata '{custom_name}' aggiunta.")
+        else:
+            self.show_status_message("Entrambi i campi 'Nome Voce' e 'ID Voce' sono necessari.", error=True)
+
+
+    def _get_selected_player_info(self):
+        """Restituisce il percorso del video e l'istanza del player selezionato."""
+        if self.player_input_button.isChecked():
+            return self.videoPathLineEdit, self.player
+        elif self.player_output_button.isChecked():
+            return self.videoPathLineOutputEdit, self.playerOutput
+        return None, None
+
+    def applyFreezeFramePause(self):
+        video_path, player = self._get_selected_player_info()
+
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Carica un video prima di applicare una pausa.", error=True)
+            return
+
+        try:
+            pause_duration = int(self.pauseVideoDurationLineEdit.text())
+            start_time = player.position() / 1000.0
+
+            video_clip = VideoFileClip(video_path)
+            freeze_frame = video_clip.get_frame(start_time)
+            freeze_clip = ImageClip(freeze_frame).set_duration(pause_duration).set_fps(video_clip.fps)
+
+            original_video_part1 = video_clip.subclip(0, start_time)
+            original_video_part2 = video_clip.subclip(start_time)
+
+            final_video = concatenate_videoclips([original_video_part1, freeze_clip, original_video_part2])
+
+            if video_clip.audio:
+                final_video.audio = video_clip.audio
+
+            output_path = self.get_temp_filepath(suffix='.mp4')
+            final_video.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            self.show_status_message("Pausa video applicata con successo.")
+            self.loadVideoOutput(output_path)
+        except ValueError:
+            self.show_status_message("La durata della pausa deve essere un numero intero.", error=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Errore durante l'applicazione della pausa: {e}")
+        finally:
+            if 'video_clip' in locals():
+                video_clip.close()
+            if 'final_video' in locals():
+                if hasattr(final_video, 'audio') and final_video.audio:
+                    final_video.audio.close()
+
+    def createAudioDock(self):
+        dock = CustomDock("Gestione Audio e Video", closable=True)
+
+        # Main widget and layout for the dock
+        main_widget = QWidget()
+        main_layout = QVBoxLayout(main_widget)
+
+        # Player Selection GroupBox
+        player_selection_group = QGroupBox("Applica a")
+        player_selection_layout = QHBoxLayout(player_selection_group)
+
+        # Pulsante per il Player Input
+        self.player_input_button = QPushButton(QIcon(get_resource("rec.png")), "Input")
+        self.player_input_button.setCheckable(True)
+        self.player_input_button.setChecked(True)
+        self.player_input_button.setToolTip("Applica le operazioni al Video Player Input")
+        player_selection_layout.addWidget(self.player_input_button)
+
+        # Pulsante per il Player Output
+        self.player_output_button = QPushButton(QIcon(get_resource("play.png")), "Output")
+        self.player_output_button.setCheckable(True)
+        self.player_output_button.setToolTip("Applica le operazioni al Video Player Output")
+        player_selection_layout.addWidget(self.player_output_button)
+
+        # Raggruppa i pulsanti per renderli mutuamente esclusivi
+        self.player_button_group = QButtonGroup(self)
+        self.player_button_group.addButton(self.player_input_button)
+        self.player_button_group.addButton(self.player_output_button)
+        self.player_button_group.setExclusive(True)
+
+        # Connetti i segnali dei pulsanti a un gestore
+        self.player_input_button.toggled.connect(lambda checked: self._on_player_selection_changed('Input', checked))
+        self.player_output_button.toggled.connect(lambda checked: self._on_player_selection_changed('Output', checked))
+
+        main_layout.addWidget(player_selection_group)
+
+
+        # Creazione del QTabWidget
+        tab_widget = QTabWidget()
+
+        # Primo tab: Aggiungi/Pausa
+        add_pause_tab = QWidget()
+        add_pause_layout = QVBoxLayout(add_pause_tab)
+
+        audioPauseGroup = self.createAudioPauseGroup()
+        videoPauseGroup = self.createVideoPauseGroup()
+        silenceRemoverGroup = self.createSilenceRemoverGroup() # New group
+
+        add_pause_layout.addWidget(audioPauseGroup)
+        add_pause_layout.addWidget(videoPauseGroup)
+        add_pause_layout.addWidget(silenceRemoverGroup) # Added to this tab
+        add_pause_layout.addStretch() # Add stretch to push widgets up
+        tab_widget.addTab(add_pause_tab, "Aggiungi/Pausa")
+
+        # Secondo tab: Selezione Audio
+        audio_selection_tab = QWidget()
+        audio_selection_layout = QVBoxLayout(audio_selection_tab)
+
+        audioReplacementGroup = self.createAudioReplacementGroup()
+        backgroundAudioGroup = self.createBackgroundAudioGroup()
+
+        audio_selection_layout.addWidget(audioReplacementGroup)
+        audio_selection_layout.addWidget(backgroundAudioGroup)
+        tab_widget.addTab(audio_selection_tab, "Selezione Audio")
+
+        # Terzo tab: Unisci Video
+        video_merge_tab = QWidget()
+        video_merge_layout = QVBoxLayout(video_merge_tab)
+
+        mergeGroup = QGroupBox("Opzioni di Unione Video")
+        grid_layout = QGridLayout(mergeGroup)
+        grid_layout.setSpacing(10)
+
+        self.mergeVideoPathLineEdit = QLineEdit()
+        self.mergeVideoPathLineEdit.setReadOnly(True)
+        self.mergeVideoPathLineEdit.setPlaceholderText("Seleziona il video da aggiungere...")
+        browseMergeVideoButton = QPushButton('Sfoglia...')
+        browseMergeVideoButton.clicked.connect(self.browseMergeVideo)
+        projectMergeVideoButton = QPushButton('Dal Progetto')
+        projectMergeVideoButton.clicked.connect(self._select_video_from_project)
+
+        grid_layout.addWidget(QLabel("Video da unire:"), 0, 0)
+        grid_layout.addWidget(self.mergeVideoPathLineEdit, 0, 1)
+        grid_layout.addWidget(browseMergeVideoButton, 0, 2)
+        grid_layout.addWidget(projectMergeVideoButton, 0, 3)
+
+        resolution_group = QGroupBox("Gestione Risoluzione")
+        resolution_layout = QVBoxLayout(resolution_group)
+        self.adaptResolutionRadio = QRadioButton("Adatta le risoluzioni")
+        self.adaptResolutionRadio.setChecked(True)
+        self.maintainResolutionRadio = QRadioButton("Mantieni le risoluzioni originali")
+        resolution_layout.addWidget(self.adaptResolutionRadio)
+        resolution_layout.addWidget(self.maintainResolutionRadio)
+        grid_layout.addWidget(resolution_group, 1, 0, 1, 4)
+
+        mergeButton = QPushButton('Unisci Video')
+        mergeButton.setStyleSheet("padding: 10px; font-weight: bold;")
+        mergeButton.clicked.connect(self.mergeVideo)
+        grid_layout.addWidget(mergeButton, 2, 0, 1, 4)
+
+        video_merge_layout.addWidget(mergeGroup)
+        video_merge_tab.setLayout(video_merge_layout)
+        tab_widget.addTab(video_merge_tab, "Unisci Video")
+
+        # Add the tab_widget to the main layout
+        main_layout.addWidget(tab_widget)
+
+        # Aggiunta del main_widget al dock
+        dock.addWidget(main_widget)
+
+        return dock
+
+    def createSilenceRemoverGroup(self):
+        silence_remover_group = QGroupBox("Rimuovi Silenzi")
+        silence_remover_layout = QVBoxLayout(silence_remover_group)
+
+        # Silence Threshold
+        silence_remover_layout.addWidget(QLabel("Soglia Silenzio (dBFS):"))
+        self.silence_threshold_spinbox = QDoubleSpinBox()
+        self.silence_threshold_spinbox.setRange(-100.0, 0.0)
+        self.silence_threshold_spinbox.setValue(-40.0)
+        self.silence_threshold_spinbox.setSuffix(" dB")
+        self.silence_threshold_spinbox.setToolTip("Livello di volume al di sotto del quale l'audio è considerato silenzioso. Valori più bassi (es. -50dB) sono più severi.")
+        silence_remover_layout.addWidget(self.silence_threshold_spinbox)
+
+        # Minimum Silence Duration
+        silence_remover_layout.addWidget(QLabel("Durata Minima Silenzio (ms):"))
+        self.min_silence_duration_spinbox = QSpinBox()
+        self.min_silence_duration_spinbox.setRange(100, 10000)
+        self.min_silence_duration_spinbox.setValue(500)
+        self.min_silence_duration_spinbox.setSuffix(" ms")
+        self.min_silence_duration_spinbox.setToolTip("La durata minima di un silenzio per essere rimosso. Utile per non tagliare le pause naturali del parlato.")
+        silence_remover_layout.addWidget(self.min_silence_duration_spinbox)
+
+        # --- Action Button ---
+        self.start_silence_removal_button = QPushButton("Avvia Elaborazione Rimuovi Silenzi")
+        self.start_silence_removal_button.setIcon(QIcon(get_resource("taglia.png")))
+        self.start_silence_removal_button.setToolTip("Avvia il processo di rimozione dei silenzi dal video caricato nel Player Input.")
+        self.start_silence_removal_button.clicked.connect(self.start_silence_removal)
+        silence_remover_layout.addWidget(self.start_silence_removal_button)
+
+        return silence_remover_group
+
+    def start_silence_removal(self):
+        """Starts the silence removal process."""
+        if not self.videoPathLineEdit or not os.path.exists(self.videoPathLineEdit):
+            self.show_status_message("Carica un video nel Player Input prima di rimuovere i silenzi.", error=True)
+            return
+
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di procedere.", error=True)
+            return
+
+        video_path = self.videoPathLineEdit
+        silence_threshold = self.silence_threshold_spinbox.value()
+        min_silence_len = self.min_silence_duration_spinbox.value()
+
+        # Generate a unique output path in the project's clips folder
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_filename = f"{base_name}_silence_removed_{int(time.time())}.mp4"
+        output_path = os.path.join(self.current_project_path, "clips", output_filename)
+
+        thread = SilenceRemoverThread(
+            video_path=video_path,
+            silence_threshold_db=silence_threshold,
+            min_silence_len_ms=min_silence_len,
+            output_path=output_path,
+            parent=self
+        )
+
+        # We use the generic start_task to handle progress bar and cancellation
+        self.start_task(
+            thread,
+            on_complete=self.on_silence_removal_complete,
+            on_error=self.on_silence_removal_error,
+            on_progress=lambda p: self.update_status_progress(p, f"Rimozione silenzi: {p}%")
+        )
+
+    def on_silence_removal_complete(self, output_path):
+        """Handles the completion of the silence removal process."""
+        self.show_status_message(f"Video senza silenzi creato: {os.path.basename(output_path)}")
+
+        # Add the new clip to the project
+        self.project_manager.add_clip_to_project_from_path(self.projectDock.gnai_path, output_path)
+
+        # Refresh the project dock to show the new clip
+        self.load_project(self.projectDock.gnai_path)
+
+        # Optionally, load the new video into the output player
+        self.loadVideoOutput(output_path)
+
+    def on_silence_removal_error(self, error_message):
+        """Handles errors during the silence removal process."""
+        self.show_status_message(f"Errore durante la rimozione dei silenzi: {error_message}", error=True)
+
+    def createAudioReplacementGroup(self):
+        audioReplacementGroup = QGroupBox("Sostituzione audio principale")
+        layout = QVBoxLayout()
+
+        # Layout orizzontale per la selezione del file
+        file_layout = QHBoxLayout()
+        self.audioPathLineEdit = QLineEdit()
+        self.audioPathLineEdit.setReadOnly(True)
+        browseAudioButton = QPushButton('Sfoglia...')
+        browseAudioButton.clicked.connect(self.browseAudio)
+        projectAudioButton = QPushButton('Dal Progetto')
+        projectAudioButton.clicked.connect(self._select_audio_from_project) # Connetti al nuovo metodo
+        file_layout.addWidget(self.audioPathLineEdit)
+        file_layout.addWidget(browseAudioButton)
+        file_layout.addWidget(projectAudioButton) # Aggiungi il nuovo pulsante
+        layout.addLayout(file_layout)
+
+        applyAudioButton = QPushButton('Applica Audio Principale')
+        applyAudioButton.clicked.connect(self.handle_apply_main_audio)
+
+        self.alignspeed_replacement = QCheckBox("Allinea velocità video con audio")
+        self.alignspeed_replacement.setChecked(True)
+        layout.addWidget(self.alignspeed_replacement)
+        layout.addWidget(applyAudioButton)
+
+        audioReplacementGroup.setLayout(layout)
+        return audioReplacementGroup
+
+    def createAudioPauseGroup(self):
+        audioPauseGroup = QGroupBox("Aggiungi pausa")
+        layout = QVBoxLayout()
+
+        # Layout orizzontale per la durata della pausa
+        duration_layout = QHBoxLayout()
+        duration_label = QLabel("Durata Pausa (s):")
+        self.pauseAudioDurationLineEdit = QLineEdit()
+        self.pauseAudioDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
+        duration_layout.addWidget(duration_label)
+        duration_layout.addWidget(self.pauseAudioDurationLineEdit)
+        layout.addLayout(duration_layout)
+
+        applyPauseButton = QPushButton('Applica Pausa Audio')
+        applyPauseButton.clicked.connect(self.applyAudioWithPauses)
+        layout.addWidget(applyPauseButton)
+
+        audioPauseGroup.setLayout(layout)
+        return audioPauseGroup
+
+    def createVideoPauseGroup(self):
+        videoPauseGroup = QGroupBox("Applica pausa video")
+        layout = QVBoxLayout()
+
+        # Layout orizzontale per la durata della pausa
+        duration_layout = QHBoxLayout()
+        duration_label = QLabel("Durata Pausa (s):")
+        self.pauseVideoDurationLineEdit = QLineEdit()
+        self.pauseVideoDurationLineEdit.setPlaceholderText("Durata Pausa (secondi)")
+        duration_layout.addWidget(duration_label)
+        duration_layout.addWidget(self.pauseVideoDurationLineEdit)
+        layout.addLayout(duration_layout)
+
+        applyVideoPauseButton = QPushButton('Applica Pausa Video')
+        applyVideoPauseButton.clicked.connect(self.applyFreezeFramePause)
+        layout.addWidget(applyVideoPauseButton)
+
+        videoPauseGroup.setLayout(layout)
+        return videoPauseGroup
+
+    def createBackgroundAudioGroup(self):
+        backgroundAudioGroup = QGroupBox("Gestione Audio di Sottofondo")
+        layout = QVBoxLayout()
+
+        # Layout orizzontale per la selezione del file
+        file_layout = QHBoxLayout()
+        self.backgroundAudioPathLineEdit = QLineEdit()
+        self.backgroundAudioPathLineEdit.setReadOnly(True)
+        browseBackgroundAudioButton = QPushButton('Scegli Sottofondo')
+        browseBackgroundAudioButton.clicked.connect(self.browseBackgroundAudio)
+        file_layout.addWidget(self.backgroundAudioPathLineEdit)
+        file_layout.addWidget(browseBackgroundAudioButton)
+        layout.addLayout(file_layout)
+
+        # Layout orizzontale per il volume
+        volume_layout = QHBoxLayout()
+        volume_label = QLabel("Volume Sottofondo:")
+        self.volumeSliderBack = QSlider(Qt.Orientation.Horizontal)
+        self.volumeSliderBack.setRange(0, 1000)
+        self.volumeSliderBack.setValue(6)
+        self.volumeLabelBack = QLabel(f"{self.volumeSliderBack.value() / 1000:.3f}")
+        self.volumeSliderBack.valueChanged.connect(self.adjustBackgroundVolume)
+        volume_layout.addWidget(volume_label)
+        volume_layout.addWidget(self.volumeSliderBack)
+        volume_layout.addWidget(self.volumeLabelBack)
+        layout.addLayout(volume_layout)
+
+        self.loopBackgroundAudioCheckBox = QCheckBox("Loop Sottofondo se più corto del video")
+        self.loopBackgroundAudioCheckBox.setChecked(True)
+        layout.addWidget(self.loopBackgroundAudioCheckBox)
+
+        applyBackgroundButton = QPushButton('Applica Sottofondo al Video')
+        applyBackgroundButton.clicked.connect(self.applyBackgroundAudioToVideo)
+        layout.addWidget(applyBackgroundButton)
+
+        backgroundAudioGroup.setLayout(layout)
+        return backgroundAudioGroup
+
+    def adjustBackgroundVolume(self):
+        slider_value = self.volumeSliderBack.value()
+        normalized_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
+        self.volumeLabelBack.setText(f"Volume Sottofondo: {normalized_volume:.3f}")
+    def setTimecodePauseFromSlider(self):
+        current_position = self.player.position()
+        self.timecodePauseLineEdit.setText(self.formatTimecode(current_position))
+    def setTimecodeVideoFromSlider(self):
+        current_position = self.player.position()
+        self.timecodeVideoPauseLineEdit.setText(self.formatTimecode(current_position))
+
+    def run_compositing_thread(self, overlay_type, base_path, overlay_path, position, size, start_time):
+        thread = VideoCompositingThread(
+            base_video_path=base_path,
+            overlay_path=overlay_path,
+            overlay_type=overlay_type,
+            position=position,
+            size=size,
+            start_time=start_time,
+            parent=self
+        )
+        self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
+
+    def on_compositing_completed(self, output_path):
+        self.show_status_message(f"Effetto video applicato con successo. File salvato.")
+        self.loadVideoOutput(output_path)
+
+    def on_compositing_error(self, error_message):
+        self.show_status_message(f"Errore durante l'applicazione dell'effetto: {error_message}", error=True)
+
+    def formatTimecode(self, position_ms):
+        hours, remainder = divmod(position_ms // 1000, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        return f"{int(hours):02}:{int(minutes):02}:{int(seconds):02}"
+
+    def mergeVideo(self):
+        base_video_path, player = self._get_selected_player_info()
+        merge_video_path = self.mergeVideoPathLineEdit.text()
+
+        if not base_video_path or not os.path.exists(base_video_path):
+            self.show_status_message("Carica il video principale prima di unirne un altro.", error=True)
+            return
+        if not merge_video_path or not os.path.exists(merge_video_path):
+            self.show_status_message("Seleziona un video da unire.", error=True)
+            return
+
+        position_ms = player.position()
+        timecode = self.formatTimecode(position_ms)
+
+        thread = VideoMergeThread(
+            base_path=base_video_path,
+            merge_path=merge_video_path,
+            timecode_str=timecode,
+            adapt_resolution=self.adaptResolutionRadio.isChecked(),
+            parent=self
+        )
+        self.start_task(thread, self.onMergeCompleted, self.onMergeError, self.update_status_progress)
+
+    def onMergeCompleted(self, output_path):
+        self.show_status_message(f"Video unito e salvato in {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+    def onMergeError(self, error_message):
+        self.show_status_message(f"Si è verificato un errore durante l'unione: {error_message}", error=True)
+
+    def browseMergeVideo(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video da Unire", "",
+                                                  "Video Files (*.mp4 *.mov *.avi)")
+        if fileName:
+            self.mergeVideoPathLineEdit.setText(fileName)
+
+    def browseBackgroundAudio(self):
+        default_dir = MUSIC_DIR
+        if not os.path.exists(default_dir):
+            self.show_status_message("La cartella di default per la musica non esiste.", error=True)
+            default_dir = "" # Fallback to default directory
+
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio di Sottofondo", default_dir, "Audio Files (*.mp3 *.wav)")
+        if fileName:
+            self.backgroundAudioPathLineEdit.setText(fileName)
+            self.show_status_message(f"Selezionato audio di sottofondo: {os.path.basename(fileName)}")
+
+    def setupDockSettingsManager(self):
+        settings_file = './dock_settings.json'
+        if os.path.exists(settings_file):
+            self.dockSettingsManager.load_settings(settings_file)
+        else:
+            self.set_default_dock_layout()
+        self.resetViewMenu()
+
+    def closeEvent(self, event):
+        # Salva tutte le modifiche correnti prima di chiudere
+        self.save_all_tabs_to_json(show_message=False)
+
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path):
+            try:
+                os.remove(self.reversed_video_path)
+                logging.info("Cleaned up temporary reversed video file on exit.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file on exit: {e}")
+
+        self.dockSettingsManager.save_settings()
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+
+        # Pulizia dei file temporanei
+        logging.info("Pulizia dei file temporanei...")
+        for segment_path in self.recording_segments:
+            try:
+                if os.path.exists(segment_path):
+                    os.remove(segment_path)
+                    logging.info(f"Rimosso file temporaneo: {segment_path}")
+            except Exception as e:
+                logging.error(f"Impossibile rimuovere il file temporaneo {segment_path}: {e}")
+
+        try:
+            segments_file = "segments.txt"
+            if os.path.exists(segments_file):
+                os.remove(segments_file)
+                logging.info(f"Rimosso file: {segments_file}")
+        except Exception as e:
+            logging.error(f"Impossibile rimuovere il file {segments_file}: {e}")
+
+        event.accept()
+
+    def selectDefaultScreen(self):
+        if self.screen_buttons:
+            self.selectScreen(0)
+
+    def selectScreen(self, screen_index):
+        if self.is_recording:
+            if screen_index != self.selected_screen_index:
+                if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
+                    self.recorder_thread.stop()
+                    self.recorder_thread.wait()
+                self.selected_screen_index = screen_index
+                for i, button in enumerate(self.screen_buttons):
+                    button.set_selected(i == screen_index)
+                self._startRecordingSegment()
+        else:
+            self.selected_screen_index = screen_index
+            for i, button in enumerate(self.screen_buttons):
+                button.set_selected(i == screen_index)
+            if hasattr(self, 'monitor_preview') and self.monitor_preview:
+                self.monitor_preview.close()
+            monitors = get_monitors()
+            if screen_index < len(monitors):
+                monitor = monitors[screen_index]
+                self.monitor_preview = MonitorPreview(monitor)
+                self.monitor_preview.show()
+                self.selectedMonitorLabel.setText(f"Monitor: Schermo {screen_index + 1} ({monitor.width}x{monitor.height})")
+
+
+    def browseFolderLocation(self):
+        folder = QFileDialog.getExistingDirectory(self, "Seleziona Cartella")
+        if folder:
+            self.folderPathLineEdit.setText(folder)
+    def openFolder(self):
+        folder_path = self.folderPathLineEdit.text() or "screenrecorder"
+        QDesktopServices.openUrl(QUrl.fromLocalFile(folder_path))
+
+    def setDefaultAudioDevice(self):
+        """Imposta il primo dispositivo audio come predefinito se disponibile."""
+        if self.audio_buttons:
+            self.audio_buttons[0].setChecked(True)
+
+    def applyBackgroundAudioToVideo(self):
+        video_path, _ = self._get_selected_player_info()
+        background_audio_path = self.backgroundAudioPathLineEdit.text()
+        slider_value = self.volumeSliderBack.value()
+        background_volume = np.exp(slider_value / 1000 * np.log(2)) - 1
+
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Carica un video prima di applicare l'audio di sottofondo.", error=True)
+            return
+        if not background_audio_path or not os.path.exists(background_audio_path):
+            self.show_status_message("Seleziona un file audio di sottofondo valido.", error=True)
+            return
+
+        thread = BackgroundAudioThread(
+            video_path=video_path,
+            audio_path=background_audio_path,
+            volume=background_volume,
+            loop_audio=self.loopBackgroundAudioCheckBox.isChecked(),
+            parent=self
+        )
+        self.start_task(thread, self.onBackgroundAudioCompleted, self.onBackgroundAudioError, self.update_status_progress)
+
+    def onBackgroundAudioCompleted(self, output_path):
+        self.show_status_message("Audio di sottofondo applicato con successo.")
+        self.loadVideoOutput(output_path)
+
+    def onBackgroundAudioError(self, error_message):
+        self.show_status_message(f"Errore durante l'applicazione dell'audio di sottofondo: {error_message}", error=True)
+
+    def applyAudioWithPauses(self):
+        video_path, player = self._get_selected_player_info()
+        pause_duration_str = self.pauseAudioDurationLineEdit.text()
+
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Carica un video prima di applicare una pausa audio.", error=True)
+            return
+
+        if not pause_duration_str:
+            self.show_status_message("Inserisci una durata per la pausa.", error=True)
+            return
+
+        try:
+            pause_duration = float(pause_duration_str)
+            start_time = player.position() / 1000.0
+
+            video_clip = VideoFileClip(video_path)
+
+            # Create a silent audio clip for the pause
+            pause_audio = AudioSegment.silent(duration=pause_duration * 1000)
+            temp_pause_path = self.get_temp_filepath(suffix=".mp3")
+            pause_audio.export(temp_pause_path, format="mp3")
+            pause_clip = AudioFileClip(temp_pause_path)
+
+            # Concatenate audio clips
+            original_audio = video_clip.audio
+            part1 = original_audio.subclip(0, start_time)
+            part2 = original_audio.subclip(start_time)
+            final_audio = concatenate_audioclips([part1, pause_clip, part2])
+
+            # Set the new audio to the video
+            video_clip.audio = final_audio
+
+            # Save the result
+            output_path = self.get_temp_filepath(suffix=".mp4")
+            video_clip.write_videofile(output_path, codec='libx264', audio_codec='aac')
+
+            self.loadVideoOutput(output_path)
+            self.show_status_message("Pausa audio applicata con successo.")
+
+        except ValueError:
+            self.show_status_message("La durata della pausa non è un numero valido.", error=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Errore", f"Errore durante l'applicazione della pausa audio: {e}")
+        finally:
+            if 'video_clip' in locals():
+                video_clip.close()
+            if 'pause_clip' in locals():
+                pause_clip.close()
+            if 'final_audio' in locals():
+                final_audio.close()
+            if 'temp_pause_path' in locals() and os.path.exists(temp_pause_path):
+                os.remove(temp_pause_path)
+
+    def updateTimecodeRec(self):
+        if self.recordingTime is not None:
+            self.recordingTime = self.recordingTime.addSecs(1)
+            self.timecodeLabel.setText(self.recordingTime.toString("hh:mm:ss"))
+
+
+    def selectAudioDevice(self):
+        selected_audio = None
+        device_index = None
+        for index, button in enumerate(self.audio_buttons):
+            if button.isChecked():
+                selected_audio = button.text()
+                device_index = index
+                break
+        self.audio_input = selected_audio  # Update the audio input name
+        if selected_audio:
+            self.selectedAudioLabel.setText(f"Audio: {selected_audio}")
+            if device_index is not None and self.test_audio_device(device_index):
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica OK")
+            else:
+                self.audioTestResultLabel.setText(f"Test Audio: Periferica KO")
+        else:
+            self.selectedAudioLabel.setText("Audio: N/A")
+
+    def test_audio_device(self, device_index):
+        p = pyaudio.PyAudio()
+        try:
+            stream = p.open(format=pyaudio.paInt16, channels=1, rate=44100, input=True, input_device_index=device_index)
+            data = stream.read(1024)
+            stream.close()
+            if np.frombuffer(data, dtype=np.int16).any():
+                return True
+            return False
+        except Exception as e:
+            return False
+        finally:
+            p.terminate()
+
+    def print_audio_devices(self):
+        p = pyaudio.PyAudio()
+        num_devices = p.get_device_count()
+
+        # 1. Get all potential device names
+        potential_devices = []
+        for i in range(num_devices):
+            device_info = p.get_device_info_by_index(i)
+            if device_info.get('maxInputChannels') > 0 and self.test_audio_device(i):
+                try:
+                    device_name = device_info.get('name').decode('utf-8')
+                except (UnicodeDecodeError, AttributeError):
+                    device_name = device_info.get('name')
+
+                is_standard_device = 'microphone' in device_name.lower() or 'stereo mix' in device_name.lower()
+                is_vb_cable = ('cable' in device_name.lower() or 'voicemeeter' in device_name.lower()) and self.use_vb_cable
+
+                if is_standard_device or is_vb_cable:
+                    potential_devices.append(device_name)
+
+        # 2. Filter out shorter, partial names (likely truncated)
+        filtered_devices = []
+        for name in potential_devices:
+            is_partial = False
+            for other_name in potential_devices:
+                if name != other_name and name in other_name:
+                    is_partial = True
+                    break
+            if not is_partial:
+                filtered_devices.append(name)
+
+        # 3. Remove exact duplicates and return
+        p.terminate()
+        return list(dict.fromkeys(filtered_devices)) # dict.fromkeys preserves order and removes duplicates
+
+    def update_audio_device_list(self):
+        """Clears and rebuilds the audio device list in the UI based on current settings."""
+        if self.audio_device_layout is None:
+            logging.warning("audio_device_layout is not initialized.")
+            return
+
+        # Clear existing widgets from the checkbox layout
+        while self.audio_device_layout.count():
+            child = self.audio_device_layout.takeAt(0)
+            if child.widget():
+                child.widget().deleteLater()
+
+        # Re-populate the checkbox layout
+        self.audio_buttons = []
+        audio_devices = self.print_audio_devices()
+        if audio_devices:
+            for device in audio_devices:
+                check_box = QCheckBox(device)
+                self.audio_device_layout.addWidget(check_box)
+                self.audio_buttons.append(check_box)
+        else:
+            logging.debug("No input audio devices found.")
+            no_device_label = QLabel("Nessun dispositivo audio trovato.")
+            self.audio_device_layout.addWidget(no_device_label)
+
+        self.setDefaultAudioDevice()
+
+    def createRecordingDock(self):
+        dock =CustomDock("Registrazione", closable=True)
+        self.rec_timer = QTimer()
+        self.rec_timer.timeout.connect(self.updateTimecodeRec)
+
+        # Group Box for Info
+        infoGroup = QGroupBox("Info")
+        infoLayout = QGridLayout(infoGroup) # Changed to QGridLayout
+
+        self.timecodeLabel = QLabel('00:00:00')
+        self.timecodeLabel.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.timecodeLabel.setStyleSheet("""
+            QLabel {
+                font-family: "Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif;
+                font-size: 28pt;
+                font-weight: bold;
+                color: #00FF00;
+                background-color: #000000;
+                border: 1px solid #555;
+                border-radius: 5px;
+                padding: 10px;
+            }
+        """)
+        infoLayout.addWidget(self.timecodeLabel, 0, 0, 1, 2) # Span 2 columns
+
+        # --- Static Info Labels ---
+        self.recordingStatusLabel = QLabel("Stato: Pronto")
+        infoLayout.addWidget(self.recordingStatusLabel, 1, 0, 1, 2)
+
+        self.selectedMonitorLabel = QLabel("Monitor: N/A")
+        infoLayout.addWidget(self.selectedMonitorLabel, 2, 0, 1, 2)
+
+        self.outputFileLabel = QLabel("File: N/A")
+        infoLayout.addWidget(self.outputFileLabel, 3, 0, 1, 2)
+
+        # --- Dynamic Stats Labels (in a new row) ---
+        self.fpsLabel = QLabel("FPS: N/A")
+        infoLayout.addWidget(self.fpsLabel, 4, 0)
+
+        self.fileSizeLabel = QLabel("Dimensione: N/A")
+        infoLayout.addWidget(self.fileSizeLabel, 4, 1)
+
+        self.bitrateLabel = QLabel("Bitrate: N/A")
+        infoLayout.addWidget(self.bitrateLabel, 5, 0)
+
+        self.audioTestResultLabel = QLabel("Test Audio: N/A")
+        infoLayout.addWidget(self.audioTestResultLabel, 5, 1)
+
+        # Apply a consistent style to info labels
+        label_style = "font-size: 9pt; color: #cccccc;"
+        self.recordingStatusLabel.setStyleSheet(label_style)
+        self.selectedMonitorLabel.setStyleSheet(label_style)
+        self.outputFileLabel.setStyleSheet(label_style)
+        self.fpsLabel.setStyleSheet(label_style)
+        self.fileSizeLabel.setStyleSheet(label_style)
+        self.bitrateLabel.setStyleSheet(label_style)
+        self.audioTestResultLabel.setStyleSheet(label_style)
+
+        # Main Layout for Recording Management
+        recordingLayout = QVBoxLayout()
+
+        # Screen selection grid
+        screensGroupBox = QGroupBox("Seleziona Schermo")
+        screensLayout = QGridLayout(screensGroupBox)
+
+        self.screen_buttons = []
+        monitors = get_monitors()
+        for i, monitor in enumerate(monitors):
+            resolution = f"{monitor.width}x{monitor.height}"
+            screen_button = ScreenButton(
+                screen_number=i + 1,
+                resolution=resolution,
+                is_primary=monitor.is_primary
+            )
+            screen_button.clicked.connect(self.selectScreen)
+            screensLayout.addWidget(screen_button, i // 3, i % 3)
+            self.screen_buttons.append(screen_button)
+
+        recordingLayout.addWidget(screensGroupBox)
+
+        # Audio selection group box
+        audioGroupBox = QGroupBox("Seleziona Audio")
+        mainAudioLayout = QVBoxLayout(audioGroupBox)
+        mainAudioLayout.addWidget(self.audioTestResultLabel)
+
+        # Container for checkboxes
+        self.audio_checkbox_container = QWidget()
+        self.audio_device_layout = QVBoxLayout(self.audio_checkbox_container)
+        mainAudioLayout.addWidget(self.audio_checkbox_container)
+
+        self.update_audio_device_list()
+        recordingLayout.addWidget(audioGroupBox)
+
+        saveOptionsGroup = QGroupBox("Opzioni di Salvataggio")
+        saveOptionsLayout = QVBoxLayout(saveOptionsGroup)
+
+        self.folderPathLineEdit = QLineEdit()
+        self.folderPathLineEdit.setPlaceholderText("Inserisci il percorso della cartella di destinazione")
+
+        self.saveVideoOnlyCheckBox = QCheckBox("Registra solo video")
+        self.saveAudioOnlyCheckBox = QCheckBox("Registra solo audio")
+
+        self.saveVideoOnlyCheckBox.toggled.connect(
+            lambda checked: self.saveAudioOnlyCheckBox.setEnabled(not checked)
+        )
+        self.saveAudioOnlyCheckBox.toggled.connect(
+            lambda checked: self.saveVideoOnlyCheckBox.setEnabled(not checked)
+        )
+
+        saveOptionsLayout.addWidget(self.saveVideoOnlyCheckBox)
+        saveOptionsLayout.addWidget(self.saveAudioOnlyCheckBox)
+        saveOptionsLayout.addWidget(QLabel("Percorso File:"))
+
+        saveOptionsLayout.addWidget(self.folderPathLineEdit)
+
+        buttonsLayout = QHBoxLayout()
+        browseButton = QPushButton('Sfoglia')
+        browseButton.clicked.connect(self.browseFolderLocation)
+        buttonsLayout.addWidget(browseButton)
+
+        open_folder_button = QPushButton('Apri Cartella')
+        open_folder_button.clicked.connect(self.openFolder)
+        buttonsLayout.addWidget(open_folder_button)
+
+        self.recordingNameLineEdit = QLineEdit()
+        self.recordingNameLineEdit.setPlaceholderText("Inserisci il nome della registrazione")
+        saveOptionsLayout.addLayout(buttonsLayout)
+
+        saveOptionsLayout.addWidget(QLabel("Nome della Registrazione:"))
+        saveOptionsLayout.addWidget(self.recordingNameLineEdit)
+
+        recordingLayout.addWidget(saveOptionsGroup)
+
+        # Aggiungi la checkbox per abilitare la registrazione automatica delle chiamate di Teams
+        self.autoRecordTeamsCheckBox = QCheckBox("Abilita registrazione automatica per Teams")
+        # recordingLayout.addWidget(self.autoRecordTeamsCheckBox)
+
+        self.startRecordingButton = QPushButton("")
+        self.startRecordingButton.setIcon(QIcon(get_resource("rec.png")))
+        self.startRecordingButton.setToolTip("Inizia la registrazione")
+
+        self.stopRecordingButton = QPushButton("")
+        self.stopRecordingButton.setIcon(QIcon(get_resource("stop.png")))
+        self.stopRecordingButton.setToolTip("Ferma la registrazione")
+
+        self.pauseRecordingButton = QPushButton("")
+        self.pauseRecordingButton.setIcon(QIcon(get_resource("pausa_play.png")))
+        self.pauseRecordingButton.setToolTip("Pausa/Riprendi la registrazione")
+        self.pauseRecordingButton.setEnabled(False)
+
+        buttonLayout = QHBoxLayout()
+        buttonLayout.addWidget(self.startRecordingButton)
+        buttonLayout.addWidget(self.stopRecordingButton)
+        buttonLayout.addWidget(self.pauseRecordingButton)
+
+        self.startRecordingButton.clicked.connect(self.startScreenRecording)
+        self.stopRecordingButton.clicked.connect(self.stopScreenRecording)
+        self.pauseRecordingButton.clicked.connect(self.togglePauseResumeRecording)
+
+        recordingLayout.addLayout(buttonLayout)
+
+        mainLayout = QVBoxLayout()
+        mainLayout.addWidget(infoGroup)
+        mainLayout.addLayout(recordingLayout)
+
+        widget = QWidget()
+        widget.setLayout(mainLayout)
+
+        dock.addWidget(widget)
+
+        self.selectDefaultScreen()
+        return dock
+
+    def startScreenRecording(self):
+        if self.show_red_dot:
+            self.cursor_overlay.show()
+        self.is_recording = True
+        self.indicator_timer.start(500)  # Blink every 500ms
+
+        self.startRecordingButton.setEnabled(False)
+        self.pauseRecordingButton.setEnabled(True)
+        self.stopRecordingButton.setEnabled(True)
+        self.recording_segments.clear()  # Pulisce i segmenti precedenti
+        self.is_paused = False
+
+        self.recordingTime = QTime(0, 0, 0)
+        self.rec_timer.start(1000)
+        self._startRecordingSegment()
+
+    def _startRecordingSegment(self):
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+            self.monitor_preview = None
+
+        selected_audio_devices = []
+        for button in self.audio_buttons:
+            if button.isChecked():
+                selected_audio_devices.append(button.text())
+
+        folder_path = self.folderPathLineEdit.text().strip()
+        save_video_only = self.saveVideoOnlyCheckBox.isChecked()
+        save_audio_only = self.saveAudioOnlyCheckBox.isChecked()
+        self.timecodeLabel.setStyleSheet("""
+            QLabel {
+                font-family: "Courier New", Courier, monospace;
+                font-size: 24pt;
+                font-weight: bold;
+                color: red;
+                background-color: #000000;
+                border: 2px solid #880000;
+                border-radius: 5px;
+                padding: 5px;
+            }
+        """)
+
+        monitor_index = self.selected_screen_index if self.selected_screen_index is not None else 0
+
+        recording_name = self.recordingNameLineEdit.text().strip()
+        if not recording_name:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            recording_name = f"recording_{timestamp}"
+
+        # --- MODIFICA PER INTEGRAZIONE PROGETTO ---
+        # Se un progetto è attivo, salva le clip nella sua cartella 'clips'
+        if self.current_project_path:
+            output_folder = os.path.join(self.current_project_path, "clips")
+        else:
+            # Altrimenti, usa la cartella specificata o quella di default
+            if folder_path:
+                output_folder = folder_path
+            else:
+                output_folder = os.path.join(os.getcwd(), 'screenrecorder')
+
+        os.makedirs(output_folder, exist_ok=True)
+        # --- FINE MODIFICA ---
+
+        file_extension = ".mp3" if save_audio_only else ".mp4"
+        segment_file_path = os.path.join(output_folder, f"{recording_name}{file_extension}")
+
+        # BUG: The original code used an undefined 'default_folder' variable.
+        # This has been corrected to use 'output_folder'.
+        while os.path.exists(segment_file_path):
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            segment_file_path = os.path.join(output_folder, f"{recording_name}_{timestamp}{file_extension}")
+
+        ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+        if not os.path.exists(ffmpeg_path):
+            QMessageBox.critical(self, "Errore",
+                                 "L'eseguibile ffmpeg.exe non è stato trovato. Assicurati che sia presente nella directory.")
+            self.startRecordingButton.setEnabled(True)
+            return
+
+        if not save_video_only and not selected_audio_devices:
+            QMessageBox.critical(self, "Errore",
+                                 "Nessun dispositivo audio selezionato. Seleziona un dispositivo audio o abilita l'opzione 'Salva solo il video'.")
+            self.startRecordingButton.setEnabled(True)
+            return
+
+        bluetooth_mode = self._is_bluetooth_mode_active()
+
+        self.recorder_thread = ScreenRecorder(
+            output_path=segment_file_path,
+            ffmpeg_path=ffmpeg_path,
+            monitor_index=monitor_index,
+            audio_inputs=selected_audio_devices if not save_video_only else [],
+            record_video=not save_audio_only,
+            audio_channels=DEFAULT_AUDIO_CHANNELS if not save_video_only else 0,
+            frames=DEFAULT_FRAME_RATE,
+            use_watermark=self.enableWatermark,
+            watermark_path=self.watermarkPath,
+            watermark_size=self.watermarkSize,
+            watermark_position=self.watermarkPosition,
+            bluetooth_mode=bluetooth_mode,
+            audio_volume=4.0
+        )
+
+        self.recorder_thread.error_signal.connect(self.showError)
+        self.recorder_thread.stats_updated.connect(self.updateRecordingStats)
+        self.recorder_thread.start()
+
+        self.recording_segments.append(segment_file_path)
+        self.current_video_path = segment_file_path
+        self.outputFileLabel.setText(f"File: {segment_file_path}")
+        self.recordingStatusLabel.setText(f'Stato: Registrazione iniziata di Schermo {monitor_index + 1}')
+
+    def togglePauseResumeRecording(self):
+        if self.is_paused:
+            self.resumeScreenRecording()
+        else:
+            self.pauseScreenRecording()
+
+    def pauseScreenRecording(self):
+        if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
+            self.recorder_thread.stop()
+            self.recorder_thread.wait()  # Ensure the thread has finished
+            self.rec_timer.stop()
+            self.recordingStatusLabel.setText('Stato: Registrazione in pausa')
+            self.is_paused = True
+
+    def resumeScreenRecording(self):
+        self._startRecordingSegment()
+        self.rec_timer.start(1000)
+        self.recordingStatusLabel.setText('Stato: Registrazione ripresa')
+
+        self.is_paused = False
+
+    def stopScreenRecording(self):
+        if self.cursor_overlay.isVisible():
+            self.cursor_overlay.hide()
+        self.is_recording = False
+        self.indicator_timer.stop()
+        self.recording_indicator.setVisible(False)
+
+        self.pauseRecordingButton.setEnabled(False)
+        self.startRecordingButton.setEnabled(True)
+        self.pauseRecordingButton.setEnabled(False)
+        self.stopRecordingButton.setEnabled(False)
+        self.rec_timer.stop()
+        if hasattr(self, 'recorder_thread') and self.recorder_thread is not None:
+            self.timecodeLabel.setStyleSheet("""
+                QLabel {
+                    font-family: "Courier New", Courier, monospace;
+                    font-size: 24pt;
+                    font-weight: bold;
+                    color: #00FF00;
+                    background-color: #000000;
+                    border: 2px solid #444444;
+                    border-radius: 5px;
+                    padding: 5px;
+                }
+            """)
+            self.recorder_thread.stop()
+            self.recorder_thread.wait()  # Ensure the thread has finished
+
+        if hasattr(self, 'current_video_path'):
+            self._mergeSegments()
+
+        if hasattr(self, 'monitor_preview') and self.monitor_preview:
+            self.monitor_preview.close()
+            self.monitor_preview = None
+
+        self.recordingStatusLabel.setText("Stato: Registrazione Terminata e video salvato.")
+        self.timecodeLabel.setText('00:00:00')
+        self.outputFileLabel.setText("File: N/A")
+        self.fpsLabel.setText("FPS: N/A")
+        self.fileSizeLabel.setText("Dimensione: N/A")
+        self.bitrateLabel.setText("Bitrate: N/A")
+
+    import datetime
+
+    def _mergeSegments(self):
+        if not self.recording_segments:
+            return
+
+        first_segment = self.recording_segments[0]
+        output_path = ""
+
+        if len(self.recording_segments) > 1:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+            base_name = os.path.splitext(os.path.basename(first_segment))[0]
+            if '_' in base_name:
+                base_name = base_name.rsplit('_', 1)[0]
+
+            output_dir = os.path.dirname(first_segment)
+            file_extension = os.path.splitext(first_segment)[1]
+            output_path = os.path.join(output_dir, f"{base_name}_final_{timestamp}{file_extension}")
+
+            ffmpeg_path = 'ffmpeg/bin/ffmpeg.exe'
+
+            if self.current_project_path:
+                temp_dir = os.path.join(self.current_project_path, "temp")
+                os.makedirs(temp_dir, exist_ok=True)
+                segments_file = os.path.join(temp_dir, "segments.txt")
+            else:
+                segments_file = "segments.txt"
+
+            try:
+                with open(segments_file, "w") as file:
+                    for segment in self.recording_segments:
+                        file.write(f"file '{os.path.abspath(segment)}'\n")
+
+                merge_command = [ffmpeg_path, '-f', 'concat', '-safe', '0', '-i', segments_file, '-c', 'copy', output_path]
+                subprocess.run(merge_command, check=True)
+
+                # Pulizia dei segmenti temporanei
+                for segment in self.recording_segments:
+                    if os.path.exists(segment):
+                        os.remove(segment)
+            finally:
+                if os.path.exists(segments_file):
+                    os.remove(segments_file)
+        else:
+            output_path = self.recording_segments[0]
+
+        if not output_path or not os.path.exists(output_path):
+            self.show_status_message("Errore nel salvataggio della registrazione.", error=True)
+            return
+
+        self.show_status_message(f"Registrazione salvata: {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+        # --- INTEGRAZIONE PROGETTO ---
+        if self.current_project_path and self.projectDock.gnai_path:
+            clip_filename = os.path.basename(output_path)
+            metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+            # Raccogli i metadati aggiuntivi
+            try:
+                clip_info = VideoFileClip(output_path)
+                duration = clip_info.duration
+                clip_info.close()
+                size = os.path.getsize(output_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+            except Exception as e:
+                logging.error(f"Impossibile estrarre i metadati per {output_path}: {e}")
+                duration, size, creation_date = 0, 0, datetime.datetime.now().isoformat()
+
+            self.project_manager.add_clip_to_project(
+                self.projectDock.gnai_path,
+                clip_filename,
+                metadata_filename,
+                duration,
+                size,
+                creation_date
+            )
+
+            # Ricarica i dati del progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Clip '{clip_filename}' aggiunta al progetto.")
+
+    def _is_bluetooth_mode_active(self):
+        """Checks if any of the selected audio devices is a Bluetooth headset."""
+        bluetooth_keywords = ['headset', 'hands-free', 'cuffie', 'bluetooth', 'cable', 'vb-audio']
+
+        selected_audio_devices = []
+        for button in self.audio_buttons:
+            if button.isChecked():
+                selected_audio_devices.append(button.text())
+
+        for device in selected_audio_devices:
+            if any(keyword in device.lower() for keyword in bluetooth_keywords):
+                return True
+
+        return False
+
+    def showError(self, message):
+        logging.error("Error recording thread:",message)
+        #QMessageBox.critical(self, "Errore", message)
+
+    def updateRecordingStats(self, stats):
+        """Aggiorna le etichette delle statistiche di registrazione."""
+        self.fpsLabel.setText(f"FPS: {stats.get('fps', 'N/A')}")
+
+        # Format file size
+        size_kb = float(stats.get('size', 0))
+        if size_kb > 1024:
+            size_mb = size_kb / 1024
+            self.fileSizeLabel.setText(f"Dimensione: {size_mb:.2f} MB")
+        else:
+            self.fileSizeLabel.setText(f"Dimensione: {size_kb} KB")
+
+        self.bitrateLabel.setText(f"Bitrate: {stats.get('bitrate', 'N/A')} kbit/s")
+
+    def saveText(self):
+        path, selected_filter = QFileDialog.getSaveFileName(self, "Salva file", "", "JSON files (*.json);;Text files (*.txt)")
+        if not path:
+            return
+
+        try:
+            file_ext = os.path.splitext(path)[1].lower()
+
+            if "(*.txt)" in selected_filter or file_ext == ".txt":
+                if file_ext != ".txt": path += ".txt"
+
+                # Salva il contenuto della scheda attualmente attiva
+                current_tab_index = self.transcriptionTabWidget.currentIndex()
+                if current_tab_index == 0:  # Trascrizione
+                    text_to_save = self.singleTranscriptionTextArea.toPlainText()
+                elif current_tab_index == 1:  # Riassunto
+                    active_summary_area = self.get_current_summary_text_area()
+                    text_to_save = active_summary_area.toPlainText()
+                elif current_tab_index == 2:  # Audio AI
+                    text_to_save = self.audioAiTextArea.toPlainText()
+                else:
+                    text_to_save = ""
+
+                with open(path, 'w', encoding='utf-8') as f:
+                    f.write(text_to_save)
+                logging.info(f"File di testo salvato: {path}")
+
+            else: # Default a JSON
+                if file_ext != ".json": path += ".json"
+
+                # Sincronizza l'ultimo stato del riassunto dalla UI al modello
+                self._sync_active_summary_to_model()
+
+                metadata = {
+                    "transcription_original": self.transcription_original,
+                    "transcription_corrected": self.transcription_corrected,
+                    "summaries": self.summaries,
+                    "combined_summary": self.combined_summary,
+                    "transcription_date": datetime.datetime.now().isoformat(),
+                    "language": self.languageComboBox.currentData()
+                }
+
+                if self.videoPathLineEdit and os.path.exists(self.videoPathLineEdit):
+                    try:
+                        video_clip = VideoFileClip(self.videoPathLineEdit)
+                        metadata["video_path"] = self.videoPathLineEdit
+                        metadata["duration"] = video_clip.duration
+                    except Exception as e:
+                        logging.warning(f"Impossibile leggere i metadati del video: {e}")
+
+                with open(path, 'w', encoding='utf-8') as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=4)
+                logging.info(f"File JSON salvato: {path}")
+
+        except Exception as e:
+            logging.error(f"Errore durante il salvataggio del file: {e}")
+            QMessageBox.critical(self, "Errore di Salvataggio", f"Impossibile salvare il file:\n{e}")
+
+    def export_summary(self):
+        """
+        Esporta il contenuto del riassunto (con formattazione) in un documento Word o PDF,
+        utilizzando un dialogo personalizzato per le opzioni.
+        Esporta esattamente ciò che l'utente vede (WYSIWYG).
+        """
+        active_summary_area = self.get_current_summary_text_area()
+        if not active_summary_area.document().toPlainText().strip():
+            self.show_status_message("Il riassunto è vuoto. Non c'è nulla da esportare.", error=True)
+            return
+
+        dialog = ExportDialog(parent=self, project_path=self.current_project_path)
+        if not dialog.exec():
+            return
+
+        options = dialog.get_options()
+        path = options['filepath']
+        file_format = options['format']
+
+        if not path:
+            self.show_status_message("Percorso del file non valido.", error=True)
+            return
+
+        # Esporta il contenuto HTML così come è visualizzato nel widget
+        export_html = active_summary_area.toHtml()
+
+        if file_format == 'docx':
+            self._export_to_docx(export_html, path)
+        elif file_format == 'pdf':
+            self._export_to_pdf(export_html, path)
+
+    def _resolve_image_path_for_export(self, src_attribute, document, temp_file_list):
+        """
+        Resolves an image's src attribute to an absolute file path.
+        If a temporary file is created (for frame:// URIs), its path is added to
+        the provided temp_file_list for later cleanup.
+        """
+        try:
+            if src_attribute.startswith('frame://'):
+                uri = QUrl(src_attribute)
+                # Use value() to get the underlying QImage from the QVariant
+                image_qvariant = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qvariant:
+                    image_qimage = image_qvariant
+                    if isinstance(image_qimage, QPixmap): # Handle both QPixmap and QImage
+                        image_qimage = image_qimage.toImage()
+
+                    if not image_qimage.isNull():
+                        fd, temp_path = tempfile.mkstemp(suffix=".png")
+                        os.close(fd)
+                        image_qimage.save(temp_path)
+                        temp_file_list.append(temp_path) # Add to list for cleanup
+                        return temp_path
+            elif src_attribute.startswith('frames/'):
+                if self.current_project_path:
+                    abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
+                    if os.path.exists(abs_path):
+                        return abs_path
+        except Exception as e:
+            logging.error(f"Error resolving image path '{src_attribute}': {e}")
+        return None
+
+    def _export_to_pdf(self, html_content, path):
+        """Esporta il contenuto HTML in un file PDF, utilizzando image_map per la gestione delle immagini."""
+        temp_files_to_clean = []
+        try:
+            pdf = FPDF()
+            pdf.add_page()
+
+            font_path = get_resource("fonts/DejaVuSans.ttf")
+            if not os.path.exists(font_path):
+                raise FileNotFoundError("Font DejaVuSans.ttf non trovato. Assicurati che sia in src/res/fonts/.")
+
+            pdf.add_font("DejaVu", "", font_path, uni=True)
+            pdf.set_font("DejaVu", size=12)
+
+            active_summary_area = self.get_current_summary_text_area()
+            doc = active_summary_area.document()
+
+            def map_image(src):
+                return self._resolve_image_path_for_export(src, doc, temp_files_to_clean) or src
+
+            soup = BeautifulSoup(html_content, 'html.parser')
+            for img in soup.find_all('img'):
+                if not img.get('src'):
+                    img.decompose()
+            body_content = soup.body.decode_contents() if soup.body else str(soup)
+
+            pdf.write_html(body_content, image_map=map_image)
+            pdf.output(path)
+            self.show_status_message(f"Riassunto esportato con successo in PDF: {os.path.basename(path)}")
+
+        except Exception as e:
+            self.show_status_message(f"Errore durante l'esportazione in PDF: {e}", error=True)
+            import traceback
+            logging.error(f"Dettagli errore esportazione PDF: {traceback.format_exc()}")
+        finally:
+            for temp_path in temp_files_to_clean:
+                try:
+                    os.remove(temp_path)
+                except OSError as e:
+                    logging.error(f"Impossibile rimuovere il file temporaneo {temp_path}: {e}")
+
+    def _get_image_stream_for_export(self, src_attribute, document):
+        """
+        Resolves an image's src attribute to an in-memory io.BytesIO stream.
+        This avoids creating temporary files on disk.
+        """
+        try:
+            if src_attribute.startswith('frame://'):
+                uri = QUrl(src_attribute)
+                image_qvariant = document.resource(QTextDocument.ResourceType.ImageResource, uri)
+                if image_qvariant:
+                    image_data = image_qvariant
+                    if isinstance(image_data, QPixmap):
+                        image_data = image_data.toImage()
+
+                    if not image_data.isNull():
+                        buffer = QBuffer()
+                        buffer.open(QIODevice.OpenModeFlag.ReadWrite)
+                        image_data.save(buffer, "PNG")
+                        stream = io.BytesIO(buffer.data())
+                        stream.seek(0)
+                        return stream
+            elif src_attribute.startswith('frames/'):
+                if self.current_project_path:
+                    abs_path = os.path.join(self.current_project_path, os.path.normpath(src_attribute))
+                    if os.path.exists(abs_path):
+                        with open(abs_path, 'rb') as f:
+                            stream = io.BytesIO(f.read())
+                        stream.seek(0)
+                        return stream
+        except Exception as e:
+            logging.error(f"Error creating image stream for '{src_attribute}': {e}")
+        return None
+
+    def _export_to_docx(self, summary_html, path):
+        """Esporta il contenuto HTML in un file DOCX, utilizzando stream in memoria per le immagini."""
+        try:
+            document = docx.Document()
+            soup = BeautifulSoup(summary_html, 'html.parser')
+
+            if not soup.body:
+                self.show_status_message("HTML non valido per l'esportazione.", error=True)
+                return
+
+            for element in soup.body.children:
+                if not hasattr(element, 'name') or not element.name:
+                    continue
+
+                if element.name.startswith('h') and element.name[1:].isdigit():
+                    level = int(element.name[1:])
+                    p = document.add_heading(level=min(level, 4))
+                    self._add_runs_to_paragraph(element, p)
+                elif element.name == 'p':
+                    p = document.add_paragraph()
+                    self._add_runs_to_paragraph(element, p)
+                elif element.name in ['ul', 'ol']:
+                    for li in element.find_all('li', recursive=False):
+                        p = document.add_paragraph(style='List Bullet')
+                        self._add_runs_to_paragraph(li, p)
+
+            document.save(path)
+            self.show_status_message(f"Riassunto esportato con successo in DOCX: {os.path.basename(path)}")
+        except Exception as e:
+            self.show_status_message(f"Impossibile esportare il riassunto in DOCX: {e}", error=True)
+            import traceback
+            logging.error(f"Errore durante l'esportazione in Word: {e}\n{traceback.format_exc()}")
+
+    def _add_runs_to_paragraph(self, element, paragraph):
+        """
+        Parses an HTML element and adds formatted runs to a DOCX paragraph,
+        handling inline images via in-memory streams.
+        """
+        from docx.shared import Inches, Pt
+        active_summary_area = self.get_current_summary_text_area()
+        doc = active_summary_area.document()
+
+        for child in element.children:
+            if isinstance(child, str):
+                run = paragraph.add_run(child)
+                self._apply_styles_to_run(element, run)
+            elif child.name == 'img':
+                src = child.get('src', '')
+                image_stream = self._get_image_stream_for_export(src, doc)
+                if image_stream:
+                    try:
+                        style = child.get('style', '')
+                        width_match = re.search(r'width:\s*(\d+(?:\.\d+)?)(px)?;?', style)
+                        height_match = re.search(r'height:\s*(\d+(?:\.\d+)?)(px)?;?', style)
+
+                        width = Pt(float(width_match.group(1))) if width_match else Inches(2.0)
+                        height = Pt(float(height_match.group(1))) if height_match else None
+
+                        paragraph.add_run().add_picture(image_stream, width=width, height=height)
+                    except Exception as img_e:
+                        logging.error(f"Could not embed image from stream in DOCX: {img_e}")
+                    finally:
+                        image_stream.close() # Assicura che lo stream venga chiuso
+
+            elif child.name:
+                self._add_runs_to_paragraph(child, paragraph)
+
+    def _apply_styles_to_run(self, element, run):
+        """Applica stili a un 'run' in base ai tag parent dell'elemento HTML."""
+        current = element
+        while current:
+            if current.name in ['b', 'strong']:
+                run.bold = True
+            if current.name in ['i', 'em']:
+                run.italic = True
+            if current.name == 'font' and 'color' in current.attrs:
+                color_str = current['color'].lstrip('#')
+                if len(color_str) == 6:
+                    try:
+                        run.font.color.rgb = RGBColor.from_string(color_str)
+                    except ValueError:
+                        logging.warning(f"Invalid color string for docx: {color_str}")
+            if current.name == 'span' and 'style' in current.attrs:
+                style = current['style'].replace(" ", "")
+                if 'background-color:' in style:
+                    for color_name, color_data in self.highlight_colors.items():
+                        if f"background-color:{color_data['hex']}" in style:
+                            run.font.highlight_color = color_data['docx']
+                            break
+            current = current.parent
+
+    def loadText(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Carica file", "", "JSON files (*.json);;Text files (*.txt);;All files (*.*)")
+        if path:
+            # Se è un json, lo gestiamo con la nuova logica
+            if path.endswith('.json'):
+                # We need a video path to associate with the json.
+                # For now, let's assume the json has a 'video_path' key.
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                    video_path = data.get("video_path")
+                    if video_path and os.path.exists(video_path):
+                        self.loadVideo(video_path)
+                    else:
+                        QMessageBox.warning(self, "Attenzione", "Il file video associato a questo JSON non è stato trovato.")
+                except Exception as e:
+                    QMessageBox.critical(self, "Errore", f"Impossibile caricare il file JSON: {e}")
+            # Se è un txt, lo carichiamo solo nell'area di testo
+            else:
+                try:
+                    with open(path, 'r', encoding='utf-8') as file:
+                        text_loaded = file.read()
+                    self.singleTranscriptionTextArea.setPlainText(text_loaded)
+                    logging.debug("File di testo caricato correttamente!")
+                except Exception as e:
+                    logging.error(f"Errore durante il caricamento del file di testo: {e}")
+
+    def openDownloadDialog(self):
+        """Apre il dialogo per importare video da URL."""
+        dialog = DownloadDialog(self)
+        dialog.exec()
+
+    def import_videos_to_project(self):
+        """
+        Apre un dialogo per selezionare file video e li importa nel progetto corrente.
+        I video vengono copiati nella cartella 'clips' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di importare i video.", error=True)
+            return
+
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Importa Video nel Progetto",
+            "", # Default directory
+            "Video Files (*.mp4 *.mov *.avi *.mkv)"
+        )
+
+        if not file_paths:
+            return # User cancelled
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        os.makedirs(clips_dir, exist_ok=True)
+
+        imported_count = 0
+        for src_path in file_paths:
+            try:
+                clip_filename = os.path.basename(src_path)
+                dest_path = os.path.join(clips_dir, clip_filename)
+
+                # Evita di sovrascrivere file esistenti
+                if os.path.exists(dest_path):
+                    logging.warning(f"Il file '{clip_filename}' esiste già nella cartella delle clip. Importazione saltata.")
+                    continue
+
+                # Copia il file
+                shutil.copy2(src_path, dest_path)
+
+                # Estrai i metadati e aggiungi al progetto
+                metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+                clip_info = VideoFileClip(dest_path)
+                duration = clip_info.duration
+                clip_info.close()
+
+                size = os.path.getsize(dest_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(dest_path)).isoformat()
+
+                self.project_manager.add_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                imported_count += 1
+
+            except Exception as e:
+                logging.error(f"Errore durante l'importazione del file {src_path}: {e}")
+                self.show_status_message(f"Errore durante l'importazione di {os.path.basename(src_path)}.", error=True)
+
+        if imported_count > 0:
+            self.show_status_message(f"Importati {imported_count} video con successo.")
+            # Ricarica il progetto per aggiornare la vista
+            self.load_project(self.projectDock.gnai_path)
+
+    def import_audio_to_project(self):
+        """
+        Apre un dialogo per selezionare file audio e li importa nel progetto corrente.
+        I file audio vengono copiati nella cartella 'audio' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo. Apri o crea un progetto prima di importare audio.", error=True)
+            return
+
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Importa Audio nel Progetto",
+            "", # Default directory
+            "Audio Files (*.mp3 *.wav *.aac *.m4a *.flac)"
+        )
+
+        if not file_paths:
+            return # User cancelled
+
+        audio_dir = os.path.join(self.current_project_path, "audio")
+        os.makedirs(audio_dir, exist_ok=True)
+
+        imported_count = 0
+        for src_path in file_paths:
+            try:
+                clip_filename = os.path.basename(src_path)
+                dest_path = os.path.join(audio_dir, clip_filename)
+
+                if os.path.exists(dest_path):
+                    logging.warning(f"Il file '{clip_filename}' esiste già nella cartella audio. Importazione saltata.")
+                    continue
+
+                shutil.copy2(src_path, dest_path)
+
+                metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+
+                clip_info = AudioFileClip(dest_path)
+                duration = clip_info.duration
+                clip_info.close()
+
+                size = os.path.getsize(dest_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(dest_path)).isoformat()
+
+                self.project_manager.add_audio_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                imported_count += 1
+
+            except Exception as e:
+                logging.error(f"Errore durante l'importazione del file audio {src_path}: {e}")
+                self.show_status_message(f"Errore durante l'importazione di {os.path.basename(src_path)}.", error=True)
+
+        if imported_count > 0:
+            self.show_status_message(f"Importati {imported_count} file audio con successo.")
+            self.load_project(self.projectDock.gnai_path)
+
+    def separate_audio_from_video(self, video_path):
+        """
+        Estrae l'audio da un file video e lo salva nella cartella 'audio' del progetto.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        try:
+            video_clip = VideoFileClip(video_path)
+            if not video_clip.audio:
+                self.show_status_message("Il video selezionato non ha una traccia audio.", error=True)
+                return
+
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            audio_filename = f"{base_name}.mp3"
+            audio_dir = os.path.join(self.current_project_path, "audio")
+
+            if not os.path.exists(audio_dir):
+                os.mkdir(audio_dir)
+
+            output_path = os.path.join(audio_dir, audio_filename)
+
+            if os.path.exists(output_path):
+                self.show_status_message(f"Un file audio con nome '{audio_filename}' esiste già.", error=True)
+                return
+
+            self.show_status_message("Estrazione audio in corso...")
+            video_clip.audio.write_audiofile(output_path)
+            video_clip.close()
+
+            # Aggiungi la nuova clip audio al progetto
+            metadata_filename = f"{base_name}.json"
+            audio_clip_info = AudioFileClip(output_path)
+            duration = audio_clip_info.duration
+            audio_clip_info.close()
+            size = os.path.getsize(output_path)
+            creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+
+            self.project_manager.add_audio_clip_to_project(
+                self.projectDock.gnai_path,
+                audio_filename,
+                metadata_filename,
+                duration,
+                size,
+                creation_date
+            )
+
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Audio estratto e aggiunto al progetto: {audio_filename}")
+
+        except Exception as e:
+            logging.error(f"Errore durante la separazione dell'audio: {e}")
+            self.show_status_message(f"Errore durante la separazione dell'audio: {e}", error=True)
+
+    def isAudioOnly(self, file_path):
+        """Check if the file is likely audio-only based on the extension."""
+        audio_extensions = {'.mp3', '.wav', '.aac', '.m4a', '.flac', '.ogg'}
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext in audio_extensions
+
+    def sourceSetter(self, url):
+        self.player.setSource(QUrl.fromLocalFile(url))
+        self.player.play()
+        self.player.pause()
+
+    def sourceSetterOutput(self, url):
+        self.playerOutput.setSource(QUrl.fromLocalFile(url))
+        self.playerOutput.play()
+        self.playerOutput.pause()
+
+    def _manage_video_json(self, video_path):
+        """
+        Crea o carica il file JSON associato a un video.
+        """
+        json_path = os.path.splitext(video_path)[0] + ".json"
+
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                logging.info(f"File JSON esistente caricato per {video_path}")
+            except (json.JSONDecodeError, IOError) as e:
+                logging.error(f"Errore nel caricamento del file JSON {json_path}: {e}. Verrà creato un nuovo file.")
+                data = self._create_new_json_data(video_path)
+        else:
+            logging.info(f"Nessun file JSON trovato per {video_path}. Creazione di un nuovo file.")
+            data = self._create_new_json_data(video_path)
+
+        # Pulisci la lista di audio generati, rimuovendo i file che non esistono più
+        if 'generated_audios' in data:
+            valid_audios = [audio for audio in data['generated_audios'] if os.path.exists(audio)]
+            if len(valid_audios) != len(data['generated_audios']):
+                data['generated_audios'] = valid_audios
+                # Riscrivi il file solo se sono state fatte modifiche
+                with open(json_path, 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False, indent=4)
+
+        # Scrivi sempre per assicurarti che il formato sia corretto e aggiornato
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+        self._update_ui_from_json_data(data)
+        self._load_and_display_extraction_cache(video_path)
+        return data
+
+    def _load_and_display_extraction_cache(self, video_path):
+        """
+        Carica e visualizza il contenuto della cache di estrazione informazioni, se esiste,
+        formattandolo come Markdown.
+        """
+        if not video_path:
+            self.infoExtractionResultArea.clear()
+            return
+
+        cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+        self.infoExtractionResultArea.clear()
+
+        if not os.path.exists(cache_path):
+            return  # No cache file, so nothing to display
+
+        try:
+            with open(cache_path, 'r', encoding='utf-8') as f:
+                cache_data = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.error(f"Impossibile leggere il file cache di estrazione {cache_path}: {e}")
+            self.infoExtractionResultArea.setPlainText(f"Errore nel caricamento della cache:\n{e}")
+            return
+
+        if not cache_data:
+            return  # Cache is empty
+
+        markdown_content = "## Risultati Precedentemente Estratti\n\n"
+
+        for query, results in cache_data.items():
+            markdown_content += f"#### Ricerca per: '{query}'\n"
+            frames = results.get("frames", [])
+            if frames:
+                for frame in frames:
+                    try:
+                        # Rimuovi le parentesi e splitta per creare il timecode in secondi
+                        time_str = frame['timestamp'].replace('[', '').replace(']', '')
+                        time_parts = time_str.split(':')
+                        if len(time_parts) == 2:
+                            minutes = int(time_parts[0])
+                            seconds = int(time_parts[1])
+                            total_seconds = minutes * 60 + seconds
+                            # Formatta come link Markdown cliccabile
+                            markdown_content += f"* [{frame['timestamp']}]({total_seconds}) - {frame['description']}\n"
+                    except (ValueError, KeyError):
+                        # Fallback per voci malformate
+                        markdown_content += f"* {frame.get('timestamp', '[N/A]')} - {frame.get('description', 'N/A')}\n"
+                markdown_content += "\n"  # Aggiunge uno spazio tra le diverse query
+            else:
+                markdown_content += "_Nessun risultato trovato per questa ricerca._\n\n"
+
+        self.infoExtractionResultArea.setMarkdown(markdown_content)
+        self.show_status_message("Cache di estrazione informazioni caricata.")
+
+
+    def _create_new_json_data(self, video_path):
+        """
+        Crea la struttura dati di default per un nuovo file JSON.
+        """
+        try:
+            clip = VideoFileClip(video_path)
+            duration = clip.duration
+            clip.close()
+            # Get video creation time
+            creation_time = os.path.getctime(video_path)
+            video_date = datetime.datetime.fromtimestamp(creation_time).isoformat()
+        except Exception as e:
+            logging.error(f"Impossibile leggere i metadati del video {video_path}: {e}")
+            duration = 0
+            video_date = datetime.datetime.now().isoformat()
+
+        return {
+            "video_path": video_path,
+            "duration": duration,
+            "language": "N/A",
+            "video_date": video_date,
+            "transcription_date": None,
+            "transcription_original": "",
+            "transcription_corrected": "",
+            "summaries": {
+                "detailed": "",
+                "meeting": "",
+                "detailed_integrated": "",
+                "meeting_integrated": ""
+            },
+            "summary_date": None,
+            "generated_audios": [],
+            "video_notes": []
+        }
+
+    def apply_selected_audio(self):
+        """
+        Applica l'audio selezionato dalla lista degli audio generati.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato dalla lista.", error=True)
+            return
+
+        audio_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        if not os.path.exists(audio_path):
+            self.show_status_message("Il file audio selezionato non esiste più.", error=True)
+            # Rimuovi l'elemento dalla lista e dal JSON
+            self._manage_video_json(self.videoPathLineEdit) # Questo ricaricherà e pulirà
+            return
+
+        self.show_status_message(f"Applicazione di {os.path.basename(audio_path)}...")
+        self.apply_generated_audio(audio_path)
+
+    def delete_selected_audio(self):
+        """
+        Elimina l'audio selezionato dalla lista, dal disco e dal file JSON.
+        """
+        selected_items = self.generatedAudiosListWidget.selectedItems()
+        if not selected_items:
+            self.show_status_message("Nessun audio selezionato da eliminare.", error=True)
+            return
+
+        item = selected_items[0]
+        audio_path = item.data(Qt.ItemDataRole.UserRole)
+
+        reply = QMessageBox.question(
+            self,
+            "Conferma Eliminazione",
+            f"Sei sicuro di voler eliminare definitivamente il file audio?\n\n{os.path.basename(audio_path)}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 1. Rimuovi il file dal disco
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                    self.show_status_message(f"File {os.path.basename(audio_path)} eliminato.")
+
+                # 2. Rimuovi dal file JSON
+                json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+                if os.path.exists(json_path):
+                    with open(json_path, 'r+', encoding='utf-8') as f:
+                        data = json.load(f)
+                        if 'generated_audios' in data and audio_path in data['generated_audios']:
+                            data['generated_audios'].remove(audio_path)
+                            f.seek(0)
+                            json.dump(data, f, ensure_ascii=False, indent=4)
+                            f.truncate()
+                        # Aggiorna l'UI con i dati modificati
+                        self._update_ui_from_json_data(data)
+
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione: {e}", error=True)
+                logging.error(f"Errore durante l'eliminazione del file audio {audio_path}: {e}")
+
+
+    def loadVideo(self, video_path, video_title = 'Video Track'):
+        """Load and play video or audio, updating UI based on file type."""
+        if self.reversed_video_path and os.path.exists(self.reversed_video_path) and not video_path == self.reversed_video_path:
+            try:
+                os.remove(self.reversed_video_path)
+                self.reversed_video_path = None
+                logging.info("Cleaned up previous reversed video file.")
+            except Exception as e:
+                logging.error(f"Could not remove temporary reversed video file: {e}")
+
+        self.player.stop()
+        self.reset_view()
+        self.speedSpinBox.setValue(1.0)
+        self.videoSlider.resetBookmarks()
+
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
+            QTimer.singleShot(1, lambda: self.sourceSetter(video_path))
+
+        self.videoPathLineEdit = video_path
+        self.transcriptionDock.setTitle(f"Trascrizione e Sintesi Audio - {os.path.basename(video_path)}")
+
+        is_audio_only = self.isAudioOnly(video_path)
+        self.cropButton.setEnabled(not is_audio_only)
+
+        if is_audio_only:
+            self.fileNameLabel.setText(f"{video_title} - Traccia solo audio")
+            self.videoCropWidget.setVisible(False)
+            self.audioOnlyLabel.setVisible(True)
+        else:
+            self.fileNameLabel.setText(os.path.basename(video_path))
+            self.videoCropWidget.setVisible(True)
+            self.audioOnlyLabel.setVisible(False)
+
+        self.updateRecentFiles(video_path)
+
+        # Gestisce il file JSON (crea o carica) e aggiorna l'InfoDock
+        self._manage_video_json(video_path)
+        self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
+        if not self.transcription_original:
+            self.transcriptionViewToggle.setEnabled(False)
+            self.transcriptionViewToggle.setChecked(False)
+
+    def loadVideoOutput(self, video_path):
+
+        self.playerOutput.stop()
+        self.speedSpinBoxOutput.setValue(1.0)
+
+        if self.playerOutput.playbackState() == QMediaPlayer.PlaybackState.StoppedState:
+            QTimer.singleShot(1, lambda: self.sourceSetterOutput(video_path))
+
+        self.fileNameLabelOutput.setText(os.path.basename(video_path))  # Aggiorna il nome del file sulla label
+        self.videoPathLineOutputEdit = video_path
+        logging.debug(f"Loaded video output: {video_path}")
+
+        # Aggiungi questa riga per caricare la cache di estrazione anche per il player di output
+        self._load_and_display_extraction_cache(video_path)
+
+
+    def updateTimeCode(self, position):
+        # Calcola ore, minuti e secondi dalla posizione, che è in millisecondi
+        total_seconds = position // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = position % 1000
+        timecode_str = f'{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}'
+        # Aggiorna il campo di testo del timecode solo se non ha il focus
+        if not self.timecodeInput.hasFocus():
+            self.timecodeInput.setText(timecode_str)
+
+    def updateDuration(self, duration):
+        # Calcola ore, minuti e secondi dalla durata, che è in millisecondi
+        total_seconds = duration // 1000
+        hours = total_seconds // 3600
+        minutes = (total_seconds % 3600) // 60
+        seconds = total_seconds % 60
+        milliseconds = duration % 1000
+        # Aggiorna l'etichetta con la durata totale
+        self.totalTimeLabel.setText(f' / {int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}:{int(milliseconds):03d}')
+
+    def setupMenuBar(self):
+        menuBar = self.menuBar()
+        fileMenu = menuBar.addMenu('&File')
+
+        openProjectAction = QAction('&Apri Progetto...', self)
+        openProjectAction.setStatusTip('Apri un file di progetto .gnai')
+        openProjectAction.triggered.connect(self.open_project)
+        fileMenu.addAction(openProjectAction)
+
+        newProjectAction = QAction('&Nuovo Progetto...', self)
+        newProjectAction.setStatusTip('Crea un nuovo progetto')
+        newProjectAction.triggered.connect(self.create_new_project)
+        fileMenu.addAction(newProjectAction)
+
+        saveProjectAction = QAction('&Salva Progetto', self)
+        saveProjectAction.setShortcut('Ctrl+S')
+        saveProjectAction.setStatusTip('Salva il progetto corrente')
+        saveProjectAction.triggered.connect(self.save_project)
+        fileMenu.addAction(saveProjectAction)
+
+        closeProjectAction = QAction('&Chiudi Progetto', self)
+        closeProjectAction.setStatusTip('Chiudi il progetto corrente e pulisci l\'area di lavoro')
+        closeProjectAction.triggered.connect(self._clear_workspace)
+        fileMenu.addAction(closeProjectAction)
+
+        fileMenu.addSeparator()
+
+        openAction = QAction('&Apri Video/Audio', self)
+        openAction.setShortcut('Ctrl+O')
+        openAction.setStatusTip('Apri video')
+        openAction.triggered.connect(self.browseVideo)
+
+        openActionOutput = QAction('&Apri come Video di Output', self)
+        openAction.setShortcut('Ctrl+I')
+        openActionOutput.setStatusTip('Apri Video di Output')
+        openActionOutput.triggered.connect(self.browseVideoOutput)
+
+        fileMenu.addAction(openAction)
+        fileMenu.addAction(openActionOutput)
+
+        # New Save As action
+        saveAsAction = QAction('&Salva Video di Output Come...', self)
+        saveAsAction.setShortcut('Ctrl+S')
+        saveAsAction.setStatusTip('Salva il video corrente dal Player Video di Output')
+        saveAsAction.triggered.connect(self.saveVideoAs)
+        fileMenu.addAction(saveAsAction)
+
+        # Action to open root folder
+        openRootFolderAction = QAction('&Apri Cartella Principale', self)
+        openRootFolderAction.setShortcut('Ctrl+R')
+        openRootFolderAction.setStatusTip('Apri la cartella principale del software')
+        openRootFolderAction.triggered.connect(self.openRootFolder)
+        fileMenu.addAction(openRootFolderAction)
+
+        fileMenu.addSeparator()
+
+        releaseSourceAction = QAction(QIcon(get_resource("reset.png")), "Scarica Sorgente Video", self)
+        releaseSourceAction.triggered.connect(self.releaseSourceVideo)
+        fileMenu.addAction(releaseSourceAction)
+
+        releaseOutputAction = QAction(QIcon(get_resource("reset.png")), "Scarica Video di Output", self)
+        releaseOutputAction.triggered.connect(self.releaseOutputVideo)
+        fileMenu.addAction(releaseOutputAction)
+
+        fileMenu.addSeparator()
+
+        exitAction = QAction('&Esci', self)
+        exitAction.setShortcut('Ctrl+Q')
+        exitAction.setStatusTip('Esci dall\'applicazione')
+        exitAction.triggered.connect(self.close)
+        fileMenu.addAction(exitAction)
+
+        fileMenu.addSeparator()
+        self.recentMenu = fileMenu.addMenu("Recenti")  # Aggiunge il menu dei file recenti
+        self.updateRecentFilesMenu()
+
+        self.recentProjectsMenu = fileMenu.addMenu("Progetti Recenti")
+        self.updateRecentProjectsMenu()
+
+
+        # Creazione del menu Import
+        importMenu = menuBar.addMenu('&Importa')
+        importUrlAction = QAction('Importa da URL...', self)
+        importUrlAction.setStatusTip('Importa video o audio da un URL (es. YouTube)')
+        importUrlAction.triggered.connect(self.openDownloadDialog)
+        importMenu.addAction(importUrlAction)
+
+        importVideoAction = QAction('Importa Video nel Progetto...', self)
+        importVideoAction.setStatusTip('Importa file video locali nel progetto corrente')
+        importVideoAction.triggered.connect(self.import_videos_to_project)
+        importMenu.addAction(importVideoAction)
+
+        importAudioAction = QAction('Importa Audio nel Progetto...', self)
+        importAudioAction.setStatusTip('Importa file audio locali nel progetto corrente')
+        importAudioAction.triggered.connect(self.import_audio_to_project)
+        importMenu.addAction(importAudioAction)
+
+        importDocAction = QAction('Importa documento...', self)
+        importDocAction.setStatusTip('Importa un documento PDF o DOCX per integrare il riassunto')
+        importDocAction.triggered.connect(self.import_document)
+        importMenu.addAction(importDocAction)
+
+        # Creazione del menu View per la gestione della visibilità dei docks
+        viewMenu = menuBar.addMenu('&Visualizza')
+
+        # Creazione del menu Workspace per i layout preimpostati
+        workspaceMenu = menuBar.addMenu('&Workspace')
+        workspaceMenu.addAction(self.defaultLayoutAction)
+        workspaceMenu.addAction(self.recordingLayoutAction)
+        workspaceMenu.addAction(self.comparisonLayoutAction)
+        workspaceMenu.addAction(self.transcriptionLayoutAction)
+
+
+        # Aggiunta del menu Workflows
+        workflowsMenu = menuBar.addMenu('&Azioni AI')
+        workflowsMenu.addAction(self.summarizeMeetingAction)
+        workflowsMenu.addAction(self.summarizeAction)
+        workflowsMenu.addAction(self.fixTextAction)
+        workflowsMenu.addAction(self.generatePptxAction)
+        # workflowsMenu.addAction(self.extractInfoAction)
+
+        # Creazione del menu Export
+        exportMenu = menuBar.addMenu('&Esporta')
+        exportAction = QAction('Esporta Riepilogo...', self)
+        exportAction.triggered.connect(self.export_summary)
+        exportMenu.addAction(exportAction)
+
+        # Creazione del menu Insert
+        insertMenu = menuBar.addMenu('&Inserisci')
+        addMediaAction = QAction('Aggiungi Media/Testo...', self)
+        addMediaAction.setStatusTip('Aggiungi testo o immagini al video')
+        addMediaAction.triggered.connect(self.openAddMediaDialog)
+        insertMenu.addAction(addMediaAction)
+
+        """
+        agentAIsMenu = menuBar.addMenu('&Agent AIs')
+
+        # Opzioni esistenti
+        runAgentAction = QAction('&Esegui Agent', self)
+        runAgentAction.setStatusTip('Esegui agent AI sul media corrente')
+        runAgentAction.triggered.connect(self.runAgent)
+        agentAIsMenu.addAction(runAgentAction)
+
+        # Nuova opzione per la creazione della guida e lancio dell'agente
+        agentAIsMenu.addSeparator()  # Aggiungi un separatore per chiarezza
+        createGuideAction = QAction('&Crea Guida Operativa', self)
+        createGuideAction.setStatusTip('Crea una guida operativa dai frame estratti')
+        createGuideAction.triggered.connect(self.createGuideAndRunAgent)
+        agentAIsMenu.addAction(createGuideAction)
+        """
+        viewMenu.aboutToShow.connect(self.updateViewMenu)  # Aggiunta di questo segnale
+        self.setupViewMenuActions(viewMenu)
+
+        # Creazione del menu About
+        aboutMenu = menuBar.addMenu('&About')
+        # Aggiunta di azioni al menu About
+        aboutAction = QAction('&About', self)
+        aboutAction.setStatusTip('About the application')
+        aboutAction.triggered.connect(self.about)
+        aboutMenu.addAction(aboutAction)
+
+    def saveVideoAs(self):
+        if not self.videoPathLineOutputEdit:
+            self.show_status_message("Nessun video caricato nel Video Player Output.", error=True)
+            return
+
+        from ui.VideoSaveOptionsDialog import VideoSaveOptionsDialog
+        from services.VideoSaver import VideoSaver
+
+        options_dialog = VideoSaveOptionsDialog(self.videoPathLineOutputEdit, self)
+        if options_dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        save_options = options_dialog.getOptions()
+
+        default_dir = ""
+        if self.current_project_path:
+            default_dir = os.path.join(self.current_project_path, "clips")
+
+        source_for_name = self.videoPathLineEdit if self.videoPathLineEdit else self.videoPathLineOutputEdit
+        base_name, ext = os.path.splitext(os.path.basename(source_for_name))
+        if base_name.startswith("tmp_"):
+            base_name = "processed_clip"
+        default_filename = f"{base_name}_output{ext}"
+
+        default_path = os.path.join(default_dir, default_filename) if default_dir else default_filename
+
+        file_filter = "Video Files (*.mp4 *.mov *.avi)"
+        fileName, _ = QFileDialog.getSaveFileName(self, "Salva Video con Nome", default_path, file_filter)
+
+        if not fileName:
+            return
+
+        is_project_save = False
+        if self.current_project_path:
+            clips_dir = os.path.join(self.current_project_path, "clips")
+            if os.path.normpath(os.path.dirname(fileName)) == os.path.normpath(clips_dir):
+                is_project_save = True
+
+        video_saver = VideoSaver(self)
+        thread = video_saver.save_video(self.videoPathLineOutputEdit, fileName, save_options)
+
+        if thread:
+            self.start_task(thread, lambda path: self.onSaveCompleted(path, is_project_save=is_project_save), self.onSaveError, self.update_status_progress)
+
+    def onSaveCompleted(self, output_path, is_project_save=False):
+        self.show_status_message(f"Video salvato con successo in: {os.path.basename(output_path)}")
+
+        if is_project_save and self.current_project_path:
+            clip_filename = os.path.basename(output_path)
+            metadata_filename = os.path.splitext(clip_filename)[0] + ".json"
+            try:
+                clip_info = VideoFileClip(output_path)
+                duration = clip_info.duration
+                clip_info.close()
+                size = os.path.getsize(output_path)
+                creation_date = datetime.datetime.fromtimestamp(os.path.getctime(output_path)).isoformat()
+
+                self.project_manager.add_clip_to_project(
+                    self.projectDock.gnai_path,
+                    clip_filename,
+                    metadata_filename,
+                    duration,
+                    size,
+                    creation_date
+                )
+                self.load_project(self.projectDock.gnai_path) # Ricarica per aggiornare la UI
+                self.show_status_message(f"Clip '{clip_filename}' aggiunta al progetto.")
+            except Exception as e:
+                logging.error(f"Impossibile aggiungere la clip salvata al progetto: {e}")
+                self.show_status_message("Errore nell'aggiungere la clip al progetto.", error=True)
+
+    def onSaveError(self, error_message):
+        self.show_status_message(f"Errore durante il salvataggio del video: {error_message}", error=True)
+
+    def setupViewMenuActions(self, viewMenu):
+        # Azione per il Video Player Dock
+        self.actionToggleVideoPlayerDock = QAction('Mostra/Nascondi Video Player Input', self, checkable=True)
+        self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
+        self.actionToggleVideoPlayerDock.triggered.connect(
+            lambda: self.toggleDockVisibilityAndUpdateMenu(self.videoPlayerDock,
+                                                           self.actionToggleVideoPlayerDock.isChecked()))
+
+        # Azioni simili per gli altri docks...
+        self.actionToggleVideoPlayerDockOutput = self.createToggleAction(self.videoPlayerOutput,
+                                                                         'Mostra/Nascondi Video Player Output')
+        self.actionToggleTranscriptionDock = self.createToggleAction(self.transcriptionDock,
+                                                                     'Mostra/Nascondi Trascrizione')
+        self.actionToggleEditingDock = self.createToggleAction(self.editingDock, 'Mostra/Nascondi Generazione Audio AI')
+        self.actionToggleRecordingDock = self.createToggleAction(self.recordingDock, 'Mostra/Nascondi Registrazione')
+        self.actionToggleAudioDock = self.createToggleAction(self.audioDock, 'Mostra/Nascondi Gestione Audio/Video')
+        self.actionToggleProjectDock = self.createToggleAction(self.projectDock, 'Mostra/Nascondi Projects')
+        self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
+        self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
+        self.actionToggleChatDock = self.createToggleAction(self.chatDock, 'Mostra/Nascondi Chat Riassunto')
+
+        # Aggiungi tutte le azioni al menu 'View'
+        viewMenu.addAction(self.actionToggleVideoPlayerDock)
+        viewMenu.addAction(self.actionToggleVideoPlayerDockOutput)
+        viewMenu.addAction(self.actionToggleTranscriptionDock)
+        viewMenu.addAction(self.actionToggleEditingDock)
+        viewMenu.addAction(self.actionToggleRecordingDock)
+        viewMenu.addAction(self.actionToggleAudioDock)
+        viewMenu.addAction(self.actionToggleProjectDock)
+        viewMenu.addAction(self.actionToggleVideoNotesDock)
+        viewMenu.addAction(self.actionToggleInfoExtractionDock)
+        viewMenu.addAction(self.actionToggleChatDock)
+
+
+
+        # Aggiungi azioni per mostrare/nascondere tutti i docks
+        showAllDocksAction = QAction('Mostra tutti i Docks', self)
+        hideAllDocksAction = QAction('Nascondi tutti i Docks', self)
+
+        showAllDocksAction.triggered.connect(self.showAllDocks)
+        hideAllDocksAction.triggered.connect(self.hideAllDocks)
+
+        viewMenu.addSeparator()  # Aggiunge un separatore per chiarezza
+        viewMenu.addAction(showAllDocksAction)
+        viewMenu.addAction(hideAllDocksAction)
+
+
+        # Azione per salvare il layout dei docks
+        saveLayoutAction = QAction('Salva Layout dei Docks', self)
+        saveLayoutAction.triggered.connect(self.saveDockLayout)
+        viewMenu.addSeparator()  # Aggiunge un separatore per chiarezza
+        viewMenu.addAction(saveLayoutAction)
+
+        # Aggiorna lo stato iniziale del menu
+        self.updateViewMenu()
+
+    def saveDockLayout(self):
+        if hasattr(self, 'dockSettingsManager'):
+            self.dockSettingsManager.save_settings()
+            self.show_status_message("Layout dei docks salvato correttamente.")
+        else:
+            self.show_status_message("Gestore delle impostazioni dei dock non trovato.", error=True)
+
+    def showAllDocks(self):
+        # Imposta tutti i docks visibili
+        self.videoPlayerDock.setVisible(True)
+        self.videoPlayerOutput.setVisible(True)
+        self.audioDock.setVisible(True)
+        self.transcriptionDock.setVisible(True)
+        self.editingDock.setVisible(True)
+        self.recordingDock.setVisible(True)
+        self.videoEffectsDock.setVisible(True)
+        self.updateViewMenu()  # Aggiorna lo stato dei menu
+
+    def hideAllDocks(self):
+        # Nasconde tutti i docks
+        self.videoPlayerDock.setVisible(False)
+        self.videoPlayerOutput.setVisible(False)
+        self.audioDock.setVisible(False)
+        self.transcriptionDock.setVisible(False)
+        self.editingDock.setVisible(False)
+        self.recordingDock.setVisible(False)
+        self.videoEffectsDock.setVisible(False)
+        self.updateViewMenu()  # Aggiorna lo stato dei menu
+    def createToggleAction(self, dock, menuText):
+        action = QAction(menuText, self, checkable=True)
+        action.setChecked(dock.isVisible())
+        action.triggered.connect(lambda checked: self.toggleDockVisibilityAndUpdateMenu(dock, checked))
+        return action
+
+    def toggleDockVisibilityAndUpdateMenu(self, dock, visible):
+        if visible:
+            dock.showDock()
+        else:
+            dock.hideDock()
+
+        self.updateViewMenu()
+
+    def resetViewMenu(self):
+
+        self.actionToggleVideoPlayerDock.setChecked(True)
+        self.actionToggleVideoPlayerDockOutput.setChecked(True)
+        self.actionToggleAudioDock.setChecked(True)
+        self.actionToggleTranscriptionDock.setChecked(True)
+        self.actionToggleEditingDock.setChecked(True)
+        self.actionToggleRecordingDock.setChecked(True)
+        self.actionToggleProjectDock.setChecked(True)
+        self.actionToggleInfoExtractionDock.setChecked(True)
+
+    def updateViewMenu(self):
+
+        # Aggiorna lo stato dei menu checkable basato sulla visibilità dei dock
+        self.actionToggleVideoPlayerDock.setChecked(self.videoPlayerDock.isVisible())
+        self.actionToggleVideoPlayerDockOutput.setChecked(self.videoPlayerOutput.isVisible())
+        self.actionToggleAudioDock.setChecked(self.audioDock.isVisible())
+        self.actionToggleTranscriptionDock.setChecked(self.transcriptionDock.isVisible())
+        self.actionToggleEditingDock.setChecked(self.editingDock.isVisible())
+        self.actionToggleRecordingDock.setChecked(self.recordingDock.isVisible())
+        self.actionToggleProjectDock.setChecked(self.projectDock.isVisible())
+        self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
+        self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
+        self.actionToggleChatDock.setChecked(self.chatDock.isVisible())
+
+    def about(self):
+        QMessageBox.about(self, "TGeniusAI",
+                          f"""<b>Genius AI</b> version: {self.version}<br>
+                          AI-based video and audio management application.<br>
+                          <br>
+                          Autore: FFA <br>""")
+
+    def onTranscriptionError(self, error_message):
+        # Il metodo finish_task mostra già l'errore, quindi non è necessario fare altro qui
+        # a meno che non ci sia una logica specifica da eseguire in caso di errore.
+        pass
+
+
+    def handleTextChange(self):
+        if self.singleTranscriptionTextArea.signalsBlocked():
+            return
+
+        # Avvia il timer di salvataggio automatico
+        self.autosave_timer.start(2500)  # 2.5 secondi
+
+        # Quando l'utente modifica il testo, questo diventa il nuovo "original_text"
+        # e qualsiasi riassunto precedente viene invalidato.
+        self.summaries = {}
+        self.active_summary_type = None
+
+        self.original_text = self.singleTranscriptionTextArea.toPlainText()
+
+        # La logica del timecode e del rilevamento lingua rimane
+        # Usa il testo semplice per il rilevamento della lingua per evitare problemi con l'HTML
+        plain_text = self.singleTranscriptionTextArea.toPlainText()
+        if plain_text.strip():
+            # La logica del timecode è stata rimossa da qui perché deve essere
+            # gestita esclusivamente dal toggle nella tab "Audio AI" e non
+            # deve attivarsi a ogni modifica della trascrizione.
+            self.detectAndUpdateLanguage(plain_text)
+
+    def autosave_transcription(self):
+        """
+        Salva automaticamente la trascrizione nel file JSON associato al video.
+        """
+        if not self.videoPathLineEdit:
+            logging.debug("Salvataggio automatico saltato: nessun video caricato.")
+            return
+
+        logging.info("Salvataggio automatico della trascrizione...")
+        current_text = self.singleTranscriptionTextArea.toPlainText()
+        update_data = {
+            "transcription_raw": current_text,
+            "transcription_date": datetime.datetime.now().isoformat()
+        }
+        self._update_json_file(self.videoPathLineEdit, update_data)
+
+    def calculateAndDisplayTimeCodeAtEndOfSentences(self, html_text):
+        WPM = 150
+        words_per_second = WPM / 60
+        cumulative_time = 0.0
+
+        soup = BeautifulSoup(html_text, 'html.parser')
+
+        # Rimuove i timestamp esistenti per evitare duplicazioni.
+        # Cerca il tag <font> specifico e lo elimina.
+        for ts_tag in soup.find_all('font', color='#ADD8E6'):
+            # Rimuove anche lo spazio vuoto che segue il timestamp, se presente
+            next_sibling = ts_tag.next_sibling
+            if next_sibling and isinstance(next_sibling, str) and next_sibling.startswith(' '):
+                next_sibling.replace_with(next_sibling.lstrip())
+            ts_tag.decompose()
+
+        new_body = BeautifulSoup('<body></body>', 'html.parser').body
+
+        # Process paragraphs or the whole body if no paragraphs exist
+        elements_to_process = soup.find_all('p') if soup.find('p') else [soup.body]
+
+        for element in elements_to_process:
+            if not element: continue
+
+            current_sentence_nodes = []
+            # Make a copy to iterate over as we will be modifying the tree
+            for node in list(element.contents):
+                # Detach the node from its original parent to be moved later
+                node.extract()
+                current_sentence_nodes.append(node)
+
+                # Check if the sentence is complete
+                # A sentence is complete if the node is a string that ends with sentence punctuation
+                if isinstance(node, str) and re.search(r'[.!?]\s*$', node):
+                    # Process the collected sentence
+                    sentence_html = ''.join(str(n) for n in current_sentence_nodes)
+                    sentence_text = BeautifulSoup(sentence_html, 'html.parser').get_text()
+                    words = re.findall(r'\b\w+\b', sentence_text)
+
+                    if words:
+                        time_for_sentence = len(words) / words_per_second
+                        cumulative_time += time_for_sentence
+
+                        # Calculate minutes and seconds
+                        minutes = int(cumulative_time // 60)
+                        seconds = int(cumulative_time % 60)
+
+                        # Create new paragraph for the sentence
+                        new_p = soup.new_tag('p')
+
+                        # Create and add timestamp with [MM:SS] format using <font> tag
+                        timestamp_font_str = f"<font color='#ADD8E6'>[{minutes:02d}:{seconds:02d}]</font> "
+                        timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
+                        new_p.append(timestamp_node)
+
+                        # Add sentence content
+                        for snode in current_sentence_nodes:
+                            new_p.append(snode)
+
+                        new_body.append(new_p)
+
+                    # Reset for the next sentence
+                    current_sentence_nodes = []
+
+            # Handle any remaining nodes that didn't form a complete sentence
+            if current_sentence_nodes:
+                sentence_html = ''.join(str(n) for n in current_sentence_nodes)
+                sentence_text = BeautifulSoup(sentence_html, 'html.parser').get_text()
+                words = re.findall(r'\b\w+\b', sentence_text)
+
+                if words:
+                    time_for_sentence = len(words) / words_per_second
+                    cumulative_time += time_for_sentence
+
+                    # Calculate minutes and seconds
+                    minutes = int(cumulative_time // 60)
+                    seconds = int(cumulative_time % 60)
+
+                    new_p = soup.new_tag('p')
+                    # Create and add timestamp with [MM:SS] format using <font> tag
+                    timestamp_font_str = f"<font color='#ADD8E6'>[{minutes:02d}:{seconds:02d}]</font> "
+                    timestamp_node = BeautifulSoup(timestamp_font_str, 'html.parser').font
+                    new_p.append(timestamp_node)
+                    for snode in current_sentence_nodes:
+                        new_p.append(snode)
+                    new_body.append(new_p)
+
+        return new_body.decode_contents()
+
+    def _style_timestamps_in_html(self, html_content):
+        """
+        Applies a consistent style to all timestamps within an HTML string.
+        It finds timestamps and wraps them in a colored <font> tag.
+        """
+        # Pattern to find timestamps like [00:00] - [00:05] or [00:00:02.4] or [00:00]
+        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\](?: - \[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\])?)')
+
+        # Function to wrap matches in a styled font tag
+        def style_match(match):
+            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
+
+        # First, remove any existing timestamp styling to prevent nested tags
+        unstyle_pattern = re.compile(r"<font color='#ADD8E6'>(.*?)</font>", re.IGNORECASE)
+        unstyled_html = unstyle_pattern.sub(r'\1', html_content)
+
+        # Apply the new style
+        styled_html = timestamp_pattern.sub(style_match, unstyled_html)
+
+        return styled_html
+
+    def _style_existing_timestamps(self, text_edit):
+        """
+        Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
+        Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
+        """
+        current_html = text_edit.toHtml()
+        new_html = self._style_timestamps_in_html(current_html)
+
+        if new_html != current_html:
+            # Salva la posizione del cursore
+            cursor = text_edit.textCursor()
+            cursor_pos = cursor.position()
+            # Applica il nuovo HTML
+            text_edit.setHtml(new_html)
+            # Ripristina la posizione del cursore
+            cursor.setPosition(cursor_pos)
+
+
+    def detectAndUpdateLanguage(self, text):
+        try:
+            detected_language_code = detect(text)
+            language = pycountry.languages.get(alpha_2=detected_language_code)
+            if language:
+                detected_language = language.name
+                self.updateLanguageComboBox(detected_language_code, detected_language)
+                self.updateTranscriptionLanguageDisplay(detected_language)
+            else:
+                self.updateTranscriptionLanguageDisplay("Lingua non supportata")
+        except LangDetectException:
+            self.updateTranscriptionLanguageDisplay("Non rilevabile")
+
+    def updateLanguageComboBox(self, language_code, language_name):
+        index = self.languageComboBox.findData(language_code)
+        if index == -1:
+            self.languageComboBox.addItem(language_name, language_code)
+            index = self.languageComboBox.count() - 1
+        self.languageComboBox.setCurrentIndex(index)
+
+    def updateTranscriptionLanguageDisplay(self, language):
+        self.transcriptionLanguageLabel.setText(f"Lingua rilevata: {language}")
+
+    def transcribeVideo(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Nessun video selezionato.", error=True)
+            return
+
+        if self.onlineModeCheckbox.isChecked():
+            # Use the original TranscriptionThread for online mode
+            if self.videoSlider.bookmarks:
+                self.bookmark_manager.transcribe_all_bookmarks()
+            else:
+                self.show_status_message("Avvio trascrizione online (Google)...")
+                thread = TranscriptionThread(
+                    media_path=self.videoPathLineEdit,
+                    main_window=self,
+                    start_time=None,
+                    end_time=None
+                )
+                self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
+        else:
+            # Use the new WhisperTranscriptionThread for offline mode
+            if self.videoSlider.bookmarks:
+                # TODO: Update bookmark_manager to support Whisper options
+                self.bookmark_manager.transcribe_all_bookmarks()
+            else:
+                self.show_status_message("Avvio trascrizione offline (Whisper)...")
+                settings = QSettings("Genius", "GeniusAI")
+                model_name = settings.value("whisper/model", "base")
+                use_gpu = settings.value("whisper/use_gpu", torch.cuda.is_available(), type=bool)
+
+                thread = WhisperTranscriptionThread(
+                    media_path=self.videoPathLineEdit,
+                    main_window=self,
+                    start_time=None,
+                    end_time=None,
+                    model_name=model_name,
+                    use_gpu=use_gpu
+                )
+                self.start_task(thread, self.onTranscriptionComplete, self.onTranscriptionError, self.update_status_progress)
+
+    def onTranscriptionComplete(self, result):
+        json_path, temp_files = result
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            # Carica il testo e poi applica lo stile
+            self.singleTranscriptionTextArea.setMarkdown(data.get('transcription_raw', ''))
+            self._style_existing_timestamps(self.singleTranscriptionTextArea)
+            self.onProcessComplete(data)
+            self.transcriptionTabs.setCurrentWidget(self.singleTranscriptionTextArea)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            self.show_status_message(f"Errore nel caricare la trascrizione: {e}", error=True)
+            logging.error(f"Failed to load transcription JSON {json_path}: {e}")
+
+        self.cleanupFiles(temp_files)
+        self.show_status_message("Trascrizione completata.")
+
+    def onTranscriptionError(self, error_message):
+        # Il metodo finish_task mostra già l'errore, quindi non è necessario fare altro qui
+        # a meno che non ci sia una logica specifica da eseguire in caso di errore.
+        pass
+
+    def _update_ui_from_json_data(self, data):
+        """
+        Aggiorna l'interfaccia utente con i dati dal file JSON.
+        """
+        # Carica le trascrizioni, gestendo la retrocompatibilità
+        self.transcription_original = data.get('transcription_original', data.get('transcription_raw', ''))
+        self.transcription_corrected = data.get('transcription_corrected', '')
+
+        # Decide quale testo mostrare e imposta lo stato del toggle
+        if self.transcription_corrected:
+            html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+            self.singleTranscriptionTextArea.setHtml(html_content)
+            self.transcriptionViewToggle.setEnabled(True)
+            self.transcriptionViewToggle.setChecked(True)
+        else:
+            # Carica il Markdown direttamente, che verrà renderizzato correttamente
+            self.singleTranscriptionTextArea.setMarkdown(self.transcription_original)
+            self.transcriptionViewToggle.setEnabled(False)
+            self.transcriptionViewToggle.setChecked(False)
+
+        # Carica i riassunti, gestendo la retrocompatibilità
+        self.summaries = data.get('summaries', {})
+        if not self.summaries:  # Se 'summaries' è vuoto o non esiste (vecchio formato)
+            raw_detailed = data.get('summary_generated', '')
+            raw_integrated = data.get('summary_generated_integrated', '')
+            # Converti in HTML perché i vecchi formati erano Markdown
+            self.summaries['detailed'] = markdown.markdown(raw_detailed, extensions=['fenced_code', 'tables'])
+            self.summaries['detailed_integrated'] = markdown.markdown(raw_integrated, extensions=['fenced_code', 'tables'])
+
+        # Per i nuovi file json, controlla se qualche valore è ancora in Markdown e convertilo
+        for key, value in self.summaries.items():
+            if value and not value.strip().startswith('<'):
+                logging.debug(f"Converting legacy Markdown summary for key '{key}' to HTML.")
+                self.summaries[key] = markdown.markdown(value, extensions=['fenced_code', 'tables'])
+
+        # Rimosso il caricamento di 'combined_summary' dal JSON del singolo clip.
+        # Questa informazione è ora gestita a livello di progetto nel file .gnai.
+        # self.combined_summary = data.get('combined_summary', {
+        #     "source_files": [], "detailed_combined": "", "meeting_combined": "",
+        #     "detailed_combined_integrated": "", "meeting_combined_integrated": ""
+        # })
+
+        # Aggiorna la vista per tutti i tab. _update_summary_view è la fonte di verità.
+        self._update_summary_view()
+
+        # Popola le aree di testo dei riassunti (ora gestito da _update_summary_view)
+        # self.summaryDetailedTextArea.setHtml(self.summaries.get('detailed', ''))
+        # self.summaryMeetingTextArea.setHtml(self.summaries.get('meeting', ''))
+        # self.summaryCombinedDetailedTextArea.setHtml(self.combined_summary.get('detailed_combined', ''))
+        # self.summaryCombinedMeetingTextArea.setHtml(self.combined_summary.get('meeting_combined', ''))
+
+        # Applica lo stile ai timestamp (ora gestito da _update_summary_view)
+        # self._style_existing_timestamps(self.summaryDetailedTextArea)
+        # self._style_existing_timestamps(self.summaryMeetingTextArea)
+        # self._style_existing_timestamps(self.summaryCombinedDetailedTextArea)
+        # self._style_existing_timestamps(self.summaryCombinedMeetingTextArea)
+
+
+        # Imposta la lingua nella combobox
+        language_code = data.get("language")
+        if language_code:
+            index = self.languageComboBox.findData(language_code)
+            if index != -1:
+                self.languageComboBox.setCurrentIndex(index)
+
+        # Carica le note video
+        self.load_video_notes_from_json(data)
+
+        # Aggiorna la lista degli audio generati
+        self.generatedAudiosListWidget.clear()
+        if 'generated_audios' in data and data['generated_audios']:
+            for audio_path in data['generated_audios']:
+                # Mostra solo il nome del file per leggibilità
+                item_text = os.path.basename(audio_path)
+                list_item = QListWidgetItem(item_text)
+                list_item.setData(Qt.ItemDataRole.UserRole, audio_path) # Salva il percorso completo
+                self.generatedAudiosListWidget.addItem(list_item)
+        logging.debug("UI aggiornata con i dati JSON!")
+
+    def cleanupFiles(self, file_paths):
+        """Safely removes temporary files used during transcription."""
+        for path in file_paths:
+            self.removeFileSafe(path)
+
+    def removeFileSafe(self, file_path, attempts=5, delay=0.5):
+        """Attempt to safely remove a file with retries and delays."""
+        for _ in range(attempts):
+            try:
+                os.remove(file_path)
+                logging.debug(f"File {file_path} successfully removed.")
+                break
+            except PermissionError:
+                logging.debug(f"Warning: File {file_path} is currently in use. Retrying...")
+                time.sleep(delay)
+            except FileNotFoundError:
+                logging.debug(f"The file {file_path} does not exist or has already been removed.")
+                break
+            except Exception as e:
+                logging.debug(f"Unexpected error while removing {file_path}: {e}")
+    def handleErrors(self, progress_dialog):
+        def error(message):
+            QMessageBox.critical(self, "Errore nella Trascrizione",
+                                 f"Errore durante la trascrizione del video: {message}")
+            progress_dialog.cancel()
+
+        return error
+
+    def generateAudioWithElevenLabs(self):
+        api_key = get_api_key('elevenlabs')
+        if not api_key:
+            self.show_status_message("Per favore, imposta l'API Key di ElevenLabs nelle impostazioni.", error=True)
+            return
+
+        def convert_numbers_to_words(text):
+            text = re.sub(r'(\d+)\.', r'\1 .', text)
+            new_text = []
+            for word in text.split():
+                if word.isdigit():
+                    new_word = num2words(word, lang='it')
+                    new_text.append(new_word)
+                else:
+                    new_text.append(word)
+            return ' '.join(new_text)
+
+        transcriptionText = self.audioAiTextArea.toPlainText()
+        if not transcriptionText.strip():
+            self.show_status_message("Inserisci il testo nella tab 'Audio AI' prima di generare l'audio.", error=True)
+            return
+        transcriptionText = convert_numbers_to_words(transcriptionText)
+
+        voice_id = self.voiceSelectionComboBox.currentData()
+        model_id = "eleven_multilingual_v1"
+
+        voice_settings = {
+            'stability': self.stabilitySlider.value() / 100.0,
+            'similarity_boost': self.similaritySlider.value() / 100.0,
+            'style': self.styleSlider.value() / 10.0,
+            'use_speaker_boost': self.speakerBoostCheckBox.isChecked()
+        }
+
+        base_name = os.path.splitext(os.path.basename(self.videoPathLineEdit))[0] if self.videoPathLineEdit else "generated_audio"
+        save_dir = os.path.dirname(self.videoPathLineEdit) if self.videoPathLineEdit else "."
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        audio_save_path = os.path.join(save_dir, f"{base_name}_generated_{timestamp}.mp3")
+
+        thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key, audio_save_path, self)
+        self.start_task(thread, self.onAudioGenerationCompleted, self.onAudioGenerationError, self.update_status_progress)
+
+    def runWav2Lip(self, video_path, audio_path, output_path):
+        command = [
+            'python', './Wav2Lip-master/inference.py',
+            '--checkpoint_path', './Wav2Lip-master/checkpoints',  # Sostituisci con il percorso al tuo checkpoint
+            '--face', video_path,
+            '--audio', audio_path,
+            '--outfile', output_path
+        ]
+
+        result = subprocess.run(command, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise Exception(f"Errore nell'esecuzione di Wav2Lip: {result.stderr}")
+
+    def createGuideAndRunAgent(self):
+        """
+        Crea una guida operativa dai frame estratti e esegue l'agent browser
+        """
+        if not hasattr(self, 'browser_agent'):
+            from services.BrowserAgent import BrowserAgent
+            self.browser_agent = BrowserAgent(self)
+
+        self.browser_agent.create_guide_agent()
+
+    def onAudioGenerationCompleted(self, audio_path):
+        """
+        Called when the AI audio generation is complete.
+        This function now decides whether to sync the audio or apply it at a specific time.
+        """
+        # Aggiungi il nuovo audio al file JSON del video
+        json_path = os.path.splitext(self.videoPathLineEdit)[0] + ".json"
+        if os.path.exists(json_path):
+            with open(json_path, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'generated_audios' not in data:
+                    data['generated_audios'] = []
+                data['generated_audios'].append(audio_path)
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.truncate()
+            # Aggiorna l'UI
+            self._update_ui_from_json_data(data)
+
+        self.apply_generated_audio(
+            new_audio_path=audio_path
+        )
+
+    def onAudioGenerationError(self, error_message):
+        self.show_status_message(f"Errore durante la generazione dell'audio: {error_message}", error=True)
+
+    def _parse_time(self, time_str):
+        """Parses a time string HH:MM:SS.ms into seconds."""
+        try:
+            parts = time_str.split(':')
+            if len(parts) != 3:
+                raise ValueError("Invalid time format. Expected HH:MM:SS.ms")
+
+            h = int(parts[0])
+            m = int(parts[1])
+
+            s_ms_part = parts[2].split('.')
+            s = int(s_ms_part[0])
+            ms = int(s_ms_part[1]) if len(s_ms_part) > 1 else 0
+
+            return h * 3600 + m * 60 + s + ms / 1000.0
+        except (ValueError, IndexError) as e:
+            self.show_status_message(f"Formato ora non valido: {time_str}. Usare HH:MM:SS.ms.", error=True)
+            return None
+
+    def apply_generated_audio(self, new_audio_path):
+        video_path = self.videoPathLineEdit
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Nessun video caricato per applicare l'audio.", error=True)
+            return
+
+        start_time_sec = self.player.position() / 1000.0
+
+        thread = AudioProcessingThread(
+            video_path,
+            new_audio_path,
+            self.alignspeed.isChecked(), # use_sync is now controlled by the checkbox
+            start_time_sec,
+            parent=self
+        )
+        self.start_task(thread, self.onAudioProcessingCompleted, self.onAudioProcessingError, self.update_status_progress)
+
+    def onAudioProcessingCompleted(self, output_path):
+        self.show_status_message("Audio applicato al video con successo.")
+        self.loadVideoOutput(output_path)
+
+    def onAudioProcessingError(self, error_message):
+        self.show_status_message(f"Errore durante l'applicazione dell'audio: {error_message}", error=True)
+
+    def handle_apply_main_audio(self):
+        """Handles the 'Applica Audio Principale' button click."""
+        video_path, player = self._get_selected_player_info()
+        new_audio_path = self.audioPathLineEdit.text()
+
+        if not video_path or not os.path.exists(video_path):
+            self.show_status_message("Nessun video caricato.", error=True)
+            return
+
+        if not new_audio_path or not os.path.exists(new_audio_path):
+            self.show_status_message("Nessun file audio selezionato.", error=True)
+            return
+
+        start_time_sec = player.position() / 1000.0
+
+        thread = AudioProcessingThread(
+            video_path,
+            new_audio_path,
+            self.alignspeed_replacement.isChecked(), # use_sync is now controlled by the checkbox
+            start_time_sec,
+            parent=self
+        )
+        self.start_task(thread, self.onAudioProcessingCompleted, self.onAudioProcessingError, self.update_status_progress)
+
+    def browseAudio(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Audio", "", "Audio Files (*.mp3 *.wav)")
+        if fileName:
+            self.audioPathLineEdit.setText(fileName)
+
+    def extractAudioFromVideo(self, video_path):
+        # Estrai l'audio dal video e salvalo temporaneamente
+        temp_audio_path = self.get_temp_filepath(suffix='.mp3')
+        video_clip = VideoFileClip(video_path)
+        video_clip.audio.write_audiofile(temp_audio_path)
+        return temp_audio_path
+
+    def applyNewAudioToVideo(self, video_path_line_edit, new_audio_path, align_audio_video):
+        video_path = video_path_line_edit
+
+        # Migliorata la validazione degli input
+        if not video_path or not os.path.exists(video_path):
+            QMessageBox.warning(self, "Attenzione", "Il file video selezionato non esiste.")
+            return
+
+        if not new_audio_path or not os.path.exists(new_audio_path):
+            QMessageBox.warning(self, "Attenzione", "Il file audio selezionato non esiste.")
+            return
+
+        # Verifica la dimensione dei file
+        video_size_mb = os.path.getsize(video_path) / (1024 * 1024)
+        audio_size_mb = os.path.getsize(new_audio_path) / (1024 * 1024)
+
+        # Avvisa l'utente se i file sono molto grandi
+        if video_size_mb > 500 or audio_size_mb > 100:
+            reply = QMessageBox.question(
+                self, "File di grandi dimensioni",
+                f"Stai elaborando file di grandi dimensioni (Video: {video_size_mb:.1f} MB, Audio: {audio_size_mb:.1f} MB).\n"
+                "L'elaborazione potrebbe richiedere molto tempo. Continuare?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            if reply == QMessageBox.StandardButton.No:
+                return
+
+        # Crea un percorso di output unico con timestamp per evitare sovrascritture
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_dir = os.path.dirname(video_path)
+        output_path = os.path.join(output_dir, f"{base_name}_audio_{timestamp}.mp4")
+
+        # Creiamo un dialog personalizzato che sostituisce QProgressDialog
+        class CustomProgressDialog(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("Processo Audio-Video")
+                self.setModal(True)
+                self.setMinimumWidth(400)
+
+                layout = QVBoxLayout(self)
+
+                # Label per il messaggio di stato
+                self.statusLabel = QLabel("Preparazione processo...")
+                layout.addWidget(self.statusLabel)
+
+                # Barra di progresso
+                self.progressBar = QProgressBar()
+                self.progressBar.setRange(0, 100)
+                self.progressBar.setValue(0)
+                layout.addWidget(self.progressBar)
+
+                # Log dettagliato
+                self.logDialog = QDialog(self)
+                self.logDialog.setWindowTitle("Log Dettagliato")
+                self.logDialog.setMinimumSize(600, 400)
+                logLayout = QVBoxLayout(self.logDialog)
+                self.logTextEdit = QTextEdit()
+                self.logTextEdit.setReadOnly(True)
+                logLayout.addWidget(self.logTextEdit)
+
+                # Pulsanti
+                buttonLayout = QHBoxLayout()
+
+                # Pulsante per mostrare log
+                self.logButton = QPushButton("Mostra Log")
+                self.logButton.clicked.connect(self.logDialog.show)
+                buttonLayout.addWidget(self.logButton)
+
+                # Pulsante per annullare
+                self.cancelButton = QPushButton("Annulla")
+                self.cancelButton.clicked.connect(self.reject)
+                buttonLayout.addWidget(self.cancelButton)
+
+                layout.addLayout(buttonLayout)
+
+            def setValue(self, value):
+                self.progressBar.setValue(value)
+
+            def setLabelText(self, text):
+                self.statusLabel.setText(text)
+
+            def addLogMessage(self, message):
+                timestamp = time.strftime("%H:%M:%S", time.localtime())
+                self.logTextEdit.append(f"[{timestamp}] {message}")
+
+                # Auto-scroll al fondo
+                cursor = self.logTextEdit.textCursor()
+                cursor.movePosition(cursor.MoveOperation.End)
+                self.logTextEdit.setTextCursor(cursor)
+
+            def wasCanceled(self):
+                return self.result() == QDialog.DialogCode.Rejected
+
+        # Crea un thread per l'elaborazione in background
+        class AudioVideoThread(QThread):
+            progress = pyqtSignal(int, str)
+            completed = pyqtSignal(str)
+            error = pyqtSignal(str)
+            detailed_log = pyqtSignal(str)
+
+            def __init__(self, video_path, audio_path, output_path, align_speed, parent_window, chunk_size=10):
+                super().__init__()
+                self.video_path = video_path
+                self.audio_path = audio_path
+                self.output_path = output_path
+                self.align_speed = align_speed
+                self.parent_window = parent_window
+                self.running = True
+                self.chunk_size = chunk_size  # In secondi, per elaborazione a pezzi
+
+                # Per statistiche
+                self.start_time = None
+                self.video_info = None
+                self.audio_info = None
+
+            def log(self, message):
+                self.detailed_log.emit(message)
+                logging.debug(message)
+
+            def get_media_info(self, file_path):
+                """Ottiene informazioni dettagliate sul file media"""
+                try:
+                    import json
+                    # Usa ffprobe per ottenere informazioni sul file
+                    ffprobe_cmd = [
+                        'ffmpeg/bin/ffprobe',
+                        '-v', 'error',
+                        '-show_format',
+                        '-show_streams',
+                        '-print_format', 'json',
+                        file_path
+                    ]
+                    result = subprocess.run(ffprobe_cmd, capture_output=True, text=True)
+
+                    if result.returncode == 0:
+                        return json.loads(result.stdout)
+                    return None
+                except Exception as e:
+                    self.log(f"Errore nell'ottenere informazioni sul file: {e}")
+                    return None
+
+            def run(self):
+                self.start_time = time.time()
+                self.log(f"Inizio elaborazione - {time.strftime('%H:%M:%S')}")
+
+                # Raccogli informazioni sui file
+                self.video_info = self.get_media_info(self.video_path)
+                self.audio_info = self.get_media_info(self.audio_path)
+
+                if self.video_info:
+                    self.log(f"Formato video: {self.video_info.get('format', {}).get('format_name', 'sconosciuto')}")
+                    self.log(
+                        f"Durata video: {self.video_info.get('format', {}).get('duration', 'sconosciuta')} secondi")
+                    self.log(f"Bitrate video: {self.video_info.get('format', {}).get('bit_rate', 'sconosciuto')} bit/s")
+
+                if self.audio_info:
+                    self.log(f"Formato audio: {self.audio_info.get('format', {}).get('format_name', 'sconosciuto')}")
+                    self.log(
+                        f"Durata audio: {self.audio_info.get('format', {}).get('duration', 'sconosciuta')} secondi")
+                    self.log(f"Bitrate audio: {self.audio_info.get('format', {}).get('bit_rate', 'sconosciuto')} bit/s")
+
+                try:
+                    if self.align_speed:
+                        self.alignSpeedAndApplyAudio()
+                    else:
+                        self.applyAudioOnly()
+
+                    if self.running:
+                        elapsed_time = time.time() - self.start_time
+                        self.log(f"Elaborazione completata in {elapsed_time:.1f} secondi")
+                        self.completed.emit(self.output_path)
+                except Exception as e:
+                    if self.running:
+                        import traceback
+                        error_details = traceback.format_exc()
+                        error_msg = f"Errore: {str(e)}\n\nDettagli: {error_details}"
+                        self.log(error_msg)
+                        self.error.emit(error_msg)
+
+            def alignSpeedAndApplyAudio(self):
+                video_clip = None
+                audio_clip = None
+
+                try:
+                    # Primo step: analisi dei file
+                    self.progress.emit(5, "Analisi dei file...")
+                    self.log("Inizio caricamento video...")
+
+                    # Utilizziamo librerie di basso livello per le informazioni
+                    video_probe = self.get_media_info(self.video_path)
+                    audio_probe = self.get_media_info(self.audio_path)
+
+                    video_duration = float(video_probe.get('format', {}).get('duration', 0))
+                    audio_duration = float(audio_probe.get('format', {}).get('duration', 0))
+
+                    self.log(f"Durata video: {video_duration:.2f}s, durata audio: {audio_duration:.2f}s")
+
+                    if video_duration <= 0 or audio_duration <= 0:
+                        raise ValueError("Durata del video o dell'audio non valida")
+
+                    # Calcola il fattore di velocità
+                    speed_factor = round(video_duration / audio_duration, 2)
+                    self.log(f"Fattore di velocità calcolato: {speed_factor}")
+
+                    # Per file molto grandi, utilizziamo direttamente ffmpeg invece di moviepy
+                    if os.path.getsize(self.video_path) > 500 * 1024 * 1024:  # > 500 MB
+                        self.log("File di grandi dimensioni rilevato. Utilizzo elaborazione ottimizzata.")
+                        self.progress.emit(20, "Elaborazione file di grandi dimensioni...")
+                        return self.process_large_files(speed_factor)
+
+                    # Per file più piccoli continua con moviepy
+                    self.progress.emit(15, "Caricamento video...")
+                    video_clip = VideoFileClip(self.video_path)
+                    self.progress.emit(30, "Caricamento audio...")
+                    audio_clip = AudioFileClip(self.audio_path)
+
+                    self.log(f"File caricati con successo. Elaborazione in corso...")
+
+                    # Checkpoint: usiamo la gestione della memoria
+                    import gc
+                    gc.collect()  # Forza la garbage collection
+
+                    # Applica il cambio di velocità
+                    self.progress.emit(40, f"Applicazione fattore velocità: {speed_factor}x...")
+                    video_modified = video_clip.fx(vfx.speedx, speed_factor)
+
+                    # Checkpoint
+                    self.log("Fattore di velocità applicato, fase di unione audio...")
+                    self.progress.emit(60, "Unione audio e video...")
+
+                    # Applica l'audio
+                    final_video = video_modified.set_audio(audio_clip)
+
+                    # Checkpoint
+                    self.log("Audio unito, preparazione al salvataggio...")
+                    self.progress.emit(70, "Preparazione salvataggio...")
+
+                    # Determina il codec audio e video
+                    codec_video = "libx264"
+                    codec_audio = "aac"
+
+                    # Ottieni il framerate originale
+                    fps = video_clip.fps
+
+                    # Configurazioni per ridurre l'uso di memoria
+                    write_options = {
+                        'codec': codec_video,
+                        'audio_codec': codec_audio,
+                        'fps': fps,
+                        'preset': 'ultrafast',
+                        'threads': 4,
+                        'logger': None,  # Disabilita il logging verboso
+                        'ffmpeg_params': ['-crf', '23']  # Comprimi leggermente senza perdere qualità
+                    }
+
+                    # Fase critica: salvataggio
+                    self.log("Inizio salvataggio video finale...")
+                    self.progress.emit(80, "Salvataggio video finale...")
+
+                    try:
+                        # Monitoriamo lo stato durante il salvataggio
+                        start_save = time.time()
+                        final_video.write_videofile(self.output_path, **write_options,
+                                                    progress_bar=False, verbose=False)
+                        save_duration = time.time() - start_save
+                        self.log(f"Salvataggio completato in {save_duration:.1f} secondi")
+                        self.progress.emit(100, "Salvataggio completato")
+                    except Exception as save_error:
+                        self.log(f"Errore durante il salvataggio: {save_error}")
+                        # Tenta un metodo alternativo
+                        self.log("Tentativo alternativo con ffmpeg...")
+                        self.progress.emit(85, "Tentativo alternativo di salvataggio...")
+                        self.save_with_ffmpeg(video_modified, audio_clip)
+
+                except Exception as e:
+                    raise Exception(f"Errore nell'allineamento audio-video: {str(e)}")
+
+                finally:
+                    # Pulizia risorse
+                    self.log("Pulizia risorse...")
+                    if video_clip:
+                        video_clip.close()
+                    if audio_clip:
+                        audio_clip.close()
+                    import gc
+                    gc.collect()  # Forza garbage collection
+
+            def process_large_files(self, speed_factor):
+                """Processa file di grandi dimensioni usando direttamente ffmpeg"""
+                try:
+                    self.progress.emit(30, "Elaborazione file grandi con ffmpeg...")
+                    self.log("Utilizzo ffmpeg per file di grandi dimensioni")
+
+                    # Crea un file temporaneo per il video con velocità modificata
+                    temp_video = self.parent_window.get_temp_filepath(suffix='.mp4')
+
+                    # Modifica la velocità del video con ffmpeg
+                    ffmpeg_speed_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', self.video_path,
+                        '-filter_complex', f'[0:v]setpts={1 / speed_factor}*PTS[v]',
+                        '-map', '[v]',
+                        '-c:v', 'libx264',
+                        '-preset', 'ultrafast',
+                        '-crf', '23',
+                        '-y',
+                        temp_video
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg per la velocità...")
+                    self.progress.emit(40, "Modifica velocità video...")
+                    subprocess.run(ffmpeg_speed_cmd, capture_output=True)
+                    self.log("Velocità video modificata")
+
+                    # Aggiungi l'audio al video modificato
+                    ffmpeg_audio_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', temp_video,
+                        '-i', self.audio_path,
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-c:v', 'copy',  # Non ricodificare il video
+                        '-c:a', 'aac',
+                        '-shortest',
+                        '-y',
+                        self.output_path
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg per aggiungere audio...")
+                    self.progress.emit(70, "Aggiunta audio...")
+                    subprocess.run(ffmpeg_audio_cmd, capture_output=True)
+
+                    # Rimuovi il file temporaneo
+                    if os.path.exists(temp_video):
+                        os.remove(temp_video)
+
+                    self.progress.emit(100, "Elaborazione completata")
+                    return True
+
+                except Exception as e:
+                    self.log(f"Errore nell'elaborazione con ffmpeg: {e}")
+                    raise Exception(f"Errore nell'elaborazione di file grandi: {str(e)}")
+
+            def save_with_ffmpeg(self, video_clip, audio_clip):
+                """Salva il video usando ffmpeg direttamente"""
+                try:
+                    # Salva video e audio temporanei
+                    temp_video = self.parent_window.get_temp_filepath(suffix='.mp4')
+                    temp_audio = self.parent_window.get_temp_filepath(suffix='.aac')
+
+                    # Salva solo il video senza audio
+                    video_clip.without_audio().write_videofile(temp_video, codec='libx264',
+                                                               audio=False, fps=video_clip.fps,
+                                                               preset='ultrafast', verbose=False,
+                                                               progress_bar=False)
+
+                    # Salva l'audio separatamente
+                    audio_clip.write_audiofile(temp_audio, codec='aac', verbose=False,
+                                               progress_bar=False)
+
+                    # Unisci video e audio con ffmpeg
+                    ffmpeg_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', temp_video,
+                        '-i', temp_audio,
+                        '-c:v', 'copy',
+                        '-c:a', 'aac',
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-shortest',
+                        '-y',
+                        self.output_path
+                    ]
+
+                    self.log("Unione finale con ffmpeg...")
+                    self.progress.emit(90, "Unione finale...")
+                    subprocess.run(ffmpeg_cmd, capture_output=True)
+
+                    # Pulizia file temporanei
+                    if os.path.exists(temp_video):
+                        os.remove(temp_video)
+                    if os.path.exists(temp_audio):
+                        os.remove(temp_audio)
+
+                    self.progress.emit(100, "Completato con metodo alternativo")
+                    return True
+
+                except Exception as e:
+                    self.log(f"Errore nel salvataggio alternativo: {e}")
+                    raise Exception(f"Fallimento anche con metodo alternativo: {str(e)}")
+
+            def applyAudioOnly(self):
+                """Applica solo l'audio al video esistente"""
+                # Implementazione simile all'allineamento ma senza modificare la velocità
+                try:
+                    self.progress.emit(10, "Caricamento video...")
+
+                    # Per file molto grandi, utilizziamo direttamente ffmpeg
+                    if os.path.getsize(self.video_path) > 500 * 1024 * 1024:  # > 500 MB
+                        self.log("File video grande rilevato, utilizzo ffmpeg diretto")
+                        return self.apply_audio_with_ffmpeg()
+
+                    video_clip = VideoFileClip(self.video_path)
+
+                    self.progress.emit(30, "Caricamento audio...")
+                    audio_clip = AudioFileClip(self.audio_path)
+
+                    # Verifica e gestisci casi in cui la durata dell'audio è diversa dal video
+                    video_duration = video_clip.duration
+                    audio_duration = audio_clip.duration
+
+                    self.log(f"Durata video: {video_duration:.2f}s, durata audio: {audio_duration:.2f}s")
+
+                    if audio_duration > video_duration:
+                        self.progress.emit(40, "Taglio audio per adattarlo al video...")
+                        self.log(f"L'audio è più lungo del video. Taglio l'audio a {video_duration}s")
+                        audio_clip = audio_clip.subclip(0, video_duration)
+                    elif audio_duration < video_duration:
+                        # Avvisiamo che l'audio è più corto
+                        self.log(f"ATTENZIONE: L'audio è più corto del video di {video_duration - audio_duration:.2f}s")
+
+                    # Applica l'audio
+                    self.progress.emit(50, "Applicazione audio...")
+                    final_video = video_clip.set_audio(audio_clip)
+
+                    # Impostazioni di output ottimizzate
+                    self.progress.emit(70, "Salvataggio video finale...")
+
+                    try:
+                        final_video.write_videofile(
+                            self.output_path,
+                            codec="libx264",
+                            audio_codec="aac",
+                            fps=video_clip.fps,
+                            preset="ultrafast",
+                            threads=4,
+                            ffmpeg_params=['-crf', '23'],
+                            logger=None,
+                            verbose=False,
+                            progress_bar=False
+                        )
+                        self.progress.emit(100, "Completato")
+                    except Exception as save_error:
+                        self.log(f"Errore durante il salvataggio: {save_error}")
+                        self.progress.emit(85, "Tentativo alternativo...")
+                        return self.save_with_ffmpeg(video_clip, audio_clip)
+
+                except Exception as e:
+                    self.log(f"Errore nell'applicazione dell'audio: {e}")
+                    raise Exception(f"Errore nella sostituzione dell'audio: {str(e)}")
+                finally:
+                    # Pulizia risorse
+                    import gc
+                    gc.collect()
+
+            def apply_audio_with_ffmpeg(self):
+                """Applica l'audio al video usando direttamente ffmpeg"""
+                try:
+                    self.progress.emit(40, "Sostituzione audio con ffmpeg...")
+                    self.log("Utilizzo ffmpeg per sostituire l'audio")
+
+                    ffmpeg_cmd = [
+                        'ffmpeg/bin/ffmpeg',
+                        '-i', self.video_path,
+                        '-i', self.audio_path,
+                        '-map', '0:v',
+                        '-map', '1:a',
+                        '-c:v', 'copy',  # Copia il video senza ricodifica
+                        '-c:a', 'aac',  # Codifica l'audio in AAC
+                        '-shortest',  # Termina quando finisce lo stream più corto
+                        '-y',  # Sovrascrivi se esiste
+                        self.output_path
+                    ]
+
+                    self.log("Esecuzione comando ffmpeg...")
+                    self.progress.emit(60, "Elaborazione in corso...")
+
+                    # Esegui il comando ffmpeg
+                    process = subprocess.Popen(
+                        ffmpeg_cmd,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        universal_newlines=True
+                    )
+
+                    # Leggi l'output per tenere traccia dell'avanzamento
+                    while True:
+                        line = process.stderr.readline()
+                        if not line and process.poll() is not None:
+                            break
+                        if 'time=' in line:
+                            try:
+                                # Estrai il timestamp corrente
+                                import re
+                                time_match = re.search(r'time=(\d+:\d+:\d+\.\d+)', line)
+                                if time_match:
+                                    current_time = time_match.group(1)
+                                    h, m, s = current_time.split(':')
+                                    seconds = float(h) * 3600 + float(m) * 60 + float(s)
+
+                                    # Calcola percentuale di completamento (approssimata)
+                                    video_info = self.get_media_info(self.video_path)
+                                    total_duration = float(video_info.get('format', {}).get('duration', 0))
+
+                                    if total_duration > 0:
+                                        progress = min(95, int((seconds / total_duration) * 90) + 60)
+                                        self.progress.emit(progress, f"Elaborazione: {current_time}")
+                            except Exception as ex:
+                                self.log(f"Errore nel parsing dell'output ffmpeg: {ex}")
+
+                    # Verifica il risultato
+                    if process.returncode == 0:
+                        self.log("Processo ffmpeg completato con successo")
+                        self.progress.emit(100, "Elaborazione completata")
+                        return True
+                    else:
+                        stderr = process.stderr.read()
+                        self.log(f"Errore ffmpeg: {stderr}")
+                        raise Exception(f"Errore nell'elaborazione ffmpeg: {stderr}")
+
+                except Exception as e:
+                    self.log(f"Errore nell'applicazione dell'audio con ffmpeg: {e}")
+                    raise Exception(f"Errore nell'applicazione dell'audio: {str(e)}")
+
+            def stop(self):
+                self.running = False
+                self.log("Richiesta interruzione processo...")
+
+        # Crea il dialog personalizzato invece di QProgressDialog
+        progress_dialog = CustomProgressDialog(self)
+
+        # Crea thread per l'elaborazione
+        self.audio_video_thread = AudioVideoThread(video_path, new_audio_path, output_path, align_audio_video, self)
+
+        # Collega i segnali - versione corretta
+        self.audio_video_thread.progress.connect(
+            lambda value, text: (progress_dialog.setValue(value), progress_dialog.setLabelText(text))
+        )
+
+        # Passa il dialog come parametro ai metodi di callback
+        self.audio_video_thread.completed.connect(
+            lambda path: self.onAudioVideoCompleted(path, progress_dialog)
+        )
+        self.audio_video_thread.error.connect(
+            lambda message: self.onAudioVideoError(message, progress_dialog)
+        )
+        self.audio_video_thread.detailed_log.connect(progress_dialog.addLogMessage)
+
+        # Avvia il thread
+        self.audio_video_thread.start()
+
+        # Mostra il dialog
+        result = progress_dialog.exec()
+
+        # Se il dialog viene chiuso, interrompi il thread
+        if result == QDialog.DialogCode.Rejected:
+            self.audio_video_thread.stop()
+
+    # Modifica i metodi di callback per accettare il dialog come parametro
+    def onAudioVideoCompleted(self, output_path, dialog=None):
+        """Gestisce il completamento dell'elaborazione audio-video"""
+        if dialog:
+            dialog.accept()
+        QMessageBox.information(self, "Successo", f"Il nuovo audio è stato applicato con successo:\n{output_path}")
+        self.loadVideoOutput(output_path)
+
+    def onAudioVideoError(self, error_message, dialog=None):
+        """Gestisce gli errori durante l'elaborazione audio-video"""
+        if dialog:
+            dialog.accept()
+        QMessageBox.critical(self, "Errore",
+                             f"Si è verificato un errore durante l'elaborazione audio-video:\n{error_message}")
+    def updateLogInfo(self, message):
+        """Aggiorna il log dettagliato"""
+        if hasattr(self, 'logTextEdit'):
+            timestamp = time.strftime("%H:%M:%S", time.localtime())
+            self.logTextEdit.append(f"[{timestamp}] {message}")
+
+            # Auto-scroll al fondo
+            cursor = self.logTextEdit.textCursor()
+            cursor.movePosition(cursor.MoveOperation.End)
+            self.logTextEdit.setTextCursor(cursor)
+
+    def updateAudioVideoProgress(self, value, message):
+        """Aggiorna il dialog di progresso con lo stato attuale"""
+        if hasattr(self, 'progressDialog') and self.progressDialog is not None:
+            self.progressDialog.setValue(value)
+            self.progressDialog.setLabelText(message)
+
+    def cutVideo(self):
+        media_path = self.videoPathLineEdit
+        if not media_path:
+            self.show_status_message("Per favore, seleziona un file prima di tagliarlo.", error=True)
+            return
+
+        if not (media_path.lower().endswith(('.mp4', '.mov', '.avi', '.mp3', '.wav', '.aac', '.ogg', '.flac'))):
+            self.show_status_message("Formato file non supportato per il taglio.", error=True)
+            return
+
+        is_audio = media_path.lower().endswith(('.mp3', '.wav', '.aac', '.ogg', '.flac'))
+        start_time = self.currentPosition / 1000.0
+
+        base_name = os.path.splitext(os.path.basename(media_path))[0]
+        directory = os.path.dirname(media_path)
+        ext = '.mp3' if is_audio else '.mp4'
+        output_path1 = generate_unique_filename(os.path.join(directory, f"{base_name}_part1{ext}"))
+        output_path2 = generate_unique_filename(os.path.join(directory, f"{base_name}_part2{ext}"))
+
+        thread = VideoCuttingThread(media_path, start_time, output_path1, output_path2)
+        self.start_task(thread, self.onCutCompleted, self.onCutError, self.update_status_progress)
+
+    def onCutCompleted(self, output_path):
+        self.show_status_message(f"File tagliato e salvato con successo.")
+        self.loadVideoOutput(output_path)
+
+    def onCutError(self, error_message):
+        self.show_status_message(f"Errore durante il taglio: {error_message}", error=True)
+
+    def positionChanged(self, position):
+        self.videoSlider.setValue(position)
+        self.currentPosition = position  # Aggiorna la posizione corrente
+        self.updateTimeCode(position)
+
+    # Slot per aggiornare il range massimo dello slider in base alla durata del video
+    def durationChanged(self, duration):
+        self.videoSlider.setRange(0, duration)
+        self.updateDuration(duration)
+
+    # Slot per aggiornare la posizione dello slider in base alla posizione corrente del video
+
+    # Slot per cambiare la posizione del video quando lo slider viene mosso
+    def setPosition(self, position):
+        self.player.setPosition(position)
+
+    def applyDarkMode(self):
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #2b2b2b;
+                color: #dcdcdc;
+            }
+            QLineEdit {
+                background-color: #333333;
+                border: 1px solid #555555;
+                border-radius: 2px;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QPushButton {
+                background-color: #555555;
+                border: 1px solid #666666;
+                border-radius: 2px;
+                padding: 5px;
+                color: #ffffff;
+            }
+            QPushButton:hover {
+                background-color: #666666;
+            }
+            QPushButton:pressed {
+                background-color: #777777;
+            }
+            QLabel {
+                color: #cccccc;
+            }
+            QFileDialog {
+                background-color: #444444;
+            }
+            QMessageBox {
+                background-color: #444444;
+            }
+               /* Stile base per la casella (non spuntata) */
+            QCheckBox::indicator {
+                background-color: #333333; /* Sfondo scuro per la casella vuota */
+                border: 1px solid #777777;
+                width: 13px;
+                height: 13px;
+                border-radius: 2px;
+            }
+
+            /* Stile per la casella QUANDO è spuntata */
+            QCheckBox::indicator:checked {
+                background-color: #55aaff; /* Un colore acceso per indicare la selezione */
+                border: 1px solid #77c7ff;
+            }
+            /* Stile per la casella quando il mouse è sopra */
+            QCheckBox::indicator:hover {
+                border: 1px solid #55aaff;
+            }
+
+            /* Stili simili per i Radio Button per coerenza */
+            QRadioButton::indicator {
+                background-color: #333333;
+                border: 1px solid #777777;
+                border-radius: 7px; /* Cerchio perfetto */
+                width: 13px;
+                height: 13px;
+            }
+            QRadioButton::indicator:checked {
+                background-color: #55aaff; /* Colore di riempimento quando selezionato */
+                border: 2px solid #333333; /* Bordo interno per creare l'effetto "pallino" */
+            }
+            QRadioButton::indicator:hover {
+                border: 1px solid #55aaff;
+            }
+        """)
+
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        file_urls = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
+        if file_urls:
+
+            self.videoPathLineEdit = file_urls[0]  # Aggiorna il percorso del video memorizzato
+            self.loadVideo(self.videoPathLineEdit, os.path.basename(file_urls[0]))
+
+    def browseVideo(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
+        if fileName:
+           self.loadVideo(fileName)
+
+    def browseVideoOutput(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*.avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
+        if fileName:
+           self.loadVideoOutput(fileName)
+
+    def browseAudioFile(self):
+        fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona File Audio", "", "Audio Files (*.mp3 *.wav *.aac *.ogg *.flac)")
+        if fileName:
+            self.loadVideo(fileName)
+
+    def updateRecentFiles(self, newFile):
+        if newFile in self.recentFiles:
+            self.recentFiles.remove(newFile)
+
+        self.recentFiles.insert(0, newFile)
+
+        if len(self.recentFiles) > 15:  # Limita la lista ai 15 più recenti
+            self.recentFiles = self.recentFiles[:15]
+
+        # Salva la lista aggiornata nelle impostazioni
+        settings = QSettings("Genius", "GeniusAI")
+        settings.setValue("recentFiles", self.recentFiles)
+
+        self.updateRecentFilesMenu()
+
+    def updateRecentFilesMenu(self):
+        self.recentMenu.clear()
+        for file in self.recentFiles:
+            action = QAction(os.path.basename(file), self)
+            action.triggered.connect(lambda checked, f=file: self.openRecentFile(f))
+            self.recentMenu.addAction(action)
+
+    def updateRecentProjects(self, newProject):
+        # Normalize the path for consistent comparison
+        newProject_norm = os.path.normpath(newProject)
+
+        # Create a new list excluding any existing instances of the project (case-insensitive on Windows)
+        if sys.platform == "win32":
+            self.recentProjects = [p for p in self.recentProjects if os.path.normpath(p).lower() != newProject_norm.lower()]
+        else:
+            self.recentProjects = [p for p in self.recentProjects if os.path.normpath(p) != newProject_norm]
+
+
+        self.recentProjects.insert(0, newProject)
+
+        if len(self.recentProjects) > 15:
+            self.recentProjects = self.recentProjects[:15]
+
+        settings = QSettings("Genius", "GeniusAI")
+        settings.setValue("recentProjects", self.recentProjects)
+
+        self.updateRecentProjectsMenu()
+
+    def updateRecentProjectsMenu(self):
+        self.recentProjectsMenu.clear()
+        for project in self.recentProjects:
+            project_name = os.path.basename(os.path.dirname(project))
+            action = QAction(project_name, self)
+            action.triggered.connect(lambda checked, p=project: self.openRecentProject(p))
+            self.recentProjectsMenu.addAction(action)
+
+    def loadRecentProjects(self):
+        """Carica la lista dei progetti recenti da QSettings."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.recentProjects = settings.value("recentProjects", [], type=list)
+        # Rimuovi i progetti che non esistono più
+        self.recentProjects = [p for p in self.recentProjects if os.path.exists(p)]
+
+    def openRecentProject(self, filePath):
+        self._clear_workspace()
+        self.load_project(filePath)
+
+    def _load_most_recent_clip(self):
+        """Finds and loads the most recent clip from the current project."""
+        if not self.projectDock.project_data:
+            return
+
+        all_clips = self.projectDock.project_data.get("clips", []) + self.projectDock.project_data.get("audio_clips", [])
+        if not all_clips:
+            return
+
+        def get_date(clip):
+            try:
+                date_str = clip.get("creation_date")
+                if date_str:
+                    return datetime.datetime.fromisoformat(date_str)
+            except (ValueError, TypeError):
+                pass  # Ignore parsing errors
+            return datetime.datetime.min  # Fallback for max()
+
+        most_recent_clip = max(all_clips, key=get_date)
+        clip_filename = most_recent_clip.get("clip_filename")
+
+        if clip_filename:
+            is_audio = any(c.get('clip_filename') == clip_filename for c in self.projectDock.project_data.get('audio_clips', []))
+            subfolder = "audio" if is_audio else "clips"
+            clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
+
+            if os.path.exists(clip_path):
+                self.loadVideo(clip_path, clip_filename)
+
+    def loadRecentFiles(self):
+        """Carica la lista dei file recenti da QSettings."""
+        settings = QSettings("Genius", "GeniusAI")
+        self.recentFiles = settings.value("recentFiles", [], type=list)
+        # Rimuovi i file che non esistono più
+        self.recentFiles = [f for f in self.recentFiles if os.path.exists(f)]
+
+
+    def openRecentFile(self, filePath):
+        self.videoPathLineEdit = filePath
+        self.player.setSource(QUrl.fromLocalFile(filePath))
+        self.fileNameLabel.setText(os.path.basename(filePath))
+
+    def playVideo(self):
+        self.player.play()
+
+    def pauseVideo(self):
+        self.player.pause()
+
+    def adattaVelocitaVideoAAudio(self, video_path, new_audio_path, output_path):
+        try:
+            # Log dei percorsi dei file
+            logging.debug(f"Percorso video: {video_path}")
+            logging.debug(f"Percorso nuovo audio: {new_audio_path}")
+            logging.debug(f"Percorso output: {output_path}")
+
+            # Carica il nuovo file audio e calcola la sua durata
+            new_audio = AudioFileClip(new_audio_path)
+            durata_audio = new_audio.duration
+            logging.debug(f"Durata audio: {durata_audio} secondi")
+
+            # Carica il video (senza audio) e calcola la sua durata
+            video_clip = VideoFileClip(video_path)
+            durata_video = video_clip.duration
+            logging.debug(f"Durata video: {durata_video} secondi")
+
+            # Calcola il fattore di velocità
+            fattore_velocita = round(durata_video / durata_audio, 1)
+            logging.debug(f"Fattore di velocità: {fattore_velocita}")
+
+            # Modifica la velocità del video
+            video_modificato = video_clip.fx(vfx.speedx, fattore_velocita)
+
+            # Imposta il nuovo audio sul video modificato
+            final_video = video_modificato.set_audio(new_audio)
+
+            # Scrivi il video finale mantenendo lo stesso frame rate del video originale
+            final_video.write_videofile(output_path, codec="libx264", audio_codec="aac", fps=video_clip.fps)
+            logging.debug('Video elaborato con successo.')
+
+        except Exception as e:
+            logging.error(f"Errore durante l'adattamento della velocità del video: {e}")
+    def stopVideo(self):
+        self.player.stop()
+
+    def updatePlayButtonIcon(self, state):
+        if self.reverseTimer.isActive():
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButton.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButton.setIcon(QIcon(get_resource("play.png")))
+
+    def keyPressEvent(self, event):
+        """
+        Gestisce gli eventi di pressione dei tasti a livello di finestra principale
+        per controllare la riproduzione video con le frecce.
+        """
+        key = event.key()
+
+        # Non intercettare gli eventi quando un campo di testo ha il focus
+        if QApplication.focusWidget() and isinstance(QApplication.focusWidget(), (QLineEdit, QTextEdit)):
+            super().keyPressEvent(event)
+            return
+
+        if key == Qt.Key.Key_Left:
+            self.rewind5Seconds()
+            event.accept()
+        elif key == Qt.Key.Key_Right:
+            self.forward5Seconds()
+            event.accept()
+        else:
+            super().keyPressEvent(event)
+
+    def eventFilter(self, source, event):
+        if source is self.videoOverlay and event.type() == QEvent.Type.MouseButtonDblClick:
+            if event.button() == Qt.MouseButton.LeftButton:
+                self.add_video_note()
+                return True
+        return super().eventFilter(source, event)
+
+    def add_video_note(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Carica un video prima di aggiungere una nota.", error=True)
+            return
+
+        self.player.pause()
+        position = self.player.position()
+        timecode = self.formatTimecode(position)
+
+        note_text, ok = MultiLineInputDialog.getText(self, "Aggiungi Nota", f"Inserisci la nota per il timecode {timecode}:")
+
+        if ok and note_text.strip():
+            note_item = f"{timecode} - {note_text.strip()}"
+            list_item = QListWidgetItem(note_item)
+            list_item.setData(Qt.ItemDataRole.UserRole, position) # Store position in ms
+            self.videoNotesListWidget.addItem(list_item)
+            self.save_video_notes_to_json()
+
+    def seek_to_note_timecode(self, item):
+        position = item.data(Qt.ItemDataRole.UserRole)
+        if position is not None:
+            self.player.setPosition(position)
+
+    def save_video_notes_to_json(self):
+        if not self.videoPathLineEdit:
+            return
+
+        notes = []
+        for i in range(self.videoNotesListWidget.count()):
+            item = self.videoNotesListWidget.item(i)
+            position = item.data(Qt.ItemDataRole.UserRole)
+            text = item.text().split(" - ", 1)[1]
+            notes.append({"position": position, "text": text})
+
+        self._update_json_file(self.videoPathLineEdit, {"video_notes": notes})
+
+    def load_video_notes_from_json(self, data):
+        self.videoNotesListWidget.clear()
+        notes = data.get("video_notes", [])
+        for note in notes:
+            position = note.get("position")
+            text = note.get("text")
+            if position is not None and text:
+                timecode = self.formatTimecode(position)
+                list_item = QListWidgetItem(f"{timecode} - {text}")
+                list_item.setData(Qt.ItemDataRole.UserRole, position)
+                self.videoNotesListWidget.addItem(list_item)
+
+    def edit_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da modificare.", error=True)
+            return
+
+        position = selected_item.data(Qt.ItemDataRole.UserRole)
+        timecode = self.formatTimecode(position)
+        current_text = selected_item.text().split(" - ", 1)[1]
+
+        new_text, ok = MultiLineInputDialog.getText(self, "Modifica Nota", "Nuovo testo della nota:", text=current_text)
+
+        if ok and new_text.strip():
+            selected_item.setText(f"{timecode} - {new_text.strip()}")
+            self.save_video_notes_to_json()
+
+    def delete_video_note(self):
+        selected_item = self.videoNotesListWidget.currentItem()
+        if not selected_item:
+            self.show_status_message("Seleziona una nota da cancellare.", error=True)
+            return
+
+        reply = QMessageBox.question(self, "Conferma Cancellazione",
+                                     f"Sei sicuro di voler cancellare la nota?\n\n'{selected_item.text()}'",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.No)
+
+        if reply == QMessageBox.StandardButton.Yes:
+            self.videoNotesListWidget.takeItem(self.videoNotesListWidget.row(selected_item))
+            self.save_video_notes_to_json()
+
+    def updatePlayButtonIconOutput(self, state):
+        if self.reverseTimerOutput.isActive():
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        elif state == QMediaPlayer.PlaybackState.PlayingState:
+            self.playButtonOutput.setIcon(QIcon(get_resource("pausa.png")))
+        else:
+            self.playButtonOutput.setIcon(QIcon(get_resource("play.png")))
+
+    # --- PROJECT MANAGEMENT METHODS ---
+
+    def _clear_workspace(self):
+        """
+        Pulisce completamente lo stato dell'applicazione per prepararsi a un nuovo progetto.
+        """
+        # 1. Pulisci i video player e i percorsi associati
+        self.releaseSourceVideo()
+        self.releaseOutputVideo()
+
+        # 2. Pulisci le aree di testo
+        self.singleTranscriptionTextArea.clear()
+        self.batchTranscriptionTextArea.clear()
+        self.audioAiTextArea.clear()
+        self.summaryDetailedTextArea.clear()
+        self.summaryMeetingTextArea.clear()
+        self.summaryCombinedDetailedTextArea.clear()
+        self.summaryCombinedMeetingTextArea.clear()
+
+
+        # 3. Resetta lo stato interno delle trascrizioni e dei riassunti
+        self.transcription_original = ""
+        self.transcription_corrected = ""
+        self.summaries = {
+            "detailed": "", "meeting": "",
+            "detailed_integrated": "", "meeting_integrated": ""
+        }
+        self.combined_summary = {
+            "source_files": [], "detailed_combined": "", "meeting_combined": "",
+            "detailed_combined_integrated": "", "meeting_combined_integrated": ""
+        }
+        self.active_summary_type = None
+        self.original_audio_ai_html = ""
+        self.transcriptionViewToggle.setChecked(False)
+        self.transcriptionViewToggle.setEnabled(False)
+
+        # 4. Resetta i percorsi e lo stato del progetto
+        self.current_project_path = None
+        self.current_video_path = None
+        self.current_audio_path = None
+
+        # 5. Pulisci i dock informativi
+        self.projectDock.clear_project()
+        self.chatDock.clear_chat()
+        self.chatDock.set_project_path(None)
+
+        self.show_status_message("Workspace pulito. Pronto per un nuovo progetto.")
+
+    def create_new_project(self):
+        project_name, ok = QInputDialog.getText(self, "Nuovo Progetto", "Inserisci il nome del nuovo progetto:")
+        if not ok or not project_name.strip():
+            # L'utente ha annullato o non ha inserito un nome
+            return
+
+        # Chiedi all'utente di scegliere una cartella di destinazione
+        destination_folder = QFileDialog.getExistingDirectory(self, "Scegli la cartella di destinazione del progetto", self.project_manager.base_dir)
+        if not destination_folder:
+            # L'utente ha annullato la selezione della cartella
+            return
+
+        # Pulisci l'area di lavoro solo dopo che l'utente ha confermato tutto
+        self._clear_workspace()
+
+        # Crea il progetto nella cartella scelta
+        project_path, gnai_path = self.project_manager.create_project(project_name.strip(), base_dir=destination_folder)
+
+        if project_path:
+            self.show_status_message(f"Progetto '{os.path.basename(project_path)}' creato con successo in '{destination_folder}'.")
+            self.load_project(gnai_path)
+        else:
+            self.show_status_message(f"Errore: Il progetto '{project_name.strip()}' esiste già in questa cartella.", error=True)
+
+    def open_project(self):
+        gnai_path, _ = QFileDialog.getOpenFileName(self, "Apri Progetto", self.project_manager.base_dir, "GeniusAI Project Files (*.gnai)")
         if gnai_path:
             self._clear_workspace()
             self.load_project(gnai_path)
 
-    def download_video_from_url(self):
-        """Opens the download dialog."""
-        dialog = DownloadDialog(self)
+    def load_project(self, gnai_path):
+        project_data, error = self.project_manager.load_project(gnai_path)
+        if error:
+            self.show_status_message(f"Errore caricamento progetto: {error}", error=True)
+            return
+
+        self.current_project_path = os.path.dirname(gnai_path)
+        self.chatDock.set_project_path(self.current_project_path)
+        self.folderPathLineEdit.setText(self.current_project_path)
+        self.projectDock.load_project_data(project_data, self.current_project_path, gnai_path)
+        self.show_status_message(f"Progetto '{project_data.get('projectName')}' caricato.")
+        self.updateRecentProjects(gnai_path)
+        if not self.projectDock.isVisible():
+            self.projectDock.show()
+
+        # Carica i riassunti combinati e la trascrizione del progetto dal file .gnai
+        project_summaries = project_data.get('projectSummaries', {})
+        if project_summaries:
+            # CORREZIONE: Mappa le chiavi del file .gnai alle chiavi del modello dati interno.
+            # Gestisce anche la chiave deprecata 'combinedDettagliato' per retrocompatibilità.
+            detailed_summary = project_summaries.get('combinedDetailed', project_summaries.get('combinedDettagliato', ''))
+            self.combined_summary['detailed_combined'] = detailed_summary
+            self.combined_summary['meeting_combined'] = project_summaries.get('combinedMeeting', '')
+            self._update_summary_view() # Aggiorna la UI dal modello dati
+            logging.info("Riassunti combinati caricati dal progetto.")
+
+        project_transcription = project_data.get('projectTranscription', '')
+        if project_transcription:
+            self.batchTranscriptionTextArea.setPlainText(project_transcription)
+            logging.info("Trascrizione del progetto caricata.")
+
+        # Asynchronously load the most recent clip to avoid blocking the UI
+        QTimer.singleShot(100, self._load_most_recent_clip)
+
+        # Prepara i dati per l'aggiornamento dell'interfaccia utente, inclusi i riassunti
+        ui_data = {
+            "summaries": project_data.get('projectSummaries', {}),
+            "combined_summary": project_data.get('combined_summary', {})
+            # Aggiungi qui altri dati specifici della clip se necessario
+        }
+        self._update_ui_from_json_data(ui_data)
+
+
+    def load_project_clip(self, video_path, metadata_filename):
+        if os.path.exists(video_path):
+            # Disconnect the signal to prevent unintended reloads
+            try:
+                self.projectDock.project_clips_folder_changed.disconnect(self.sync_project_clips_folder)
+            except TypeError:
+                pass  # Signal was not connected
+
+            self.loadVideo(video_path)
+
+            # Reconnect the signal after loading
+            self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
+
+            self.show_status_message(f"Clip '{os.path.basename(video_path)}' caricata.")
+        else:
+            self.show_status_message(f"File video non trovato: {video_path}", error=True)
+
+    def merge_project_clips(self):
+        if not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto caricato o nessuna clip nel progetto.", error=True)
+            return
+
+        clips = self.projectDock.project_data.get("clips", [])
+        if not clips:
+            self.show_status_message("Nessuna clip da unire nel progetto.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        clips_paths = sorted([os.path.join(clips_dir, c["clip_filename"]) for c in clips])
+
+        # Proponi un nome di default per il file unito
+        project_name = self.projectDock.project_data.get("projectName", "merged_video")
+        default_save_path = os.path.join(self.current_project_path, f"{project_name}_merged.mp4")
+
+        output_path, _ = QFileDialog.getSaveFileName(self, "Salva Video Unito", default_save_path, "MP4 Video Files (*.mp4)")
+        if not output_path:
+            return
+
+        thread = ProjectClipsMergeThread(clips_paths, output_path, self)
+        self.start_task(thread, self.on_merge_clips_completed, self.on_merge_clips_error, self.update_status_progress)
+
+    def on_merge_clips_completed(self, output_path):
+        self.show_status_message(f"Clip unite con successo. Video salvato in {os.path.basename(output_path)}")
+        self.loadVideoOutput(output_path)
+
+    def on_merge_clips_error(self, error_message):
+        self.show_status_message(f"Errore durante l'unione delle clip: {error_message}", error=True)
+
+    def sync_project_clips_folder(self):
+        """
+        Sincronizza il file .gnai con la cartella 'clips', aggiornando lo stato dei file.
+        """
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        if not os.path.isdir(clips_dir):
+            os.makedirs(clips_dir) # Crea la cartella se non esiste
+
+        try:
+            disk_files = {f for f in os.listdir(clips_dir) if os.path.isfile(os.path.join(clips_dir, f)) and f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))}
+
+            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+            if not project_data:
+                return
+
+            registered_clips_dict = {c['clip_filename']: c for c in project_data.get('clips', [])}
+            now = datetime.datetime.now().isoformat()
+            changes_made = False
+
+            # Controlla lo stato dei file registrati
+            for filename, clip_data in registered_clips_dict.items():
+                if filename in disk_files:
+                    # Il file esiste, aggiorna lo stato a 'online' se necessario
+                    if clip_data.get('status') != 'online':
+                        clip_data['status'] = 'online'
+                        changes_made = True
+                    clip_data['last_seen'] = now
+                    disk_files.remove(filename) # Rimuovi dalla lista dei file non tracciati
+                else:
+                    # Il file non esiste più, aggiorna lo stato a 'offline'
+                    if clip_data.get('status') != 'offline':
+                        clip_data['status'] = 'offline'
+                        changes_made = True
+
+            # Aggiungi nuovi file trovati sul disco
+            if disk_files:
+                self.show_status_message(f"Rilevati {len(disk_files)} nuovi file. Aggiunta in corso...")
+                for filename in disk_files:
+                    clip_path = os.path.join(clips_dir, filename)
+                    try:
+                        clip_info = VideoFileClip(clip_path)
+                        duration = clip_info.duration
+                        clip_info.close()
+                        size = os.path.getsize(clip_path)
+                        creation_date = datetime.datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
+
+                        new_clip_data = {
+                            "clip_filename": filename,
+                            "metadata_filename": os.path.splitext(filename)[0] + ".json",
+                            "addedAt": now,
+                            "duration": duration,
+                            "size": size,
+                            "creation_date": creation_date,
+                            "status": "new",
+                            "last_seen": now
+                        }
+                        project_data["clips"].append(new_clip_data)
+                        changes_made = True
+                    except Exception as e:
+                        logging.error(f"Impossibile aggiungere la nuova clip {filename}: {e}")
+
+            # Salva e ricarica se ci sono state modifiche
+            if changes_made:
+                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+
+            # Ricarica solo i dati del progetto e aggiorna la vista del dock,
+            # evitando di chiamare self.load_project() che causerebbe un loop.
+            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+            if project_data:
+                self.projectDock.load_project_data(project_data, self.current_project_path, self.projectDock.gnai_path)
+
+            if changes_made:
+                self.show_status_message("Progetto sincronizzato con la cartella clips.")
+
+
+        except Exception as e:
+            logging.error(f"Errore durante la sincronizzazione della cartella clips: {e}")
+            self.show_status_message("Errore durante la sincronizzazione della cartella.", error=True)
+
+    def delete_project_clip(self, clip_filename):
+        """
+        Chiede all'utente come gestire l'eliminazione di una clip: solo dal progetto
+        o anche dal disco. Gestisce sia clip video che audio.
+        """
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        # Determina se è una clip audio o video per costruire il percorso corretto
+        is_audio = any(clip['clip_filename'] == clip_filename for clip in self.projectDock.project_data.get('audio_clips', []))
+        subfolder = "audio" if is_audio else "clips"
+        clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
+
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Rimuovi Clip")
+        msg_box.setText(f"Cosa vuoi fare con la clip '{clip_filename}'?")
+        msg_box.setIcon(QMessageBox.Icon.Question)
+
+        remove_button = msg_box.addButton("Rimuovi solo dal Progetto", QMessageBox.ButtonRole.ActionRole)
+        delete_button = msg_box.addButton("Elimina da Progetto e Disco", QMessageBox.ButtonRole.DestructiveRole)
+        cancel_button = msg_box.addButton("Annulla", QMessageBox.ButtonRole.RejectRole)
+
+        msg_box.exec()
+
+        if msg_box.clickedButton() == remove_button:
+            # Rimuovi solo dal JSON
+            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+            if success:
+                self.load_project(self.projectDock.gnai_path)
+                self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
+            else:
+                self.show_status_message(f"Errore: {message}", error=True)
+
+        elif msg_box.clickedButton() == delete_button:
+            # Rimuovi dal JSON e dal disco
+            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+            if not success:
+                self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
+                return
+
+            try:
+                if os.path.exists(clip_path):
+                    os.remove(clip_path)
+                json_path = os.path.splitext(clip_path)[0] + ".json"
+                if os.path.exists(json_path):
+                    os.remove(json_path)
+
+                self.load_project(self.projectDock.gnai_path)
+                self.show_status_message(f"Clip '{clip_filename}' eliminata dal progetto e dal disco.")
+            except Exception as e:
+                self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
+                self.load_project(self.projectDock.gnai_path)
+
+    def rename_project_clip(self, old_filename, new_filename):
+        """Rinomina una clip, gestendo lo scaricamento e ricaricamento dai player."""
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        is_audio = any(c['clip_filename'] == old_filename for c in self.projectDock.project_data.get('audio_clips', []))
+        subfolder = "audio" if is_audio else "clips"
+        clips_dir = os.path.join(self.current_project_path, subfolder)
+
+        old_clip_path = os.path.join(clips_dir, old_filename)
+        new_clip_path = os.path.join(clips_dir, new_filename)
+        old_json_path = os.path.splitext(old_clip_path)[0] + ".json"
+        new_json_path = os.path.splitext(new_clip_path)[0] + ".json"
+
+        if os.path.exists(new_clip_path):
+            self.show_status_message(f"Un file con nome '{new_filename}' esiste già.", error=True)
+            return
+
+        # --- Logica di scaricamento/ricaricamento ---
+        player_to_reload = None
+        reload_timestamp = 0
+
+        # Controlla se il file è caricato nel player di input
+        if self.videoPathLineEdit and os.path.normpath(self.videoPathLineEdit) == os.path.normpath(old_clip_path):
+            player_to_reload = 'input'
+            reload_timestamp = self.player.position()
+            self.releaseSourceVideo()
+
+        # Controlla se il file è caricato nel player di output
+        if self.videoPathLineOutputEdit and os.path.normpath(self.videoPathLineOutputEdit) == os.path.normpath(old_clip_path):
+            player_to_reload = 'output'
+            reload_timestamp = self.playerOutput.position()
+            self.releaseOutputVideo()
+        # --- Fine logica ---
+
+        try:
+            if os.path.exists(old_clip_path):
+                os.rename(old_clip_path, new_clip_path)
+            if os.path.exists(old_json_path):
+                os.rename(old_json_path, new_json_path)
+
+            success, message = self.project_manager.rename_clip_in_project(
+                self.projectDock.gnai_path, old_filename, new_filename
+            )
+            if not success:
+                raise Exception(message)
+
+            self.load_project(self.projectDock.gnai_path)
+            self.show_status_message(f"Clip '{old_filename}' rinominata in '{new_filename}'.")
+
+            # --- Ricarica nel player ---
+            if player_to_reload:
+                QTimer.singleShot(100, lambda: self._reload_renamed_clip(player_to_reload, new_clip_path, reload_timestamp))
+
+        except Exception as e:
+            self.show_status_message(f"Errore durante la rinomina: {e}", error=True)
+            # Tenta il ripristino
+            if os.path.exists(new_clip_path) and not os.path.exists(old_clip_path):
+                os.rename(new_clip_path, old_clip_path)
+            if os.path.exists(new_json_path) and not os.path.exists(old_json_path):
+                os.rename(new_json_path, old_json_path)
+            # Se un video era stato scaricato, tenta di ricaricarlo
+            if player_to_reload:
+                 QTimer.singleShot(100, lambda: self._reload_renamed_clip(player_to_reload, old_clip_path, reload_timestamp))
+
+
+    def _reload_renamed_clip(self, player_type, clip_path, timestamp):
+        """Ricarica una clip in un player e imposta il timestamp."""
+        if player_type == 'input':
+            self.loadVideo(clip_path)
+            self.player.setPosition(timestamp)
+        elif player_type == 'output':
+            self.loadVideoOutput(clip_path)
+            self.playerOutput.setPosition(timestamp)
+
+    def rename_clip_from_summary(self, clip_filename):
+        """
+        Genera un nuovo nome file dal titolo del riassunto di una clip e la rinomina.
+        """
+        if not self.current_project_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        # 1. Trova il percorso del file JSON associato
+        clip_path = self.project_manager.get_clip_path_by_filename(self.projectDock.gnai_path, clip_filename)
+        if not clip_path:
+            self.show_status_message(f"Impossibile trovare il percorso per la clip '{clip_filename}'.", error=True)
+            return
+
+        json_path = os.path.splitext(clip_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            self.show_status_message(f"File JSON non trovato per '{clip_filename}'. Generare prima un riassunto.", error=True)
+            return
+
+        # 2. Leggi il JSON e estrai il titolo del riassunto
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+
+            summary_text = data.get("summaries", {}).get("detailed", "")
+            if not summary_text:
+                self.show_status_message("Nessun riassunto dettagliato trovato nel file JSON.", error=True)
+                return
+
+            # Estrai la prima riga come titolo
+            summary_title = summary_text.strip().split('\n')[0]
+            # Rimuovi eventuali asterischi o caratteri di markdown iniziali
+            summary_title = re.sub(r'^[#* \t]+', '', summary_title)
+
+            if not summary_title:
+                self.show_status_message("Il titolo del riassunto è vuoto.", error=True)
+                return
+
+        except (json.JSONDecodeError, IndexError) as e:
+            self.show_status_message(f"Errore nella lettura del titolo dal JSON: {e}", error=True)
+            return
+
+        # 3. Usa ProcessTextAI per generare il nome del file
+        self.show_status_message(f"Genero il nome del file dal titolo: '{summary_title}'...")
+
+        thread = ProcessTextAI(
+            mode="generate_filename",
+            language="italiano", # La lingua non è critica per questa modalità
+            prompt_vars={'text': summary_title}
+        )
+
+        # Il callback gestirà la rinomina effettiva
+        on_complete = lambda new_base_name: self.on_filename_generated(clip_filename, new_base_name)
+        self.start_task(thread, on_complete, self.onProcessError, self.update_status_progress)
+
+    def on_filename_generated(self, old_filename, new_base_name):
+        """
+        Callback chiamato quando il nuovo nome base del file è stato generato dall'AI.
+        """
+        new_base_name = new_base_name.strip().replace("'", "") # Pulisce ulteriormente l'output
+
+        if not new_base_name:
+            self.show_status_message("L'AI non ha generato un nome file valido.", error=True)
+            return
+
+        # Aggiungi l'estensione originale
+        _, extension = os.path.splitext(old_filename)
+        new_filename = f"{new_base_name}{extension}"
+
+        self.show_status_message(f"Nuovo nome generato: '{new_filename}'. Procedo con la rinomina...")
+
+        # Chiama il metodo di rinomina esistente
+        self.rename_project_clip(old_filename, new_filename)
+
+    def relink_project_clip(self, old_filename, new_filepath):
+        """Gestisce il ricollegamento di una clip offline."""
+        if not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        new_filename = os.path.basename(new_filepath)
+        dest_path = os.path.join(clips_dir, new_filename)
+
+        # Copia il nuovo file nella cartella clips del progetto
+        try:
+            shutil.copy2(new_filepath, dest_path)
+        except Exception as e:
+            self.show_status_message(f"Errore durante la copia del file: {e}", error=True)
+            return
+
+        # Aggiorna il file .gnai usando il ProjectManager
+        success, message = self.project_manager.relink_clip(
+            self.projectDock.gnai_path, old_filename, dest_path
+        )
+
+        if success:
+            self.load_project(self.projectDock.gnai_path) # Ricarica per aggiornare la UI
+            self.show_status_message(f"Clip '{old_filename}' ricollegata a '{new_filename}'.")
+        else:
+            self.show_status_message(f"Errore nel ricollegamento: {message}", error=True)
+            # Se il ricollegamento fallisce, rimuovi il file copiato per pulizia
+            if os.path.exists(dest_path):
+                os.remove(dest_path)
+
+    def open_project_folder(self):
+        """Apre la cartella del progetto corrente nel file explorer di sistema."""
+        if self.current_project_path and os.path.isdir(self.current_project_path):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.current_project_path))
+            self.show_status_message(f"Apertura della cartella: {self.current_project_path}")
+        else:
+            self.show_status_message("Nessuna cartella di progetto valida da aprire.", error=True)
+
+    def save_project(self):
+        """Salva lo stato corrente del progetto."""
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo da salvare.", error=True)
+            return
+
+        # Assicurati che i dati del progetto nel dock siano aggiornati
+        # (Questo potrebbe non essere necessario se i dati sono sempre coerenti)
+        current_data = self.projectDock.project_data
+        if not current_data:
+            self.show_status_message("Dati del progetto non validi.", error=True)
+            return
+
+        success, message = self.project_manager.save_project(self.projectDock.gnai_path, current_data)
+        if success:
+            self.show_status_message("Progetto salvato con successo.")
+        else:
+            self.show_status_message(f"Errore nel salvataggio del progetto: {message}", error=True)
+
+    def _on_player_selection_changed(self, player_name, is_checked):
+        """Mostra un messaggio nella status bar quando la selezione del player cambia."""
+        if is_checked:
+            self.show_status_message(f"Player {player_name} selezionato per le operazioni.", timeout=3000)
+
+    def _select_audio_from_project(self):
+        """Apre il dialogo per selezionare un file audio dal progetto e aggiorna il line edit."""
+        selected_path = self._select_clip_from_project_dialog(clip_type='audio')
+        if selected_path:
+            self.audioPathLineEdit.setText(selected_path)
+
+    def _select_video_from_project(self):
+        """Apre il dialogo per selezionare un file video dal progetto e aggiorna il line edit."""
+        selected_path = self._select_clip_from_project_dialog(clip_type='video')
+        if selected_path:
+            self.mergeVideoPathLineEdit.setText(selected_path)
+
+    def _select_clip_from_project_dialog(self, clip_type='video'):
+        """
+        Apre un dialogo per selezionare una clip (video o audio) dal progetto corrente.
+        Restituisce il percorso completo della clip selezionata o None.
+        """
+        if not self.current_project_path or not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return None
+
+        if clip_type == 'video':
+            clips = self.projectDock.project_data.get("clips", [])
+            title = "Seleziona Video dal Progetto"
+            clips_dir = os.path.join(self.current_project_path, "clips")
+        elif clip_type == 'audio':
+            clips = self.projectDock.project_data.get("audio_clips", [])
+            title = "Seleziona Audio dal Progetto"
+            clips_dir = os.path.join(self.current_project_path, "audio")
+        else:
+            return None
+
+        if not clips:
+            self.show_status_message(f"Nessuna clip di tipo '{clip_type}' trovata nel progetto.", error=True)
+            return None
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+
+        list_widget = QListWidget()
+        for clip in clips:
+            # Mostra solo le clip 'online' o 'new'
+            if clip.get('status') in ['online', 'new']:
+                list_widget.addItem(clip["clip_filename"])
+
+        layout.addWidget(list_widget)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted and list_widget.currentItem():
+            selected_filename = list_widget.currentItem().text()
+            return os.path.join(clips_dir, selected_filename)
+
+        return None
+
+    def get_temp_filepath(self, suffix="", prefix="tmp_"):
+        """
+        Genera un percorso per un file temporaneo, all'interno della cartella
+        temp del progetto se un progetto è attivo.
+        """
+        if self.current_project_path:
+            temp_dir = os.path.join(self.current_project_path, "temp")
+            os.makedirs(temp_dir, exist_ok=True)
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix=prefix, dir=temp_dir)
+            os.close(fd)
+            return path
+        else:
+            fd, path = tempfile.mkstemp(suffix=suffix, prefix=prefix)
+            os.close(fd)
+            return path
+
+    def get_temp_dir(self, prefix="tmp_"):
+        """
+        Genera un percorso per una directory temporanea, all'interno della cartella
+        temp del progetto se un progetto è attivo.
+        """
+        if self.current_project_path:
+            temp_dir = os.path.join(self.current_project_path, "temp")
+            os.makedirs(temp_dir, exist_ok=True)
+            return tempfile.mkdtemp(prefix=prefix, dir=temp_dir)
+        else:
+            return tempfile.mkdtemp(prefix=prefix)
+
+    def openAddMediaDialog(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Please load a video in the Input Player first.", error=True)
+            return
+
+        dialog = AddMediaDialog(parent=self)
+        dialog.media_added.connect(self.handle_media_added)
         dialog.exec()
 
-    def undo_text(self):
-        """Performs undo on the active text edit."""
-        active_edit = self.get_active_text_edit()
-        if active_edit:
-            active_edit.undo()
+    def handle_media_added(self, media_data):
+        output_path = self.get_temp_filepath(suffix=".mp4", prefix=f"{media_data['type']}_overlay_")
 
-    def redo_text(self):
-        """Performs redo on the active text edit."""
-        active_edit = self.get_active_text_edit()
-        if active_edit:
-            active_edit.redo()
+        # Determine start time: use first bookmark or current position
+        if self.videoSlider.bookmarks:
+            start_time = sorted(self.videoSlider.bookmarks)[0][0] / 1000.0
+            self.show_status_message(f"Adding overlay at start of bookmark: {start_time:.2f}s")
+        else:
+            start_time = self.player.position() / 1000.0
+            self.show_status_message(f"Adding overlay at current position: {start_time:.2f}s")
 
-    def cut_text(self):
-        """Performs cut on the active text edit."""
-        active_edit = self.get_active_text_edit()
-        if active_edit:
-            active_edit.cut()
+        media_type = media_data.get("type")
 
-    def copy_text(self):
-        """Performs copy on the active text edit."""
-        active_edit = self.get_active_text_edit()
-        if active_edit:
-            active_edit.copy()
+        if media_type == 'video_pip':
+            thread = VideoCompositingThread(
+                base_video_path=self.videoPathLineEdit,
+                overlay_path=media_data['path'],
+                overlay_type='video',
+                position=media_data['position_name'],
+                size=media_data['size_percent'],
+                start_time=start_time,
+                parent=self
+            )
+            self.start_task(thread, self.on_compositing_completed, self.on_compositing_error, self.update_status_progress)
+        else:
+            # Unify position data for all other media types
+            if 'position' in media_data and isinstance(media_data['position'], tuple):
+                media_data['position'] = {
+                    'x': media_data['position'][0],
+                    'y': media_data['position'][1]
+                }
 
-    def paste_text(self):
-        """Performs paste on the active text edit."""
-        active_edit = self.get_active_text_edit()
-        if active_edit:
-            active_edit.paste()
+            thread = MediaOverlayThread(
+                base_video_path=self.videoPathLineEdit,
+                media_data=media_data,
+                output_path=output_path,
+                start_time=start_time,
+                parent=self
+            )
+            self.start_task(
+                thread,
+                on_complete=self.on_overlay_completed,
+                on_error=self.on_overlay_error,
+                on_progress=self.update_status_progress
+            )
 
-    def about(self):
-        """Shows the about dialog."""
-        QMessageBox.about(self, "About GeniusAI",
-                          f"<b>Genius AI</b> version: {self.version}<br>"
-                          f"Build Date: {self.build_date}<br><br>"
-                          "An AI-powered video and audio management application.")
+    def on_overlay_completed(self, output_path):
+        self.show_status_message("Media overlay applied successfully.")
+        self.loadVideoOutput(output_path)
+
+    def on_overlay_error(self, error_message):
+        self.show_status_message(f"Error applying media overlay: {error_message}", error=True)
+
+    def start_batch_transcription(self):
+        """
+        Starts the batch transcription process for all online videos in the current project.
+        """
+        if not self.current_project_path or not self.projectDock.project_data:
+            self.show_status_message("Nessun progetto attivo. Caricare un progetto prima di avviare la trascrizione batch.", error=True)
+            return
+
+        clips = self.projectDock.project_data.get("clips", [])
+        online_clips = [c for c in clips if c.get("status") == "online"]
+
+        if not online_clips:
+            self.show_status_message("Nessuna clip video online trovata nel progetto da trascrivere.", error=True)
+            return
+
+        clips_dir = os.path.join(self.current_project_path, "clips")
+        video_paths = [os.path.join(clips_dir, c["clip_filename"]) for c in online_clips]
+
+        # Clear the batch transcription area and switch to its tab
+        self.batchTranscriptionTextArea.clear()
+        self.transcriptionTabs.setCurrentWidget(self.batchTranscriptionTextArea)
+        self.show_status_message(f"Avvio trascrizione per {len(video_paths)} video...")
+
+        thread = BatchTranscriptionThread(video_paths, parent=self)
+        self.start_task(
+            thread,
+            on_complete=lambda: self.show_status_message("Batch transcription process finished."), # Generic completion
+            on_error=self.on_batch_transcription_error,
+            on_progress=self._on_batch_progress
+        )
+        # We need to connect the specific signal for individual file completion
+        thread.file_transcribed.connect(self._on_single_transcription_complete)
+        # Connect the new signal for the combined result
+        thread.batch_completed.connect(self._on_batch_transcription_finished)
+
+    def _on_batch_progress(self, current, total, message):
+        """Updates the status bar with batch progress."""
+        progress_percentage = int((current / total) * 100)
+        self.update_status_progress(progress_percentage, message)
+
+    def _on_single_transcription_complete(self, filename, text):
+        """
+        Appends the result of a single transcription to the text area,
+        handling both plain text and HTML content.
+        """
+        cursor = self.batchTranscriptionTextArea.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.batchTranscriptionTextArea.setTextCursor(cursor)
+
+        separator = f"<br><hr><h3>Trascrizione per: {filename}</h3>"
+        cursor.insertHtml(separator)
+
+        # Move cursor again to be sure we are at the end
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        self.batchTranscriptionTextArea.setTextCursor(cursor)
+
+        # Check if the text is likely HTML
+        if '<' in text and '>' in text:
+            cursor.insertHtml(text)
+        else:
+            cursor.insertText(text)
+
+        # Ensure there's a newline after the inserted block
+        cursor.insertHtml("<br>")
+
+    def _on_batch_transcription_finished(self, combined_text):
+        """Saves the combined transcription to the project file."""
+        if self.projectDock.gnai_path:
+            project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+            if not error:
+                project_data['projectTranscription'] = combined_text
+                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+                self.show_status_message("Trascrizione batch completata e salvata nel progetto.", timeout=5000)
+            else:
+                self.show_status_message("Errore nel salvataggio della trascrizione batch.", error=True)
+
+    def on_batch_transcription_error(self, error_message):
+        """Handles errors reported during the batch transcription."""
+        # The error is already displayed by finish_task, but we can log it here.
+        logging.error(f"Errore durante la trascrizione batch: {error_message}")
+
+    def start_batch_summarization(self):
+        """Starts the batch summarization process."""
+        if not self.projectDock.gnai_path:
+            self.show_status_message("Nessun progetto attivo.", error=True)
+            return
+
+        project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+        if error or not project_data.get('projectTranscription'):
+            self.show_status_message("Nessuna trascrizione di progetto trovata. Eseguire prima la trascrizione batch.", error=True)
+            return
+
+        summary_type, ok = QInputDialog.getItem(self, "Tipo di Riassunto", "Scegli il tipo di riassunto:", ["Dettagliato", "Note Riunione"], 0, False)
+        if not ok:
+            return
+
+        mode = 'combined_summary_text_only'
+        # CORREZIONE: Imposta la chiave corretta per il salvataggio
+        if summary_type == "Dettagliato":
+            self.active_summary_type = "combinedDetailed"
+        else: # Note Riunione
+            self.active_summary_type = "combinedMeeting"
+
+        thread = ProcessTextAI(
+            mode=mode,
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'text': project_data['projectTranscription']}
+        )
+        self.start_task(thread, self.on_batch_summary_completed, self.onProcessError, self.update_status_progress)
+
+    def on_batch_summary_completed(self, summary_text):
+        """
+        Saves the generated batch summary directly to the correct field
+        in the .gnai project file and displays it in the UI.
+        """
+        if not self.projectDock.gnai_path or not self.active_summary_type:
+            self.active_summary_type = None
+            return
+
+        # Load the project data
+        project_data, error = self.project_manager.load_project(self.projectDock.gnai_path)
+        if error:
+            self.show_status_message(f"Errore nel caricamento del progetto per salvare il riassunto: {error}", error=True)
+            self.active_summary_type = None
+            return
+
+        # Ensure the 'projectSummaries' dictionary exists
+        if 'projectSummaries' not in project_data:
+            project_data['projectSummaries'] = {}
+
+        # The gnai_key is what's used in the .gnai file (e.g., "combinedDetailed")
+        gnai_key = self.active_summary_type
+        project_data['projectSummaries'][gnai_key] = summary_text
+
+        # Save the updated project data back to the .gnai file
+        self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+        self.show_status_message(f"Riassunto '{gnai_key}' salvato con successo nel file di progetto.", timeout=5000)
+
+        # CORREZIONE: Mappa la chiave del file .gnai alla chiave del modello dati interno
+        # e aggiorna il modello dati e la UI.
+        model_key = None
+        if gnai_key == "combinedDetailed":
+            model_key = "detailed_combined"
+        elif gnai_key == "combinedMeeting":
+            model_key = "meeting_combined"
+
+        if model_key:
+            self.combined_summary[model_key] = summary_text
+
+            # Refresh the UI from the updated data model
+            self._update_summary_view()
+
+            # Switch to the correct tab to show the result
+            if model_key == "detailed_combined":
+                self.summaryTabWidget.setCurrentWidget(self.summaryCombinedDetailedTextArea)
+            elif model_key == "meeting_combined":
+                self.summaryTabWidget.setCurrentWidget(self.summaryCombinedMeetingTextArea)
+
+        # Reset the active summary type
+        self.active_summary_type = None
+
+    def save_summary_to_clip_json(self, clip_path, summary_type, summary_content):
+        """
+        Salva un tipo specifico di riassunto nel file JSON di una clip.
+        """
+        if not clip_path or not os.path.exists(clip_path):
+            logging.warning(f"Salvataggio riassunto saltato: percorso clip non valido - {clip_path}")
+            return
+
+        json_path = os.path.splitext(clip_path)[0] + ".json"
+        if not os.path.exists(json_path):
+            logging.warning(f"Salvataggio riassunto saltato: file JSON non trovato per {clip_path}")
+            return
+
+        try:
+            with open(json_path, 'r+', encoding='utf-8') as f:
+                data = json.load(f)
+                if 'summaries' not in data or not isinstance(data['summaries'], dict):
+                    data['summaries'] = {}
+
+                data['summaries'][summary_type] = summary_content
+                data['summary_date'] = datetime.datetime.now().isoformat()
+
+                f.seek(0)
+                json.dump(data, f, ensure_ascii=False, indent=4)
+                f.truncate()
+            logging.info(f"Riassunto '{summary_type}' salvato per {os.path.basename(clip_path)}")
+        except (IOError, json.JSONDecodeError) as e:
+            logging.error(f"Errore durante il salvataggio del riassunto nel file JSON {json_path}: {e}")
+
+
+    def generate_operational_guide(self):
+        """
+        Starts the process of generating an operational guide from the current video.
+        """
+        if not self.videoPathLineEdit:
+            self.show_status_message("Carica un video prima di generare una guida operativa.", error=True)
+            return
+
+        # Use the same frame count as the video integration feature for consistency
+        num_frames = self.estrazioneFrameCountSpin.value()
+        language = self.languageComboBox.currentText()
+
+        thread = OperationalGuideThread(
+            video_path=self.videoPathLineEdit,
+            num_frames=num_frames,
+            language=language,
+            parent=self
+        )
+        self.start_task(
+            thread,
+            on_complete=self.on_operational_guide_completed,
+            on_error=self.on_operational_guide_error,
+            on_progress=self.update_status_progress
+        )
+
+    def on_operational_guide_completed(self, guide_text):
+        """
+        Handles the successful completion of the operational guide generation.
+        """
+        self.audioAiTextArea.setMarkdown(guide_text)
+        self.transcriptionTabWidget.setCurrentWidget(self.audio_ai_tab)
+        self.show_status_message("Guida operativa generata e visualizzata nella tab Audio AI.")
+
+    def on_operational_guide_error(self, error_message):
+        """
+        Handles errors that occur during the operational guide generation.
+        """
+        self.show_status_message(f"Errore durante la generazione della guida: {error_message}", error=True)
+
+    def createInfoExtractionDock(self):
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+
+        self.infoExtractionResultArea = CustomTextEdit(self)
+        self.infoExtractionResultArea.setPlaceholderText("I risultati della ricerca appariranno qui...")
+        self.infoExtractionResultArea.timestampDoubleClicked.connect(self.seek_to_search_result_timecode)
+        layout.addWidget(self.infoExtractionResultArea)
+
+        # Player Selection
+        player_selection_layout = QHBoxLayout()
+        player_selection_layout.addWidget(QLabel("Player Target:"))
+        self.analysisPlayerSelectionCombo = QComboBox()
+        self.analysisPlayerSelectionCombo.addItems(["Player Input", "Player Output"])
+        player_selection_layout.addWidget(self.analysisPlayerSelectionCombo)
+        layout.addLayout(player_selection_layout)
+
+        # Frame Count
+        frame_count_layout = QHBoxLayout()
+        frame_count_layout.addWidget(QLabel("Numero di frame da analizzare:"))
+        self.analysisFrameCountSpin = QSpinBox()
+        self.analysisFrameCountSpin.setRange(1, 500)
+        self.analysisFrameCountSpin.setValue(20)
+        frame_count_layout.addWidget(self.analysisFrameCountSpin)
+        layout.addLayout(frame_count_layout)
+
+        # Smart Extraction Checkbox
+        self.smartExtractionCheckbox = QCheckBox("Usa estrazione intelligente dei frame")
+        self.smartExtractionCheckbox.setToolTip("Analizza solo i frame con cambiamenti significativi dell'interfaccia.")
+        layout.addWidget(self.smartExtractionCheckbox)
+
+        # Search Query
+        search_layout = QHBoxLayout()
+        self.searchQueryInput = QLineEdit()
+        self.searchQueryInput.setPlaceholderText("Es: una persona che saluta, una macchina rossa...")
+        search_layout.addWidget(QLabel("Cosa vuoi cercare?"))
+        search_layout.addWidget(self.searchQueryInput)
+        layout.addLayout(search_layout)
+
+        self.searchButton = QPushButton("Cerca")
+        self.searchButton.clicked.connect(self.run_specific_object_search)
+        layout.addWidget(self.searchButton)
+
+        # Connect the checkbox to the slot
+        self.smartExtractionCheckbox.toggled.connect(self._toggle_frame_count_spinbox)
+        # Set initial state
+        self._toggle_frame_count_spinbox(self.smartExtractionCheckbox.isChecked())
+
+        self.infoExtractionDock.addWidget(widget)
+
+    def _toggle_frame_count_spinbox(self, checked):
+        """Enable/disable the frame count spinbox based on smart extraction checkbox."""
+        self.analysisFrameCountSpin.setEnabled(not checked)
+        self.analysisFrameCountSpin.setToolTip("Non utilizzato con l'estrazione intelligente" if checked else "Numero di frame da analizzare")
+
+    def _get_selected_analysis_video_path(self):
+        """
+        Restituisce il percorso del file video dal player selezionato nel dock di analisi.
+        """
+        selected_player = self.analysisPlayerSelectionCombo.currentText()
+        if selected_player == "Player Input":
+            return self.videoPathLineEdit
+        else: # Player Output
+            return self.videoPathLineOutputEdit
+
+    def run_specific_object_search(self):
+        video_path = self._get_selected_analysis_video_path()
+
+        if not video_path:
+            QMessageBox.warning(self, "Attenzione", "Nessun video caricato nel player selezionato.")
+            return
+
+        search_query = self.searchQueryInput.text().strip()
+        if not search_query:
+            QMessageBox.warning(self, "Attenzione", "Inserisci un oggetto da cercare.")
+            return
+
+        # --- Cache-Loading Logic ---
+        cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+        try:
+            if os.path.exists(cache_path):
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    cache_data = json.load(f)
+                if search_query in cache_data:
+                    self.show_status_message(f"Risultati per '{search_query}' trovati nella cache.")
+                    # Pass the results directly to the completion handler, marking them as from cache
+                    payload = {
+                        'query': search_query,
+                        'results': cache_data[search_query],
+                        'from_cache': True
+                    }
+                    self.on_specific_object_search_complete(payload)
+                    return # Skip the analysis
+        except (json.JSONDecodeError, IOError) as e:
+            self.show_status_message(f"Cache corrotta o illeggibile: {e}. Eseguo una nuova analisi.", error=True)
+            logging.error(f"Error reading cache file {cache_path}: {e}")
+        # --- End of Cache-Loading Logic ---
+
+
+        self.infoExtractionResultArea.setPlainText(f"Ricerca di '{search_query}' in corso...")
+
+        thread = FrameExtractor(
+            video_path=video_path,
+            num_frames=self.analysisFrameCountSpin.value(),
+            analysis_mode='specific_object_search',
+            search_query=search_query,
+            language=self.languageComboBox.currentText()
+        )
+
+        class Worker(QThread):
+            completed = pyqtSignal(dict)
+            error = pyqtSignal(str)
+
+            def __init__(self, extractor):
+                super().__init__()
+                self.extractor = extractor
+
+            def run(self):
+                try:
+                    # Decide which frame extraction method to use
+                    if self.extractor.parent.smartExtractionCheckbox.isChecked():
+                        self.extractor.parent.show_status_message("Estrazione intelligente dei frame in corso...", timeout=0)
+                        frames = self.extractor.extract_significant_frames()
+                    else:
+                        self.extractor.parent.show_status_message("Estrazione frame standard in corso...", timeout=0)
+                        frames = self.extractor.extract_frames()
+
+                    if not frames:
+                        self.error.emit("Estrazione dei frame non riuscita.")
+                        return
+
+                    # Analyze the extracted frames
+                    self.extractor.parent.show_status_message(f"Analisi di {len(frames)} frame in corso...", timeout=0)
+                    results = self.extractor.analyze_frames_for_specific_object(
+                        frames,
+                        self.extractor.language,
+                        self.extractor.search_query
+                    )
+
+                    if results is not None:
+                        payload = {
+                            'query': self.extractor.search_query,
+                            'results': {"frames": results}, # Ensure the structure matches what on_specific_object_search_complete expects
+                            'from_cache': False
+                        }
+                        self.completed.emit(payload)
+                    else:
+                        self.error.emit("Nessun risultato ottenuto dall'analisi.")
+                except Exception as e:
+                    import traceback
+                    logging.error(f"Errore nel worker di ricerca: {e}\n{traceback.format_exc()}")
+                    self.error.emit(str(e))
+
+        # Pass the main window instance to the extractor and worker
+        thread.parent = self
+        self.worker = Worker(thread)
+        self.worker.completed.connect(self.on_specific_object_search_complete)
+        self.worker.error.connect(self.onAnalysisError)
+        self.worker.start()
+
+    def on_specific_object_search_complete(self, payload):
+        # Unpack payload
+        search_query = payload.get('query')
+        results = payload.get('results', {})
+        from_cache = payload.get('from_cache', False)
+
+        # --- Cache-Saving Logic ---
+        if not from_cache and search_query and results:
+            video_path = self._get_selected_analysis_video_path()
+
+            if video_path:
+                cache_path = os.path.splitext(video_path)[0] + "_extraction_cache.json"
+                try:
+                    # Read existing cache data or initialize a new dictionary
+                    if os.path.exists(cache_path):
+                        with open(cache_path, 'r', encoding='utf-8') as f:
+                            cache_data = json.load(f)
+                    else:
+                        cache_data = {}
+
+                    # Add/update the entry for the current search query
+                    cache_data[search_query] = results
+
+                    # Write the updated data back to the cache file
+                    with open(cache_path, 'w', encoding='utf-8') as f:
+                        json.dump(cache_data, f, ensure_ascii=False, indent=4)
+
+                    logging.info(f"Risultati per '{search_query}' salvati nella cache: {cache_path}")
+
+                except (IOError, json.JSONDecodeError) as e:
+                    self.show_status_message(f"Errore durante il salvataggio nella cache: {e}", error=True)
+                    logging.error(f"Error writing to cache file {cache_path}: {e}")
+        # --- End of Cache-Saving Logic ---
+
+        frames = results.get("frames", [])
+        if not frames:
+            self.infoExtractionResultArea.setPlainText("Nessuna occorrenza trovata.")
+            return
+
+        # Format the results into a readable Markdown list with clickable timecodes
+        markdown_result = f"## Risultati per: '{search_query}'\n\n"
+        for frame in frames:
+            try:
+                # Rimuovi le parentesi e splitta per creare il timecode in secondi
+                time_str = frame['timestamp'].replace('[', '').replace(']', '')
+                time_parts = time_str.split(':')
+                if len(time_parts) == 2:
+                    minutes = int(time_parts[0])
+                    seconds = int(time_parts[1])
+                    total_seconds = minutes * 60 + seconds
+                    # Formatta come link Markdown cliccabile
+                    markdown_result += f"* [{frame['timestamp']}]({total_seconds}) - {frame['description']}\n"
+            except (ValueError, KeyError):
+                 # Fallback per voci malformate
+                markdown_result += f"* {frame.get('timestamp', '[N/A]')} - {frame.get('description', 'N/A')}\n"
+
+        self.infoExtractionResultArea.setMarkdown(markdown_result)
+        self.show_status_message("Ricerca completata.")
+
+    def seek_to_search_result_timecode(self, seconds):
+        """
+        Seeks the selected video player to the specified time in seconds.
+        """
+        selected_player_name = self.analysisPlayerSelectionCombo.currentText()
+        player = self.player if selected_player_name == "Player Input" else self.playerOutput
+
+        if player:
+            player.setPosition(int(seconds * 1000))
+
+    def import_document(self):
+        """
+        Handles the document import workflow: selecting a file, extracting text,
+        choosing a summary to update, and calling the AI to integrate the information.
+        """
+        # 1. Check if there is a summary to integrate into
+        available_summaries = []
+        if self.summaries.get("detailed", "").strip():
+            available_summaries.append("Dettagliato")
+        if self.summaries.get("meeting", "").strip():
+            available_summaries.append("Note Riunione")
+
+        if not available_summaries:
+            self.show_status_message("Nessun riassunto esistente da integrare. Generane uno prima.", error=True)
+            return
+
+        # 2. Open file dialog to select PDF or DOCX
+        filePath, _ = QFileDialog.getOpenFileName(
+            self, "Importa Documento", "", "Documents (*.pdf *.docx)"
+        )
+        if not filePath:
+            return
+
+        # 3. Extract text from the document
+        try:
+            if filePath.lower().endswith('.pdf'):
+                document_text = self._extract_text_from_pdf(filePath)
+            elif filePath.lower().endswith('.docx'):
+                document_text = self._extract_text_from_docx(filePath)
+            else:
+                self.show_status_message("Formato file non supportato.", error=True)
+                return
+
+            if not document_text.strip():
+                self.show_status_message("Nessun testo estratto dal documento.", error=True)
+                return
+        except Exception as e:
+            self.show_status_message(f"Errore estrazione testo: {e}", error=True)
+            logging.error(f"Failed to extract text from {filePath}: {e}")
+            return
+
+        # 4. Ask user which summary to update
+        summary_choice, ok = QInputDialog.getItem(
+            self, "Scegli Riassunto", "In quale riassunto vuoi integrare il documento?", available_summaries, 0, False
+        )
+        if not ok:
+            return
+
+        # 5. Get the existing summary and prepare for AI integration
+        summary_key = "detailed" if summary_choice == "Dettagliato" else "meeting"
+        existing_summary = self.summaries.get(summary_key, "")
+        self.active_summary_type = summary_key # Set this for onProcessComplete
+
+        self.show_status_message(f"Integrazione del documento nel riassunto '{summary_choice}' in corso...")
+
+        # 6. Call the AI service
+        thread = ProcessTextAI(
+            mode="document_integration",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={
+                'existing_summary': existing_summary,
+                'document_text': document_text
+            }
+        )
+        self.start_task(thread, self.onProcessComplete, self.onProcessError, self.update_status_progress)
+
+    def _extract_text_from_pdf(self, file_path):
+        """Extracts text from a PDF file."""
+        import pypdf
+        text = ""
+        with open(file_path, 'rb') as f:
+            reader = pypdf.PdfReader(f)
+            for page in reader.pages:
+                text += page.extract_text() or ""
+        return text
+
+    def _extract_text_from_docx(self, file_path):
+        """Extracts text from a DOCX file."""
+        import docx
+        doc = docx.Document(file_path)
+        text = "\n".join([para.text for para in doc.paragraphs])
+        return text
+
+    def toggleReversePlayback(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("No video loaded to reverse.", error=True)
+            return
+
+        start_time = None
+        end_time = None
+        if self.videoSlider.bookmarks:
+            # Use the first bookmark for reversal
+            start_pos, end_pos = sorted(self.videoSlider.bookmarks)[0]
+            start_time = start_pos / 1000.0
+            end_time = end_pos / 1000.0
+            self.show_status_message(f"Reversing bookmark from {start_time:.2f}s to {end_time:.2f}s...")
+        else:
+            self.show_status_message("Reversing entire video...")
+
+        is_audio_only = self.isAudioOnly(self.videoPathLineEdit)
+        thread = ReverseVideoThread(self.videoPathLineEdit, start_time=start_time, end_time=end_time, is_audio_only=is_audio_only, parent=self)
+        self.start_task(
+            thread,
+            on_complete=self.onReverseCompleted,
+            on_error=self.onReverseError,
+            on_progress=self.update_status_progress
+        )
+
+    def onReverseCompleted(self, reversed_path):
+        self.reversed_video_path = reversed_path
+        self.loadVideoOutput(self.reversed_video_path)
+        self.playerOutput.play()
+        self.show_status_message("Reversed video is now playing in the output player.")
+
+    def onReverseError(self, error_message):
+        self.show_status_message(f"Error reversing video: {error_message}", error=True)
+
+    def translate_transcription(self):
+        self._translate_text(self.singleTranscriptionTextArea)
+
+    def _translate_text(self, text_widget):
+        if not text_widget.toPlainText().strip():
+            self.show_status_message("Nessun testo da tradurre.", error=True)
+            return
+
+        self.current_translation_widget = text_widget
+        dest_lang_code = self.translationComboBox.currentData()
+        html_content = text_widget.toHtml()
+
+        thread = TranslationThread(html_content, dest_lang_code, self)
+
+        self.start_task(
+            thread,
+            on_complete=self.on_translation_complete,
+            on_error=self.on_translation_error,
+            on_progress=lambda v, s: self.update_status_progress(v, s) # Placeholder, il thread non ha progress
+        )
+
+    def handle_chat_message(self, query):
+        """Handles the sendMessage signal from the ChatDock."""
+        summary_text_area = self.get_current_summary_text_area()
+        if not summary_text_area or not summary_text_area.toPlainText().strip():
+            self.chatDock.add_message("AI", "Per favore, genera o carica un riassunto prima di fare una domanda.")
+            return
+
+        summary_text = summary_text_area.toPlainText()
+
+        thread = ProcessTextAI(
+            mode="chat_summary",
+            language=self.languageComboBox.currentText(),
+            prompt_vars={'summary_text': summary_text, 'user_query': query}
+        )
+        self.start_task(thread, self.on_chat_response_received, self.onProcessError, self.update_status_progress)
+
+    def on_chat_response_received(self, response):
+        """Handles the completed signal from the ProcessTextAI thread for chat responses."""
+        self.chatDock.add_message("AI", response)
+
+    def on_translation_complete(self, translated_html):
+        """Gestisce il completamento della traduzione."""
+        if self.current_translation_widget:
+            self.current_translation_widget.blockSignals(True)
+            self.current_translation_widget.setHtml(translated_html)
+            self.current_translation_widget.blockSignals(False)
+            self.show_status_message(f"Testo tradotto con successo in {self.translationComboBox.currentText()}.")
+
+        self.current_translation_widget = None
+
+    def on_translation_error(self, error_message):
+        """Gestisce gli errori durante la traduzione."""
+        self.show_status_message(f"Errore di traduzione: {error_message}", error=True)
+        self.current_translation_widget = None
+
+
+def get_application_path():
+    """Determina il percorso base dell'applicazione, sia in modalità di sviluppo che compilata"""
+    if getattr(sys, 'frozen', False):
+        # Se l'app è compilata con PyInstaller
+        return os.path.dirname(sys.executable)
+    else:
+        # In modalità di sviluppo
+        return os.path.dirname(os.path.abspath(__file__))
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+
+    # Specifica la cartella delle immagini
+    base_path = get_application_path()
+    image_folder = os.path.join(base_path, "res", "splash_images")
+    print(image_folder)
+    # Crea la splash screen con un'immagine casuale dalla cartella
+    splash = SplashScreen(image_folder)
+    splash.show()
+
+    splash.showMessage("Caricamento risorse...")
+    time.sleep(1)  # Simula un ritardo
+
+    splash.showMessage("Inizializzazione interfaccia...")
+    time.sleep(1)  # Simula un altro ritardo
+
+    window = VideoAudioManager()
+
+    window.show()
+
+    splash.finish(window)
+
+    sys.exit(app.exec())

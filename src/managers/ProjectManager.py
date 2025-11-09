@@ -1,12 +1,10 @@
 import os
 import json
 from datetime import datetime
-from PyQt6.QtWidgets import QFileDialog, QInputDialog, QMessageBox
 
 class ProjectManager:
-    def __init__(self, main_window):
-        self.main_window = main_window
-        self.base_dir = "projects"
+    def __init__(self, base_dir):
+        self.base_dir = base_dir
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
 
@@ -17,19 +15,6 @@ class ProjectManager:
             if not os.path.exists(os.path.join(self.base_dir, project_name)):
                 return project_name
             i += 1
-
-    def create_new_project(self):
-        """
-        Crea un nuovo progetto, chiedendo all'utente un nome.
-        """
-        project_name, ok = QInputDialog.getText(self.main_window, "Nuovo Progetto", "Inserisci il nome del progetto:")
-        if ok and project_name:
-            self.main_window._clear_workspace()
-            project_path, gnai_path = self.create_project(project_name)
-            if project_path:
-                self.load_project(gnai_path)
-            else:
-                QMessageBox.warning(self.main_window, "Errore", f"Impossibile creare il progetto '{project_name}'. Potrebbe esistere già.")
 
     def create_project(self, project_name=None, base_dir=None):
         if not project_name:
@@ -70,38 +55,7 @@ class ProjectManager:
 
         return project_path, gnai_path
 
-    def select_project_to_load(self):
-        """Opens a file dialog to select and load a project."""
-        gnai_path, _ = QFileDialog.getOpenFileName(self.main_window, "Open Project", self.base_dir, "GeniusAI Project Files (*.gnai)")
-        if gnai_path:
-            self.main_window._clear_workspace()
-            self.load_project(gnai_path)
-
     def load_project(self, gnai_path):
-        """Carica un progetto dal suo file .gnai e aggiorna l'interfaccia utente."""
-        project_data, error = self._load_project_data(gnai_path)
-        if error:
-            self.main_window.show_status_message(f"Errore caricamento progetto: {error}", error=True)
-            return
-
-        self.main_window.current_project_path = os.path.dirname(gnai_path)
-        self.main_window.setWindowTitle(f"GeniusAI - Progetto: {project_data.get('projectName', 'Senza nome')}")
-
-        # Aggiorna il project dock
-        self.main_window.ui_manager.projectDock.set_project_path(self.main_window.current_project_path)
-        self.main_window.ui_manager.projectDock.update_model(project_data)
-        self.main_window.ui_manager.projectDock.refresh_view()
-
-        # Aggiorna lo stato interno dell'applicazione con i dati del progetto
-        self.main_window._update_ui_from_json_data(project_data)
-
-        # Carica la prima clip, se esiste
-        QTimer.singleShot(100, lambda: self.main_window._load_most_recent_clip(project_data))
-
-        self.main_window.addRecentProject(gnai_path)
-        self.main_window.show_status_message(f"Progetto '{project_data.get('projectName')}' caricato.")
-
-    def _load_project_data(self, gnai_path):
         if not os.path.exists(gnai_path):
             return None, "Project file not found"
 

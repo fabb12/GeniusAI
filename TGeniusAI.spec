@@ -122,6 +122,27 @@ else:
 # ====================================================================================
 
 
+# ====================================================================================
+# === INIZIO CORREZIONE PER ERRORE DLL PYTORCH ===
+# Aggiunge esplicitamente le DLL dalla cartella torch/lib per risolvere
+# problemi di caricamento come `OSError: [WinError 1114]`.
+try:
+    import torch
+    torch_lib_path = os.path.join(os.path.dirname(torch.__file__), 'lib')
+    if os.path.exists(torch_lib_path):
+        print(f"Inclusione delle DLL dalla cartella torch/lib: {torch_lib_path}")
+        dll_files = [f for f in os.listdir(torch_lib_path) if f.endswith('.dll')]
+        for dll in dll_files:
+            binaries.append((os.path.join(torch_lib_path, dll), 'torch/lib'))
+        print(f"Aggiunte {len(dll_files)} DLL di PyTorch ai binaries.")
+    else:
+        print("ATTENZIONE: La cartella torch/lib non è stata trovata.")
+except ImportError:
+    print("ATTENZIONE: PyTorch non è installato, impossibile aggiungere le sue DLL.")
+# === FINE CORREZIONE PER ERRORE DLL PYTORCH ===
+# ====================================================================================
+
+
 # Resource files
 resource_files = [
     (os.path.join(current_dir, '.env'), '.'),
@@ -149,8 +170,8 @@ a = Analysis(
     binaries=binaries,
     datas=resource_files + datas + playwright_datas,
     hiddenimports=hiddenimports,
-    hookspath=['hooks'],
-    runtime_hooks=[],
+    hookspath=[],
+    runtime_hooks=['pyinstaller.hook.py'],
     excludes=[
         'PyQt5',
         'PyQt6.Qt3DAnimation',
