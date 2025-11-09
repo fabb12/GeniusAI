@@ -3,6 +3,7 @@
 import os
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLineEdit, QPushButton, QHBoxLayout, QMenu, QFileDialog, QMessageBox, QInputDialog
 from PyQt6.QtCore import pyqtSignal, Qt
+from PyQt6.QtGui import QTextBlockFormat
 from src.ui.CustomDock import CustomDock
 from src.ui.CustomTextEdit import CustomTextEdit
 
