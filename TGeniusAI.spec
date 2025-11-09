@@ -150,7 +150,7 @@ a = Analysis(
     datas=resource_files + datas + playwright_datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    runtime_hooks=[],
+    runtime_hooks=['pyinstaller.hook.py'],
     excludes=[
         'PyQt5',
         'PyQt6.Qt3DAnimation',
