@@ -799,6 +799,7 @@ class VideoAudioManager(QMainWindow):
         self.current_thread = None
         self.original_status_bar_stylesheet = self.statusBar.styleSheet()
         self.current_translation_widget = None
+        self._is_applying_font_settings = False
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
@@ -1652,6 +1653,19 @@ class VideoAudioManager(QMainWindow):
         self.summaryCombinedMeetingTextArea.textChanged.connect(self._on_summary_text_changed)
         self.summaryTabWidget.addTab(self.summaryCombinedMeetingTextArea, "Note Riunione Combinato")
 
+        all_custom_text_edits = [
+            self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
+            self.summaryDetailedTextArea, self.summaryMeetingTextArea,
+            self.summaryDetailedIntegratedTextArea, self.summaryMeetingIntegratedTextArea,
+            self.summaryCombinedDetailedTextArea, self.summaryCombinedMeetingTextArea,
+            self.audioAiTextArea, self.infoExtractionResultArea,
+            self.chatDock.history_text_edit
+        ]
+        for text_edit in all_custom_text_edits:
+            if text_edit:
+                text_edit.fontSizeChanged.connect(self.handle_font_size_change)
+
+
         # Connect frame edit signals
         self.singleTranscriptionTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
         self.summaryDetailedTextArea.frame_edit_requested.connect(self.handle_frame_edit_request)
@@ -1844,40 +1858,44 @@ class VideoAudioManager(QMainWindow):
         self.applyStyleToAllDocks()
 
         # Applica le impostazioni del font
-        self.apply_and_save_font_settings()
+        self.apply_font_settings()
 
     def open_search_dialog(self):
         """
         Apre il dialogo di ricerca per l'area di testo attualmente attiva e visibile.
-        Questo metodo determina quale CustomTextEdit ha il focus o è correntemente visualizzato
-        e invoca il suo metodo `openSearchDialog`.
+        Dà priorità al widget con focus, altrimenti usa il widget visibile nel tab corrente.
         """
         active_text_edit = None
+        focused_widget = QApplication.focusWidget()
 
-        # Controlla quale tab principale è attivo
-        current_main_tab = self.transcriptionTabWidget.currentWidget()
+        # 1. Priorità al widget che ha il focus
+        if isinstance(focused_widget, CustomTextEdit):
+            active_text_edit = focused_widget
+        else:
+            # 2. Fallback: logica basata sul tab corrente (come prima)
+            current_main_tab_index = self.transcriptionTabWidget.currentIndex()
+            current_main_tab_text = self.transcriptionTabWidget.tabText(current_main_tab_index)
 
-        if self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Trascrizione":
-            # Se siamo nella tab "Trascrizione", controlla il tab interno
-            current_transcription_tab = self.transcriptionTabs.currentWidget()
-            if isinstance(current_transcription_tab, CustomTextEdit):
-                active_text_edit = current_transcription_tab
+            if current_main_tab_text == "Trascrizione":
+                widget = self.transcriptionTabs.currentWidget()
+                if isinstance(widget, CustomTextEdit):
+                    active_text_edit = widget
+            elif current_main_tab_text == "Riassunto":
+                widget = self.summaryTabWidget.currentWidget()
+                if isinstance(widget, CustomTextEdit):
+                    active_text_edit = widget
+            elif current_main_tab_text == "Audio AI":
+                if isinstance(self.audioAiTextArea, CustomTextEdit):
+                    active_text_edit = self.audioAiTextArea
+            # Aggiungi un controllo per il dock di estrazione info, se necessario
+            elif self.infoExtractionResultArea.isVisible() and self.infoExtractionResultArea.hasFocus():
+                 active_text_edit = self.infoExtractionResultArea
 
-        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Riassunto":
-            # Se siamo nella tab "Riassunto", prendi il widget corrente del tab dei riassunti
-            current_summary_tab = self.summaryTabWidget.currentWidget()
-            if isinstance(current_summary_tab, CustomTextEdit):
-                active_text_edit = current_summary_tab
 
-        elif self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex()) == "Audio AI":
-             if isinstance(self.audioAiTextArea, CustomTextEdit):
-                active_text_edit = self.audioAiTextArea
-
-        # Se abbiamo trovato un editor di testo attivo e visibile, apri il dialogo
         if active_text_edit and active_text_edit.isVisible():
             active_text_edit.openSearchDialog()
         else:
-            self.show_status_message("Nessun campo di testo attivo per la ricerca.", error=True)
+            self.show_status_message("Nessun campo di testo attivo per la ricerca. Clicca su un'area di testo prima di cercare.", error=True)
 
     def get_current_summary_text_area(self):
         """Restituisce il widget CustomTextEdit del tab di riassunto attualmente attivo."""
@@ -1885,67 +1903,88 @@ class VideoAudioManager(QMainWindow):
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
 
-    def apply_and_save_font_settings(self):
+    def handle_font_size_change(self, new_size):
+        """Gestisce la modifica della dimensione del font da un widget e la salva."""
+        # Se stiamo già applicando le impostazioni, esci per evitare un loop
+        if self._is_applying_font_settings:
+            return
+
+        settings = QSettings("Genius", "GeniusAI")
+        # Salva solo la dimensione, la famiglia viene gestita dalla finestra di dialogo delle impostazioni
+        settings.setValue("editor/fontSize", new_size)
+
+        # Riapplica le impostazioni a tutti i widget per mantenere la coerenza
+        self.apply_font_settings()
+
+    def apply_font_settings(self):
         """
         Applica le impostazioni del font a tutte le aree di testo.
         - Applica la famiglia di caratteri a tutto il testo (paragrafi e intestazioni).
         - Applica la dimensione del carattere solo ai paragrafi, preservando le dimensioni delle intestazioni.
         """
-        settings = QSettings("Genius", "GeniusAI")
-        font_family = settings.value("editor/fontFamily", "Arial")
-        font_size = settings.value("editor/fontSize", 14, type=int)
+        if self._is_applying_font_settings:
+            return
+        self._is_applying_font_settings = True
 
-        # Formato per i paragrafi (famiglia + dimensione)
-        paragraph_font = QFont(font_family, font_size)
-        paragraph_format = QTextCharFormat()
-        paragraph_format.setFont(paragraph_font)
+        try:
+            settings = QSettings("Genius", "GeniusAI")
+            font_family = settings.value("editor/fontFamily", "Arial")
+            font_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
-        heading_font = QFont()
-        heading_font.setFamily(font_family)
-        heading_format = QTextCharFormat()
-        heading_format.setFont(heading_font)
+            # Formato per i paragrafi (famiglia + dimensione)
+            paragraph_font = QFont(font_family, font_size)
+            paragraph_format = QTextCharFormat()
+            paragraph_format.setFont(paragraph_font)
 
-        text_areas = [
-            self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
-            self.summaryDetailedTextArea, self.summaryMeetingTextArea,
-            self.summaryDetailedIntegratedTextArea, self.summaryMeetingIntegratedTextArea,
-            self.summaryCombinedDetailedTextArea, self.summaryCombinedMeetingTextArea,
-            self.infoExtractionResultArea, self.audioAiTextArea,
-            self.chatDock.history_text_edit
-        ]
+            # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
+            heading_font = QFont()
+            heading_font.setFamily(font_family)
+            heading_format = QTextCharFormat()
+            heading_format.setFont(heading_font)
 
-        for area in text_areas:
-            if not area:
-                continue
+            text_areas = [
+                self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
+                self.summaryDetailedTextArea, self.summaryMeetingTextArea,
+                self.summaryDetailedIntegratedTextArea, self.summaryMeetingIntegratedTextArea,
+                self.summaryCombinedDetailedTextArea, self.summaryCombinedMeetingTextArea,
+                self.infoExtractionResultArea, self.audioAiTextArea,
+                self.chatDock.history_text_edit
+            ]
 
-            # Imposta il formato per il nuovo testo che verrà digitato
-            area.setCurrentCharFormat(paragraph_format)
+            for area in text_areas:
+                if not area:
+                    continue
 
-            cursor = QTextCursor(area.document())
-            cursor.beginEditBlock()
+                # Imposta il formato per il nuovo testo che verrà digitato
+                area.setCurrentCharFormat(paragraph_format)
 
-            block = area.document().begin()
-            while block.isValid():
-                block_cursor = QTextCursor(block)
-                block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+                cursor = QTextCursor(area.document())
+                cursor.beginEditBlock()
 
-                is_heading = block.blockFormat().headingLevel() > 0
+                block = area.document().begin()
+                while block.isValid():
+                    block_cursor = QTextCursor(block)
+                    block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
 
-                if is_heading:
-                    # Per le intestazioni, unisci solo la famiglia del carattere
-                    block_cursor.mergeCharFormat(heading_format)
-                else:
-                    # Per i paragrafi, unisci sia la famiglia che la dimensione
-                    block_cursor.mergeCharFormat(paragraph_format)
+                    is_heading = block.blockFormat().headingLevel() > 0
 
-                block = block.next()
+                    if is_heading:
+                        # Per le intestazioni, unisci solo la famiglia del carattere
+                        block_cursor.mergeCharFormat(heading_format)
+                    else:
+                        # Per i paragrafi, unisci sia la famiglia che la dimensione
+                        block_cursor.mergeCharFormat(paragraph_format)
 
-            cursor.endEditBlock()
+                    block = block.next()
 
-        # Propagate font settings to ChatDock
-        if hasattr(self, 'chatDock'):
-            self.chatDock.set_font(font_family, font_size)
+                cursor.endEditBlock()
+
+            # Propagate font settings to ChatDock
+            if hasattr(self, 'chatDock'):
+                self.chatDock.set_font(font_family, font_size)
+        finally:
+            self._is_applying_font_settings = False
+
 
     def videoContainerResizeEvent(self, event):
         # When the container is resized, resize both the video widget and the overlay
@@ -2948,7 +2987,7 @@ class VideoAudioManager(QMainWindow):
         dialog = SettingsDialog(self)
         if dialog.exec():
             self.load_recording_settings()
-            self.apply_and_save_font_settings()
+            self.apply_font_settings()
 
     def set_default_dock_layout(self):
 
