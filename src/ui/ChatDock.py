@@ -16,7 +16,14 @@ class ChatDock(CustomDock):
         super().__init__(title, closable=closable, parent=parent)
         self.setToolTip("Interroga il riassunto attualmente selezionato.")
         self.project_path = None
+        self.font_family = "Arial"  # Default font family
+        self.font_size = 14        # Default font size
         self._setup_ui()
+
+    def set_font(self, font_family, font_size):
+        """Sets the font for the chat history text edit."""
+        self.font_family = font_family
+        self.font_size = font_size
 
     def set_project_path(self, path):
         """Sets the current project path to enable project-specific actions."""
@@ -61,16 +68,38 @@ class ChatDock(CustomDock):
     def add_message(self, sender, message):
         """
         Adds a message to the chat history, formatting it based on the sender.
+        Uses <div> for block-level elements to avoid extra margins from <p>.
         """
-        if sender.lower() == "user":
-            formatted_message = f'<p style="color: #a9d18e;"><b>Tu:</b><br>{message}</p>'
-        else: # AI or System
-            # Basic markdown-to-HTML conversion for simple formatting like bold and lists
-            import markdown
-            html_message = markdown.markdown(message)
-            formatted_message = f'<p style="color: #87ceeb;"><b>AI:</b></p>{html_message}'
+        cursor = self.history_text_edit.textCursor()
+        cursor.movePosition(cursor.MoveOperation.End)
 
-        self.history_text_edit.append(formatted_message)
+        # Ensure we start on a new line if the history is not empty
+        if not self.history_text_edit.toPlainText().strip() == "":
+            cursor.insertBlock()
+
+        if sender.lower() == "user":
+            # User messages are on a single line, with "Tu:" and the message together.
+            html = f"""
+            <div style="font-family: {self.font_family}; font-size: {self.font_size}pt;">
+                <span style="color: #a9d18e;"><b>Tu:</b> </span>
+                <span>{message}</span>
+            </div>
+            """
+        else:  # AI or System
+            # AI messages have "AI:" on one line and the content on the next.
+            import markdown
+            html_message = markdown.markdown(message, extensions=['fenced_code', 'tables'])
+            html = f"""
+            <div style="font-family: {self.font_family}; font-size: {self.font_size}pt;">
+                <span style="color: #87ceeb;"><b>AI:</b></span>
+            </div>
+            {html_message}
+            """
+
+        cursor.insertHtml(html.strip())
+
+        # Ensure the view scrolls to the bottom
+        self.history_text_edit.ensureCursorVisible()
 
     def clear_chat(self):
         """Clears the chat history."""
