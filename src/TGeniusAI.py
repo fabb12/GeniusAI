@@ -668,7 +668,7 @@ class ReverseVideoThread(QThread):
 class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
-
+        self._is_applying_font_settings = False
         self.project_manager = ProjectManager(base_dir="projects")
         self.bookmark_manager = BookmarkManager(self)
         self.translation_service = TranslationService()
@@ -799,7 +799,6 @@ class VideoAudioManager(QMainWindow):
         self.current_thread = None
         self.original_status_bar_stylesheet = self.statusBar.styleSheet()
         self.current_translation_widget = None
-        self._is_applying_font_settings = False
 
     def show_status_message(self, message, timeout=5000, error=False):
         """Mostra un messaggio nella barra di stato per un tempo limitato."""
