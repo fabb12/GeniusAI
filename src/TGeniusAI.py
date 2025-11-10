@@ -1902,18 +1902,27 @@ class VideoAudioManager(QMainWindow):
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
 
-    def handle_font_size_change(self, new_size):
-        """Gestisce la modifica della dimensione del font da un widget e la salva."""
-        # Se stiamo già applicando le impostazioni, esci per evitare un loop
+    def handle_font_size_change(self, delta):
+        """
+        Gestisce una richiesta di modifica della dimensione del font (zoom).
+        'delta' è un intero, solitamente +1 o -1.
+        """
         if self._is_applying_font_settings:
             return
 
         settings = QSettings("Genius", "GeniusAI")
-        # Salva solo la dimensione, la famiglia viene gestita dalla finestra di dialogo delle impostazioni
-        settings.setValue("editor/fontSize", new_size)
+        # Leggi la dimensione corrente dalle impostazioni, con un default ragionevole
+        current_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Riapplica le impostazioni a tutti i widget per mantenere la coerenza
-        self.apply_font_settings()
+        # Calcola la nuova dimensione
+        new_size = current_size + delta
+        new_size = max(6, new_size)  # Imposta una dimensione minima di 6
+
+        # Salva la nuova dimensione nelle impostazioni only se è cambiata
+        if new_size != current_size:
+            settings.setValue("editor/fontSize", new_size)
+            # Applica le nuove impostazioni a tutti i widget di testo
+            self.apply_font_settings()
 
     def apply_font_settings(self):
         """
