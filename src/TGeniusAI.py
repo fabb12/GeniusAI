@@ -1926,10 +1926,10 @@ class VideoAudioManager(QMainWindow):
 
     def apply_font_settings(self):
         """
-        Applica le impostazioni del font a tutte le aree di testo.
-        - Applica la famiglia di caratteri a tutto il testo.
-        - Calcola dinamicamente la dimensione dei titoli (H1, H2, ecc.) in base alla
-          dimensione del paragrafo per mantenere una gerarchia visiva.
+        Applica le impostazioni del font a tutte le aree di testo in modo robusto.
+        Itera attraverso ogni frammento di testo, modificando direttamente il suo formato
+        per sovrascrivere la famiglia e la dimensione del carattere, preservando altri stili
+        come il colore, anche in presenza di stili HTML inline.
         """
         if self._is_applying_font_settings:
             return
@@ -1940,15 +1940,7 @@ class VideoAudioManager(QMainWindow):
             font_family = settings.value("editor/fontFamily", "Arial")
             base_font_size = settings.value("editor/fontSize", 14, type=int)
 
-            # Definizione dei moltiplicatori per le dimensioni dei titoli
-            heading_scales = {
-                1: 1.5,   # H1
-                2: 1.3,   # H2
-                3: 1.15,  # H3
-                4: 1.0,   # H4
-                5: 0.9,   # H5
-                6: 0.8    # H6
-            }
+            heading_scales = {1: 1.5, 2: 1.3, 3: 1.15, 4: 1.0, 5: 0.9, 6: 0.8}
 
             text_areas = [
                 self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
@@ -1963,41 +1955,53 @@ class VideoAudioManager(QMainWindow):
                 if not area:
                     continue
 
-                # Imposta il formato di base per il nuovo testo che verrà digitato
-                default_format = QTextCharFormat()
-                default_font = QFont(font_family, base_font_size)
-                default_format.setFont(default_font)
-                area.setCurrentCharFormat(default_format)
-
+                # Disabilita l'undo/redo per migliorare le prestazioni durante la modifica
+                area.document().setUndoRedoEnabled(False)
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
 
                 block = area.document().begin()
                 while block.isValid():
-                    block_cursor = QTextCursor(block)
-                    block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
-
                     heading_level = block.blockFormat().headingLevel()
-                    char_format = QTextCharFormat()
+                    is_heading = 0 < heading_level <= 6
 
-                    if 0 < heading_level <= 6:
-                        # È un titolo: calcola la dimensione e imposta la famiglia
+                    # Determina la dimensione del font target per l'intero blocco
+                    if is_heading:
                         scale = heading_scales.get(heading_level, 1.0)
-                        scaled_size = int(base_font_size * scale)
-                        heading_font = QFont(font_family, scaled_size)
-                        heading_font.setBold(True) # Rendi i titoli in grassetto
-                        char_format.setFont(heading_font)
+                        target_font_size = int(base_font_size * scale)
                     else:
-                        # È un paragrafo normale
-                        paragraph_font = QFont(font_family, base_font_size)
-                        char_format.setFont(paragraph_font)
+                        target_font_size = base_font_size
 
-                    block_cursor.mergeCharFormat(char_format)
+                    # Itera attraverso ogni frammento di testo all'interno del blocco
+                    it = block.begin()
+                    while not it.atEnd():
+                        fragment = it.fragment()
+                        if fragment.isValid():
+                            # Ottieni una copia del formato corrente del frammento
+                            current_format = fragment.charFormat()
+                            # Ottieni una copia del font da quel formato
+                            font = current_format.font()
+
+                            # Modifica le proprietà del font
+                            font.setFamily(font_family)
+                            font.setPointSize(target_font_size)
+                            if is_heading:
+                                font.setBold(True)
+
+                            # Riapplica il font modificato al formato
+                            current_format.setFont(font)
+
+                            # Applica il formato aggiornato al frammento
+                            frag_cursor = QTextCursor(fragment)
+                            frag_cursor.setCharFormat(current_format)
+
+                        it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
+                # Riabilita l'undo/redo
+                area.document().setUndoRedoEnabled(True)
 
-            # Propaga le impostazioni del font al ChatDock
             if hasattr(self, 'chatDock'):
                 self.chatDock.set_font(font_family, base_font_size)
         finally:
