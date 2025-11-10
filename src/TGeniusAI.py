@@ -1918,8 +1918,9 @@ class VideoAudioManager(QMainWindow):
     def apply_font_settings(self):
         """
         Applica le impostazioni del font a tutte le aree di testo.
-        - Applica la famiglia di caratteri a tutto il testo (paragrafi e intestazioni).
-        - Applica la dimensione del carattere solo ai paragrafi, preservando le dimensioni delle intestazioni.
+        - Applica la famiglia di caratteri a tutto il testo.
+        - Calcola dinamicamente la dimensione dei titoli (H1, H2, ecc.) in base alla
+          dimensione del paragrafo per mantenere una gerarchia visiva.
         """
         if self._is_applying_font_settings:
             return
@@ -1928,18 +1929,17 @@ class VideoAudioManager(QMainWindow):
         try:
             settings = QSettings("Genius", "GeniusAI")
             font_family = settings.value("editor/fontFamily", "Arial")
-            font_size = settings.value("editor/fontSize", 14, type=int)
+            base_font_size = settings.value("editor/fontSize", 14, type=int)
 
-            # Formato per i paragrafi (famiglia + dimensione)
-            paragraph_font = QFont(font_family, font_size)
-            paragraph_format = QTextCharFormat()
-            paragraph_format.setFont(paragraph_font)
-
-            # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
-            heading_font = QFont()
-            heading_font.setFamily(font_family)
-            heading_format = QTextCharFormat()
-            heading_format.setFont(heading_font)
+            # Definizione dei moltiplicatori per le dimensioni dei titoli
+            heading_scales = {
+                1: 1.5,   # H1
+                2: 1.3,   # H2
+                3: 1.15,  # H3
+                4: 1.0,   # H4
+                5: 0.9,   # H5
+                6: 0.8    # H6
+            }
 
             text_areas = [
                 self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
@@ -1954,8 +1954,11 @@ class VideoAudioManager(QMainWindow):
                 if not area:
                     continue
 
-                # Imposta il formato per il nuovo testo che verrà digitato
-                area.setCurrentCharFormat(paragraph_format)
+                # Imposta il formato di base per il nuovo testo che verrà digitato
+                default_format = QTextCharFormat()
+                default_font = QFont(font_family, base_font_size)
+                default_format.setFont(default_font)
+                area.setCurrentCharFormat(default_format)
 
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
@@ -1965,22 +1968,29 @@ class VideoAudioManager(QMainWindow):
                     block_cursor = QTextCursor(block)
                     block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
 
-                    is_heading = block.blockFormat().headingLevel() > 0
+                    heading_level = block.blockFormat().headingLevel()
+                    char_format = QTextCharFormat()
 
-                    if is_heading:
-                        # Per le intestazioni, unisci solo la famiglia del carattere
-                        block_cursor.mergeCharFormat(heading_format)
+                    if 0 < heading_level <= 6:
+                        # È un titolo: calcola la dimensione e imposta la famiglia
+                        scale = heading_scales.get(heading_level, 1.0)
+                        scaled_size = int(base_font_size * scale)
+                        heading_font = QFont(font_family, scaled_size)
+                        heading_font.setBold(True) # Rendi i titoli in grassetto
+                        char_format.setFont(heading_font)
                     else:
-                        # Per i paragrafi, unisci sia la famiglia che la dimensione
-                        block_cursor.mergeCharFormat(paragraph_format)
+                        # È un paragrafo normale
+                        paragraph_font = QFont(font_family, base_font_size)
+                        char_format.setFont(paragraph_font)
 
+                    block_cursor.mergeCharFormat(char_format)
                     block = block.next()
 
                 cursor.endEditBlock()
 
-            # Propagate font settings to ChatDock
+            # Propaga le impostazioni del font al ChatDock
             if hasattr(self, 'chatDock'):
-                self.chatDock.set_font(font_family, font_size)
+                self.chatDock.set_font(font_family, base_font_size)
         finally:
             self._is_applying_font_settings = False
 
