@@ -263,12 +263,10 @@ class CustomTextEdit(QTextEdit):
         """
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             angle = event.angleDelta().y()
-            # Ottieni la dimensione del font corrente dal widget stesso
-            current_size = self.font().pointSize()
-            if current_size <= 0:  # pointSize() può restituire -1 se non impostato
-                # Fallback a una dimensione di default se non è possibile ottenere quella corrente
-                settings = QSettings("Genius", "GeniusAI")
-                current_size = settings.value("editor/fontSize", 14, type=int)
+            # Leggi la dimensione del font corrente da QSettings, che è la fonte di verità.
+            # Questo risolve il bug dove lo zoom si bloccava dopo il primo step.
+            settings = QSettings("Genius", "GeniusAI")
+            current_size = settings.value("editor/fontSize", 14, type=int)
 
             if angle > 0:
                 new_size = current_size + 1
