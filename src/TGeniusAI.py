@@ -1993,8 +1993,9 @@ class VideoAudioManager(QMainWindow):
                             current_format.setFont(font)
 
                             # Applica il formato aggiornato al frammento
-                            frag_cursor = QTextCursor(fragment)
-                            frag_cursor.setCharFormat(current_format)
+                            cursor.setPosition(fragment.position())
+                            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
+                            cursor.setCharFormat(current_format)
 
                         it += 1
                     block = block.next()
