@@ -8249,6 +8249,7 @@ class VideoAudioManager(QMainWindow):
         dialog = OperationalGuideDialog(self)
         if dialog.exec():
             options = dialog.get_options()
+            logging.info(f"DEBUG: Options received from dialog: {options}")
             num_frames = self.analysisFrameCountSpin.value()
             language = self.languageComboBox.currentText()
             use_smart_extraction = self.smartExtractionCheckbox.isChecked()
