@@ -95,7 +95,7 @@ from src.ui.ProjectDock import ProjectDock
 from src.ui.ChatDock import ChatDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
-from src.services.utils import remove_timestamps_from_html, generate_unique_filename
+from src.services.utils import remove_timestamps_from_html, generate_unique_filename, remove_inline_styles
 from src.services.Translator import TranslationService
 from src.services.TranslationThread import TranslationThread
 import docx
@@ -2775,17 +2775,18 @@ class VideoAudioManager(QMainWindow):
             if self.active_summary_type == 'transcription_fix':
                 # Salva il risultato grezzo (Markdown)
                 self.transcription_corrected = result
-                # Converti il Markdown in HTML per la visualizzazione
+                # Converti il Markdown in HTML e pulisci gli stili inline
                 html_content = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-                self.singleTranscriptionTextArea.setHtml(html_content)
+                clean_html = remove_inline_styles(html_content)
+                self.singleTranscriptionTextArea.setHtml(clean_html)
                 self.show_status_message("Correzione del testo completata.")
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
-                # Converti il risultato Markdown in HTML prima di salvarlo.
-                # Questa è la nuova fonte di verità.
+                # Converti il risultato Markdown in HTML e puliscilo dagli stili inline.
                 html_result = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-                self.summaries[self.active_summary_type] = html_result
+                clean_html = remove_inline_styles(html_result)
+                self.summaries[self.active_summary_type] = clean_html
 
                 # Invalida il riassunto integrato corrispondente.
                 integrated_key = f"{self.active_summary_type}_integrated"

@@ -98,6 +98,22 @@ def parse_timestamp_to_seconds(timestamp_str):
         return 0
 import requests
 import logging
+from bs4 import BeautifulSoup
+
+def remove_inline_styles(html_content):
+    """
+    Rimuove tutti gli attributi 'style' inline dall'HTML usando BeautifulSoup.
+    """
+    if not html_content:
+        return ""
+    soup = BeautifulSoup(html_content, 'html.parser')
+    for tag in soup.find_all(True): # Trova tutti i tag
+        if 'style' in tag.attrs:
+            del tag['style']
+    # Restituisce il contenuto del tag body, o l'intero soup se non c'è body
+    if soup.body:
+        return soup.body.decode_contents()
+    return str(soup)
 
 def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, images=None, timeout=300):
     """
