@@ -8654,17 +8654,17 @@ class VideoAudioManager(QMainWindow):
 
     def handle_chat_message(self, query):
         """Handles the sendMessage signal from the ChatDock."""
-        summary_text_area = self.get_current_summary_text_area()
-        if not summary_text_area or not summary_text_area.toPlainText().strip():
-            self.chatDock.add_message("AI", "Per favore, genera o carica un riassunto prima di fare una domanda.")
+        transcription_text_area = self.singleTranscriptionTextArea
+        if not transcription_text_area or not transcription_text_area.toPlainText().strip():
+            self.chatDock.add_message("AI", "Per favore, genera o carica una trascrizione prima di fare una domanda.")
             return
 
-        summary_text = summary_text_area.toPlainText()
+        transcription_text = transcription_text_area.toPlainText()
 
         thread = ProcessTextAI(
             mode="chat_summary",
             language=self.languageComboBox.currentText(),
-            prompt_vars={'summary_text': summary_text, 'user_query': query}
+            prompt_vars={'summary_text': transcription_text, 'user_query': query}
         )
         self.start_task(thread, self.on_chat_response_received, self.onProcessError, self.update_status_progress)
 
