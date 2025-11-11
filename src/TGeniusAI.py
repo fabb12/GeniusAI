@@ -1903,23 +1903,18 @@ class VideoAudioManager(QMainWindow):
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
 
-    def handle_font_size_change(self, delta):
+    def handle_font_size_change(self, new_size):
         """
-        Gestisce una richiesta di modifica della dimensione del font (zoom).
-        'delta' è un intero, solitamente +1 o -1.
+        Gestisce una richiesta di modifica della dimensione del font (zoom) per il testo base.
+        'new_size' è la nuova dimensione assoluta in punti.
         """
         if self._is_applying_font_settings:
             return
 
         settings = QSettings("Genius", "GeniusAI")
-        # Leggi la dimensione corrente dalle impostazioni, con un default ragionevole
         current_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Calcola la nuova dimensione
-        new_size = current_size + delta
-        new_size = max(6, new_size)  # Imposta una dimensione minima di 6
-
-        # Salva la nuova dimensione nelle impostazioni only se è cambiata
+        # Salva la nuova dimensione nelle impostazioni solo se è cambiata
         if new_size != current_size:
             settings.setValue("editor/fontSize", new_size)
             # Applica le nuove impostazioni a tutti i widget di testo
@@ -1927,10 +1922,8 @@ class VideoAudioManager(QMainWindow):
 
     def apply_font_settings(self):
         """
-        Applica le impostazioni del font a tutte le aree di testo in modo robusto.
-        Itera attraverso ogni frammento di testo, modificando direttamente il suo formato
-        per sovrascrivere la famiglia e la dimensione del carattere, preservando altri stili
-        come il colore, anche in presenza di stili HTML inline.
+        Applica le impostazioni del font a tutte le aree di testo, gestendo separatamente
+        le dimensioni per il testo base, i titoli (H1, H2) e i sottotitoli (H3-H6).
         """
         if self._is_applying_font_settings:
             return
@@ -1940,8 +1933,8 @@ class VideoAudioManager(QMainWindow):
             settings = QSettings("Genius", "GeniusAI")
             font_family = settings.value("editor/fontFamily", "Arial")
             base_font_size = settings.value("editor/fontSize", 14, type=int)
-
-            heading_scales = {1: 1.5, 2: 1.3, 3: 1.15, 4: 1.0, 5: 0.9, 6: 0.8}
+            title_font_size = settings.value("editor/titleFontSize", 22, type=int)
+            subtitle_font_size = settings.value("editor/subtitleFontSize", 18, type=int)
 
             text_areas = [
                 self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
@@ -1956,7 +1949,6 @@ class VideoAudioManager(QMainWindow):
                 if not area:
                     continue
 
-                # Disabilita l'undo/redo per migliorare le prestazioni durante la modifica
                 area.document().setUndoRedoEnabled(False)
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
@@ -1964,13 +1956,13 @@ class VideoAudioManager(QMainWindow):
                 block = area.document().begin()
                 while block.isValid():
                     heading_level = block.blockFormat().headingLevel()
-                    is_heading = 0 < heading_level <= 6
 
-                    # Determina la dimensione del font target per l'intero blocco
-                    if is_heading:
-                        scale = heading_scales.get(heading_level, 1.0)
-                        target_font_size = int(base_font_size * scale)
-                    else:
+                    # Determina la dimensione del font target per il blocco
+                    if 1 <= heading_level <= 2:
+                        target_font_size = title_font_size
+                    elif 3 <= heading_level <= 6:
+                        target_font_size = subtitle_font_size
+                    else: # Testo normale (heading_level == 0)
                         target_font_size = base_font_size
 
                     # Itera attraverso ogni frammento di testo all'interno del blocco
@@ -1978,30 +1970,28 @@ class VideoAudioManager(QMainWindow):
                     while not it.atEnd():
                         fragment = it.fragment()
                         if fragment.isValid():
-                            # Ottieni una copia del formato corrente del frammento
                             current_format = fragment.charFormat()
-                            # Ottieni una copia del font da quel formato
                             font = current_format.font()
 
-                            # Modifica le proprietà del font
                             font.setFamily(font_family)
                             font.setPointSize(target_font_size)
-                            if is_heading:
+
+                            # Applica il grassetto ai titoli/sottotitoli se non lo hanno già
+                            if heading_level > 0:
                                 font.setBold(True)
 
-                            # Riapplica il font modificato al formato
                             current_format.setFont(font)
 
-                            # Applica il formato aggiornato al frammento
-                            cursor.setPosition(fragment.position())
-                            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
-                            cursor.setCharFormat(current_format)
+                            # Seleziona il frammento e applica il formato
+                            frag_cursor = QTextCursor(block)
+                            frag_cursor.setPosition(fragment.position())
+                            frag_cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
+                            frag_cursor.setCharFormat(current_format)
 
                         it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
-                # Riabilita l'undo/redo
                 area.document().setUndoRedoEnabled(True)
 
             if hasattr(self, 'chatDock'):

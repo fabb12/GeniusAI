@@ -162,6 +162,13 @@ class SettingsDialog(QDialog):
         layout.addRow("Font Family:", self.fontFamilyComboBox)
         self.fontSizeSpinBox = QSpinBox(minimum=6, maximum=72, suffix=" pt", toolTip="Dimensione del carattere.")
         layout.addRow("Font Size:", self.fontSizeSpinBox)
+
+        self.titleFontSizeSpinBox = QSpinBox(minimum=8, maximum=96, suffix=" pt", toolTip="Dimensione del carattere per i titoli (H1, H2).")
+        layout.addRow("Dimensione Titoli:", self.titleFontSizeSpinBox)
+
+        self.subtitleFontSizeSpinBox = QSpinBox(minimum=7, maximum=84, suffix=" pt", toolTip="Dimensione del carattere per i sottotitoli (H3, H4, ecc.).")
+        layout.addRow("Dimensione Sottotitoli:", self.subtitleFontSizeSpinBox)
+
         self.highlightColorComboBox = QComboBox(toolTip="Colore per l'evidenziazione del testo.")
         self.highlightColorComboBox.addItems(self.highlight_colors.keys())
         layout.addRow("Colore Evidenziatore:", self.highlightColorComboBox)
@@ -182,6 +189,8 @@ class SettingsDialog(QDialog):
         self.useVBCableCheckBox.setChecked(self.settings.value("recording/useVBCable", False, type=bool))
         self.fontFamilyComboBox.setCurrentFont(QFont(self.settings.value("editor/fontFamily", "Arial")))
         self.fontSizeSpinBox.setValue(self.settings.value("editor/fontSize", 14, type=int))
+        self.titleFontSizeSpinBox.setValue(self.settings.value("editor/titleFontSize", 22, type=int))
+        self.subtitleFontSizeSpinBox.setValue(self.settings.value("editor/subtitleFontSize", 18, type=int))
         self.highlightColorComboBox.setCurrentText(self.settings.value("editor/highlightColor", "Giallo"))
         # Carica impostazioni Whisper
         self.whisperModelComboBox.setCurrentText(self.settings.value("whisper/model", "base"))
@@ -208,6 +217,8 @@ class SettingsDialog(QDialog):
         self.settings.setValue("recording/useVBCable", self.useVBCableCheckBox.isChecked())
         self.settings.setValue("editor/fontFamily", self.fontFamilyComboBox.currentFont().family())
         self.settings.setValue("editor/fontSize", self.fontSizeSpinBox.value())
+        self.settings.setValue("editor/titleFontSize", self.titleFontSizeSpinBox.value())
+        self.settings.setValue("editor/subtitleFontSize", self.subtitleFontSizeSpinBox.value())
         self.settings.setValue("editor/highlightColor", self.highlightColorComboBox.currentText())
         # Salva impostazioni Whisper
         self.settings.setValue("whisper/model", self.whisperModelComboBox.currentText())
