@@ -19,12 +19,15 @@ class OperationalGuideThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, video_path, num_frames, language, use_smart_extraction=False, parent=None):
+    def __init__(self, video_path, num_frames, language, use_smart_extraction=False, recipient="un utente generico", style="professionale", synthesis="dettagliata", parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.num_frames = num_frames
         self.language = language
         self.use_smart_extraction = use_smart_extraction
+        self.recipient = recipient
+        self.style = style
+        self.synthesis = synthesis
         self.extractor = FrameExtractor(video_path=video_path, num_frames=num_frames)
         self.selected_model = get_model_for_action('frame_extractor') # Use the same vision model
 
@@ -63,7 +66,12 @@ class OperationalGuideThread(QThread):
             with open(PROMPT_OPERATIONAL_GUIDE, 'r', encoding='utf-8') as f:
                 prompt_template = f.read()
 
-            formatted_prompt = prompt_template.format(language=self.language)
+            formatted_prompt = prompt_template.format(
+                language=self.language,
+                recipient=self.recipient,
+                style=self.style,
+                synthesis=self.synthesis
+            )
         except Exception as e:
             raise RuntimeError(f"Impossibile leggere o formattare il file prompt della guida operativa: {e}")
 

@@ -69,6 +69,7 @@ from src.ui.MonitorPreview import MonitorPreview
 from src.managers.StreamToLogger import setup_logging
 from src.services.FrameExtractor import FrameExtractor
 from src.services.OperationalGuideThread import OperationalGuideThread
+from src.ui.OperationalGuideDialog import OperationalGuideDialog
 from src.services.VideoCropping import CropThread
 from PyQt6.QtCore import QThread, pyqtSignal, Qt
 from src.ui.CropDialog import CropDialog
@@ -8245,24 +8246,29 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Carica un video prima di generare una guida operativa.", error=True)
             return
 
-        # Use the same frame count as the video integration feature for consistency
-        num_frames = self.analysisFrameCountSpin.value()
-        language = self.languageComboBox.currentText()
-        use_smart_extraction = self.smartExtractionCheckbox.isChecked()
+        dialog = OperationalGuideDialog(self)
+        if dialog.exec():
+            options = dialog.get_options()
+            num_frames = self.analysisFrameCountSpin.value()
+            language = self.languageComboBox.currentText()
+            use_smart_extraction = self.smartExtractionCheckbox.isChecked()
 
-        thread = OperationalGuideThread(
-            video_path=self.videoPathLineEdit,
-            num_frames=num_frames,
-            language=language,
-            use_smart_extraction=use_smart_extraction,
-            parent=self
-        )
-        self.start_task(
-            thread,
-            on_complete=self.on_operational_guide_completed,
-            on_error=self.on_operational_guide_error,
-            on_progress=self.update_status_progress
-        )
+            thread = OperationalGuideThread(
+                video_path=self.videoPathLineEdit,
+                num_frames=num_frames,
+                language=language,
+                use_smart_extraction=use_smart_extraction,
+                recipient=options["recipient"],
+                style=options["style"],
+                synthesis=options["synthesis"],
+                parent=self
+            )
+            self.start_task(
+                thread,
+                on_complete=self.on_operational_guide_completed,
+                on_error=self.on_operational_guide_error,
+                on_progress=self.update_status_progress
+            )
 
     def on_operational_guide_completed(self, guide_text):
         """
