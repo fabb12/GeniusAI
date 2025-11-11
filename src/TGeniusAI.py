@@ -1905,14 +1905,18 @@ class VideoAudioManager(QMainWindow):
 
     def handle_font_size_change(self, new_size):
         """
-        Gestisce una richiesta di modifica della dimensione del font (zoom) per il testo base.
-        'new_size' è la nuova dimensione assoluta in punti.
+        Gestisce una richiesta di modifica della dimensione del font (zoom).
+        'new_size' è ora la dimensione assoluta del font da applicare.
         """
         if self._is_applying_font_settings:
             return
 
         settings = QSettings("Genius", "GeniusAI")
+        # Leggi la dimensione corrente per vedere se c'è un cambiamento
         current_size = settings.value("editor/fontSize", 14, type=int)
+
+        # Assicura che la nuova dimensione sia valida
+        new_size = max(6, new_size)
 
         # Salva la nuova dimensione nelle impostazioni solo se è cambiata
         if new_size != current_size:
@@ -1950,6 +1954,8 @@ class VideoAudioManager(QMainWindow):
                     continue
 
                 area.document().setUndoRedoEnabled(False)
+                # Usa un singolo cursore per l'intero documento per evitare errori di tipo.
+                # Questo cursore verrà spostato per selezionare e formattare ogni frammento.
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
 
@@ -1962,7 +1968,7 @@ class VideoAudioManager(QMainWindow):
                         target_font_size = title_font_size
                     elif 3 <= heading_level <= 6:
                         target_font_size = subtitle_font_size
-                    else: # Testo normale (heading_level == 0)
+                    else:  # Testo normale (heading_level == 0)
                         target_font_size = base_font_size
 
                     # Itera attraverso ogni frammento di testo all'interno del blocco
@@ -1970,29 +1976,32 @@ class VideoAudioManager(QMainWindow):
                     while not it.atEnd():
                         fragment = it.fragment()
                         if fragment.isValid():
+                            # CORREZIONE: Seleziona il frammento con il cursore del documento
+                            # invece di creare un nuovo cursore dal frammento.
+                            cursor.setPosition(fragment.position())
+                            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
+
+                            # Ottieni, modifica e applica il formato del carattere
                             current_format = fragment.charFormat()
                             font = current_format.font()
-
                             font.setFamily(font_family)
                             font.setPointSize(target_font_size)
 
-                            # Applica il grassetto ai titoli/sottotitoli se non lo hanno già
                             if heading_level > 0:
                                 font.setBold(True)
 
                             current_format.setFont(font)
-
-                            # Seleziona il frammento e applica il formato
-                            frag_cursor = QTextCursor(block)
-                            frag_cursor.setPosition(fragment.position())
-                            frag_cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
-                            frag_cursor.setCharFormat(current_format)
+                            cursor.setCharFormat(current_format)
 
                         it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
+                # Cancella la selezione finale per evitare che il testo rimanga evidenziato
+                cursor.clearSelection()
+                area.setTextCursor(cursor)
                 area.document().setUndoRedoEnabled(True)
+
 
             if hasattr(self, 'chatDock'):
                 self.chatDock.set_font(font_family, base_font_size)
