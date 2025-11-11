@@ -9,8 +9,8 @@ class OperationalGuideDialog(QDialog):
         layout = QVBoxLayout(self)
         form_layout = QFormLayout()
 
-        self.recipient_input = QLineEdit(self)
-        self.recipient_input.setPlaceholderText("Es. nuovo utente, tecnico specializzato")
+        self.recipient_input = QComboBox(self)
+        self.recipient_input.addItems(["Nuovo utente", "Tecnico specializzato", "Manager", "Cliente"])
         form_layout.addRow("Destinatario della guida:", self.recipient_input)
 
         self.style_input = QComboBox(self)
@@ -31,7 +31,7 @@ class OperationalGuideDialog(QDialog):
 
     def get_options(self):
         return {
-            "recipient": self.recipient_input.text(),
+            "recipient": self.recipient_input.currentText(),
             "style": self.style_input.currentText(),
             "synthesis": self.synthesis_input.currentText()
         }
