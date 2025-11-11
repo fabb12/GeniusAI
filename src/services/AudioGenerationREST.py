@@ -4,7 +4,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 class AudioGenerationThread(QThread):
     completed = pyqtSignal(str)  # Signal to notify the path of the completed file
     error = pyqtSignal(str)      # Signal to notify errors
-    progress = pyqtSignal(int)   # Signal to update progress, if necessary
+    progress = pyqtSignal(int, str)   # Signal to update progress, if necessary
 
     def __init__(self, text, voice_id, model_id, voice_settings, api_key, output_path, parent=None):
         super().__init__(parent)
@@ -36,7 +36,7 @@ class AudioGenerationThread(QThread):
                     for chunk in response.iter_content(chunk_size=1024):
                         if chunk:  # filter out keep-alive new chunks
                             f.write(chunk)
-                            self.progress.emit(100)  # You may want to refine progress updates for large files
+                            self.progress.emit(100, "Audio generato.")  # You may want to refine progress updates for large files
                 self.completed.emit(self.output_path)
             else:
                 raise Exception(f"Failed to generate audio: {response.status_code} - {response.text}")
