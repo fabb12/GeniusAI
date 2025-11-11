@@ -345,12 +345,6 @@ class PptxGeneration:
             # Se viene fornito un template, caricalo. Altrimenti, crea una presentazione vuota.
             if template_path and os.path.exists(template_path):
                 prs = Presentation(template_path)
-                # Rimuovi tutte le slide esistenti dal template per usarlo solo per lo stile.
-                # Questo ciclo itera all'indietro per eliminare le slide in modo sicuro senza problemi di indice.
-                for i in range(len(prs.slides) - 1, -1, -1):
-                    rId = prs.slides._sldIdLst[i].rId
-                    prs.part.drop_rel(rId)
-                    del prs.slides._sldIdLst[i]
             else:
                 prs = Presentation()
 
