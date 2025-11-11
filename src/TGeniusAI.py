@@ -1954,57 +1954,46 @@ class VideoAudioManager(QMainWindow):
                     continue
 
                 area.document().setUndoRedoEnabled(False)
-                # Usa un singolo cursore per l'intero documento per evitare errori di tipo.
-                # Questo cursore verrà spostato per selezionare e formattare ogni frammento.
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
 
                 block = area.document().begin()
                 while block.isValid():
-                    heading_level = block.blockFormat().headingLevel()
-
-                    # Determina la dimensione del font target per il blocco
-                    if 1 <= heading_level <= 2:
-                        target_font_size = title_font_size
-                    elif 3 <= heading_level <= 6:
-                        target_font_size = subtitle_font_size
-                    else:  # Testo normale (heading_level == 0)
-                        target_font_size = base_font_size
-
-                    # Itera attraverso ogni frammento di testo all'interno del blocco
                     it = block.begin()
                     while not it.atEnd():
                         fragment = it.fragment()
                         if fragment.isValid():
-                            # CORREZIONE: Seleziona il frammento con il cursore del documento
-                            # invece di creare un nuovo cursore dal frammento.
                             cursor.setPosition(fragment.position())
                             cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
 
-                            # Ottieni, modifica e applica il formato del carattere
                             current_format = fragment.charFormat()
                             font = current_format.font()
                             font.setFamily(font_family)
-                            font.setPointSize(target_font_size)
 
-                            if heading_level > 0:
+                            heading_level = block.blockFormat().headingLevel()
+                            if 1 <= heading_level <= 2:
+                                font.setPointSize(title_font_size)
                                 font.setBold(True)
+                            elif 3 <= heading_level <= 6:
+                                font.setPointSize(subtitle_font_size)
+                                font.setBold(True)
+                            else:
+                                font.setPointSize(base_font_size)
+                                # Mantieni il grassetto se era già presente
+                                font.setBold(current_format.font().bold())
 
                             current_format.setFont(font)
-                            cursor.setCharFormat(current_format)
+                            cursor.mergeCharFormat(current_format)
 
                         it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
-                # Cancella la selezione finale per evitare che il testo rimanga evidenziato
-                cursor.clearSelection()
-                area.setTextCursor(cursor)
                 area.document().setUndoRedoEnabled(True)
-
 
             if hasattr(self, 'chatDock'):
                 self.chatDock.set_font(font_family, base_font_size)
+
         finally:
             self._is_applying_font_settings = False
 
