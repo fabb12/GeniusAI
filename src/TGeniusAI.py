@@ -801,7 +801,6 @@ class VideoAudioManager(QMainWindow):
         self.monitor_preview = None
         self.cursor_overlay = CursorOverlay()
         self.current_thread = None
-        self.original_status_bar_stylesheet = self.statusBar.styleSheet()
         self.current_translation_widget = None
 
     def show_status_message(self, message, timeout=5000, error=False):
@@ -1749,6 +1748,7 @@ class VideoAudioManager(QMainWindow):
         self.statusBar = QStatusBar()
         self.setStatusBar(self.statusBar)
         self.statusBar.setStyleSheet("QStatusBar { padding: 1px; } QStatusBar::item { border: none; }")
+        self.original_status_bar_stylesheet = self.statusBar.styleSheet()
         self.statusLabel = QLabel("Pronto")
         self.statusLabel.setToolTip("Mostra lo stato corrente dell'applicazione")
         self.statusBar.addWidget(self.statusLabel, 1) # Il secondo argomento è lo stretch factor
@@ -6259,7 +6259,15 @@ class VideoAudioManager(QMainWindow):
         timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
         audio_save_path = os.path.join(save_dir, f"{base_name}_generated_{timestamp}.mp3")
 
-        thread = AudioGenerationThread(transcriptionText, voice_id, model_id, voice_settings, api_key, audio_save_path, self)
+        thread = AudioGenerationThread(
+            text=transcriptionText,
+            voice_id=voice_id,
+            model_id=model_id, # Assicura che il modello corretto sia passato
+            voice_settings=voice_settings,
+            api_key=api_key,
+            output_path=audio_save_path,
+            parent=self
+        )
         self.start_task(thread, self.onAudioGenerationCompleted, self.onAudioGenerationError, self.update_status_progress)
 
     def runWav2Lip(self, video_path, audio_path, output_path):
