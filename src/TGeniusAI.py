@@ -1903,24 +1903,34 @@ class VideoAudioManager(QMainWindow):
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
 
-    def handle_font_size_change(self, new_size):
-        """Gestisce la modifica della dimensione del font da un widget e la salva."""
-        # Se stiamo già applicando le impostazioni, esci per evitare un loop
+    def handle_font_size_change(self, delta):
+        """
+        Gestisce una richiesta di modifica della dimensione del font (zoom).
+        'delta' è un intero, solitamente +1 o -1.
+        """
         if self._is_applying_font_settings:
             return
 
         settings = QSettings("Genius", "GeniusAI")
-        # Salva solo la dimensione, la famiglia viene gestita dalla finestra di dialogo delle impostazioni
-        settings.setValue("editor/fontSize", new_size)
+        # Leggi la dimensione corrente dalle impostazioni, con un default ragionevole
+        current_size = settings.value("editor/fontSize", 14, type=int)
 
-        # Riapplica le impostazioni a tutti i widget per mantenere la coerenza
-        self.apply_font_settings()
+        # Calcola la nuova dimensione
+        new_size = current_size + delta
+        new_size = max(6, new_size)  # Imposta una dimensione minima di 6
+
+        # Salva la nuova dimensione nelle impostazioni only se è cambiata
+        if new_size != current_size:
+            settings.setValue("editor/fontSize", new_size)
+            # Applica le nuove impostazioni a tutti i widget di testo
+            self.apply_font_settings()
 
     def apply_font_settings(self):
         """
-        Applica le impostazioni del font a tutte le aree di testo.
-        - Applica la famiglia di caratteri a tutto il testo (paragrafi e intestazioni).
-        - Applica la dimensione del carattere solo ai paragrafi, preservando le dimensioni delle intestazioni.
+        Applica le impostazioni del font a tutte le aree di testo in modo robusto.
+        Itera attraverso ogni frammento di testo, modificando direttamente il suo formato
+        per sovrascrivere la famiglia e la dimensione del carattere, preservando altri stili
+        come il colore, anche in presenza di stili HTML inline.
         """
         if self._is_applying_font_settings:
             return
@@ -1929,18 +1939,9 @@ class VideoAudioManager(QMainWindow):
         try:
             settings = QSettings("Genius", "GeniusAI")
             font_family = settings.value("editor/fontFamily", "Arial")
-            font_size = settings.value("editor/fontSize", 14, type=int)
+            base_font_size = settings.value("editor/fontSize", 14, type=int)
 
-            # Formato per i paragrafi (famiglia + dimensione)
-            paragraph_font = QFont(font_family, font_size)
-            paragraph_format = QTextCharFormat()
-            paragraph_format.setFont(paragraph_font)
-
-            # Formato per le intestazioni (solo famiglia, per non sovrascrivere la dimensione)
-            heading_font = QFont()
-            heading_font.setFamily(font_family)
-            heading_format = QTextCharFormat()
-            heading_format.setFont(heading_font)
+            heading_scales = {1: 1.5, 2: 1.3, 3: 1.15, 4: 1.0, 5: 0.9, 6: 0.8}
 
             text_areas = [
                 self.singleTranscriptionTextArea, self.batchTranscriptionTextArea,
@@ -1955,33 +1956,55 @@ class VideoAudioManager(QMainWindow):
                 if not area:
                     continue
 
-                # Imposta il formato per il nuovo testo che verrà digitato
-                area.setCurrentCharFormat(paragraph_format)
-
+                # Disabilita l'undo/redo per migliorare le prestazioni durante la modifica
+                area.document().setUndoRedoEnabled(False)
                 cursor = QTextCursor(area.document())
                 cursor.beginEditBlock()
 
                 block = area.document().begin()
                 while block.isValid():
-                    block_cursor = QTextCursor(block)
-                    block_cursor.movePosition(QTextCursor.MoveOperation.EndOfBlock, QTextCursor.MoveMode.KeepAnchor)
+                    heading_level = block.blockFormat().headingLevel()
+                    is_heading = 0 < heading_level <= 6
 
-                    is_heading = block.blockFormat().headingLevel() > 0
-
+                    # Determina la dimensione del font target per l'intero blocco
                     if is_heading:
-                        # Per le intestazioni, unisci solo la famiglia del carattere
-                        block_cursor.mergeCharFormat(heading_format)
+                        scale = heading_scales.get(heading_level, 1.0)
+                        target_font_size = int(base_font_size * scale)
                     else:
-                        # Per i paragrafi, unisci sia la famiglia che la dimensione
-                        block_cursor.mergeCharFormat(paragraph_format)
+                        target_font_size = base_font_size
 
+                    # Itera attraverso ogni frammento di testo all'interno del blocco
+                    it = block.begin()
+                    while not it.atEnd():
+                        fragment = it.fragment()
+                        if fragment.isValid():
+                            # Ottieni una copia del formato corrente del frammento
+                            current_format = fragment.charFormat()
+                            # Ottieni una copia del font da quel formato
+                            font = current_format.font()
+
+                            # Modifica le proprietà del font
+                            font.setFamily(font_family)
+                            font.setPointSize(target_font_size)
+                            if is_heading:
+                                font.setBold(True)
+
+                            # Riapplica il font modificato al formato
+                            current_format.setFont(font)
+
+                            # Applica il formato aggiornato al frammento
+                            frag_cursor = QTextCursor(fragment)
+                            frag_cursor.setCharFormat(current_format)
+
+                        it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
+                # Riabilita l'undo/redo
+                area.document().setUndoRedoEnabled(True)
 
-            # Propagate font settings to ChatDock
             if hasattr(self, 'chatDock'):
-                self.chatDock.set_font(font_family, font_size)
+                self.chatDock.set_font(font_family, base_font_size)
         finally:
             self._is_applying_font_settings = False
 

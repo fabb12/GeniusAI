@@ -294,24 +294,17 @@ class CustomTextEdit(QTextEdit):
     def wheelEvent(self, event):
         """
         Gestisce l'evento della rotellina del mouse per lo zoom del testo.
-        """
-        Gestisce l'evento della rotellina del mouse per lo zoom del testo
-        ed emette un segnale quando la dimensione del font cambia.
+        Emette un segnale per richiedere un cambio di dimensione del font,
+        invece di applicarlo direttamente.
         """
         if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
             angle = event.angleDelta().y()
-            current_size = self.fontPointSize()
-
             if angle > 0:
-                new_size = current_size + 1
+                # Richiesta di aumentare la dimensione del font
+                self.fontSizeChanged.emit(1)
             elif angle < 0:
-                new_size = max(6, current_size - 1) # Imposta una dimensione minima
-            else:
-                return
-
-            if new_size != current_size:
-                self.setFontPointSize(new_size)
-                self.fontSizeChanged.emit(int(new_size))
+                # Richiesta di diminuire la dimensione del font
+                self.fontSizeChanged.emit(-1)
 
             event.accept()
         else:
