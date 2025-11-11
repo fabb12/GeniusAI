@@ -26,21 +26,17 @@ class CustomTextDocument(QTextDocument):
             parent_widget = self.parent()
             if isinstance(parent_widget, CustomTextEdit):
                 image_name = name.toString().replace("frame://", "")
-                metadata = parent_widget.image_metadata.get(image_name)
+                metadata = parent_widget.html_manager.image_metadata.get(image_name)
                 if metadata and 'original_image' in metadata:
                     return metadata['original_image']
 
         return super().loadResource(type, name)
 
+from managers.HtmlManager import HtmlManager
+
 class CustomTextEdit(QTextEdit):
     """
-
-    Un QTextEdit personalizzato con funzionalità aggiuntive:
-    - Segnale per il cambio posizione cursore.
-    - Ricerca (Ctrl+F) con dialogo separato, navigazione (F3/Shift+F3) ed evidenziazione.
-    - Capacità di impostare ed esportare contenuto Markdown.
-    - Tentativo di rendering Markdown su incolla *solo se sostituisce tutto*.
-    - Zoom del testo con Ctrl + rotellina del mouse.
+    Un QTextEdit personalizzato con funzionalità aggiuntive.
     """
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
@@ -50,54 +46,22 @@ class CustomTextEdit(QTextEdit):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.html_manager = HtmlManager()
         self.setDocument(CustomTextDocument(self))
-        # Memorizza l'istanza del dialogo di ricerca per evitare duplicati
         self.search_dialog_instance = None
-
-        # Stato della ricerca
         self.search_text = None
         self.current_search_index = -1
         self.search_results_cursors = []
         self.last_search_options = {}
         self.resizing_image = None
         self.resizing_start_pos = None
-        self.image_metadata = {}
 
     def insert_image_with_metadata(self, displayed_pixmap, width, height, video_path, timestamp, original_image=None):
-        """
-        Inserts an image as a document resource and stores its metadata.
-        Generates a unique but simpler name for the image resource.
-        """
-        # Generate a unique name for the image resource. Using a timestamp is a good way to ensure uniqueness.
-        image_name = f"frame_{int(time.time() * 1000)}"
-        uri = QUrl(f"frame://{image_name}")
-
-        # The document will use this URI to request the image data via the loadResource method.
-        # We store the actual image data in our metadata dictionary.
-        # Convert QPixmap to QImage for storage to ensure it's device-independent.
-        image_to_store = original_image if original_image is not None else displayed_pixmap.toImage()
-        self.image_metadata[image_name] = {
-            'video_path': video_path,
-            'timestamp': timestamp,
-            'original_image': image_to_store # This is what loadResource will return
-        }
-
-        # The document itself doesn't store the image, just a reference (the URI).
-        # We need to add the *displayed* pixmap as the resource for the initial display.
-        self.document().addResource(QTextDocument.ResourceType.ImageResource, uri, displayed_pixmap.toImage())
-
-        cursor = self.textCursor()
-        image_format = QTextImageFormat()
-        image_format.setName(uri.toString())
-        image_format.setWidth(width)
-        image_format.setHeight(height)
-
-        cursor.insertImage(image_format)
-
-        # Force a relayout to ensure the new image is displayed correctly
-        self.viewport().update()
-
-        return image_name
+        if self.html_manager:
+            return self.html_manager.insert_image_with_metadata(
+                self, displayed_pixmap, width, height, video_path, timestamp, original_image
+            )
+        return None
 
     def find_nearest_timecode(self, cursor_pos):
         """Finds the nearest timecode to the given cursor position."""
