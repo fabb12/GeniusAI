@@ -379,6 +379,10 @@ DEFAULT_VOICES = {
     # Aggiungere altre voci predefinite se necessario
 }
 
+def get_default_voices():
+    """Restituisce il dizionario delle voci predefinite di ElevenLabs."""
+    return DEFAULT_VOICES
+
 # --- Funzione per recuperare il modello per un'azione specifica ---
 def get_model_for_action(action_name: str) -> str:
     """

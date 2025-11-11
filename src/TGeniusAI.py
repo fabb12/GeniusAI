@@ -79,7 +79,7 @@ from src.ui.AddMediaDialog import AddMediaDialog
 from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_FILE,
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
-                    DEFAULT_FRAME_RATE, DEFAULT_VOICES, SPLASH_IMAGES_DIR,
+                    DEFAULT_FRAME_RATE, get_default_voices, SPLASH_IMAGES_DIR,
                     DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS)
 import os
 AudioSegment.converter = FFMPEG_PATH
@@ -1415,12 +1415,12 @@ class VideoAudioManager(QMainWindow):
         self.timecodeCheckbox.toggled.connect(self.handleTimecodeToggle)
         tools_grid_layout.addWidget(self.timecodeCheckbox, 0, 0)
 
-        self.syncButton = QPushButton('')
-        self.syncButton.setIcon(QIcon(get_resource("sync.png")))
-        self.syncButton.setFixedSize(32, 32)
-        self.syncButton.setToolTip("Sincronizza Video da Timecode Vicino")
-        self.syncButton.clicked.connect(self.sync_video_to_transcription)
-        tools_grid_layout.addWidget(self.syncButton, 0, 1)
+        self.openAudioDockButton = QPushButton('')
+        self.openAudioDockButton.setIcon(QIcon(get_resource("sound.png")))
+        self.openAudioDockButton.setFixedSize(32, 32)
+        self.openAudioDockButton.setToolTip("Apri Dock Audio AI")
+        self.openAudioDockButton.clicked.connect(self.editingDock.show)
+        tools_grid_layout.addWidget(self.openAudioDockButton, 0, 1)
 
         self.pauseTimeEdit = QLineEdit()
         self.pauseTimeEdit.setPlaceholderText("Durata pausa (es. 1.0s)")
@@ -3404,7 +3404,7 @@ class VideoAudioManager(QMainWindow):
         # QComboBox per la selezione della voce con opzione per inserire custom ID
         self.voiceSelectionComboBox = QComboBox()
         self.voiceSelectionComboBox.setEditable(True)
-        for name, voice_id in DEFAULT_VOICES.items():
+        for name, voice_id in get_default_voices().items():
             self.voiceSelectionComboBox.addItem(name, voice_id)
 
         layout.addWidget(self.voiceSelectionComboBox)
