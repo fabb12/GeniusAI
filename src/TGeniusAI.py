@@ -669,6 +669,7 @@ class VideoAudioManager(QMainWindow):
     def __init__(self):
         super().__init__()
         self._is_applying_font_settings = False
+
         self.project_manager = ProjectManager(base_dir="projects")
         self.bookmark_manager = BookmarkManager(self)
         self.translation_service = TranslationService()
