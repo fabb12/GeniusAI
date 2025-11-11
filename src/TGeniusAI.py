@@ -95,7 +95,8 @@ from src.ui.ProjectDock import ProjectDock
 from src.ui.ChatDock import ChatDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
-from src.services.utils import remove_timestamps_from_html, generate_unique_filename, remove_inline_styles
+from src.managers.HtmlManager import HtmlManager
+from src.services.utils import generate_unique_filename
 from src.services.Translator import TranslationService
 from src.services.TranslationThread import TranslationThread
 import docx
@@ -673,6 +674,7 @@ class VideoAudioManager(QMainWindow):
         self.project_manager = ProjectManager(base_dir="projects")
         self.bookmark_manager = BookmarkManager(self)
         self.translation_service = TranslationService()
+        self.html_manager = HtmlManager()
         self.current_project_path = None
 
         setup_logging()
@@ -2122,7 +2124,7 @@ class VideoAudioManager(QMainWindow):
             # Mostra il testo corretto, se disponibile
             if self.transcription_corrected:
                 # Converti il Markdown salvato in HTML per la visualizzazione
-                html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+                html_content = self.html_manager.markdown_to_html(self.transcription_corrected)
                 self.singleTranscriptionTextArea.setHtml(html_content)
         else:
             # Mostra il testo originale con formattazione
@@ -2631,7 +2633,7 @@ class VideoAudioManager(QMainWindow):
         # Dobbiamo calcolarli e salvarli come stato "master".
         if checked:
             # Rimuoviamo eventuali vecchi timestamp per sicurezza prima di ricalcolare
-            text_without_timestamps = remove_timestamps_from_html(current_html_with_timestamps)
+            text_without_timestamps = self.html_manager.remove_timestamps_from_html(current_html_with_timestamps)
             # Calcoliamo i nuovi timestamp basandoci sul testo pulito
             self.original_audio_ai_html = self.calculateAndDisplayTimeCodeAtEndOfSentences(text_without_timestamps)
         else:
@@ -2662,7 +2664,7 @@ class VideoAudioManager(QMainWindow):
             text_area.setHtml(processed_html)
         else:
             # Nascondi i timecode usando la funzione di utilità.
-            cleaned_html = remove_timestamps_from_html(full_html_content)
+            cleaned_html = self.html_manager.remove_timestamps_from_html(full_html_content)
             text_area.setHtml(cleaned_html)
         text_area.blockSignals(False)
 
@@ -2777,15 +2779,15 @@ class VideoAudioManager(QMainWindow):
                 self.transcription_corrected = result
                 # Converti il Markdown in HTML e pulisci gli stili inline
                 html_content = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-                clean_html = remove_inline_styles(html_content)
+                clean_html = self.html_manager.remove_inline_styles(html_content)
                 self.singleTranscriptionTextArea.setHtml(clean_html)
                 self.show_status_message("Correzione del testo completata.")
                 self.transcriptionViewToggle.setEnabled(True)
                 self.transcriptionViewToggle.setChecked(True)
             else:
                 # Converti il risultato Markdown in HTML e puliscilo dagli stili inline.
-                html_result = markdown.markdown(result, extensions=['fenced_code', 'tables'])
-                clean_html = remove_inline_styles(html_result)
+                html_result = self.html_manager.markdown_to_html(result)
+                clean_html = self.html_manager.remove_inline_styles(html_result)
                 self.summaries[self.active_summary_type] = clean_html
 
                 # Invalida il riassunto integrato corrispondente.
@@ -2924,9 +2926,9 @@ class VideoAudioManager(QMainWindow):
         display_html = html_content
 
         if show_timestamps:
-            display_html = self._style_timestamps_in_html(html_content)
+            display_html = self.html_manager.style_timestamps_in_html(html_content)
         else:
-            display_html = remove_timestamps_from_html(html_content)
+            display_html = self.html_manager.remove_timestamps_from_html(html_content)
 
 
         # 5. Aggiorna la UI
@@ -5983,34 +5985,13 @@ class VideoAudioManager(QMainWindow):
 
         return new_body.decode_contents()
 
-    def _style_timestamps_in_html(self, html_content):
-        """
-        Applies a consistent style to all timestamps within an HTML string.
-        It finds timestamps and wraps them in a colored <font> tag.
-        """
-        # Pattern to find timestamps like [00:00] - [00:05] or [00:00:02.4] or [00:00]
-        timestamp_pattern = re.compile(r'(\[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\](?: - \[\d{2}:\d{2}(?::\d{2})?(?:\.\d)?\])?)')
-
-        # Function to wrap matches in a styled font tag
-        def style_match(match):
-            return f"<font color='#ADD8E6'>{match.group(1)}</font>"
-
-        # First, remove any existing timestamp styling to prevent nested tags
-        unstyle_pattern = re.compile(r"<font color='#ADD8E6'>(.*?)</font>", re.IGNORECASE)
-        unstyled_html = unstyle_pattern.sub(r'\1', html_content)
-
-        # Apply the new style
-        styled_html = timestamp_pattern.sub(style_match, unstyled_html)
-
-        return styled_html
-
     def _style_existing_timestamps(self, text_edit):
         """
         Applica uno stile coerente ai timestamp esistenti in un QTextEdit.
         Cerca i timestamp nel formato [HH:MM:SS.d] e li colora.
         """
         current_html = text_edit.toHtml()
-        new_html = self._style_timestamps_in_html(current_html)
+        new_html = self.html_manager.style_timestamps_in_html(current_html)
 
         if new_html != current_html:
             # Salva la posizione del cursore
@@ -6116,7 +6097,7 @@ class VideoAudioManager(QMainWindow):
 
         # Decide quale testo mostrare e imposta lo stato del toggle
         if self.transcription_corrected:
-            html_content = markdown.markdown(self.transcription_corrected, extensions=['fenced_code', 'tables'])
+            html_content = self.html_manager.markdown_to_html(self.transcription_corrected)
             self.singleTranscriptionTextArea.setHtml(html_content)
             self.transcriptionViewToggle.setEnabled(True)
             self.transcriptionViewToggle.setChecked(True)
@@ -6132,14 +6113,14 @@ class VideoAudioManager(QMainWindow):
             raw_detailed = data.get('summary_generated', '')
             raw_integrated = data.get('summary_generated_integrated', '')
             # Converti in HTML perché i vecchi formati erano Markdown
-            self.summaries['detailed'] = markdown.markdown(raw_detailed, extensions=['fenced_code', 'tables'])
-            self.summaries['detailed_integrated'] = markdown.markdown(raw_integrated, extensions=['fenced_code', 'tables'])
+            self.summaries['detailed'] = self.html_manager.markdown_to_html(raw_detailed)
+            self.summaries['detailed_integrated'] = self.html_manager.markdown_to_html(raw_integrated)
 
         # Per i nuovi file json, controlla se qualche valore è ancora in Markdown e convertilo
         for key, value in self.summaries.items():
             if value and not value.strip().startswith('<'):
                 logging.debug(f"Converting legacy Markdown summary for key '{key}' to HTML.")
-                self.summaries[key] = markdown.markdown(value, extensions=['fenced_code', 'tables'])
+                self.summaries[key] = self.html_manager.markdown_to_html(value)
 
         # Rimosso il caricamento di 'combined_summary' dal JSON del singolo clip.
         # Questa informazione è ora gestita a livello di progetto nel file .gnai.

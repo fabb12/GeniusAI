@@ -44,39 +44,6 @@ def generate_unique_filename(base_path):
 
     return new_filepath
 
-def remove_timestamps_from_html(html_content):
-    """
-    Removes timestamp tags and raw timestamps (e.g., [00:12:34.5] or [01:23]) from an HTML string,
-    ensuring that other HTML tags like <img> are not affected.
-    """
-    if not html_content:
-        return ""
-
-    # This pattern is now highly specific to the timestamp format to avoid over-matching.
-    # It targets <font> tags with the specific timestamp color and a timestamp-like content.
-    font_timestamp_pattern = re.compile(
-        r'\s*<font[^>]*color=["\']?#ADD8E6["\']?[^>]*>\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\]</font>\s*',
-        re.IGNORECASE
-    )
-    content = font_timestamp_pattern.sub(' ', html_content)
-
-    # This pattern for raw timestamps is already specific.
-    raw_timestamp_pattern = re.compile(r'\s*\[\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,2})?\]\s*')
-    content = raw_timestamp_pattern.sub(' ', content)
-
-    # Clean up whitespace issues that may result from the removal.
-    # Collapse multiple spaces into a single space.
-    content = re.sub(r'\s{2,}', ' ', content)
-    # Remove space that might be left after an opening <p> tag.
-    content = re.sub(r'(<p[^>]*>)\s+', r'\1', content, flags=re.IGNORECASE)
-    # Remove space that might be left before a closing </p> tag.
-    content = re.sub(r'\s+</p>', '</p>', content)
-    # Qt sometimes uses <br />. Let's not leave hanging spaces before it.
-    content = re.sub(r'\s+<br\s*/?>', '<br />', content)
-
-
-    return content.strip()
-
 def parse_timestamp_to_seconds(timestamp_str):
     """Converte un timestamp stringa [HH:MM:SS] o [MM:SS] in secondi totali."""
     if not isinstance(timestamp_str, str):
@@ -99,21 +66,6 @@ def parse_timestamp_to_seconds(timestamp_str):
 import requests
 import logging
 from bs4 import BeautifulSoup
-
-def remove_inline_styles(html_content):
-    """
-    Rimuove tutti gli attributi 'style' inline dall'HTML usando BeautifulSoup.
-    """
-    if not html_content:
-        return ""
-    soup = BeautifulSoup(html_content, 'html.parser')
-    for tag in soup.find_all(True): # Trova tutti i tag
-        if 'style' in tag.attrs:
-            del tag['style']
-    # Restituisce il contenuto del tag body, o l'intero soup se non c'è body
-    if soup.body:
-        return soup.body.decode_contents()
-    return str(soup)
 
 def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, images=None, timeout=300):
     """
