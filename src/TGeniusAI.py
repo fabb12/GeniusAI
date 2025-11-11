@@ -50,7 +50,7 @@ from difflib import SequenceMatcher
 from src.ui.DownloadDialog import DownloadDialog
 from src.services.AudioTranscript import TranscriptionThread
 from src.services.WhisperTranscript import WhisperTranscriptionThread
-from src.services.AudioGenerationREST import AudioGenerationThread
+from src.services.AudioGenerationREST import AudioGenerationThread, FetchVoicesThread
 from src.services.VideoCutting import VideoCuttingThread
 from src.recorder.ScreenRecorder import ScreenRecorder
 from src.managers.SettingsManager import DockSettingsManager
@@ -80,7 +80,8 @@ from src.config import (get_api_key, FFMPEG_PATH, FFMPEG_PATH_DOWNLOAD, VERSION_
                     MUSIC_DIR, DEFAULT_FRAME_COUNT, DEFAULT_AUDIO_CHANNELS,
                     DEFAULT_STABILITY, DEFAULT_SIMILARITY, DEFAULT_STYLE,
                     DEFAULT_FRAME_RATE, get_default_voices, SPLASH_IMAGES_DIR,
-                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS)
+                    DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, get_resource, WATERMARK_IMAGE, HIGHLIGHT_COLORS,
+                    get_model_for_action)
 import os
 AudioSegment.converter = FFMPEG_PATH
 from src.ui.VideoOverlay import VideoOverlay
@@ -1862,6 +1863,9 @@ class VideoAudioManager(QMainWindow):
         # Applica le impostazioni del font
         self.apply_font_settings()
 
+        # Avvia il recupero delle voci da ElevenLabs all'avvio
+        self.fetch_elevenlabs_voices()
+
     def open_search_dialog(self):
         """
         Apre il dialogo di ricerca per l'area di testo attualmente attiva e visibile.
@@ -3401,13 +3405,23 @@ class VideoAudioManager(QMainWindow):
         voiceSettingsGroup = QGroupBox("Impostazioni Voce")
         layout = QVBoxLayout()
 
+        # Layout orizzontale per ComboBox e pulsante di aggiornamento
+        voice_selection_layout = QHBoxLayout()
         # QComboBox per la selezione della voce con opzione per inserire custom ID
         self.voiceSelectionComboBox = QComboBox()
         self.voiceSelectionComboBox.setEditable(True)
-        for name, voice_id in get_default_voices().items():
-            self.voiceSelectionComboBox.addItem(name, voice_id)
+        # Il popolamento iniziale avverrà tramite fetch_elevenlabs_voices
+        voice_selection_layout.addWidget(self.voiceSelectionComboBox)
 
-        layout.addWidget(self.voiceSelectionComboBox)
+        # Pulsante per aggiornare l'elenco delle voci
+        self.refreshVoicesButton = QPushButton()
+        self.refreshVoicesButton.setIcon(QIcon(get_resource("refresh.png")))
+        self.refreshVoicesButton.setToolTip("Aggiorna l'elenco delle voci da ElevenLabs")
+        self.refreshVoicesButton.clicked.connect(self.fetch_elevenlabs_voices)
+        voice_selection_layout.addWidget(self.refreshVoicesButton)
+
+        layout.addLayout(voice_selection_layout)
+
 
         # Campo di input per ID voce
         self.voiceIdInput = QLineEdit()
@@ -6231,7 +6245,7 @@ class VideoAudioManager(QMainWindow):
         transcriptionText = convert_numbers_to_words(transcriptionText)
 
         voice_id = self.voiceSelectionComboBox.currentData()
-        model_id = "eleven_multilingual_v1"
+        model_id = get_model_for_action('tts_generation')
 
         voice_settings = {
             'stability': self.stabilitySlider.value() / 100.0,
@@ -6296,6 +6310,53 @@ class VideoAudioManager(QMainWindow):
 
     def onAudioGenerationError(self, error_message):
         self.show_status_message(f"Errore durante la generazione dell'audio: {error_message}", error=True)
+
+    def fetch_elevenlabs_voices(self):
+        api_key = get_api_key('elevenlabs')
+        if not api_key:
+            self.show_status_message("API Key di ElevenLabs non impostata. Impossibile recuperare le voci.", error=True)
+            # Clear the combo box except for default voices
+            self.voiceSelectionComboBox.clear()
+            for name, voice_id in get_default_voices().items():
+                self.voiceSelectionComboBox.addItem(name, voice_id)
+            return
+
+        self.show_status_message("Recupero voci da ElevenLabs...", timeout=0)
+        self.fetch_voices_thread = FetchVoicesThread(api_key, self)
+        self.fetch_voices_thread.completed.connect(self.on_voices_fetched)
+        self.fetch_voices_thread.error.connect(self.on_voices_fetch_error)
+        self.fetch_voices_thread.start()
+
+    def on_voices_fetch_error(self, error_message):
+        self.show_status_message(f"Errore recupero voci: {error_message}", error=True, timeout=10000)
+        # Call the success handler with no data to populate defaults
+        self.on_voices_fetched(None)
+
+    def on_voices_fetched(self, voices_data):
+        self.voiceSelectionComboBox.blockSignals(True)
+        self.voiceSelectionComboBox.clear()
+
+        # Always add default voices first, regardless of fetch success
+        for name, voice_id in get_default_voices().items():
+            # Add a prefix only if fetched voices are also present
+            prefix = "[Default] " if voices_data else ""
+            self.voiceSelectionComboBox.addItem(f"{prefix}{name}", voice_id)
+
+        if voices_data:
+            self.voiceSelectionComboBox.insertSeparator(self.voiceSelectionComboBox.count())
+            # Add fetched voices
+            for voice in voices_data:
+                voice_name = voice.get('name', 'Senza nome')
+                voice_id = voice.get('voice_id')
+                if voice_id:
+                    self.voiceSelectionComboBox.addItem(voice_name, voice_id)
+            self.show_status_message("Elenco voci aggiornato con successo.", timeout=5000)
+        else:
+            # This branch now only handles the status message for the failure case
+            self.show_status_message("Recupero voci fallito. Caricate solo le voci di default.", error=True)
+
+        self.voiceSelectionComboBox.blockSignals(False)
+
 
     def _parse_time(self, time_str):
         """Parses a time string HH:MM:SS.ms into seconds."""

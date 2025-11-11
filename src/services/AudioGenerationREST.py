@@ -42,3 +42,30 @@ class AudioGenerationThread(QThread):
                 raise Exception(f"Failed to generate audio: {response.status_code} - {response.text}")
         except Exception as e:
             self.error.emit(str(e))
+
+class FetchVoicesThread(QThread):
+    completed = pyqtSignal(list)
+    error = pyqtSignal(str)
+
+    def __init__(self, api_key, parent=None):
+        super().__init__(parent)
+        self.api_key = api_key
+
+    def run(self):
+        url = "https://api.elevenlabs.io/v1/voices"
+        headers = {
+            "Accept": "application/json",
+            "xi-api-key": self.api_key
+        }
+
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                voices_data = response.json().get('voices', [])
+                # Semplifichiamo i dati, passando solo nome e ID
+                voices_list = [{'name': voice['name'], 'voice_id': voice['voice_id']} for voice in voices_data]
+                self.completed.emit(voices_list)
+            else:
+                raise Exception(f"Failed to fetch voices: {response.status_code} - {response.text}")
+        except Exception as e:
+            self.error.emit(f"Errore di rete o API: {e}")
