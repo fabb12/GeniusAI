@@ -61,6 +61,10 @@ class PptxDialog(QDialog):
         self.template_path_label.setReadOnly(True)
         design_layout.addWidget(self.template_path_label, 0, 1)
 
+        self.remove_template_button = QPushButton("Rimuovi")
+        self.remove_template_button.clicked.connect(self.remove_template)
+        design_layout.addWidget(self.remove_template_button, 0, 2)
+
         design_group.setLayout(design_layout)
         main_layout.addWidget(design_group)
 
@@ -103,6 +107,12 @@ class PptxDialog(QDialog):
         if path:
             self.template_path = path
             self.template_path_label.setText(os.path.basename(path))
+
+    def remove_template(self):
+        """Resets the template selection."""
+        self.template_path = ""
+        self.template_path_label.setText("")
+        self.template_path_label.setPlaceholderText("Nessun template selezionato")
 
     def handle_get_ai_content(self):
         """Genera il contenuto testuale tramite AI e lo mostra nell'editor."""
