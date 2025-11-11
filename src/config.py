@@ -127,6 +127,12 @@ OLLAMA_GEMMA_LATEST = "ollama:gemma:latest"
 OLLAMA_LLAMA3_8B = "ollama:llama3:8b"
 OLLAMA_MISTRAL_7B = "ollama:mistral:7b" # Esempio Mistral
 OLLAMA_LLAVA = "ollama:llava:latest"  # Modello Vision
+
+# ElevenLabs (TTS) - Modelli a Novembre 2025
+ELEVENLABS_V2_MULTILINGUAL = "eleven_multilingual_v2" # Raccomandato, alta qualità
+ELEVENLABS_V2_TURBO = "eleven_turbo_v2"           # Bassa latenza
+ELEVENLABS_V3 = "eleven_v3"                   # Alpha, alta espressività
+
 # --- Struttura Dati Categoria Modelli ---
 # Dizionari che raggruppano i modelli per provider per una migliore visualizzazione nella UI
 
@@ -192,6 +198,14 @@ CATEGORIZED_POWERFUL_TEXT_MODELS = {
     "Google": [GEMINI_25_PRO]
 }
 
+CATEGORIZED_TTS_MODELS = {
+    "ElevenLabs": [
+        ELEVENLABS_V2_MULTILINGUAL,
+        ELEVENLABS_V2_TURBO,
+        ELEVENLABS_V3
+    ]
+}
+
 # --- Liste Piatte per Compatibilità ---
 # Queste liste mantengono la compatibilità con il codice esistente, generate dinamicamente.
 MODELS_WITH_VISION = _flatten_model_dict(CATEGORIZED_MODELS_WITH_VISION)
@@ -248,6 +262,13 @@ ACTION_MODELS_CONFIG = {
         'default': os.getenv("DEFAULT_MODEL_SUMMARY", GEMINI_25_FLASH),
         'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)), # Tutti i modelli testuali vanno bene
         'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
+    },
+    'tts_generation': {
+        'display_name': "Sintesi Vocale (TTS)",
+        'setting_key': "models/tts_generation",
+        'default': os.getenv("DEFAULT_MODEL_TTS", ELEVENLABS_V2_MULTILINGUAL),
+        'allowed': _flatten_model_dict(CATEGORIZED_TTS_MODELS),
+        'categorized_source': CATEGORIZED_TTS_MODELS
     },
     # Esempio: Se avessi una generazione specifica per la guida operativa
     # 'operational_guide': {
