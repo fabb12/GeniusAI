@@ -1963,27 +1963,38 @@ class VideoAudioManager(QMainWindow):
                     while not it.atEnd():
                         fragment = it.fragment()
                         if fragment.isValid():
+                            # Seleziona il frammento di testo
                             cursor.setPosition(fragment.position())
                             cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
 
-                            current_format = fragment.charFormat()
-                            font = current_format.font()
+                            # Crea un nuovo formato per evitare di modificare l'originale in modo imprevedibile
+                            new_char_format = QTextCharFormat()
+                            # Copia il font esistente per preservare stili come colore, sottolineatura, ecc.
+                            font = QFont(fragment.charFormat().font())
+
+                            # Imposta la famiglia di font globale
                             font.setFamily(font_family)
 
+                            # Determina la dimensione del font in base al livello di intestazione del blocco
                             heading_level = block.blockFormat().headingLevel()
-                            if 1 <= heading_level <= 2:
-                                font.setPointSize(title_font_size)
-                                font.setBold(True)
-                            elif 3 <= heading_level <= 6:
-                                font.setPointSize(subtitle_font_size)
-                                font.setBold(True)
-                            else:
-                                font.setPointSize(base_font_size)
-                                # Mantieni il grassetto se era già presente
-                                font.setBold(current_format.font().bold())
 
-                            current_format.setFont(font)
-                            cursor.mergeCharFormat(current_format)
+                            if 1 <= heading_level <= 2:  # Titoli H1, H2
+                                font.setPointSize(title_font_size)
+                                font.setBold(True) # I titoli sono sempre in grassetto
+                            elif 3 <= heading_level <= 6:  # Sottotitoli H3-H6
+                                font.setPointSize(subtitle_font_size)
+                                font.setBold(True) # I sottotitoli sono sempre in grassetto
+                            else:  # Testo normale
+                                font.setPointSize(base_font_size)
+                                # Per il testo normale, preserva l'impostazione di grassetto esistente
+                                font.setBold(fragment.charFormat().font().bold())
+
+                            # Applica il font aggiornato al nuovo formato
+                            new_char_format.setFont(font)
+
+                            # Unisci il nuovo formato con quello esistente sul cursore.
+                            # Questo modifica solo il font, preservando altri stili come il colore di sfondo.
+                            cursor.mergeCharFormat(new_char_format)
 
                         it += 1
                     block = block.next()
