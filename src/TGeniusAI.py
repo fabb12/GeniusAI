@@ -1417,7 +1417,7 @@ class VideoAudioManager(QMainWindow):
         tools_grid_layout.addWidget(self.timecodeCheckbox, 0, 0)
 
         self.openAudioDockButton = QPushButton('')
-        self.openAudioDockButton.setIcon(QIcon(get_resource("sound.png")))
+        self.openAudioDockButton.setIcon(QIcon(get_resource("tts.png")))
         self.openAudioDockButton.setFixedSize(32, 32)
         self.openAudioDockButton.setToolTip("Apri Dock Audio AI")
         self.openAudioDockButton.clicked.connect(self.editingDock.show)
