@@ -19,18 +19,24 @@ class OperationalGuideThread(QThread):
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)
 
-    def __init__(self, video_path, num_frames, language, parent=None):
+    def __init__(self, video_path, num_frames, language, use_smart_extraction=False, parent=None):
         super().__init__(parent)
         self.video_path = video_path
         self.num_frames = num_frames
         self.language = language
+        self.use_smart_extraction = use_smart_extraction
         self.extractor = FrameExtractor(video_path=video_path, num_frames=num_frames)
         self.selected_model = get_model_for_action('frame_extractor') # Use the same vision model
 
     def run(self):
         try:
-            self.progress.emit(10, "Estrazione dei fotogrammi dal video...")
-            frames = self.extractor.extract_frames()
+            if self.use_smart_extraction:
+                self.progress.emit(10, "Estrazione intelligente dei fotogrammi in corso...")
+                frames = self.extractor.extract_significant_frames()
+            else:
+                self.progress.emit(10, "Estrazione dei fotogrammi dal video...")
+                frames = self.extractor.extract_frames()
+
             if not frames:
                 self.error.emit("Impossibile estrarre i fotogrammi dal video.")
                 return

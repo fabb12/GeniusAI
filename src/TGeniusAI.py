@@ -8246,13 +8246,15 @@ class VideoAudioManager(QMainWindow):
             return
 
         # Use the same frame count as the video integration feature for consistency
-        num_frames = self.estrazioneFrameCountSpin.value()
+        num_frames = self.analysisFrameCountSpin.value()
         language = self.languageComboBox.currentText()
+        use_smart_extraction = self.smartExtractionCheckbox.isChecked()
 
         thread = OperationalGuideThread(
             video_path=self.videoPathLineEdit,
             num_frames=num_frames,
             language=language,
+            use_smart_extraction=use_smart_extraction,
             parent=self
         )
         self.start_task(
