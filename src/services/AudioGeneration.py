@@ -4,7 +4,7 @@ import time
 import os
 from dotenv import load_dotenv
 from elevenlabs import ElevenLabs, Voice, VoiceSettings
-from src.config import get_api_key
+from src.config import get_api_key, get_model_for_action
 
 load_dotenv()
 
@@ -26,9 +26,12 @@ class AudioGenerationThread(QThread):
                 stability=self.voice_settings['stability'],
                 similarity_boost=self.voice_settings['similarity_boost'],
                 style=self.voice_settings['style'],
-                use_speaker_boost=self.voice_settings['use_speaker_boost'],
-                model="eleven_multilingual_v1"
+                use_speaker_boost=self.voice_settings['use_speaker_boost']
             )
+
+            # Determina il modello da usare, prelevandolo dalle impostazioni
+            # Usa il modello specifico per TTS, se disponibile
+            tts_model = get_model_for_action('tts_generation')
 
             voice = Voice(
                 voice_id=self.voice_settings['voice_id'],
@@ -40,8 +43,12 @@ class AudioGenerationThread(QThread):
                 time.sleep(1)
                 self.progress.emit(percent_complete)
 
-            # Generazione dell'audio tramite il client
-            audio_generated = self.client.generate(text=self.text, voice=voice)
+            # Generazione dell'audio tramite il client, passando il modello dinamicamente
+            audio_generated = self.client.generate(
+                text=self.text,
+                voice=voice,
+                model=tts_model
+            )
 
             # Controlla se l'output di `generate` è già un oggetto bytes
             if isinstance(audio_generated, bytes):
