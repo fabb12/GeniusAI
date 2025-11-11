@@ -1959,47 +1959,40 @@ class VideoAudioManager(QMainWindow):
 
                 block = area.document().begin()
                 while block.isValid():
-                    heading_level = block.blockFormat().headingLevel()
+                    it = block.begin()
+                    while not it.atEnd():
+                        fragment = it.fragment()
+                        if fragment.isValid():
+                            cursor.setPosition(fragment.position())
+                            cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
 
-                    if 1 <= heading_level <= 6:  # È un titolo o sottotitolo
-                        # Seleziona l'intero blocco
-                        cursor.setPosition(block.position())
-                        cursor.setPosition(block.position() + block.length(), QTextCursor.MoveMode.KeepAnchor)
+                            # Crea un nuovo formato partendo da quello del frammento per preservare colori, ecc.
+                            new_format = QTextCharFormat(fragment.charFormat())
+                            font = new_format.font() # Ottieni il font da modificare
 
-                        # Crea un formato per il blocco
-                        block_char_format = QTextCharFormat()
-                        font = QFont()
-                        font.setFamily(font_family)
-                        font.setBold(True)
+                            # Applica forzatamente la famiglia di caratteri
+                            font.setFamily(font_family)
 
-                        if 1 <= heading_level <= 2:
-                            font.setPointSize(title_font_size)
-                        else: # 3 a 6
-                            font.setPointSize(subtitle_font_size)
-
-                        block_char_format.setFont(font)
-                        cursor.mergeCharFormat(block_char_format)
-
-                    else:  # Testo normale, itera sui frammenti per preservare stili inline
-                        it = block.begin()
-                        while not it.atEnd():
-                            fragment = it.fragment()
-                            if fragment.isValid():
-                                # Seleziona il frammento
-                                cursor.setPosition(fragment.position())
-                                cursor.setPosition(fragment.position() + fragment.length(), QTextCursor.MoveMode.KeepAnchor)
-
-                                # Crea il formato per il frammento
-                                fragment_char_format = QTextCharFormat()
-                                font = QFont(fragment.charFormat().font()) # Preserva gli stili esistenti (grassetto, colore, ecc.)
-                                font.setFamily(font_family)
+                            # Applica forzatamente la dimensione del carattere corretta
+                            heading_level = block.blockFormat().headingLevel()
+                            if 1 <= heading_level <= 2:
+                                font.setPointSize(title_font_size)
+                                font.setBold(True)
+                            elif 3 <= heading_level <= 6:
+                                font.setPointSize(subtitle_font_size)
+                                font.setBold(True)
+                            else:
                                 font.setPointSize(base_font_size)
+                                # Preserva il grassetto solo per il testo normale
+                                font.setBold(fragment.charFormat().font().bold())
 
-                                fragment_char_format.setFont(font)
-                                cursor.mergeCharFormat(fragment_char_format)
+                            new_format.setFont(font)
 
-                            it += 1
+                            # Usa setCharFormat per sovrascrivere completamente la formattazione del carattere del frammento,
+                            # risolvendo il problema degli stili inline.
+                            cursor.setCharFormat(new_format)
 
+                        it += 1
                     block = block.next()
 
                 cursor.endEditBlock()
