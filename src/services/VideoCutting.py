@@ -79,7 +79,7 @@ class VideoCuttingThread(QThread):
 
             if is_video:
                 # Salva il file video tagliato
-                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac")
+                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True, ffmpeg_params=['-movflags', '+faststart'])
             else:
                 # Salva il file audio tagliato
                 clip.write_audiofile(self.output_path)
