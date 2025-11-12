@@ -21,6 +21,11 @@ class VideoCuttingThread(QThread):
         self.watermark_position = watermark_position
 
     def run(self):
+        media = None
+        subclip = None
+        watermark_clip = None
+        final_clip = None
+
         try:
             # Determina se il file è video o audio in base all'estensione
             if self.media_path.lower().endswith(('.mp4', '.mov', '.avi')):
@@ -40,7 +45,8 @@ class VideoCuttingThread(QThread):
                 end_time = self.end_time
 
             # Taglia il media tra start_time e end_time
-            clip = media.subclip(self.start_time, end_time)
+            subclip = media.subclip(self.start_time, end_time)
+            final_clip = subclip
 
             if is_video and self.use_watermark:
                 if not self.watermark_path or not os.path.exists(self.watermark_path):
@@ -58,8 +64,8 @@ class VideoCuttingThread(QThread):
 
                 try:
                     watermark_clip = (ImageClip(self.watermark_path)
-                                      .set_duration(clip.duration)
-                                      .resize(height=int(clip.h * self.watermark_size / 100))
+                                      .set_duration(subclip.duration)
+                                      .resize(height=int(subclip.h * self.watermark_size / 100))
                                       .set_opacity(0.5))
 
                     # Position the watermark
@@ -71,7 +77,7 @@ class VideoCuttingThread(QThread):
                     }
                     watermark_clip = watermark_clip.set_position(position_map[self.watermark_position])
 
-                    clip = CompositeVideoClip([clip, watermark_clip])
+                    final_clip = CompositeVideoClip([subclip, watermark_clip])
                 except Exception as e:
                     self.error.emit(f"Errore durante l'applicazione del watermark: {e}")
                     return
@@ -79,12 +85,19 @@ class VideoCuttingThread(QThread):
 
             if is_video:
                 # Salva il file video tagliato
-                clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True, ffmpeg_params=['-movflags', '+faststart'])
+                final_clip.write_videofile(self.output_path, codec="libx264", audio_codec="aac", temp_audiofile='temp-audio.m4a', remove_temp=True, ffmpeg_params=['-movflags', '+faststart'])
             else:
                 # Salva il file audio tagliato
-                clip.write_audiofile(self.output_path)
+                final_clip.write_audiofile(self.output_path)
 
             self.progress.emit(100, "Taglio completato")  # Completa il progresso al 100%
             self.completed.emit(self.output_path)
         except Exception as e:
             self.error.emit(str(e))
+        finally:
+            if subclip:
+                subclip.close()
+            if watermark_clip:
+                watermark_clip.close()
+            if media:
+                media.close()
