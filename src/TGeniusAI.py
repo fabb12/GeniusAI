@@ -3416,7 +3416,7 @@ class VideoAudioManager(QMainWindow):
 
         # Pulsante per aggiornare l'elenco delle voci
         self.refreshVoicesButton = QPushButton()
-        self.refreshVoicesButton.setIcon(QIcon(get_resource("refresh.png")))
+        self.refreshVoicesButton.setIcon(QIcon(get_resource("voice.png")))
         self.refreshVoicesButton.setToolTip("Aggiorna l'elenco delle voci da ElevenLabs")
         self.refreshVoicesButton.clicked.connect(self.fetch_elevenlabs_voices)
         voice_selection_layout.addWidget(self.refreshVoicesButton)
