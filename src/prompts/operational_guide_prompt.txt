@@ -16,12 +16,12 @@ Il tuo compito è analizzare i fotogrammi forniti, che rappresentano i passaggi 
     - Tra istruzioni complesse per dare all'utente il tempo di comprendere.
 
 **FORMATO RICHIESTO:**
-La guida deve essere formattata in Markdown e seguire questa struttura:
+La guida deve seguire questa struttura:
 
 1.  **Titolo Principale:** Inizia con un titolo principale che riassuma lo scopo della guida (es. `# Guida alla Configurazione Iniziale`).
 2.  **Introduzione (Opzionale):** Una breve introduzione che spiega lo scopo generale del processo.
 3.  **Passaggi:** Per ogni azione significativa identificata nei fotogrammi:
-    *   **Titolo del Passaggio:** Usa un titolo breve e descrittivo per l'azione (es. `## Accesso al Pannello di Controllo`).
+    *   **Titolo del Passaggio:** Usa un titolo breve e descrittivo per l'azione (es. `Accesso al Pannello di Controllo`).
     *   **Descrizione:** Fornisci una spiegazione chiara di cosa sta succedendo e perché, in uno stile narrativo.
     *   **Istruzioni:** Elenca le azioni specifiche che l'utente deve compiere (es. "Per prima cosa, clicca sul pulsante 'Salva'. <break time="1s" /> Successivamente, inserisci il tuo indirizzo email nel campo 'Email'.").
 
