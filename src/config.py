@@ -270,13 +270,20 @@ ACTION_MODELS_CONFIG = {
         'allowed': _flatten_model_dict(CATEGORIZED_TTS_MODELS),
         'categorized_source': CATEGORIZED_TTS_MODELS
     },
-    # Esempio: Se avessi una generazione specifica per la guida operativa
-    # 'operational_guide': {
-    #     'display_name': "Guida Operativa (da Visione)",
-    #     'setting_key': "models/operational_guide",
-    #     'default': os.getenv("DEFAULT_MODEL_OPERATIONAL_GUIDE", GEMINI_25_PRO),
-    #     'allowed': [m for m in POWERFUL_TEXT_MODELS if m in MODELS_WITH_VISION] # Modelli potenti con visione
-    # }
+    'chat': {
+        'display_name': "Chat",
+        'setting_key': "models/chat",
+        'default': os.getenv("DEFAULT_MODEL_CHAT", GEMINI_25_FLASH),
+        'allowed': list(set(FAST_TEXT_MODELS + POWERFUL_TEXT_MODELS)),
+        'categorized_source': _CATEGORIZED_ALL_TEXT_MODELS
+    },
+    'operational_guide': {
+        'display_name': "Guida Operativa",
+        'setting_key': "models/operational_guide",
+        'default': os.getenv("DEFAULT_MODEL_OPERATIONAL_GUIDE", GEMINI_25_PRO),
+        'allowed': MODELS_WITH_VISION,
+        'categorized_source': CATEGORIZED_MODELS_WITH_VISION
+    }
 }
 
 # --- Percorsi File e Prompt ---

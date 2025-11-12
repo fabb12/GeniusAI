@@ -10,6 +10,7 @@ class OperationalGuideDialog(QDialog):
         form_layout = QFormLayout()
 
         self.recipient_input = QComboBox(self)
+        self.recipient_input.setEditable(True)
         self.recipient_input.addItems(["Nuovo utente", "Tecnico specializzato", "Manager", "Cliente"])
         form_layout.addRow("Destinatario della guida:", self.recipient_input)
 
