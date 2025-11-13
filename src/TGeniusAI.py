@@ -1682,6 +1682,9 @@ class VideoAudioManager(QMainWindow):
 
         # Connect the tab change signal to the update function
         self.summaryTabWidget.currentChanged.connect(self._update_summary_view)
+        self.summaryTabWidget.currentChanged.connect(self._update_chat_context)
+        self.transcriptionTabWidget.currentChanged.connect(self._update_chat_context)
+        self.transcriptionTabs.currentChanged.connect(self._update_chat_context)
 
         # Map widgets to their data keys for easier management
         self.summary_widget_map = {
@@ -7873,6 +7876,39 @@ class VideoAudioManager(QMainWindow):
             self.loadVideoOutput(clip_path)
             self.playerOutput.setPosition(timestamp)
 
+    def _update_chat_context(self, index=None):
+        """Updates the chat dock's context based on the currently selected tab."""
+        # This function can be triggered by either tab widget.
+        # We need to determine which one is currently visible.
+        current_main_tab_title = self.transcriptionTabWidget.tabText(self.transcriptionTabWidget.currentIndex())
+
+        context_name = ""
+        context_content = ""
+
+        if current_main_tab_title == "Trascrizione":
+            transcription_tab_widget = self.transcriptionTabs.currentWidget()
+            tab_title = self.transcriptionTabs.tabText(self.transcriptionTabs.currentIndex())
+            context_name = f"Chat con {tab_title}"
+            if transcription_tab_widget:
+                context_content = transcription_tab_widget.toPlainText()
+
+        elif current_main_tab_title == "Riassunto":
+            summary_widget = self.summaryTabWidget.currentWidget()
+            tab_title = self.summaryTabWidget.tabText(self.summaryTabWidget.currentIndex())
+            context_name = f"Chat con Riassunto {tab_title}"
+            if summary_widget:
+                context_content = summary_widget.toPlainText()
+
+        elif current_main_tab_title == "Audio AI":
+            context_name = "Chat con Audio AI"
+            context_content = self.audioAiTextArea.toPlainText()
+
+        if hasattr(self, 'chatDock') and self.chatDock:
+            # We will implement update_context in the next step
+            # For now, let's assume it exists.
+            if hasattr(self.chatDock, 'update_context'):
+                 self.chatDock.update_context(context_name, context_content)
+
     def rename_clip_from_summary(self, clip_filename):
         """
         Genera un nuovo nome file dal titolo del riassunto di una clip e la rinomina.
@@ -8766,17 +8802,15 @@ class VideoAudioManager(QMainWindow):
 
     def handle_chat_message(self, query):
         """Handles the sendMessage signal from the ChatDock."""
-        transcription_text_area = self.singleTranscriptionTextArea
-        if not transcription_text_area or not transcription_text_area.toPlainText().strip():
-            self.chatDock.add_message("AI", "Per favore, genera o carica una trascrizione prima di fare una domanda.")
+        context_text = self.chatDock.current_context_content
+        if not context_text or not context_text.strip():
+            self.chatDock.add_message("AI", "Per favore, seleziona una trascrizione o un riassunto con del contenuto prima di fare una domanda.")
             return
-
-        transcription_text = transcription_text_area.toPlainText()
 
         thread = ProcessTextAI(
             mode="chat_summary",
             language=self.languageComboBox.currentText(),
-            prompt_vars={'summary_text': transcription_text, 'user_query': query}
+            prompt_vars={'summary_text': context_text, 'user_query': query}
         )
         self.start_task(thread, self.on_chat_response_received, self.onProcessError, self.update_status_progress)
 

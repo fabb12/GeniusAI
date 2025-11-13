@@ -18,7 +18,17 @@ class ChatDock(CustomDock):
         self.project_path = None
         self.font_family = "Arial"  # Default font family
         self.font_size = 14        # Default font size
+        self.current_context_content = "" # To store the context text
+        self.default_title = title
         self._setup_ui()
+
+    def update_context(self, context_name, context_content):
+        """Updates the chat's context and title based on the selected tab."""
+        self.current_context_content = context_content
+        if context_name:
+            self.setWindowTitle(context_name)
+        else:
+            self.setWindowTitle(self.default_title)
 
     def set_font(self, font_family, font_size):
         """Sets the font for the chat history text edit."""
