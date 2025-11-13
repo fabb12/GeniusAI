@@ -60,6 +60,7 @@ from src.managers.Settings import SettingsDialog
 from src.ui.ScreenButton import ScreenButton
 from src.ui.CustomTextEdit import CustomTextEdit
 from src.services.PptxGeneration import PptxGeneration
+from src.services.threads import PptxGenerationThread
 from src.ui.PptxDialog import PptxDialog
 from src.ui.ExportDialog import ExportDialog
 from src.services.ProcessTextAI import ProcessTextAI
@@ -3022,6 +3023,36 @@ class VideoAudioManager(QMainWindow):
 
         dialog = PptxDialog(self, transcription_text=current_text)
         dialog.exec()
+
+    def start_pptx_generation_thread(self, testo, save_path, template_path, num_slides, company_name, language):
+        """Avvia il thread per la generazione della presentazione."""
+        thread = PptxGenerationThread(
+            self, testo, save_path, template_path, num_slides, company_name, language
+        )
+        self.start_task(
+            thread,
+            self.on_pptx_generation_finished,
+            self.on_pptx_generation_error,
+            lambda v, s: self.update_status_progress(v, s)
+        )
+
+    def on_pptx_generation_finished(self, output_path):
+        """Gestisce il completamento della generazione PPTX."""
+        self.show_status_message(f"Presentazione salvata in: {os.path.basename(output_path)}")
+        reply = QMessageBox.question(self, 'Apri File', 'Vuoi aprire la presentazione generata?',
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                     QMessageBox.StandardButton.Yes)
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                if sys.platform == "win32": os.startfile(output_path)
+                elif sys.platform == "darwin": subprocess.call(['open', output_path])
+                else: subprocess.call(['xdg-open', output_path])
+            except Exception as e:
+                self.show_status_message(f"Non è stato possibile aprire il file: {e}", error=True)
+
+    def on_pptx_generation_error(self, error_message):
+        """Gestisce gli errori durante la generazione PPTX."""
+        self.show_status_message(f"Errore durante la generazione della presentazione: {error_message}", error=True)
 
     def showSettingsDialog(self):
         dialog = SettingsDialog(self)
