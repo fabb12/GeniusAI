@@ -246,28 +246,10 @@ class PptxGeneration:
                 parent.show_status_message("Salvataggio annullato.", error=True)
             return
 
-        wait_msg = QMessageBox(QMessageBox.Icon.Information, "Elaborazione", "Generazione del testo AI in corso...", QMessageBox.StandardButton.NoButton, parent)
-        wait_msg.setWindowModality(Qt.WindowModality.WindowModal)
-        wait_msg.show()
-        QApplication.processEvents()
-
-        try:
-            result_tuple = PptxGeneration.generaTestoPerSlide(testo_attuale, num_slide, company_name, language)
-            wait_msg.close()
-
-            if not isinstance(result_tuple, tuple) or len(result_tuple) != 3:
-                QMessageBox.critical(parent, "Errore Generazione Testo", f"Impossibile generare il contenuto.\nErrore: {result_tuple}")
-                return
-
-            testo_per_slide, _, _ = result_tuple
-
-            # Passa num_slides alla creazione del PPTX per il troncamento
-            PptxGeneration.createPresentationFromText(parent, testo_per_slide, save_path, template_path, num_slides=num_slide)
-
-        except Exception as e:
-             wait_msg.close()
-             logging.exception("Errore in creaPresentazione")
-             QMessageBox.critical(parent, "Errore Imprevisto", f"Errore durante la creazione: {e}")
+        # Avvia il thread per la generazione
+        parent.start_pptx_generation_thread(
+            testo_attuale, save_path, template_path, num_slide, company_name, language
+        )
 
 
     @staticmethod
@@ -305,31 +287,27 @@ class PptxGeneration:
             return
 
         tf = body_shape.text_frame
-        tf.clear()  # Pulisce tutto il contenuto esistente nel placeholder
+        tf.clear()
 
-        lines = content_text.strip().split('\n')
-        p = tf.paragraphs[0]
-        first_line_processed = False
+        # Rimuove l'eventuale paragrafo vuoto creato da clear()
+        if len(tf.paragraphs) > 0 and not tf.paragraphs[0].text.strip():
+            p = tf.paragraphs[0]
+            p._element.getparent().remove(p._element)
 
-        for line in lines:
+        for line in content_text.strip().split('\n'):
             if not line.strip():
                 continue
 
-            clean_line = re.sub(r'^\s*[-*•]\s*', '', line)
-            indent_level = (len(line) - len(line.lstrip(' '))) // 2
-
-            if not first_line_processed:
-                p.text = clean_line
-                p.level = indent_level
-                first_line_processed = True
-            else:
-                p = tf.add_paragraph()
-                p.text = clean_line
-                p.level = indent_level
+            p = tf.add_paragraph()
+            p.text = re.sub(r'^\s*[-*•]\s*', '', line).strip()
+            p.level = (len(line) - len(line.lstrip(' '))) // 2
 
     @staticmethod
     def _truncate_slides(slides_data, num_slides):
         """Tronca o avvisa se il numero di slide generate non corrisponde a quello richiesto."""
+        if num_slides is None:
+            return slides_data
+
         if len(slides_data) > num_slides:
             logging.warning(f"L'AI ha generato {len(slides_data)} slide, ma ne sono state richieste {num_slides}. Tronco le slide extra.")
             return slides_data[:num_slides]
@@ -342,82 +320,43 @@ class PptxGeneration:
         """Crea il file .pptx dal testo strutturato generato dall'AI, usando un approccio robusto per i layout."""
         logging.info(f"Tentativo di creare file PPTX: {output_file} con template: {template_path}")
         try:
-            # Se viene fornito un template, caricalo. Altrimenti, crea una presentazione vuota.
             if template_path and os.path.exists(template_path):
                 prs = Presentation(template_path)
+                # Rimuovi tutte le slide esistenti dal template
+                for i in range(len(prs.slides) - 1, -1, -1):
+                    rId = prs.slides._sldIdLst[i].rId
+                    prs.part.drop_rel(rId)
+                    del prs.slides._sldIdLst[i]
             else:
                 prs = Presentation()
 
-            # --- Ricerca robusta dei layout ---
             title_slide_layout = PptxGeneration._find_layout_by_placeholder_types(prs, PP_PLACEHOLDER.TITLE)
             content_slide_layout = PptxGeneration._find_layout_by_placeholder_types(prs, PP_PLACEHOLDER.TITLE, PP_PLACEHOLDER.BODY)
 
             if not content_slide_layout:
-                QMessageBox.critical(parent, "Errore Template", "Impossibile trovare un layout 'Titolo e Contenuto' adeguato nel template.")
+                if parent:
+                    QMessageBox.critical(parent, "Errore Template", "Impossibile trovare un layout 'Titolo e Contenuto' adeguato nel template.")
                 return
             if not title_slide_layout:
                 logging.warning("Nessun layout solo titolo trovato, userò 'Titolo e Contenuto' come fallback.")
                 title_slide_layout = content_slide_layout
 
-
-            # --- Parsing del testo AI con una logica più robusta ---
-            slides_data = []
-            # Pulisce i tag in stile Markdown (es. **Titolo:**) in tag semplici (es. Titolo:)
             clean_text = re.sub(r'\*\*(Titolo|Sottotitolo|Contenuto)\*\*:', r'\1:', testo, flags=re.IGNORECASE)
-
-            # Divide il testo in blocchi per ogni slide, usando "Titolo:" come separatore
-            # Il lookahead (?=...) assicura che il separatore "Titolo:" non venga consumato e rimanga nel blocco successivo
             slide_blocks = re.split(r'\n(?=Titolo:)', clean_text.strip(), flags=re.IGNORECASE)
 
+            slides_data = []
             for block in slide_blocks:
                 if not block.strip():
                     continue
 
-                # Inizializza i campi per la slide corrente
-                titolo, sottotitolo, contenuto = '', '', ''
-                current_field = None # Campo corrente che stiamo leggendo (es. 'contenuto')
-                content_lines = []
+                titolo_match = re.search(r'Titolo:\s*(.*)', block, re.IGNORECASE)
+                sottotitolo_match = re.search(r'Sottotitolo:\s*(.*)', block, re.IGNORECASE)
+                contenuto_match = re.search(r'Contenuto:\s*((.|\n)*)', block, re.IGNORECASE)
 
-                for line in block.strip().split('\n'):
-                    line_stripped = line.strip()
+                titolo = titolo_match.group(1).strip() if titolo_match else ''
+                sottotitolo = sottotitolo_match.group(1).strip() if sottotitolo_match else ''
+                contenuto = contenuto_match.group(1).strip() if contenuto_match else ''
 
-                    # Rileva un nuovo campo (Titolo, Sottotitolo, Contenuto)
-                    match_titolo = re.match(r'Titolo:\s*(.*)', line_stripped, re.IGNORECASE)
-                    match_sottotitolo = re.match(r'Sottotitolo:\s*(.*)', line_stripped, re.IGNORECASE)
-                    match_contenuto = re.match(r'Contenuto:\s*(.*)', line_stripped, re.IGNORECASE)
-
-                    if match_titolo:
-                        # Se stavamo leggendo il contenuto, salvalo prima di passare al nuovo campo
-                        if current_field == 'contenuto' and content_lines:
-                            contenuto = '\n'.join(content_lines).strip()
-                            content_lines = []
-
-                        titolo = match_titolo.group(1).strip()
-                        current_field = 'titolo'
-                    elif match_sottotitolo:
-                        if current_field == 'contenuto' and content_lines:
-                            contenuto = '\n'.join(content_lines).strip()
-                            content_lines = []
-
-                        sottotitolo = match_sottotitolo.group(1).strip()
-                        current_field = 'sottotitolo'
-                    elif match_contenuto:
-                        if current_field == 'contenuto' and content_lines:
-                            contenuto = '\n'.join(content_lines).strip()
-                            content_lines = []
-
-                        # Inizia a leggere il contenuto, anche quello sulla stessa riga
-                        content_lines.append(match_contenuto.group(1).strip())
-                        current_field = 'contenuto'
-                    elif current_field == 'contenuto':
-                        # Se siamo nella sezione 'Contenuto', aggiungi la riga
-                        content_lines.append(line.strip())
-
-                # Assicura che l'ultimo blocco di contenuto venga salvato
-                if content_lines:
-                    contenuto = '\n'.join(content_lines).strip()
-
-                # Aggiungi la slide solo se ha un titolo
                 if titolo:
                     slides_data.append({
                         'titolo': titolo,
@@ -436,63 +375,38 @@ class PptxGeneration:
             if not slides_data:
                 return
 
-            # --- Gestione Prima Slide (con logica condizionale per layout) ---
             first_slide_data = slides_data.pop(0)
-            first_slide_content = first_slide_data.get('contenuto', '').strip()
-
-            # Se la prima slide ha contenuto, usa il layout 'Titolo e Contenuto'. Altrimenti, usa quello per il titolo.
-            layout_per_prima_slide = content_slide_layout if first_slide_content else title_slide_layout
-
+            layout_per_prima_slide = content_slide_layout if first_slide_data.get('contenuto', '').strip() else title_slide_layout
             slide = prs.slides.add_slide(layout_per_prima_slide)
 
-            # Popola titolo e sottotitolo
             if slide.shapes.title:
                 slide.shapes.title.text = first_slide_data.get('titolo', '').strip()
-            subtitle_text = first_slide_data.get('sottotitolo', '').strip()
             subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
-            if subtitle_text and subtitle_shape:
-                subtitle_shape.text = subtitle_text
+            if subtitle_shape and first_slide_data.get('sottotitolo'):
+                subtitle_shape.text = first_slide_data.get('sottotitolo', '').strip()
+            if first_slide_data.get('contenuto'):
+                PptxGeneration._add_content_to_slide(slide, first_slide_data.get('contenuto', '').strip())
 
-            # Popola il contenuto se il layout lo permette e il contenuto esiste
-            if first_slide_content:
-                 PptxGeneration._add_content_to_slide(slide, first_slide_content)
-
-
-            # --- Gestione Slide Successive ---
             for slide_data in slides_data:
                 slide = prs.slides.add_slide(content_slide_layout)
                 if slide.shapes.title:
                     slide.shapes.title.text = slide_data.get('titolo', '').strip()
-                subtitle_text = slide_data.get('sottotitolo', '').strip()
                 subtitle_shape = PptxGeneration._find_placeholder(slide, PP_PLACEHOLDER.SUBTITLE)
-                if subtitle_text and subtitle_shape:
-                    subtitle_shape.text = subtitle_text
-                content_text = slide_data.get('contenuto', '').strip()
-                if content_text:
-                    PptxGeneration._add_content_to_slide(slide, content_text)
+                if subtitle_shape and slide_data.get('sottotitolo'):
+                    subtitle_shape.text = slide_data.get('sottotitolo', '').strip()
+                if slide_data.get('contenuto'):
+                    PptxGeneration._add_content_to_slide(slide, slide_data.get('contenuto', '').strip())
 
-            # --- Salvataggio e notifica ---
             if prs.slides:
                 prs.save(output_file)
                 logging.info(f"Presentazione salvata con successo: {output_file}")
-                if not is_preview and parent and hasattr(parent, 'show_status_message'):
-                    parent.show_status_message(f"Presentazione generata e salvata: {os.path.basename(output_file)}")
-                    reply = QMessageBox.question(parent, 'Apri File', 'Vuoi aprire la presentazione generata?', QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.Yes)
-                    if reply == QMessageBox.StandardButton.Yes:
-                        try:
-                            if sys.platform == "win32": os.startfile(output_file)
-                            elif sys.platform == "darwin": subprocess.call(['open', output_file])
-                            else: subprocess.call(['xdg-open', output_file])
-                        except Exception as e:
-                            logging.error(f"Impossibile aprire il file '{output_file}': {e}")
-                            parent.show_status_message(f"Non è stato possibile aprire il file.", error=True)
+                # La notifica e l'apertura del file sono gestite dal thread
             else:
                 logging.warning("Nessuna slide è stata generata.")
 
         except Exception as e:
             logging.exception("Errore durante la creazione del file PPTX")
-            if parent:
-                QMessageBox.critical(parent, "Errore Creazione PPTX", f"Si è verificato un errore: {e}")
+            raise e # Rilancia l'eccezione per essere catturata dal thread
 
     @staticmethod
     def generate_preview(parent, testo, template_path=None, num_slides=None):
