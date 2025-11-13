@@ -7,6 +7,7 @@ from PyQt6.QtCore import QThread, pyqtSignal
 import tempfile
 import logging
 from moviepy.editor import AudioFileClip
+import concurrent.futures
 
 # Import for Whisper
 import whisper
@@ -34,6 +35,8 @@ class WhisperTranscriptionThread(QThread):
         self.end_time = end_time
         self.model_name = model_name
         self.use_gpu = use_gpu
+        self.transcribe_future = None
+        self.executor = None
 
     @classmethod
     def load_model(cls, model_name='base', use_gpu=True, progress_signal=None):
@@ -77,51 +80,59 @@ class WhisperTranscriptionThread(QThread):
         overall_start_time = time.time()
         standard_wav_path = None
         input_clip = None
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
         try:
+            if not self._is_running: return
             # --- Audio Extraction ---
-            audio_extraction_start_time = time.time()
             self.progress.emit(5, "Estrazione e standardizzazione audio...")
             input_clip = AudioFileClip(self.media_path)
-
             if self.start_time is not None and self.end_time is not None:
-                self.progress.emit(6, f"Estrazione audio da {self.start_time:.2f}s a {self.end_time:.2f}s...")
                 input_clip = input_clip.subclip(self.start_time, self.end_time)
-
             standard_wav_path = self.main_window.get_temp_filepath(suffix=".wav")
             input_clip.write_audiofile(standard_wav_path, codec='pcm_s16le', fps=16000, logger=None)
-            audio_extraction_end_time = time.time()
-            logging.info(f"Audio extracted in {audio_extraction_end_time - audio_extraction_start_time:.2f} seconds.")
             self.progress.emit(10, "Audio pronto per la trascrizione.")
 
-            # --- Environment Setup for FFmpeg ---
-            original_path = os.environ["PATH"]
+            if not self._is_running: return
+            original_path = os.environ.get("PATH", "")
             ffmpeg_dir = os.path.dirname(FFMPEG_PATH)
             os.environ["PATH"] = ffmpeg_dir + pathsep + original_path
 
-            # --- Model Loading ---
             model = self.load_model(self.model_name, self.use_gpu, self.progress)
+            if not model:
+                self.error.emit("Failed to load Whisper model.")
+                return
 
-            # --- Transcription ---
-            transcription_start_time = time.time()
+            # --- Transcription in a separate thread ---
             self.progress.emit(25, "Trascrizione in corso con Whisper...")
             language_code = self.main_window.languageComboBox.currentData()
-
-            result = model.transcribe(
+            self.transcribe_future = self.executor.submit(
+                model.transcribe,
                 standard_wav_path,
                 language=language_code if language_code != 'auto' else None,
                 fp16=self.use_gpu and torch.cuda.is_available(),
-                verbose=False # Set to True for debugging Whisper's internal progress
+                verbose=False
             )
-            transcription_end_time = time.time()
-            logging.info(f"Whisper transcription completed in {transcription_end_time - transcription_start_time:.2f} seconds.")
-            logging.info(f"Detected language: {result.get('language')}")
 
+            # Wait for the future to complete, periodically checking the running flag
+            while self._is_running and not self.transcribe_future.done():
+                time.sleep(0.2) # Check for cancellation every 200ms
+
+            if not self._is_running:
+                logging.info("Transcription cancelled by user during execution.")
+                # The future continues in the background, but we exit the thread.
+                return
+
+            result = self.transcribe_future.result() # Get result if done
+            logging.info(f"Whisper transcription completed. Detected language: {result.get('language')}")
+
+            if not self._is_running: return
             # --- Formatting Output ---
             transcription = ""
             last_end_time = 0.0
             offset_seconds = self.start_time if self.start_time is not None else 0.0
-
             total_segments = len(result['segments'])
+
             for i, segment in enumerate(result['segments']):
                 if not self._is_running:
                     self.save_transcription_to_json(transcription, result.get('language', language_code))
@@ -130,27 +141,20 @@ class WhisperTranscriptionThread(QThread):
                 start_segment = segment['start']
                 end_segment = segment['end']
                 text = segment['text'].strip()
-                avg_logprob = segment.get('avg_logprob', -1.0)
-                no_speech_prob = segment.get('no_speech_prob', 0.0)
 
-                # Calculate and insert break tags for silences > 1s
                 if last_end_time > 0:
                     pause_duration = start_segment - last_end_time
                     if pause_duration > 1.0:
-                        # Breaks are formatted as paragraphs for consistency
                         transcription += f'<p><break time="{pause_duration:.1f}s" /></p>'
 
-                # Format the timestamp for the current segment
                 start_seconds_with_offset = int(start_segment + offset_seconds)
                 start_mins, start_secs = divmod(start_seconds_with_offset, 60)
                 timestamp = f"[{start_mins:02d}:{start_secs:02d}]"
 
                 if text:
-                    # Format with separate <p> tags for timestamp and text
                     transcription += f"<p>{timestamp}</p><p>{text}</p>"
 
                 last_end_time = end_segment
-
                 progress_percentage = 30 + int(((i + 1) / total_segments) * 65)
                 self.progress.emit(progress_percentage, f"Elaborazione segmento {i + 1}/{total_segments}")
 
@@ -163,18 +167,25 @@ class WhisperTranscriptionThread(QThread):
             logging.error(error_msg)
             self.error.emit(error_msg)
         except Exception as e:
-            import traceback
-            logging.error(f"Errore nella trascrizione Whisper: {e}\n{traceback.format_exc()}")
-            self.error.emit(f"Si è verificato un errore imprevisto: {e}")
+            if self._is_running: # Only emit error if not cancelled
+                import traceback
+                logging.error(f"Errore nella trascrizione Whisper: {e}\n{traceback.format_exc()}")
+                self.error.emit(f"Si è verificato un errore imprevisto: {e}")
         finally:
+            # --- Cleanup ---
+            if self.executor:
+                self.executor.shutdown(wait=False, cancel_futures=True)
             if 'original_path' in locals():
                 os.environ["PATH"] = original_path
             if input_clip:
                 input_clip.close()
             if standard_wav_path and os.path.exists(standard_wav_path):
-                os.remove(standard_wav_path)
+                try:
+                    os.remove(standard_wav_path)
+                except OSError as e:
+                    logging.warning(f"Could not remove temporary audio file {standard_wav_path}: {e}")
             overall_end_time = time.time()
-            logging.info(f"TranscriptionThread finished in {overall_end_time - overall_start_time:.2f} seconds.")
+            logging.info(f"WhisperTranscriptionThread finished in {overall_end_time - overall_start_time:.2f} seconds.")
 
     def save_transcription_to_json(self, transcription, language_code):
         json_path = os.path.splitext(self.media_path)[0] + ".json"
@@ -191,4 +202,11 @@ class WhisperTranscriptionThread(QThread):
         return json_path
 
     def stop(self):
+        """
+        Stops the QThread from processing further.
+        Note: This will not interrupt the underlying Whisper `transcribe` call if it
+        is already running, as it's a blocking operation in a separate thread.
+        The worker thread will run to completion, but its result will be discarded.
+        """
+        logging.info("Stopping WhisperTranscriptionThread.")
         self._is_running = False
