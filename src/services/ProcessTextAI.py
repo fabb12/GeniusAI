@@ -51,8 +51,11 @@ class ProcessTextAI(QThread):
             raise ValueError(f"La modalità '{mode}' non è valida. Scegli tra: {valid_modes}")
         self.mode = mode
 
-        # Recupera il modello selezionato per l'azione 'text_processing'
-        self.selected_model = get_model_for_action('text_processing')
+        # Recupera il modello corretto in base alla modalità
+        if mode == 'chat_summary':
+            self.selected_model = get_model_for_action('chat')
+        else:
+            self.selected_model = get_model_for_action('text_processing')
         self.anthropic_api_key = get_api_key('anthropic')
         self.google_api_key = get_api_key('google')
         self.ollama_endpoint = OLLAMA_ENDPOINT
