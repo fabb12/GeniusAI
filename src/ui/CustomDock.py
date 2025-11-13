@@ -86,6 +86,11 @@ class CustomDock(Dock):
         super().__init__(name, area=area, size=size, widget=widget, hideTitle=hideTitle,
                          autoOrientation=autoOrientation, label=label, **kargs)
 
+    def setTitle(self, new_title):
+        """Sets the title of the dock's label."""
+        if self.label and hasattr(self.label, 'setText'):
+            self.label.setText(new_title)
+
     def setCustomStyle(self, style):
         """
         Applica lo style sheet *style* al contenitore del dock e poi riapplica
