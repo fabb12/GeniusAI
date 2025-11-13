@@ -29,7 +29,7 @@ class OperationalGuideThread(QThread):
         self.style = style
         self.synthesis = synthesis
         self.extractor = FrameExtractor(video_path=video_path, num_frames=num_frames)
-        self.selected_model = get_model_for_action('frame_extractor') # Use the same vision model
+        self.selected_model = get_model_for_action('operational_guide')
 
     def run(self):
         try:
