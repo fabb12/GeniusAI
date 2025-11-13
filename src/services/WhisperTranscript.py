@@ -8,6 +8,9 @@ import tempfile
 import logging
 from moviepy.editor import AudioFileClip
 import concurrent.futures
+import re
+import sys
+import io
 
 # Import for Whisper
 import whisper
@@ -15,6 +18,23 @@ import torch
 from urllib.error import URLError
 from src.config import FFMPEG_PATH
 from os import pathsep
+
+class ProgressIO(io.StringIO):
+    def __init__(self, progress_signal):
+        super().__init__()
+        self.progress_signal = progress_signal
+        self.progress_regex = re.compile(r"(\d+)%\|")
+
+    def write(self, s):
+        match = self.progress_regex.search(s)
+        if match:
+            percentage = int(match.group(1))
+            # Map whisper's progress (0-100) to our desired range (e.g., 30-95)
+            mapped_percentage = 30 + int((percentage / 100) * 65)
+            self.progress_signal.emit(mapped_percentage, f"Trascrizione in corso... {percentage}%")
+        # To aid in debugging, you might want to write to the original stderr
+        # sys.__stderr__.write(s)
+        super().write(s)
 
 class WhisperTranscriptionThread(QThread):
     progress = pyqtSignal(int, str)
@@ -106,13 +126,21 @@ class WhisperTranscriptionThread(QThread):
             # --- Transcription in a separate thread ---
             self.progress.emit(25, "Trascrizione in corso con Whisper...")
             language_code = self.main_window.languageComboBox.currentData()
-            self.transcribe_future = self.executor.submit(
-                model.transcribe,
-                standard_wav_path,
-                language=language_code if language_code != 'auto' else None,
-                fp16=self.use_gpu and torch.cuda.is_available(),
-                verbose=False
-            )
+
+            original_stderr = sys.stderr
+            progress_io = ProgressIO(self.progress)
+            sys.stderr = progress_io
+
+            try:
+                self.transcribe_future = self.executor.submit(
+                    model.transcribe,
+                    standard_wav_path,
+                    language=language_code if language_code != 'auto' else None,
+                    fp16=self.use_gpu and torch.cuda.is_available(),
+                    verbose=None # Use whisper's default progress bar
+                )
+            finally:
+                sys.stderr = original_stderr
 
             # Wait for the future to complete, periodically checking the running flag
             while self._is_running and not self.transcribe_future.done():
@@ -155,10 +183,9 @@ class WhisperTranscriptionThread(QThread):
                     transcription += f"<p>{timestamp}</p><p>{text}</p>"
 
                 last_end_time = end_segment
-                progress_percentage = 30 + int(((i + 1) / total_segments) * 65)
-                self.progress.emit(progress_percentage, f"Elaborazione segmento {i + 1}/{total_segments}")
+                # The progress is now handled by the ProgressIO class in real-time
 
-            self.progress.emit(100, "Trascrizione completata.")
+            self.progress.emit(100, "Formattazione completata.")
             json_path = self.save_transcription_to_json(transcription, result.get('language', language_code))
             self.completed.emit((json_path, [standard_wav_path]))
 
