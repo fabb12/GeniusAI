@@ -388,14 +388,11 @@ from PyQt6.QtGui import QColor
 from docx.enum.text import WD_COLOR_INDEX
 
 HIGHLIGHT_COLORS = {
-    "Giallo Intenso": {"qcolor": QColor("#FFD700"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#ffd700"},
-    "Verde Brillante": {"qcolor": QColor("#32CD32"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#32cd32"},
-    "Ciano": {"qcolor": QColor("#00FFFF"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#00ffff"},
-    "Magenta": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#ff00ff"},
-    "Arancione Vivo": {"qcolor": QColor("#FF8C00"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#ff8c00"},
-    "Azzurro Cielo": {"qcolor": QColor("#87CEEB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#87ceeb"},
-    "Viola": {"qcolor": QColor("#9370DB"), "docx": WD_COLOR_INDEX.VIOLET, "hex": "#9370db"},
-    "Rosso Chiaro": {"qcolor": QColor("#F08080"), "docx": WD_COLOR_INDEX.RED, "hex": "#f08080"},
+    "Giallo Pastello": {"qcolor": QColor("#F2D984"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#F2D984"},
+    "Azzurro Polvere": {"qcolor": QColor("#779ECB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#779ECB"},
+    "Lilla": {"qcolor": QColor("#C8A2C8"), "docx": WD_COLOR_INDEX.VIOLET, "hex": "#C8A2C8"},
+    "Verde Salvia": {"qcolor": QColor("#9DC183"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#9DC183"},
+    "Rosa Antico": {"qcolor": QColor("#E0B6B6"), "docx": WD_COLOR_INDEX.PINK, "hex": "#E0B6B6"},
     "Blu Timecode": {"qcolor": QColor("#ADD8E6"), "docx": None, "hex": "#add8e6"},
 }
 
