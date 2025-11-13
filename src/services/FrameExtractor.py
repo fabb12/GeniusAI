@@ -17,7 +17,7 @@ from PIL import Image
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
+    get_api_key, get_model_for_action,
     PROMPT_FRAMES_ANALYSIS, PROMPT_VIDEO_SUMMARY, PROMPT_SPECIFIC_OBJECT_RECOGNITION
 )
 from src.services.utils import _call_ollama_api
@@ -53,7 +53,6 @@ class FrameExtractor:
         api_keys = api_keys or {}
         self.anthropic_api_key = api_keys.get('anthropic', get_api_key('anthropic'))
         self.google_api_key = api_keys.get('google', get_api_key('google'))
-        self.ollama_endpoint = OLLAMA_ENDPOINT
 
         # Recupera il modello selezionato per l'azione 'frame_extractor'
         self.selected_model = get_model_for_action('frame_extractor')
@@ -412,7 +411,6 @@ class FrameExtractor:
             model_name = self.selected_model.split(":", 1)[1]
 
             raw_text = _call_ollama_api(
-                self.ollama_endpoint,
                 model_name,
                 system_prompt,
                 user_prompt,
@@ -657,7 +655,6 @@ class FrameExtractor:
             elif "ollama:" in model_name_lower:
                 model_name = self.selected_model.split(":", 1)[1]
                 summary = _call_ollama_api(
-                    self.ollama_endpoint,
                     model_name,
                     "Sei un assistente AI specializzato nel riassumere video.",
                     prompt_text

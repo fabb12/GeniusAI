@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
+    get_api_key, get_model_for_action, get_ollama_endpoint,
     PROMPT_PPTX_GENERATION # Assicurati che questo percorso sia corretto e il file esista
 )
 from src.services.utils import _call_ollama_api
@@ -145,7 +145,6 @@ class PptxGeneration:
                 ollama_model_name = selected_model.split(":", 1)[1]
 
                 result_text = _call_ollama_api(
-                    OLLAMA_ENDPOINT,
                     ollama_model_name,
                     system_prompt_content,
                     user_prompt
@@ -221,8 +220,9 @@ class PptxGeneration:
                 return f"Errore: Modello '{selected_model}' non supportato."
 
         except requests.exceptions.ConnectionError:
-             logging.error(f"Impossibile connettersi a Ollama: {OLLAMA_ENDPOINT}")
-             return f"Errore di connessione a Ollama ({OLLAMA_ENDPOINT}). Verifica che sia in esecuzione."
+             endpoint = get_ollama_endpoint()
+             logging.error(f"Impossibile connettersi a Ollama: {endpoint}")
+             return f"Errore di connessione a Ollama ({endpoint}). Verifica che sia in esecuzione."
         except requests.exceptions.Timeout:
              logging.error(f"Timeout durante connessione a Ollama ({selected_model})")
              return f"Timeout Ollama ({selected_model}). Il modello potrebbe essere lento o non rispondere."

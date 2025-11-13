@@ -79,6 +79,39 @@ def get_api_key(service_name: str) -> str:
 
     return fallback_keys.get(service_name.lower(), "")
 
+
+# --- Funzione Centralizzata per Recupero Endpoint Ollama ---
+def get_ollama_endpoint() -> str:
+    """
+    Recupera l'endpoint di Ollama, dando priorità a QSettings,
+    poi a una variabile d'ambiente, e infine a un default.
+
+    Returns:
+        str: L'URL dell'endpoint di Ollama.
+    """
+    settings = QSettings("Genius", "GeniusAI")
+
+    # 1. Prova a leggere da QSettings
+    # La chiave usata qui dovrà corrispondere a quella nel SettingsDialog
+    settings_key = "api_keys_dialog/ollama_endpoint"
+    stored_endpoint = settings.value(settings_key, "")
+
+    if stored_endpoint and isinstance(stored_endpoint, str) and stored_endpoint.strip():
+        logging.debug(f"Endpoint Ollama trovato in QSettings: {stored_endpoint}")
+        return stored_endpoint.strip()
+
+    # 2. Se non trovato, prova a leggere dalla variabile d'ambiente
+    env_endpoint = os.getenv("OLLAMA_ENDPOINT")
+    if env_endpoint and env_endpoint.strip():
+        logging.debug(f"Endpoint Ollama trovato nella variabile d'ambiente: {env_endpoint}")
+        return env_endpoint.strip()
+
+    # 3. Se non trovato da nessuna parte, usa il default
+    default_endpoint = "http://localhost:11434"
+    logging.debug(f"Nessun endpoint Ollama personalizzato trovato, si usa il default: {default_endpoint}")
+    return default_endpoint
+
+
 # --- Definizione Identificatori Modello ---
 # Claude (Anthropic) - Modelli stabili a Ottobre 2025
 
@@ -118,7 +151,8 @@ GEMINI_15_FLASH_8B = GEMINI_25_FLASH_LITE   # Deprecato, mappato al modello legg
 # GPT_4O_MINI = "gpt-4o-mini"
 
 # Modelli Locali (via Ollama)
-OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434") # Default Ollama endpoint
+# La configurazione dell'endpoint è ora gestita dalla funzione get_ollama_endpoint()
+# OLLAMA_ENDPOINT = os.getenv("OLLAMA_ENDPOINT", "http://localhost:11434") # Default Ollama endpoint
 OLLAMA_GEMMA_2B = "ollama:gemma:2b"
 OLLAMA_GEMMA_7B = "ollama:gemma:7b"
 OLLAMA_GEMMA2_9B = "ollama:gemma2:9B"
@@ -433,7 +467,7 @@ def debug_config():
         "WATERMARK_IMAGE": WATERMARK_IMAGE,
         "VERSION_FILE": VERSION_FILE,
         "LOG_FILE": LOG_FILE,
-        "OLLAMA_ENDPOINT": OLLAMA_ENDPOINT,
+        "OLLAMA_ENDPOINT": get_ollama_endpoint(),
         # API Keys Status
         "ELEVENLABS_API_KEY": "Impostata" if ELEVENLABS_API_KEY else "NON Impostata",
         "ANTHROPIC_API_KEY": "Impostata" if ANTHROPIC_API_KEY else "NON Impostata",
