@@ -52,6 +52,7 @@ from src.services.AudioTranscript import TranscriptionThread
 from src.services.WhisperTranscript import WhisperTranscriptionThread
 from src.services.AudioGenerationREST import AudioGenerationThread, FetchVoicesThread
 from src.services.VideoCutting import VideoCuttingThread
+from src.services.CommentDownloader import CommentDownloader
 from src.recorder.ScreenRecorder import ScreenRecorder
 from src.managers.SettingsManager import DockSettingsManager
 from src.ui.CustVideoWidget import CropVideoWidget
@@ -96,6 +97,7 @@ from src.managers.ProjectManager import ProjectManager
 from src.managers.BookmarkManager import BookmarkManager
 from src.ui.ProjectDock import ProjectDock
 from src.ui.ChatDock import ChatDock
+from src.ui.CommentDock import CommentDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.managers.HtmlManager import HtmlManager
@@ -1000,6 +1002,11 @@ class VideoAudioManager(QMainWindow):
         self.chatDock.sendMessage.connect(self.handle_chat_message)
         self.chatDock.history_text_edit.timestampDoubleClicked.connect(self.sincronizza_video)
 
+        self.commentDock = CommentDock()
+        self.commentDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.addDock(self.commentDock, 'right', self.chatDock)
+        self.commentDock.sendToChat.connect(self.update_chat_with_comments)
+
         # ---------------------
         # PLAYER INPUT
         # ---------------------
@@ -1110,6 +1117,11 @@ class VideoAudioManager(QMainWindow):
         self.frameBackwardButton.clicked.connect(self.frameBackward)
         self.frameForwardButton.clicked.connect(self.frameForward)
         self.deleteButton.clicked.connect(self.bookmark_manager.delete_all_bookmarks)
+
+        self.downloadCommentsButton = QPushButton('')
+        self.downloadCommentsButton.setIcon(QIcon(get_resource("download.png")))
+        self.downloadCommentsButton.setToolTip("Scarica i commenti del video")
+        self.downloadCommentsButton.clicked.connect(self.download_comments)
 
         self.totalTimeLabel = QLabel('/ 00:00:00:000')
         self.totalTimeLabel.setToolTip("Mostra la durata totale del video input")
@@ -1227,6 +1239,7 @@ class VideoAudioManager(QMainWindow):
         playbackControlLayout.addWidget(self.cropButton)
         playbackControlLayout.addWidget(self.deleteButton)
         playbackControlLayout.addWidget(self.transferToOutputButton)
+        playbackControlLayout.addWidget(self.downloadCommentsButton)
 
         # Layout principale del Player Input
         videoPlayerLayout = QVBoxLayout()
@@ -1736,7 +1749,8 @@ class VideoAudioManager(QMainWindow):
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock,
             'infoExtractionDock': self.infoExtractionDock,
-            'chatDock': self.chatDock
+            'chatDock': self.chatDock,
+            'commentDock': self.commentDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -5803,6 +5817,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
         self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
         self.actionToggleChatDock = self.createToggleAction(self.chatDock, 'Mostra/Nascondi Chat Riassunto')
+        self.actionToggleCommentDock = self.createToggleAction(self.commentDock, 'Mostra/Nascondi Commenti')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -5815,6 +5830,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoNotesDock)
         viewMenu.addAction(self.actionToggleInfoExtractionDock)
         viewMenu.addAction(self.actionToggleChatDock)
+        viewMenu.addAction(self.actionToggleCommentDock)
 
 
 
@@ -5891,6 +5907,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleRecordingDock.setChecked(True)
         self.actionToggleProjectDock.setChecked(True)
         self.actionToggleInfoExtractionDock.setChecked(True)
+        self.actionToggleCommentDock.setChecked(True)
 
     def updateViewMenu(self):
 
@@ -5905,6 +5922,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
         self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
         self.actionToggleChatDock.setChecked(self.chatDock.isVisible())
+        self.actionToggleCommentDock.setChecked(self.commentDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
@@ -7909,6 +7927,11 @@ class VideoAudioManager(QMainWindow):
             if hasattr(self.chatDock, 'update_context'):
                  self.chatDock.update_context(context_name, context_content)
 
+    def update_chat_with_comments(self, comments):
+        if hasattr(self, 'chatDock') and self.chatDock:
+            self.chatDock.update_context("Chat con Commenti", comments)
+            self.show_status_message("Commenti inviati alla chat.")
+
     def rename_clip_from_summary(self, clip_filename):
         """
         Genera un nuovo nome file dal titolo del riassunto di una clip e la rinomina.
@@ -8832,6 +8855,23 @@ class VideoAudioManager(QMainWindow):
         """Gestisce gli errori durante la traduzione."""
         self.show_status_message(f"Errore di traduzione: {error_message}", error=True)
         self.current_translation_widget = None
+
+    def download_comments(self):
+        if not self.videoPathLineEdit:
+            self.show_status_message("Nessun video caricato.", error=True)
+            return
+
+        url, ok = QInputDialog.getText(self, 'Download Commenti', 'Inserisci l\'URL del video di YouTube:')
+        if ok and url:
+            output_path = os.path.splitext(self.videoPathLineEdit)[0] + "_comments.json"
+            thread = CommentDownloader(url, output_path, self)
+            self.start_task(thread, self.on_comments_download_completed, self.on_comments_download_error, self.update_status_progress)
+
+    def on_comments_download_completed(self, output_path):
+        self.show_status_message(f"Commenti scaricati con successo in {os.path.basename(output_path)}")
+
+    def on_comments_download_error(self, error_message):
+        self.show_status_message(f"Errore durante il download dei commenti: {error_message}", error=True)
 
 
 def get_application_path():
