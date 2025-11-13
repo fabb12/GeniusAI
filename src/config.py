@@ -388,11 +388,11 @@ from PyQt6.QtGui import QColor
 from docx.enum.text import WD_COLOR_INDEX
 
 HIGHLIGHT_COLORS = {
-    "Giallo brillante": {"qcolor": QColor("#FFD700"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#FFD700"},
-    "Ciano acceso": {"qcolor": QColor("#00FFFF"), "docx": WD_COLOR_INDEX.TURQUOISE, "hex": "#00FFFF"},
-    "Magenta vivace": {"qcolor": QColor("#FF00FF"), "docx": WD_COLOR_INDEX.PINK, "hex": "#FF00FF"},
-    "Verde lime": {"qcolor": QColor("#ADFF2F"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#ADFF2F"},
-    "Arancione brillante": {"qcolor": QColor("#FFA500"), "docx": WD_COLOR_INDEX.DARK_YELLOW, "hex": "#FFA500"},
+    "Giallo Pastello": {"qcolor": QColor("#F2D984"), "docx": WD_COLOR_INDEX.YELLOW, "hex": "#F2D984"},
+    "Azzurro Polvere": {"qcolor": QColor("#779ECB"), "docx": WD_COLOR_INDEX.TEAL, "hex": "#779ECB"},
+    "Lilla": {"qcolor": QColor("#C8A2C8"), "docx": WD_COLOR_INDEX.VIOLET, "hex": "#C8A2C8"},
+    "Verde Salvia": {"qcolor": QColor("#9DC183"), "docx": WD_COLOR_INDEX.BRIGHT_GREEN, "hex": "#9DC183"},
+    "Rosa Antico": {"qcolor": QColor("#E0B6B6"), "docx": WD_COLOR_INDEX.PINK, "hex": "#E0B6B6"},
     "Blu Timecode": {"qcolor": QColor("#ADD8E6"), "docx": None, "hex": "#add8e6"},
 }
 
