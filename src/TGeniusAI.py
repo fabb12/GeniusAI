@@ -7735,12 +7735,12 @@ class VideoAudioManager(QMainWindow):
         """
         Chiede all'utente come gestire l'eliminazione di una clip: solo dal progetto
         o anche dal disco. Gestisce sia clip video che audio.
+        Disconnette temporaneamente il file watcher per prevenire race conditions.
         """
         if not self.current_project_path:
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
-        # Determina se è una clip audio o video per costruire il percorso corretto
         is_audio = any(clip['clip_filename'] == clip_filename for clip in self.projectDock.project_data.get('audio_clips', []))
         subfolder = "audio" if is_audio else "clips"
         clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
@@ -7749,41 +7749,53 @@ class VideoAudioManager(QMainWindow):
         msg_box.setWindowTitle("Rimuovi Clip")
         msg_box.setText(f"Cosa vuoi fare con la clip '{clip_filename}'?")
         msg_box.setIcon(QMessageBox.Icon.Question)
-
         remove_button = msg_box.addButton("Rimuovi solo dal Progetto", QMessageBox.ButtonRole.ActionRole)
         delete_button = msg_box.addButton("Elimina da Progetto e Disco", QMessageBox.ButtonRole.DestructiveRole)
         cancel_button = msg_box.addButton("Annulla", QMessageBox.ButtonRole.RejectRole)
-
         msg_box.exec()
 
-        if msg_box.clickedButton() == remove_button:
-            # Rimuovi solo dal JSON
-            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
-            if success:
-                self.load_project(self.projectDock.gnai_path)
-                self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
-            else:
-                self.show_status_message(f"Errore: {message}", error=True)
+        clicked_button = msg_box.clickedButton()
+        if clicked_button == cancel_button:
+            return
 
-        elif msg_box.clickedButton() == delete_button:
-            # Rimuovi dal JSON e dal disco
-            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
-            if not success:
-                self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
-                return
+        # Disconnette il watcher per evitare che il sync automatico interferisca
+        try:
+            self.projectDock.project_clips_folder_changed.disconnect(self.sync_project_clips_folder)
+            logging.debug("File watcher disconnesso per l'operazione di cancellazione.")
+        except TypeError:
+            logging.warning("Il segnale del file watcher non era connesso.")
 
-            try:
-                if os.path.exists(clip_path):
-                    os.remove(clip_path)
-                json_path = os.path.splitext(clip_path)[0] + ".json"
-                if os.path.exists(json_path):
-                    os.remove(json_path)
+        try:
+            if clicked_button == remove_button:
+                success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+                if success:
+                    self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
+                else:
+                    self.show_status_message(f"Errore: {message}", error=True)
 
-                self.load_project(self.projectDock.gnai_path)
-                self.show_status_message(f"Clip '{clip_filename}' eliminata dal progetto e dal disco.")
-            except Exception as e:
-                self.show_status_message(f"Errore durante l'eliminazione del file: {e}", error=True)
-                self.load_project(self.projectDock.gnai_path)
+            elif clicked_button == delete_button:
+                success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+                if not success:
+                    self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
+                    return
+
+                try:
+                    if os.path.exists(clip_path):
+                        os.remove(clip_path)
+                    json_path = os.path.splitext(clip_path)[0] + ".json"
+                    if os.path.exists(json_path):
+                        os.remove(json_path)
+                    self.show_status_message(f"Clip '{clip_filename}' eliminata dal progetto e dal disco.")
+                except Exception as e:
+                    self.show_status_message(f"Errore durante l'eliminazione del file fisico: {e}", error=True)
+
+            # Ricarica sempre il progetto per aggiornare la UI con lo stato corrente del .gnai
+            self.load_project(self.projectDock.gnai_path)
+
+        finally:
+            # Riconnette sempre il watcher
+            self.projectDock.project_clips_folder_changed.connect(self.sync_project_clips_folder)
+            logging.debug("File watcher riconnesso.")
 
     def rename_project_clip(self, old_filename, new_filename):
         """Rinomina una clip, gestendo lo scaricamento e ricaricamento dai player."""
