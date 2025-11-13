@@ -353,7 +353,8 @@ class CustomTextEdit(QTextEdit):
     def mouseDoubleClickEvent(self, event):
         """
         Gestisce il doppio clic del mouse per cercare un timestamp e sincronizzare il video.
-        Identifica quale timecode è stato cliccato, anche se ce ne sono multipli sulla stessa riga.
+        Identifica quale timecode è stato cliccato, anche se ce ne sono multipli sulla stessa riga,
+        e gestisce formati come [16:52, 24:00] o [16:52].
         """
         super().mouseDoubleClickEvent(event)
 
@@ -361,16 +362,20 @@ class CustomTextEdit(QTextEdit):
         block_text = cursor.block().text()
         click_pos_in_block = cursor.positionInBlock()
 
-        # Regex per trovare tutti i possibili formati di timecode
-        timecode_pattern = re.compile(r'\[((?:\d+:)?\d+:\d+(?:\.\d)?)\]')
+        # Regex per trovare l'intero contenuto tra parentesi quadre.
+        timecode_pattern = re.compile(r'\[([^\]]+)\]')
 
         for match in timecode_pattern.finditer(block_text):
             start_pos, end_pos = match.span(0)
 
-            # Controlla se la posizione del clic è all'interno di questo specifico timecode
+            # Controlla se la posizione del clic è all'interno del blocco [...]
             if start_pos <= click_pos_in_block < end_pos:
-                time_str = match.group(1)
-                parts = time_str.split(':')
+                full_match_str = match.group(1)  # Contenuto: "16:52, 24:00" o "16:52"
+
+                # Estrai il primo timecode dalla lista
+                first_time_str = full_match_str.split(',')[0].strip()
+
+                parts = first_time_str.split(':')
                 total_seconds = 0
                 try:
                     if len(parts) == 3:  # Formato HH:MM:SS.d
@@ -386,7 +391,7 @@ class CustomTextEdit(QTextEdit):
                     if total_seconds >= 0:
                         self.timestampDoubleClicked.emit(total_seconds)
                         return  # Esci dopo aver trovato e processato il timecode corretto
-                except ValueError:
+                except (ValueError, IndexError):
                     # Se il parsing fallisce, continua a cercare altri match
                     continue
 
