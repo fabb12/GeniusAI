@@ -66,11 +66,13 @@ def parse_timestamp_to_seconds(timestamp_str):
 import requests
 import logging
 from bs4 import BeautifulSoup
+from src.config import get_ollama_endpoint
 
-def _call_ollama_api(endpoint, model_name, system_prompt, user_prompt, images=None, timeout=300):
+def _call_ollama_api(model_name, system_prompt, user_prompt, images=None, timeout=300):
     """
     Funzione helper centralizzata per chiamare l'API di Ollama, con gestione per modelli di testo e vision.
     """
+    endpoint = get_ollama_endpoint()
     # Se vengono fornite immagini, usa sempre e solo /api/generate
     if images:
         logging.info(f"Modalità Vision: tentativo Ollama con /api/generate per il modello '{model_name}'...")

@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 
 # Importa la configurazione delle azioni e le chiavi/endpoint necessari
 from src.config import (
-    OLLAMA_ENDPOINT, get_api_key, get_model_for_action,
+    get_api_key, get_model_for_action, get_ollama_endpoint,
     PROMPT_MEETING_SUMMARY # Assicurati che questo percorso sia corretto
 )
 from src.services.utils import _call_ollama_api
@@ -45,7 +45,6 @@ class MeetingSummarizer(QThread):
         self.selected_model = get_model_for_action('summary')
         self.anthropic_api_key = get_api_key('anthropic')
         self.google_api_key = get_api_key('google')
-        self.ollama_endpoint = OLLAMA_ENDPOINT
 
         logging.info(f"MeetingSummarizer inizializzato con modello: {self.selected_model}")
 
@@ -113,7 +112,6 @@ class MeetingSummarizer(QThread):
                 ollama_model_name = self.selected_model.split(":", 1)[1]
 
                 result_text = _call_ollama_api(
-                    self.ollama_endpoint,
                     ollama_model_name,
                     system_prompt_content,
                     user_prompt
@@ -176,8 +174,9 @@ class MeetingSummarizer(QThread):
 
         # Gestione eccezioni API specifiche
         except requests.exceptions.ConnectionError:
-             logging.error(f"Impossibile connettersi a Ollama: {self.ollama_endpoint}")
-             return f"Errore di connessione a Ollama ({self.ollama_endpoint}). Verifica che sia in esecuzione."
+             endpoint = get_ollama_endpoint()
+             logging.error(f"Impossibile connettersi a Ollama: {endpoint}")
+             return f"Errore di connessione a Ollama ({endpoint}). Verifica che sia in esecuzione."
         except requests.exceptions.Timeout:
              logging.error(f"Timeout durante connessione a Ollama ({self.selected_model}) per riassunto")
              return f"Timeout Ollama ({self.selected_model}). Il modello potrebbe essere lento o non rispondere."

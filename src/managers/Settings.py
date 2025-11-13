@@ -11,7 +11,7 @@ import whisper
 import torch
 from PyQt6.QtCore import QSettings, Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
-from src.config import ACTION_MODELS_CONFIG, OLLAMA_ENDPOINT, WATERMARK_IMAGE, HIGHLIGHT_COLORS
+from src.config import ACTION_MODELS_CONFIG, get_ollama_endpoint, WATERMARK_IMAGE, HIGHLIGHT_COLORS
 from PyQt6.QtWidgets import QListWidget, QListWidgetItem, QProgressBar, QMessageBox, QGroupBox
 
 class ModelDownloaderThread(QThread):
@@ -72,6 +72,17 @@ class SettingsDialog(QDialog):
         layout.addRow("Google AI (Gemini) API Key:", self.api_key_edits['google'])
         self.api_key_edits['openai'] = QLineEdit(echoMode=QLineEdit.EchoMode.Password, toolTip="API Key di OpenAI (GPT).")
         layout.addRow("OpenAI (GPT) API Key:", self.api_key_edits['openai'])
+
+        # Aggiungi un separatore visivo
+        separator = QWidget()
+        separator.setFixedHeight(1)
+        separator.setStyleSheet("background-color: #c0c0c0;")
+        layout.addRow(separator)
+
+        # Campo per l'endpoint di Ollama
+        self.api_key_edits['ollama_endpoint'] = QLineEdit(toolTip="Endpoint per il server Ollama locale (es. http://localhost:11434).")
+        layout.addRow("Ollama Endpoint:", self.api_key_edits['ollama_endpoint'])
+
         spacer = QWidget()
         spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout.addRow(spacer)
@@ -115,7 +126,13 @@ class SettingsDialog(QDialog):
         layout.setRowStretch(row, 1)
 
         if any("ollama:" in m for cfg in ACTION_MODELS_CONFIG.values() for m in cfg.get('allowed', [])):
-            ollama_note = QLabel(f"<i>Nota: I modelli 'ollama:' richiedono Ollama in esecuzione (default: {OLLAMA_ENDPOINT}).</i>")
+            # Mostra l'endpoint attualmente configurato e guida l'utente
+            current_endpoint = get_ollama_endpoint()
+            ollama_note = QLabel(
+                f"<i>Nota: I modelli 'ollama:' richiedono Ollama in esecuzione.<br>"
+                f"Endpoint attuale: <b>{current_endpoint}</b><br>"
+                f"Puoi modificarlo nella scheda 'API Keys'.</i>"
+            )
             ollama_note.setWordWrap(True)
             layout.addWidget(ollama_note, row, 0, 1, 2)
             layout.setRowStretch(row + 1, 1)
