@@ -42,7 +42,7 @@ class CustomTextEdit(QTextEdit):
     timestampDoubleClicked = pyqtSignal(float)
     insert_frame_requested = pyqtSignal(float, int)
     frame_edit_requested = pyqtSignal(str)
-    fontSizeChanged = pyqtSignal(int)
+    # fontSizeChanged = pyqtSignal(int)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -279,7 +279,8 @@ class CustomTextEdit(QTextEdit):
             new_size = max(6, new_size)  # Imposta una dimensione minima di 6
 
             # Emetti la nuova dimensione assoluta invece di un delta
-            self.fontSizeChanged.emit(new_size)
+            # self.fontSizeChanged.emit(new_size)
+            self.zoomIn() if angle > 0 else self.zoomOut()
 
             event.accept()
         else:
