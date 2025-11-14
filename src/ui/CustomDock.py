@@ -121,4 +121,4 @@ class CustomDock(Dock):
         per poterlo ripristinare in seguito.
         """
         self.hideDock()
-        self.sigClosed.emit(self)
+        # self.sigClosed.emit(self)
