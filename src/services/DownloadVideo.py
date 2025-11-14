@@ -12,17 +12,18 @@ from src.config import FFMPEG_PATH
 import subprocess
 
 class DownloadThread(QThread):
-    completed = pyqtSignal(list)  # Emits [path, title, language, date]
+    completed = pyqtSignal(list)  # Emits [path, title, language, date, video_id]
     error = pyqtSignal(str)
     progress = pyqtSignal(int, str)  # Signal for download progress
     stream_url_found = pyqtSignal(str)  # Nuovo segnale per l'URL del flusso trovato
 
-    def __init__(self, url, download_video, ffmpeg_path, parent_window=None):
+    def __init__(self, url, download_video, ffmpeg_path, parent_window=None, download_comments=False):
         super().__init__()
         self.url = url
         self.ffmpeg_path = os.path.abspath(ffmpeg_path)
         FFmpegPostProcessor._ffmpeg_location.set(FFMPEG_PATH)
         self.download_video = download_video
+        self.download_comments = download_comments
         self.running = True
         self.process = None
         if parent_window and hasattr(parent_window, 'get_temp_dir'):
@@ -215,11 +216,25 @@ class DownloadThread(QThread):
             }
             self._execute_download(ydl_opts, stream_url)
             if self.running:
-                self.completed.emit([output_path, base_name, "it", None])
+                self.completed.emit([output_path, base_name, "it", None, None])
         except Exception as e:
             if self.running:
                 self.error.emit(f"Errore durante il download del video: {str(e)}")
 
+    def download_comments_json(self, video_id):
+        """Download comments and save to a JSON file."""
+        if not self.running: return
+        comments_options = {
+            'skip_download': True,
+            'writeinfojson': True,
+            'outtmpl': os.path.join(self.temp_dir, f'comments_{video_id}.json'),
+            'quiet': True,
+        }
+        try:
+            with yt_dlp.YoutubeDL(comments_options) as ydl:
+                ydl.extract_info(f"https://www.youtube.com/watch?v={video_id}", download=False)
+        except Exception as e:
+            self.error.emit(f"Error downloading comments: {str(e)}")
 
     def download_audio_only(self):
         """Download only the audio from a YouTube video and emit the title."""
@@ -235,6 +250,9 @@ class DownloadThread(QThread):
         try:
             info = self._execute_download(audio_options, self.url)
             if self.running and 'id' in info:
+                video_id = info.get('id')
+                if self.download_comments:
+                    self.download_comments_json(video_id)
                 files_in_temp = os.listdir(self.temp_dir)
                 if not files_in_temp:
                     self.error.emit("No file found in temporary directory after download.")
@@ -243,7 +261,7 @@ class DownloadThread(QThread):
                 video_title = info.get('title', 'Unknown Title')
                 video_language = info.get('language', 'Lingua non rilevata')
                 upload_date = info.get('upload_date', None)
-                self.completed.emit([audio_file_path, video_title, video_language, upload_date])
+                self.completed.emit([audio_file_path, video_title, video_language, upload_date, video_id])
             elif self.running:
                 self.error.emit("Video ID not found.")
         except Exception as e:
@@ -264,6 +282,9 @@ class DownloadThread(QThread):
         try:
             info = self._execute_download(video_options, self.url)
             if self.running and 'id' in info:
+                video_id = info.get('id')
+                if self.download_comments:
+                    self.download_comments_json(video_id)
                 files_in_temp = os.listdir(self.temp_dir)
                 if not files_in_temp:
                     self.error.emit("No file found in temporary directory after download.")
@@ -272,7 +293,7 @@ class DownloadThread(QThread):
                 video_title = info.get('title', 'Unknown Title')
                 video_language = info.get('language', 'Lingua non rilevata')
                 upload_date = info.get('upload_date', None)
-                self.completed.emit([video_file_path, video_title, video_language, upload_date])
+                self.completed.emit([video_file_path, video_title, video_language, upload_date, video_id])
             elif self.running:
                 self.error.emit("Video ID not found.")
         except Exception as e:

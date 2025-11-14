@@ -38,15 +38,20 @@ class DownloadDialog(QDialog):
         self.video_checkbox.setChecked(True)
         grid_layout.addWidget(self.video_checkbox, 1, 1)
 
-        # Riga 2: Trascrizione Automatica
+        # Riga 2: Checkbox per i commenti
+        self.comments_checkbox = QCheckBox("Scarica anche i commenti del video")
+        self.comments_checkbox.setChecked(False)
+        grid_layout.addWidget(self.comments_checkbox, 2, 1)
+
+        # Riga 3: Trascrizione Automatica
         self.transcribe_checkbox = QCheckBox("Avvia trascrizione dopo il download")
         self.transcribe_checkbox.setChecked(True)
-        grid_layout.addWidget(self.transcribe_checkbox, 2, 1)
+        grid_layout.addWidget(self.transcribe_checkbox, 3, 1)
 
-        # Riga 3: Pulsante di download
+        # Riga 4: Pulsante di download
         download_btn = QPushButton("Scarica")
         download_btn.clicked.connect(self.handleDownload)
-        grid_layout.addWidget(download_btn, 3, 1)
+        grid_layout.addWidget(download_btn, 4, 1)
 
         # Imposta lo stretch per la colonna 1 per farla espandere
         grid_layout.setColumnStretch(1, 1)
@@ -61,8 +66,9 @@ class DownloadDialog(QDialog):
             return
 
         download_video = self.video_checkbox.isChecked()
+        download_comments = self.comments_checkbox.isChecked()
 
-        thread = DownloadThread(url, download_video, FFMPEG_PATH_DOWNLOAD, parent_window=self.parent_window)
+        thread = DownloadThread(url, download_video, FFMPEG_PATH_DOWNLOAD, parent_window=self.parent_window, download_comments=download_comments)
 
         if hasattr(thread, 'stream_url_found'):
             thread.stream_url_found.connect(self.onStreamUrlFound)
@@ -80,7 +86,7 @@ class DownloadDialog(QDialog):
         logging.debug(f"URL di streaming trovato: {stream_url}")
 
     def onDownloadFinished(self, result):
-        temp_file_path, video_title, video_language, upload_date = result
+        temp_file_path, video_title, video_language, upload_date, video_id = result
         self.parent_window.show_status_message(f"Download completato: {video_title}")
         self.parent_window.video_download_language = video_language
         logging.debug(video_language)
@@ -106,6 +112,13 @@ class DownloadDialog(QDialog):
 
             # Move the downloaded file to the clips directory with the new name
             shutil.move(temp_file_path, permanent_file_path)
+
+            # Move the comments file if it exists
+            if video_id:
+                temp_comments_path = os.path.join(temp_dir, f"comments_{video_id}.json")
+                if os.path.exists(temp_comments_path):
+                    permanent_comments_path = os.path.join(clips_dir, f"comments_{video_id}.json")
+                    shutil.move(temp_comments_path, permanent_comments_path)
 
             # Clean up the temporary directory
             temp_dir = os.path.dirname(temp_file_path)

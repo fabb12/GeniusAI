@@ -96,6 +96,7 @@ from src.managers.ProjectManager import ProjectManager
 from src.managers.BookmarkManager import BookmarkManager
 from src.ui.ProjectDock import ProjectDock
 from src.ui.ChatDock import ChatDock
+from src.ui.CommentsDock import CommentsDock
 from src.services.BatchTranscription import BatchTranscriptionThread
 from src.services.VideoCompositing import VideoCompositingThread
 from src.managers.HtmlManager import HtmlManager
@@ -1000,6 +1001,10 @@ class VideoAudioManager(QMainWindow):
         self.chatDock.sendMessage.connect(self.handle_chat_message)
         self.chatDock.history_text_edit.timestampDoubleClicked.connect(self.sincronizza_video)
 
+        self.commentsDock = CommentsDock(parent=self)
+        self.commentsDock.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        area.addDock(self.commentsDock, 'bottom', self.chatDock)
+
         # ---------------------
         # PLAYER INPUT
         # ---------------------
@@ -1736,7 +1741,8 @@ class VideoAudioManager(QMainWindow):
             'projectDock': self.projectDock,
             'videoNotesDock': self.videoNotesDock,
             'infoExtractionDock': self.infoExtractionDock,
-            'chatDock': self.chatDock
+            'chatDock': self.chatDock,
+            'commentsDock': self.commentsDock
         }
         self.dockSettingsManager = DockSettingsManager(self, docks, self)
 
@@ -5313,6 +5319,14 @@ class VideoAudioManager(QMainWindow):
 
         self._update_ui_from_json_data(data)
         self._load_and_display_extraction_cache(video_path)
+
+        # Load comments
+        video_id = data.get('video_id')
+        if video_id:
+            comments_path = os.path.join(os.path.dirname(video_path), f"comments_{video_id}.json")
+            if os.path.exists(comments_path):
+                self.commentsDock.load_comments(comments_path)
+
         return data
 
     def _load_and_display_extraction_cache(self, video_path):
@@ -5803,6 +5817,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoNotesDock = self.createToggleAction(self.videoNotesDock, 'Mostra/Nascondi Note Video')
         self.actionToggleInfoExtractionDock = self.createToggleAction(self.infoExtractionDock, 'Mostra/Nascondi Estrazione Info Video')
         self.actionToggleChatDock = self.createToggleAction(self.chatDock, 'Mostra/Nascondi Chat Riassunto')
+        self.actionToggleCommentsDock = self.createToggleAction(self.commentsDock, 'Mostra/Nascondi Commenti YouTube')
 
         # Aggiungi tutte le azioni al menu 'View'
         viewMenu.addAction(self.actionToggleVideoPlayerDock)
@@ -5815,6 +5830,7 @@ class VideoAudioManager(QMainWindow):
         viewMenu.addAction(self.actionToggleVideoNotesDock)
         viewMenu.addAction(self.actionToggleInfoExtractionDock)
         viewMenu.addAction(self.actionToggleChatDock)
+        viewMenu.addAction(self.actionToggleCommentsDock)
 
 
 
@@ -5905,6 +5921,7 @@ class VideoAudioManager(QMainWindow):
         self.actionToggleVideoNotesDock.setChecked(self.videoNotesDock.isVisible())
         self.actionToggleInfoExtractionDock.setChecked(self.infoExtractionDock.isVisible())
         self.actionToggleChatDock.setChecked(self.chatDock.isVisible())
+        self.actionToggleCommentsDock.setChecked(self.commentsDock.isVisible())
 
     def about(self):
         QMessageBox.about(self, "TGeniusAI",
