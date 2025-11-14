@@ -1665,9 +1665,9 @@ class VideoAudioManager(QMainWindow):
             self.audioAiTextArea, self.infoExtractionResultArea,
             self.chatDock.history_text_edit
         ]
-        for text_edit in all_custom_text_edits:
-            if text_edit:
-                text_edit.fontSizeChanged.connect(self.handle_font_size_change)
+        # for text_edit in all_custom_text_edits:
+            # if text_edit:
+                # text_edit.fontSizeChanged.connect(self.handle_font_size_change)
 
 
         # Connect frame edit signals
@@ -1913,40 +1913,6 @@ class VideoAudioManager(QMainWindow):
         # Mappatura diretta dall'indice del widget al widget stesso.
         # Questo è più robusto dei controlli if/elif basati sull'indice.
         return self.summaryTabWidget.currentWidget()
-
-    def handle_font_size_change(self, new_size):
-        """
-        Gestisce una richiesta di modifica della dimensione del font (zoom),
-        scalando proporzionalmente anche titoli e sottotitoli.
-        """
-        if self._is_applying_font_settings:
-            return
-
-        settings = QSettings("Genius", "GeniusAI")
-
-        # Leggi tutte le dimensioni dei font correnti
-        current_base_size = settings.value("editor/fontSize", 14, type=int)
-        current_title_size = settings.value("editor/titleFontSize", 22, type=int)
-        current_subtitle_size = settings.value("editor/subtitleFontSize", 18, type=int)
-
-        # Assicura che la nuova dimensione di base sia valida
-        new_base_size = max(6, new_size)
-
-        # Calcola il delta solo se c'è una modifica effettiva
-        if new_base_size != current_base_size:
-            delta = new_base_size - current_base_size
-
-            # Calcola le nuove dimensioni per titoli e sottotitoli
-            new_title_size = max(current_title_size + delta, 8) # Min size 8
-            new_subtitle_size = max(current_subtitle_size + delta, 7) # Min size 7
-
-            # Salva tutte le nuove dimensioni nelle impostazioni
-            settings.setValue("editor/fontSize", new_base_size)
-            settings.setValue("editor/titleFontSize", new_title_size)
-            settings.setValue("editor/subtitleFontSize", new_subtitle_size)
-
-            # Applica le nuove impostazioni a tutti i widget di testo
-            self.apply_font_settings()
 
     def apply_font_settings(self):
         """
