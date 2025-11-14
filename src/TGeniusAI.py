@@ -7388,6 +7388,12 @@ class VideoAudioManager(QMainWindow):
         elif key == Qt.Key.Key_Right:
             self.forward5Seconds()
             event.accept()
+        elif key == Qt.Key.Key_Plus:
+            self.speedSpinBox.stepBy(1)
+            event.accept()
+        elif key == Qt.Key.Key_Minus:
+            self.speedSpinBox.stepBy(-1)
+            event.accept()
         else:
             super().keyPressEvent(event)
 
