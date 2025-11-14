@@ -113,6 +113,9 @@ class DownloadDialog(QDialog):
             # Move the downloaded file to the clips directory with the new name
             shutil.move(temp_file_path, permanent_file_path)
 
+            # Define temp_dir before using it
+            temp_dir = os.path.dirname(temp_file_path)
+
             # Move the comments file if it exists
             if video_id:
                 temp_comments_path = os.path.join(temp_dir, f"comments_{video_id}.json")
@@ -121,7 +124,6 @@ class DownloadDialog(QDialog):
                     shutil.move(temp_comments_path, permanent_comments_path)
 
             # Clean up the temporary directory
-            temp_dir = os.path.dirname(temp_file_path)
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
 
