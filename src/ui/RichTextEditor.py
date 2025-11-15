@@ -1,16 +1,16 @@
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QToolBar)
-from PyQt6.QtGui import QIcon, QAction, QTextListFormat
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QToolBar, QToolButton, QFontComboBox, QHBoxLayout)
+from PyQt6.QtGui import QIcon, QAction, QTextListFormat, QFont
 from PyQt6.QtCore import pyqtSignal
 
 from src.ui.CustomTextEdit import CustomTextEdit
 from src.config import get_resource
+from src.ui.CollapsibleGroupBox import CollapsibleGroupBox
 
 class RichTextEditor(QWidget):
     """
     A composite widget that combines a QToolBar with a CustomTextEdit to provide
-    rich text editing capabilities.
+    rich text editing capabilities, with a collapsible UI.
     """
-    # Expose signals from the underlying CustomTextEdit for seamless integration
     cursorPositionChanged = pyqtSignal()
     timestampDoubleClicked = pyqtSignal(float)
     insert_frame_requested = pyqtSignal(float, int)
@@ -22,52 +22,98 @@ class RichTextEditor(QWidget):
         super().__init__(parent)
 
         # Main layout
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
-
-        # Toolbar for formatting actions
-        self.toolbar = QToolBar(self)
-        layout.addWidget(self.toolbar)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(2)
 
         # The actual text editing widget
         self.text_edit = CustomTextEdit(self)
-        layout.addWidget(self.text_edit)
 
-        self._setup_toolbar()
+        self._setup_ui()
         self._connect_signals()
 
-    def _setup_toolbar(self):
-        """Creates and configures the formatting toolbar."""
-        # --- Character Formatting ---
-        self.bold_action = QAction(QIcon(get_resource("text_fix.png")), "Grassetto", self)
+        self.main_layout.addWidget(self.text_edit)
+
+    def _setup_ui(self):
+        """Creates and configures the formatting UI."""
+        # --- Main Toolbar for frequently used actions ---
+        main_toolbar = QToolBar("Main Formatting")
+        main_toolbar.setIconSize(main_toolbar.iconSize() / 1.2) # Smaller icons
+        self.main_layout.addWidget(main_toolbar)
+
+        # Character Formatting
+        self.bold_action = QAction(QIcon(get_resource("text_fix.png")), "Grassetto (Ctrl+B)", self)
         self.bold_action.setShortcut("Ctrl+B")
         self.bold_action.setCheckable(True)
         self.bold_action.triggered.connect(self.set_bold)
-        self.toolbar.addAction(self.bold_action)
+        main_toolbar.addAction(self.bold_action)
 
-        self.italic_action = QAction(QIcon(get_resource("text_sum.png")), "Corsivo", self)
+        self.italic_action = QAction(QIcon(get_resource("text_sum.png")), "Corsivo (Ctrl+I)", self)
         self.italic_action.setShortcut("Ctrl+I")
         self.italic_action.setCheckable(True)
         self.italic_action.triggered.connect(self.set_italic)
-        self.toolbar.addAction(self.italic_action)
+        main_toolbar.addAction(self.italic_action)
 
-        self.underline_action = QAction(QIcon(get_resource("script.png")), "Sottolineato", self)
+        self.underline_action = QAction(QIcon(get_resource("script.png")), "Sottolineato (Ctrl+U)", self)
         self.underline_action.setShortcut("Ctrl+U")
         self.underline_action.setCheckable(True)
         self.underline_action.triggered.connect(self.set_underline)
-        self.toolbar.addAction(self.underline_action)
+        main_toolbar.addAction(self.underline_action)
 
-        self.toolbar.addSeparator()
+        main_toolbar.addSeparator()
 
-        # --- Paragraph Formatting (Lists) ---
+        # Reset Formatting
+        self.reset_format_action = QAction(QIcon(get_resource("reset.png")), "Reset Formattazione", self)
+        self.reset_format_action.triggered.connect(self.reset_format)
+        main_toolbar.addAction(self.reset_format_action)
+
+        main_toolbar.addSeparator()
+
+        # Font Size Controls (on main toolbar for easy access)
+        self.decrease_font_action = QAction(QIcon(get_resource("minus.png")), "Riduci Dimensione", self)
+        self.decrease_font_action.triggered.connect(self.decrease_font_size)
+        main_toolbar.addAction(self.decrease_font_action)
+
+        self.increase_font_action = QAction(QIcon(get_resource("plus.png")), "Aumenta Dimensione", self)
+        self.increase_font_action.triggered.connect(self.increase_font_size)
+        main_toolbar.addAction(self.increase_font_action)
+
+        # --- Collapsible Group for Font and Size ---
+        font_size_group = CollapsibleGroupBox("Font e Dimensioni", self)
+        self.main_layout.addWidget(font_size_group)
+
+        font_size_layout = QHBoxLayout()
+        font_size_group.setContentLayout(font_size_layout)
+
+        # Font Family ComboBox
+        self.font_combo = QFontComboBox(self)
+        self.font_combo.currentFontChanged.connect(self.set_font_family)
+        font_size_layout.addWidget(self.font_combo)
+
+        font_size_layout.addStretch()
+
+        # --- Collapsible Group for Paragraph Formatting ---
+        paragraph_group = CollapsibleGroupBox("Paragrafo", self)
+        self.main_layout.addWidget(paragraph_group)
+
+        paragraph_layout = QHBoxLayout()
+        paragraph_group.setContentLayout(paragraph_layout)
+
+        # Bullet List Button
+        bullet_button = QToolButton(self)
         bullet_action = QAction(QIcon(get_resource("meet.png")), "Elenco Puntato", self)
         bullet_action.triggered.connect(self.insert_bullet_list)
-        self.toolbar.addAction(bullet_action)
+        bullet_button.setDefaultAction(bullet_action)
+        paragraph_layout.addWidget(bullet_button)
 
+        # Numbered List Button
+        numbered_button = QToolButton(self)
         numbered_action = QAction(QIcon(get_resource("meet_sum.png")), "Elenco Numerato", self)
         numbered_action.triggered.connect(self.insert_numbered_list)
-        self.toolbar.addAction(numbered_action)
+        numbered_button.setDefaultAction(numbered_action)
+        paragraph_layout.addWidget(numbered_button)
+
+        paragraph_layout.addStretch() # Push buttons to the left
 
         # Connect cursor position changes to update toolbar button states
         self.text_edit.cursorPositionChanged.connect(self._update_toolbar_state)
@@ -84,24 +130,31 @@ class RichTextEditor(QWidget):
     # --- Toolbar Action Slots ---
 
     def set_bold(self, checked):
-        """Toggles bold formatting."""
         self.text_edit.setFontWeight(700 if checked else 400)
 
     def set_italic(self, checked):
-        """Toggles italic formatting."""
         self.text_edit.setFontItalic(checked)
 
     def set_underline(self, checked):
-        """Toggles underline formatting."""
         self.text_edit.setFontUnderline(checked)
 
+    def reset_format(self):
+        self.text_edit.reset_selection_format()
+
+    def increase_font_size(self):
+        self.text_edit.modify_selection_font_size(1)
+
+    def decrease_font_size(self):
+        self.text_edit.modify_selection_font_size(-1)
+
+    def set_font_family(self, font: QFont):
+        self.text_edit.set_selection_font_family(font.family())
+
     def insert_bullet_list(self):
-        """Inserts a bullet list at the cursor position."""
         cursor = self.text_edit.textCursor()
         cursor.createList(QTextListFormat.Style.ListDisc)
 
     def insert_numbered_list(self):
-        """Inserts a numbered list at the cursor position."""
         cursor = self.text_edit.textCursor()
         cursor.createList(QTextListFormat.Style.ListDecimal)
 
@@ -110,6 +163,12 @@ class RichTextEditor(QWidget):
         self.bold_action.setChecked(self.text_edit.fontWeight() > 500)
         self.italic_action.setChecked(self.text_edit.fontItalic())
         self.underline_action.setChecked(self.text_edit.fontUnderline())
+
+        # Update font combo box
+        current_font = self.text_edit.currentFont()
+        self.font_combo.blockSignals(True)
+        self.font_combo.setCurrentFont(current_font)
+        self.font_combo.blockSignals(False)
 
     # --- Methods to expose CustomTextEdit's public interface ---
     # This allows the RichTextEditor to be a drop-in replacement.
