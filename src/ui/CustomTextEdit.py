@@ -7,6 +7,7 @@ from PyQt6.QtGui import (QTextCursor, QKeySequence, QTextCharFormat, QColor,
                          QTextDocument, QPalette, QFont, QPixmap, QTextImageFormat, QIcon)
 from PyQt6.QtCore import pyqtSignal, Qt, QTimer, QSettings, QUrl
 from PyQt6.QtWidgets import QMenu
+from PyQt6.QtGui import QTextCursor, QFont
 import re
 import time
 import base64
@@ -618,6 +619,55 @@ class CustomTextEdit(QTextEdit):
 
     def get_active_search_text(self):
         return self.search_text
+
+    def reset_selection_format(self):
+        """
+        Resets the character formatting of the selected text to default.
+        """
+        cursor = self.textCursor()
+        if cursor.hasSelection():
+            # Create a default format
+            default_format = QTextCharFormat()
+            # To ensure it overrides everything, you might want to set a default font
+            # default_format.setFont(QFont("Arial", 12)) # Or get from settings
+            cursor.setCharFormat(default_format)
+
+    def modify_selection_font_size(self, delta):
+        """
+        Modifies the font size of the selected text by a given delta.
+        If no text is selected, it applies to the current word.
+        """
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QTextCursor.SelectionType.WordUnderCursor)
+            self.setTextCursor(cursor) # Make selection visible
+
+        current_format = cursor.charFormat()
+        current_size = current_format.fontPointSize()
+        if current_size <= 0:
+            current_size = current_format.font().pointSize()
+            if current_size <= 0:
+                current_size = self.font().pointSize()
+
+        new_size = max(6, current_size + delta)
+
+        format = QTextCharFormat()
+        format.setFontPointSize(new_size)
+        cursor.mergeCharFormat(format)
+
+    def set_selection_font_family(self, font_family):
+        """
+        Sets the font family for the selected text.
+        If no text is selected, it applies to the current word.
+        """
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QTextCursor.SelectionType.WordUnderCursor)
+            self.setTextCursor(cursor) # Make selection visible
+
+        format = QTextCharFormat()
+        format.setFontFamily(font_family)
+        cursor.mergeCharFormat(format)
 
 
 class SearchDialog(QDialog):
