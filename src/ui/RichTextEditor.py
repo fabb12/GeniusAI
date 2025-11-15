@@ -36,12 +36,12 @@ class RichTextEditor(QWidget):
 
     def _setup_ui(self):
         """Creates and configures the formatting UI."""
-        # --- Main Toolbar for frequently used actions ---
+        # --- Main Toolbar for all actions ---
         main_toolbar = QToolBar("Main Formatting")
-        main_toolbar.setIconSize(main_toolbar.iconSize() / 1.2) # Smaller icons
+        main_toolbar.setIconSize(main_toolbar.iconSize() / 1.2)
         self.main_layout.addWidget(main_toolbar)
 
-        # Character Formatting
+        # Group 1: Character Formatting
         self.bold_action = QAction(QIcon(get_resource("text_fix.png")), "Grassetto (Ctrl+B)", self)
         self.bold_action.setShortcut("Ctrl+B")
         self.bold_action.setCheckable(True)
@@ -62,14 +62,11 @@ class RichTextEditor(QWidget):
 
         main_toolbar.addSeparator()
 
-        # Reset Formatting
-        self.reset_format_action = QAction(QIcon(get_resource("reset.png")), "Reset Formattazione", self)
-        self.reset_format_action.triggered.connect(self.reset_format)
-        main_toolbar.addAction(self.reset_format_action)
+        # Group 2: Font and Size
+        self.font_combo = QFontComboBox(self)
+        self.font_combo.currentFontChanged.connect(self.set_font_family)
+        main_toolbar.addWidget(self.font_combo)
 
-        main_toolbar.addSeparator()
-
-        # Font Size Controls (on main toolbar for easy access)
         self.decrease_font_action = QAction(QIcon(get_resource("minus.png")), "Riduci Dimensione", self)
         self.decrease_font_action.triggered.connect(self.decrease_font_size)
         main_toolbar.addAction(self.decrease_font_action)
@@ -78,42 +75,23 @@ class RichTextEditor(QWidget):
         self.increase_font_action.triggered.connect(self.increase_font_size)
         main_toolbar.addAction(self.increase_font_action)
 
-        # --- Collapsible Group for Font and Size ---
-        font_size_group = CollapsibleGroupBox("Font e Dimensioni", self)
-        self.main_layout.addWidget(font_size_group)
+        main_toolbar.addSeparator()
 
-        font_size_layout = QHBoxLayout()
-        font_size_group.setContentLayout(font_size_layout)
-
-        # Font Family ComboBox
-        self.font_combo = QFontComboBox(self)
-        self.font_combo.currentFontChanged.connect(self.set_font_family)
-        font_size_layout.addWidget(self.font_combo)
-
-        font_size_layout.addStretch()
-
-        # --- Collapsible Group for Paragraph Formatting ---
-        paragraph_group = CollapsibleGroupBox("Paragrafo", self)
-        self.main_layout.addWidget(paragraph_group)
-
-        paragraph_layout = QHBoxLayout()
-        paragraph_group.setContentLayout(paragraph_layout)
-
-        # Bullet List Button
-        bullet_button = QToolButton(self)
+        # Group 3: Paragraph Formatting
         bullet_action = QAction(QIcon(get_resource("meet.png")), "Elenco Puntato", self)
         bullet_action.triggered.connect(self.insert_bullet_list)
-        bullet_button.setDefaultAction(bullet_action)
-        paragraph_layout.addWidget(bullet_button)
+        main_toolbar.addAction(bullet_action)
 
-        # Numbered List Button
-        numbered_button = QToolButton(self)
         numbered_action = QAction(QIcon(get_resource("meet_sum.png")), "Elenco Numerato", self)
         numbered_action.triggered.connect(self.insert_numbered_list)
-        numbered_button.setDefaultAction(numbered_action)
-        paragraph_layout.addWidget(numbered_button)
+        main_toolbar.addAction(numbered_action)
 
-        paragraph_layout.addStretch() # Push buttons to the left
+        main_toolbar.addSeparator()
+
+        # Group 4: Actions
+        self.reset_format_action = QAction(QIcon(get_resource("reset.png")), "Reset Formattazione", self)
+        self.reset_format_action.triggered.connect(self.reset_format)
+        main_toolbar.addAction(self.reset_format_action)
 
         # Connect cursor position changes to update toolbar button states
         self.text_edit.cursorPositionChanged.connect(self._update_toolbar_state)
