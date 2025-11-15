@@ -9,6 +9,33 @@ import json
 from pathlib import Path
 from bs4 import BeautifulSoup
 
+class SortableTreeWidgetItem(QTreeWidgetItem):
+    def __lt__(self, other):
+        column = self.treeWidget().sortColumn()
+        order = self.treeWidget().header().sortIndicatorOrder()
+
+        # Colonne 1 (Data), 2 (Durata), 3 (Dimensione) usano UserRole per l'ordinamento
+        if column in [1, 2, 3]:
+            v1 = self.data(column, Qt.ItemDataRole.UserRole)
+            v2 = other.data(column, Qt.ItemDataRole.UserRole)
+
+            # Gestisce i casi in cui un valore è None (es. download senza durata)
+            if v1 is None and v2 is None:
+                return False
+            if v1 is None:
+                return order == Qt.SortOrder.AscendingOrder
+            if v2 is None:
+                return order == Qt.SortOrder.DescendingOrder
+
+            try:
+                # Funziona per numeri (durata, dimensione) e stringhe di data ISO
+                return v1 < v2
+            except TypeError:
+                return self.text(column) < other.text(column) # Fallback
+
+        # Ordinamento predefinito basato su stringhe (case-insensitive) per le altre colonne
+        return self.text(column).lower() < other.text(column).lower()
+
 class ProjectDock(CustomDock):
     """
     Un dock per visualizzare e gestire un progetto .gnai, mostrando
@@ -184,14 +211,18 @@ class ProjectDock(CustomDock):
         clips_layout = QVBoxLayout(clips_group)
 
         self.tree_clips = QTreeWidget()
+        self.tree_clips.setSortingEnabled(True)
         self.tree_clips.setColumnCount(6)
         self.tree_clips.setHeaderLabels(["Nome File", "Data", "Durata", "Dimensione", "Trascrizione", "Riassunto"])
         self.tree_clips.setToolTip("Fai doppio click su una clip per caricarla.")
         self.tree_clips.itemDoubleClicked.connect(self._on_clip_selected)
 
         header = self.tree_clips.header()
-        header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch) # Stretch "Nome File"
+        header.setSortIndicator(0, Qt.SortOrder.AscendingOrder)
+        # Abilita il ridimensionamento interattivo per tutte le colonne
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        # Imposta la colonna "Nome File" per occupare lo spazio rimanente, garantendone la visibilità
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
 
         clips_layout.addWidget(self.tree_clips)
 
@@ -296,7 +327,7 @@ class ProjectDock(CustomDock):
             if not clips:
                 return
 
-            root_item = QTreeWidgetItem(self.tree_clips)
+            root_item = SortableTreeWidgetItem(self.tree_clips)
             root_item.setText(0, root_text)
             root_item.setExpanded(True)
 
@@ -305,7 +336,7 @@ class ProjectDock(CustomDock):
                 self.file_watcher.addPath(clips_dir)
 
             for clip in clips:
-                item = QTreeWidgetItem(root_item)
+                item = SortableTreeWidgetItem(root_item)
                 clip_filename = clip.get("clip_filename", "N/A")
                 full_path = os.path.join(clips_dir, clip_filename)
 
@@ -344,17 +375,26 @@ class ProjectDock(CustomDock):
                 elif status == "offline":
                     item.setIcon(0, QIcon(get_resource("offline.png")))
 
+                creation_date = clip.get("creation_date")
+                duration = clip.get("duration")
+                size = clip.get("size")
+
                 item.setText(0, clip_filename)
                 item.setToolTip(0, full_path) # Tooltip con percorso completo
-                item.setText(1, self._format_date(clip.get("creation_date")))
-                item.setText(2, self._format_duration(clip.get("duration")))
-                item.setText(3, self._format_size(clip.get("size")))
+                item.setText(1, self._format_date(creation_date))
+                item.setText(2, self._format_duration(duration))
+                item.setText(3, self._format_size(size))
                 item.setText(4, has_transcription)
                 item.setText(5, has_summary)
 
                 # Salva il percorso completo e lo stato per un facile accesso
                 item.setData(0, Qt.ItemDataRole.UserRole, full_path)
                 item.setData(0, Qt.ItemDataRole.UserRole + 1, status)
+                # Salva i dati grezzi per l'ordinamento
+                item.setData(1, Qt.ItemDataRole.UserRole, creation_date)
+                item.setData(2, Qt.ItemDataRole.UserRole, duration)
+                item.setData(3, Qt.ItemDataRole.UserRole, size)
+
 
         # Carica clip video e audio
         project_clips = sorted(project_data.get("clips", []), key=lambda x: x.get("creation_date", ""))
@@ -366,7 +406,7 @@ class ProjectDock(CustomDock):
         # Carica file dalla cartella 'downloads' del progetto (invariato)
         download_folder_path = os.path.join(project_dir, "downloads")
         if os.path.exists(download_folder_path):
-            download_root = QTreeWidgetItem(self.tree_clips)
+            download_root = SortableTreeWidgetItem(self.tree_clips)
             download_root.setText(0, "Downloads")
             download_root.setExpanded(True)
 
@@ -375,16 +415,24 @@ class ProjectDock(CustomDock):
             for filename in os.listdir(download_folder_path):
                 file_path = os.path.join(download_folder_path, filename)
                 if os.path.isfile(file_path) and os.path.splitext(filename)[1].lower() in media_extensions:
-                    item = QTreeWidgetItem(download_root)
+                    item = SortableTreeWidgetItem(download_root)
                     item.setText(0, filename)
                     item.setToolTip(0, file_path)
 
                     try:
                         stat = os.stat(file_path)
-                        item.setText(1, self._format_date(datetime.datetime.fromtimestamp(stat.st_mtime).isoformat()))
+                        mtime = datetime.datetime.fromtimestamp(stat.st_mtime)
+                        size_bytes = stat.st_size
+
+                        item.setText(1, self._format_date(mtime.isoformat()))
                         item.setText(2, "N/A")
-                        item.setText(3, self._format_size(stat.st_size))
+                        item.setText(3, self._format_size(size_bytes))
+
                         item.setData(0, Qt.ItemDataRole.UserRole, file_path)
+                        # Salva i dati grezzi per l'ordinamento
+                        item.setData(1, Qt.ItemDataRole.UserRole, mtime.isoformat())
+                        item.setData(2, Qt.ItemDataRole.UserRole, None) # Nessuna durata disponibile
+                        item.setData(3, Qt.ItemDataRole.UserRole, size_bytes)
                     except (OSError, ValueError):
                         item.setText(1, "N/A")
                         item.setText(2, "N/A")
