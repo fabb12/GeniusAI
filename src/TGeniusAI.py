@@ -7196,15 +7196,80 @@ class VideoAudioManager(QMainWindow):
         """)
 
     def dragEnterEvent(self, event):
-        if event.mimeData().hasUrls():
+        # Accetta l'evento solo se ci sono URL e un progetto è attivo
+        if event.mimeData().hasUrls() and self.current_project_path:
             event.acceptProposedAction()
 
     def dropEvent(self, event):
-        file_urls = [url.toLocalFile() for url in event.mimeData().urls() if url.isLocalFile()]
-        if file_urls:
+        if not self.current_project_path or not self.projectDock.gnai_path:
+            self.show_status_message("Trascina i file solo quando un progetto è attivo.", error=True)
+            return
 
-            self.videoPathLineEdit = file_urls[0]  # Aggiorna il percorso del video memorizzato
-            self.loadVideo(self.videoPathLineEdit, os.path.basename(file_urls[0]))
+        urls = event.mimeData().urls()
+        if not urls:
+            return
+
+        # Definisci le estensioni supportate
+        audio_exts = {'.mp3', '.wav', '.ogg', '.aac', '.flac', '.m4a'}
+        video_exts = {'.mp4', '.mov', '.avi', '.mkv', '.wmv'}
+
+        # Cartelle di destinazione
+        audio_dir = os.path.join(self.current_project_path, "audio")
+        video_dir = os.path.join(self.current_project_path, "clips")
+        os.makedirs(audio_dir, exist_ok=True)
+        os.makedirs(video_dir, exist_ok=True)
+
+        imported_count = 0
+        for url in urls:
+            if not url.isLocalFile():
+                continue
+
+            src_path = url.toLocalFile()
+            filename = os.path.basename(src_path)
+            extension = os.path.splitext(filename)[1].lower()
+
+            clip_type = None
+            dest_dir = None
+
+            if extension in audio_exts:
+                clip_type = 'audio'
+                dest_dir = audio_dir
+            elif extension in video_exts:
+                clip_type = 'video'
+                dest_dir = video_dir
+            else:
+                logging.warning(f"File non supportato '{filename}' saltato.")
+                continue
+
+            dest_path = os.path.join(dest_dir, filename)
+
+            # Evita duplicati
+            if os.path.exists(dest_path):
+                logging.warning(f"File '{filename}' già esistente nel progetto. Saltato.")
+                continue
+
+            try:
+                # Copia il file e aggiungilo al progetto
+                shutil.copy2(src_path, dest_path)
+                success, message = self.project_manager.add_clip_to_project_from_path(
+                    self.projectDock.gnai_path, dest_path, clip_type, status="online"
+                )
+                if success:
+                    imported_count += 1
+                else:
+                    self.show_status_message(f"Errore nell'aggiungere '{filename}': {message}", error=True)
+                    # Pulisci il file copiato in caso di errore
+                    if os.path.exists(dest_path):
+                        os.remove(dest_path)
+
+            except Exception as e:
+                logging.error(f"Errore durante il drag & drop di '{filename}': {e}")
+                self.show_status_message(f"Errore nell'importazione di '{filename}'.", error=True)
+
+        if imported_count > 0:
+            self.show_status_message(f"Importati {imported_count} file con successo.")
+            # Ricarica l'intero progetto per aggiornare la UI
+            self.load_project(self.projectDock.gnai_path)
 
     def browseVideo(self):
         fileName, _ = QFileDialog.getOpenFileName(self, "Seleziona Video", "", "Video/Audio Files (*avi *.mp4 *.mov *.mp3 *.wav *.aac *.ogg *.flac *.mkv)")
@@ -7667,85 +7732,67 @@ class VideoAudioManager(QMainWindow):
 
     def sync_project_clips_folder(self):
         """
-        Sincronizza il file .gnai con la cartella 'clips', aggiornando lo stato dei file.
+        Sincronizza il file .gnai con le cartelle 'clips' e 'audio', aggiornando lo stato dei file.
         """
         if not self.current_project_path or not self.projectDock.gnai_path:
             return
 
-        clips_dir = os.path.join(self.current_project_path, "clips")
-        if not os.path.isdir(clips_dir):
-            os.makedirs(clips_dir) # Crea la cartella se non esiste
+        project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+        if not project_data:
+            return
 
-        try:
-            disk_files = {f for f in os.listdir(clips_dir) if os.path.isfile(os.path.join(clips_dir, f)) and f.lower().endswith(('.mp4', '.mov', '.avi', '.mkv'))}
+        changes_made = False
+        now = datetime.datetime.now().isoformat()
 
-            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
-            if not project_data:
-                return
+        # Funzione helper per sincronizzare una singola cartella
+        def sync_folder(subfolder, clip_type, file_extensions):
+            nonlocal changes_made
+            folder_dir = os.path.join(self.current_project_path, subfolder)
+            if not os.path.isdir(folder_dir):
+                os.makedirs(folder_dir)
 
-            registered_clips_dict = {c['clip_filename']: c for c in project_data.get('clips', [])}
-            now = datetime.datetime.now().isoformat()
-            changes_made = False
+            try:
+                disk_files = {f for f in os.listdir(folder_dir) if os.path.isfile(os.path.join(folder_dir, f)) and f.lower().endswith(file_extensions)}
+                list_key = "clips" if clip_type == 'video' else "audio_clips"
+                registered_clips_dict = {c['clip_filename']: c for c in project_data.get(list_key, [])}
 
-            # Controlla lo stato dei file registrati
-            for filename, clip_data in registered_clips_dict.items():
-                if filename in disk_files:
-                    # Il file esiste, aggiorna lo stato a 'online' se necessario
-                    if clip_data.get('status') != 'online':
-                        clip_data['status'] = 'online'
-                        changes_made = True
-                    clip_data['last_seen'] = now
-                    disk_files.remove(filename) # Rimuovi dalla lista dei file non tracciati
-                else:
-                    # Il file non esiste più, aggiorna lo stato a 'offline'
-                    if clip_data.get('status') != 'offline':
-                        clip_data['status'] = 'offline'
-                        changes_made = True
+                # Controlla lo stato dei file registrati
+                for filename, clip_data in registered_clips_dict.items():
+                    if filename in disk_files:
+                        if clip_data.get('status') != 'online':
+                            clip_data['status'] = 'online'
+                            changes_made = True
+                        clip_data['last_seen'] = now
+                        disk_files.remove(filename)
+                    else:
+                        if clip_data.get('status') != 'offline':
+                            clip_data['status'] = 'offline'
+                            changes_made = True
 
-            # Aggiungi nuovi file trovati sul disco
-            if disk_files:
-                self.show_status_message(f"Rilevati {len(disk_files)} nuovi file. Aggiunta in corso...")
-                for filename in disk_files:
-                    clip_path = os.path.join(clips_dir, filename)
-                    try:
-                        clip_info = VideoFileClip(clip_path)
-                        duration = clip_info.duration
-                        clip_info.close()
-                        size = os.path.getsize(clip_path)
-                        creation_date = datetime.datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
+                # Aggiungi nuovi file trovati sul disco
+                if disk_files:
+                    self.show_status_message(f"Rilevati {len(disk_files)} nuovi file {clip_type}. Aggiunta in corso...")
+                    for filename in disk_files:
+                        clip_path = os.path.join(folder_dir, filename)
+                        self.project_manager.add_clip_to_project_from_path(self.projectDock.gnai_path, clip_path, clip_type, status="new")
+                        changes_made = True # add_clip_to_project_from_path salva già il file, ma settiamo il flag per ricaricare
 
-                        new_clip_data = {
-                            "clip_filename": filename,
-                            "metadata_filename": os.path.splitext(filename)[0] + ".json",
-                            "addedAt": now,
-                            "duration": duration,
-                            "size": size,
-                            "creation_date": creation_date,
-                            "status": "new",
-                            "last_seen": now
-                        }
-                        project_data["clips"].append(new_clip_data)
-                        changes_made = True
-                    except Exception as e:
-                        logging.error(f"Impossibile aggiungere la nuova clip {filename}: {e}")
+            except Exception as e:
+                logging.error(f"Errore durante la sincronizzazione della cartella {subfolder}: {e}")
+                self.show_status_message(f"Errore durante la sincronizzazione della cartella {subfolder}.", error=True)
 
-            # Salva e ricarica se ci sono state modifiche
-            if changes_made:
-                self.project_manager.save_project(self.projectDock.gnai_path, project_data)
+        # Sincronizza entrambe le cartelle
+        sync_folder("clips", "video", ('.mp4', '.mov', '.avi', '.mkv'))
+        sync_folder("audio", "audio", ('.mp3', '.wav', '.aac', '.m4a', '.flac'))
 
-            # Ricarica solo i dati del progetto e aggiorna la vista del dock,
-            # evitando di chiamare self.load_project() che causerebbe un loop.
-            project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
-            if project_data:
-                self.projectDock.load_project_data(project_data, self.current_project_path, self.projectDock.gnai_path)
+        # Ricarica i dati del progetto e aggiorna la vista del dock
+        # Questo ricaricherà i dati freschi dopo che add_clip_to_project_from_path ha salvato.
+        final_project_data, _ = self.project_manager.load_project(self.projectDock.gnai_path)
+        if final_project_data:
+            self.projectDock.load_project_data(final_project_data, self.current_project_path, self.projectDock.gnai_path)
 
-            if changes_made:
-                self.show_status_message("Progetto sincronizzato con la cartella clips.")
-
-
-        except Exception as e:
-            logging.error(f"Errore durante la sincronizzazione della cartella clips: {e}")
-            self.show_status_message("Errore durante la sincronizzazione della cartella.", error=True)
+        if changes_made:
+            self.show_status_message("Progetto sincronizzato con le cartelle media.")
 
     def delete_project_clip(self, clip_filename):
         """
@@ -7757,7 +7804,9 @@ class VideoAudioManager(QMainWindow):
             self.show_status_message("Nessun progetto attivo.", error=True)
             return
 
-        is_audio = any(clip['clip_filename'] == clip_filename for clip in self.projectDock.project_data.get('audio_clips', []))
+        # Determina se la clip è audio o video per costruire il percorso corretto
+        project_data = self.projectDock.project_data
+        is_audio = any(c.get('clip_filename') == clip_filename for c in project_data.get('audio_clips', []))
         subfolder = "audio" if is_audio else "clips"
         clip_path = os.path.join(self.current_project_path, subfolder, clip_filename)
 
@@ -7782,19 +7831,17 @@ class VideoAudioManager(QMainWindow):
             logging.warning("Il segnale del file watcher non era connesso.")
 
         try:
+            # La logica di rimozione è la stessa, ma il ProjectManager ora è generico
+            success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
+
+            if not success:
+                self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
+                return
+
             if clicked_button == remove_button:
-                success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
-                if success:
-                    self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
-                else:
-                    self.show_status_message(f"Errore: {message}", error=True)
+                self.show_status_message(f"Clip '{clip_filename}' rimossa dal progetto.")
 
             elif clicked_button == delete_button:
-                success, message = self.project_manager.remove_clip_from_project(self.projectDock.gnai_path, clip_filename)
-                if not success:
-                    self.show_status_message(f"Errore nella rimozione dal progetto: {message}", error=True)
-                    return
-
                 try:
                     if os.path.exists(clip_path):
                         os.remove(clip_path)

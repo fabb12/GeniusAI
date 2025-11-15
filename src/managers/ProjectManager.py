@@ -64,16 +64,26 @@ class ProjectManager:
 
         return project_data, None
 
-    def add_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date, status="new"):
+    def add_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date, clip_type, status="new"):
+        """
+        Aggiunge una clip (video o audio) al file di progetto .gnai.
+        clip_type può essere 'video' o 'audio'.
+        """
         if not os.path.exists(gnai_path):
             return False, "Project file not found"
+
+        list_key = "clips" if clip_type == 'video' else "audio_clips"
 
         with open(gnai_path, 'r+') as f:
             project_data = json.load(f)
 
+            # Inizializza la lista se non esiste
+            if list_key not in project_data:
+                project_data[list_key] = []
+
             # Evita di aggiungere clip duplicati
-            if any(c['clip_filename'] == clip_filename for c in project_data.get('clips', [])):
-                return True, "Clip already in project"
+            if any(c['clip_filename'] == clip_filename for c in project_data.get(list_key, [])):
+                return True, f"Clip ({clip_type}) already in project"
 
             now = datetime.now().isoformat()
             clip_info = {
@@ -87,25 +97,33 @@ class ProjectManager:
                 "last_seen": now
             }
 
-            project_data["clips"].append(clip_info)
+            project_data[list_key].append(clip_info)
 
             f.seek(0)
             json.dump(project_data, f, indent=4)
             f.truncate()
 
-        return True, "Clip added successfully"
+        return True, f"Clip ({clip_type}) added successfully"
 
-    def add_clip_to_project_from_path(self, gnai_path, clip_path, status="new"):
+    def add_clip_to_project_from_path(self, gnai_path, clip_path, clip_type, status="new"):
         """
-        Extracts metadata from a clip path and adds it to the project.
+        Estrae i metadati da un percorso di clip e li aggiunge al progetto.
         """
         if not os.path.exists(clip_path):
             return False, "Clip file not found"
 
         try:
-            from moviepy.editor import VideoFileClip
-            with VideoFileClip(clip_path) as clip_info:
-                duration = clip_info.duration
+            # Usa il loader corretto in base al tipo
+            if clip_type == 'video':
+                from moviepy.editor import VideoFileClip
+                media_clip = VideoFileClip(clip_path)
+            else: # 'audio'
+                from moviepy.editor import AudioFileClip
+                media_clip = AudioFileClip(clip_path)
+
+            with media_clip:
+                duration = media_clip.duration
+
             size = os.path.getsize(clip_path)
             creation_date = datetime.fromtimestamp(os.path.getctime(clip_path)).isoformat()
             clip_filename = os.path.basename(clip_path)
@@ -118,43 +136,11 @@ class ProjectManager:
                 duration,
                 size,
                 creation_date,
+                clip_type,
                 status
             )
         except Exception as e:
             return False, f"Failed to process clip metadata: {e}"
-
-    def add_audio_clip_to_project(self, gnai_path, clip_filename, metadata_filename, duration, size, creation_date, status="new"):
-        if not os.path.exists(gnai_path):
-            return False, "Project file not found"
-
-        with open(gnai_path, 'r+') as f:
-            project_data = json.load(f)
-
-            # Evita di aggiungere clip duplicati
-            if any(c['clip_filename'] == clip_filename for c in project_data.get('audio_clips', [])):
-                return True, "Audio clip already in project"
-
-            now = datetime.now().isoformat()
-            clip_info = {
-                "clip_filename": clip_filename,
-                "metadata_filename": metadata_filename,
-                "addedAt": now,
-                "duration": duration,
-                "size": size,
-                "creation_date": creation_date,
-                "status": status,
-                "last_seen": now
-            }
-
-            if "audio_clips" not in project_data:
-                project_data["audio_clips"] = []
-            project_data["audio_clips"].append(clip_info)
-
-            f.seek(0)
-            json.dump(project_data, f, indent=4)
-            f.truncate()
-
-        return True, "Audio clip added successfully"
 
     def save_project(self, gnai_path, project_data):
         """
@@ -171,17 +157,31 @@ class ProjectManager:
 
     def remove_clip_from_project(self, gnai_path, clip_filename):
         """
-        Rimuove una clip dal file di progetto .gnai.
+        Rimuove una clip (video o audio) dal file di progetto .gnai.
         """
         if not os.path.exists(gnai_path):
             return False, "Project file not found"
 
         with open(gnai_path, 'r+') as f:
             project_data = json.load(f)
+            clip_found = False
 
-            original_clips = project_data.get("clips", [])
-            # Filtra le clip, mantenendo solo quelle che non corrispondono al nome del file da eliminare
-            project_data["clips"] = [clip for clip in original_clips if clip.get("clip_filename") != clip_filename]
+            # Cerca e rimuovi dalle clip video
+            original_video_clips = project_data.get("clips", [])
+            updated_video_clips = [clip for clip in original_video_clips if clip.get("clip_filename") != clip_filename]
+            if len(updated_video_clips) < len(original_video_clips):
+                project_data["clips"] = updated_video_clips
+                clip_found = True
+
+            # Cerca e rimuovi dalle clip audio
+            original_audio_clips = project_data.get("audio_clips", [])
+            updated_audio_clips = [clip for clip in original_audio_clips if clip.get("clip_filename") != clip_filename]
+            if len(updated_audio_clips) < len(original_audio_clips):
+                project_data["audio_clips"] = updated_audio_clips
+                clip_found = True
+
+            if not clip_found:
+                return False, "Clip not found in project"
 
             f.seek(0)
             json.dump(project_data, f, indent=4)
@@ -227,7 +227,7 @@ class ProjectManager:
 
     def relink_clip(self, gnai_path, old_filename, new_filepath):
         """
-        Ri-collega una clip offline a un nuovo percorso file.
+        Ri-collega una clip (video o audio) offline a un nuovo percorso file.
         """
         if not os.path.exists(gnai_path):
             return False, "File di progetto non trovato"
@@ -236,16 +236,20 @@ class ProjectManager:
 
         with open(gnai_path, 'r+') as f:
             project_data = json.load(f)
-
             clip_found = False
-            for clip in project_data.get("clips", []):
-                if clip.get("clip_filename") == old_filename:
-                    # Aggiorna i dettagli della clip
-                    clip["clip_filename"] = os.path.basename(new_filepath)
-                    clip["status"] = "online"
-                    clip["size"] = os.path.getsize(new_filepath)
-                    clip["last_seen"] = datetime.now().isoformat()
-                    clip_found = True
+
+            # Cerca nelle clip video e audio
+            for clip_list_key in ["clips", "audio_clips"]:
+                for clip in project_data.get(clip_list_key, []):
+                    if clip.get("clip_filename") == old_filename:
+                        # Aggiorna i dettagli della clip
+                        clip["clip_filename"] = os.path.basename(new_filepath)
+                        clip["status"] = "online"
+                        clip["size"] = os.path.getsize(new_filepath)
+                        clip["last_seen"] = datetime.now().isoformat()
+                        clip_found = True
+                        break
+                if clip_found:
                     break
 
             if not clip_found:
