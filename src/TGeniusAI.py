@@ -59,6 +59,7 @@ from src.ui.CustomSlider import CustomSlider
 from src.managers.Settings import SettingsDialog
 from src.ui.ScreenButton import ScreenButton
 from src.ui.CustomTextEdit import CustomTextEdit
+from src.ui.RichTextEditor import RichTextEditor
 from src.services.PptxGeneration import PptxGeneration
 from src.services.threads import PptxGenerationThread
 from src.ui.PptxDialog import PptxDialog
@@ -1473,7 +1474,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTabs.setToolTip("Visualizza la trascrizione singola o multipla.")
 
         # Tab per la Trascrizione Singola
-        self.singleTranscriptionTextArea = CustomTextEdit(self)
+        self.singleTranscriptionTextArea = RichTextEditor(self)
         self.singleTranscriptionTextArea.setPlaceholderText("La trascrizione del video corrente apparirà qui...")
         self.singleTranscriptionTextArea.textChanged.connect(self.handleTextChange)
         self.singleTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
@@ -1483,7 +1484,7 @@ class VideoAudioManager(QMainWindow):
         self.transcriptionTabs.addTab(self.singleTranscriptionTextArea, "Trascrizione Singola")
 
         # Tab per la Trascrizione Multipla
-        self.batchTranscriptionTextArea = CustomTextEdit(self)
+        self.batchTranscriptionTextArea = RichTextEditor(self)
         self.batchTranscriptionTextArea.setPlaceholderText("I risultati della trascrizione multipla appariranno qui...")
         self.batchTranscriptionTextArea.setReadOnly(True) # Inizialmente in sola lettura
         self.batchTranscriptionTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
@@ -1500,7 +1501,7 @@ class VideoAudioManager(QMainWindow):
         # Sposta il gruppo "Strumenti" qui
         audio_ai_layout.addWidget(tools_group)
 
-        self.audioAiTextArea = CustomTextEdit(self)
+        self.audioAiTextArea = RichTextEditor(self)
         self.audioAiTextArea.setPlaceholderText("Incolla qui il testo da usare per la generazione audio o altre funzioni AI...")
         audio_ai_layout.addWidget(self.audioAiTextArea)
 
@@ -1599,7 +1600,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.setToolTip("Visualizza i diversi tipi di riassunto generati.")
 
         # Tab per il Riassunto Dettagliato
-        self.summaryDetailedTextArea = CustomTextEdit(self)
+        self.summaryDetailedTextArea = RichTextEditor(self)
         self.summaryDetailedTextArea.setPlaceholderText("Il riassunto dettagliato apparirà qui...")
         self.summaryDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryDetailedTextArea.insert_frame_requested.connect(
@@ -1609,7 +1610,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.addTab(self.summaryDetailedTextArea, "Dettagliato")
 
         # Tab per le Note Riunione
-        self.summaryMeetingTextArea = CustomTextEdit(self)
+        self.summaryMeetingTextArea = RichTextEditor(self)
         self.summaryMeetingTextArea.setPlaceholderText("Le note della riunione appariranno qui...")
         self.summaryMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingTextArea.insert_frame_requested.connect(
@@ -1619,7 +1620,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.addTab(self.summaryMeetingTextArea, "Note Riunione")
 
         # Tab per il Riassunto Dettagliato (Integrato)
-        self.summaryDetailedIntegratedTextArea = CustomTextEdit(self)
+        self.summaryDetailedIntegratedTextArea = RichTextEditor(self)
         self.summaryDetailedIntegratedTextArea.setPlaceholderText("Il riassunto dettagliato integrato con le informazioni del video apparirà qui...")
         self.summaryDetailedIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryDetailedIntegratedTextArea.insert_frame_requested.connect(
@@ -1629,7 +1630,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.addTab(self.summaryDetailedIntegratedTextArea, "Dettagliato (Integrato)")
 
         # Tab per le Note Riunione (Integrato)
-        self.summaryMeetingIntegratedTextArea = CustomTextEdit(self)
+        self.summaryMeetingIntegratedTextArea = RichTextEditor(self)
         self.summaryMeetingIntegratedTextArea.setPlaceholderText("Le note della riunione integrate con le informazioni del video appariranno qui...")
         self.summaryMeetingIntegratedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryMeetingIntegratedTextArea.insert_frame_requested.connect(
@@ -1639,7 +1640,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.addTab(self.summaryMeetingIntegratedTextArea, "Note Riunione (Integrato)")
 
         # Tab per il Riassunto Dettagliato Combinato
-        self.summaryCombinedDetailedTextArea = CustomTextEdit(self)
+        self.summaryCombinedDetailedTextArea = RichTextEditor(self)
         self.summaryCombinedDetailedTextArea.setPlaceholderText("Il riassunto dettagliato combinato apparirà qui...")
         self.summaryCombinedDetailedTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryCombinedDetailedTextArea.insert_frame_requested.connect(
@@ -1649,7 +1650,7 @@ class VideoAudioManager(QMainWindow):
         self.summaryTabWidget.addTab(self.summaryCombinedDetailedTextArea, "Dettagliato Combinato")
 
         # Tab per le Note Riunione Combinato
-        self.summaryCombinedMeetingTextArea = CustomTextEdit(self)
+        self.summaryCombinedMeetingTextArea = RichTextEditor(self)
         self.summaryCombinedMeetingTextArea.setPlaceholderText("Le note della riunione combinate appariranno qui...")
         self.summaryCombinedMeetingTextArea.timestampDoubleClicked.connect(self.sincronizza_video)
         self.summaryCombinedMeetingTextArea.insert_frame_requested.connect(
@@ -8445,7 +8446,7 @@ class VideoAudioManager(QMainWindow):
         widget = QWidget()
         layout = QVBoxLayout(widget)
 
-        self.infoExtractionResultArea = CustomTextEdit(self)
+        self.infoExtractionResultArea = RichTextEditor(self)
         self.infoExtractionResultArea.setPlaceholderText("I risultati della ricerca appariranno qui...")
         self.infoExtractionResultArea.timestampDoubleClicked.connect(self.seek_to_search_result_timecode)
         layout.addWidget(self.infoExtractionResultArea)
