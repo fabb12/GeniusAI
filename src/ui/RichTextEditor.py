@@ -78,6 +78,20 @@ class RichTextEditor(QWidget):
         main_toolbar.addSeparator()
 
         # Group 3: Paragraph Formatting
+        self.title_action = QAction(QIcon(get_resource("title.png")), "Titolo", self)
+        self.title_action.triggered.connect(lambda: self.set_heading_level(1))
+        main_toolbar.addAction(self.title_action)
+
+        self.subtitle_action = QAction(QIcon(get_resource("subtitle.png")), "Sottotitolo", self)
+        self.subtitle_action.triggered.connect(lambda: self.set_heading_level(2))
+        main_toolbar.addAction(self.subtitle_action)
+
+        self.paragraph_action = QAction(QIcon(get_resource("paragraph.png")), "Paragrafo", self)
+        self.paragraph_action.triggered.connect(lambda: self.set_heading_level(0))
+        main_toolbar.addAction(self.paragraph_action)
+
+        main_toolbar.addSeparator()
+
         bullet_action = QAction(QIcon(get_resource("meet.png")), "Elenco Puntato", self)
         bullet_action.triggered.connect(self.insert_bullet_list)
         main_toolbar.addAction(bullet_action)
@@ -129,12 +143,13 @@ class RichTextEditor(QWidget):
         self.text_edit.set_selection_font_family(font.family())
 
     def insert_bullet_list(self):
-        cursor = self.text_edit.textCursor()
-        cursor.createList(QTextListFormat.Style.ListDisc)
+        self.text_edit.toggle_list_style(QTextListFormat.Style.ListDisc)
 
     def insert_numbered_list(self):
-        cursor = self.text_edit.textCursor()
-        cursor.createList(QTextListFormat.Style.ListDecimal)
+        self.text_edit.toggle_list_style(QTextListFormat.Style.ListDecimal)
+
+    def set_heading_level(self, level):
+        self.text_edit.set_heading_level(level)
 
     def _update_toolbar_state(self):
         """Updates the checked state of toolbar buttons based on the cursor's current format."""

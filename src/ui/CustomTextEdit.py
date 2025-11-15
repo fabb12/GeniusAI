@@ -636,24 +636,36 @@ class CustomTextEdit(QTextEdit):
         """
         Modifies the font size of the selected text by a given delta.
         If no text is selected, it applies to the current word.
+        Handles headings by applying a scaled delta.
         """
         cursor = self.textCursor()
         if not cursor.hasSelection():
             cursor.select(QTextCursor.SelectionType.WordUnderCursor)
-            self.setTextCursor(cursor) # Make selection visible
+            self.setTextCursor(cursor)
+
+        # Check the heading level of the block
+        heading_level = cursor.blockFormat().headingLevel()
+
+        # Apply a scaling factor to the delta for headings
+        scale_factor = 1.0
+        if heading_level == 1: # H1
+            scale_factor = 1.5
+        elif heading_level == 2: # H2
+            scale_factor = 1.25
+
+        scaled_delta = delta * scale_factor
 
         current_format = cursor.charFormat()
         current_size = current_format.fontPointSize()
+
         if current_size <= 0:
-            current_size = current_format.font().pointSize()
-            if current_size <= 0:
-                current_size = self.font().pointSize()
+            current_size = self.font().pointSize()
 
-        new_size = max(6, current_size + delta)
+        new_size = max(6, current_size + scaled_delta)
 
-        format = QTextCharFormat()
-        format.setFontPointSize(new_size)
-        cursor.mergeCharFormat(format)
+        new_format = QTextCharFormat()
+        new_format.setFontPointSize(new_size)
+        cursor.mergeCharFormat(new_format)
 
     def set_selection_font_family(self, font_family):
         """
@@ -668,6 +680,54 @@ class CustomTextEdit(QTextEdit):
         format = QTextCharFormat()
         format.setFontFamily(font_family)
         cursor.mergeCharFormat(format)
+
+    def set_heading_level(self, level):
+        """
+        Sets the heading level for the current block. Level 0 is a paragraph.
+        """
+        cursor = self.textCursor()
+        if not cursor.hasSelection():
+            cursor.select(QTextCursor.SelectionType.BlockUnderCursor)
+            self.setTextCursor(cursor)
+
+        block_format = cursor.blockFormat()
+        block_format.setHeadingLevel(level)
+        cursor.mergeBlockFormat(block_format)
+
+    def toggle_list_style(self, style):
+        """
+        Toggles a list style on the current selection. If the style is already
+        applied, it removes the list formatting.
+        """
+        cursor = self.textCursor()
+        block = cursor.block()
+        current_list = block.textList()
+
+        cursor.beginEditBlock()
+        if current_list and current_list.format().style() == style:
+            # If the current block is already in the target list style, remove it.
+            # This requires creating a new block format without the list.
+            new_block_format = cursor.blockFormat()
+            new_block_format.setIndent(0) # Reset indentation
+            cursor.setBlockFormat(new_block_format)
+
+            # To effectively remove the list, we need to handle the block itself.
+            # A common way is to create a new list of a different, temporary type
+            # and then immediately remove it by setting the block format again.
+            # This feels hacky. A cleaner way is to work with fragments if possible
+            # or manage the blocks directly.
+            # Let's try a more robust approach: remove the block from its list.
+            # This functionality is not direct. The easiest way is often to
+            # clear the list by creating a new list of style 'ListStyleUndefined'.
+            # However, createList can be complex.
+            # Let's try simply resetting the block's format.
+            cursor.createList(QTextListFormat.Style.ListStyleUndefined)
+
+        else:
+            # If it's a different list style or no list, apply the new style.
+            cursor.createList(style)
+
+        cursor.endEditBlock()
 
 
 class SearchDialog(QDialog):
